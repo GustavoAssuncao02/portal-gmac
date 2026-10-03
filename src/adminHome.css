@@ -24,6 +24,22 @@
 .home-metric--green .home-metric-icon { color: #18875c; background: #edf8f1; border-color: #dceee3; }
 .home-metric--red .home-metric-icon { color: #c35058; background: #fff1f2; border-color: #f5dfe2; }
 .home-metric--amber .home-metric-icon { color: #b8811b; background: #fff7e8; border-color: #f3e8cf; }
+.home-payables { padding: 24px 0; border-bottom: 1px solid #e1e8ed; }
+.home-payables-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.home-payable { min-width: 0; padding: 15px; border: 1px solid #dce5ed; border-radius: 6px; background: #fff; color: #335e7f; font: inherit; text-align: left; cursor: pointer; }
+.home-payable:hover { border-color: #6c94b4; background: #f7fafd; }
+.home-payable:focus-visible { outline: 2px solid #2470aa; outline-offset: 3px; }
+.home-payable:disabled { cursor: wait; }
+.home-payable-heading { display: flex; align-items: center; gap: 8px; min-height: 30px; font-size: 12px; line-height: 1.4; }
+.home-payable-heading > span { flex: 1; min-width: 0; }
+.home-payable-heading > .icon { width: 17px; height: 17px; flex: 0 0 17px; }
+.home-payable-heading > .icon:last-child { width: 13px; height: 13px; flex-basis: 13px; color: #8c9eab; }
+.home-payable > strong { display: block; margin-top: 12px; font-size: 21px; line-height: 1.35; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.home-payable > small { display: block; margin-top: 5px; color: #738493; font-size: 11px; line-height: 1.4; }
+.home-payable--overdue { border-color: #efd4d8; color: #b34551; }
+.home-payable--today { border-color: #efdfbd; color: #9c741d; }
+.home-payable--upcoming { border-color: #d5e8e0; color: #227358; }
+.home-payables-error { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: 12px; margin-bottom: 0; }
 .home-workspace { display: grid; grid-template-columns: minmax(0, 1fr) 300px; align-items: start; gap: 28px; margin-top: 28px; }
 .home-orders, .home-side { min-width: 0; }
 .home-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
@@ -101,6 +117,7 @@
   .home-calculator > span { font-size: 15px; }
 }
 @media (max-width: 1050px) {
+  .home-payables-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .home-workspace { grid-template-columns: minmax(0, 1fr); }
   .home-side { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
   .home-calculator { min-height: 170px; }
@@ -113,6 +130,7 @@
   .home-attention-items { gap: 16px; }
 }
 @media (max-width: 760px) {
+  .home-payables-metrics { grid-template-columns: minmax(0, 1fr); gap: 10px; }
   .admin-home-main { padding: 66px 16px 24px; }
   .admin-home-shell > .sidebar { flex: 0 0 56px; min-width: 0; }
   .admin-home-shell .sidebar-logo { height: 96px; }

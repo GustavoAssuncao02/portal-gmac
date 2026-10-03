@@ -33,11 +33,11 @@ test('offer settings, materials and editable machine rate survive proposal PDF a
   const resources = { materials: [{ id: 'material', name: 'Titanio', quantity: 12.5, unitPrice: 20, stockStatus: 'unknown', stockAvailable: 0, purchaseQuantity: 12.5 }], laborEntries: [{ id: 'labor', machineId: 1, type: 'machine', resource: 'Torno de teste', hours: 2, hourlyRate: 175 }], stages: ['welding', 'cutting'], kind: 'product' }
   const saved = await fixture.request(`/offers/${id}/resources`, 'PUT', resources)
   assert.equal(saved.status, 200)
-  assert.deepEqual(saved.data.item.resources.stages, ['cutting', 'welding'])
+  assert.deepEqual(saved.data.item.resources.stages, ['welding', 'cutting'])
   const proposal = { key: 'A', title: 'Teste', deadline: '2026-12-20', serviceValue: 600, materials: 250, labor: 350, machine: '2 horas', serviceTime: '2 horas', margin: 0, discount: 0, profit: 0, stages: ['painting'], kind: 'service' }
   const generated = await fixture.request(`/offers/${id}/proposal`, 'POST', { proposal, layout: 'classic' })
   assert.equal(generated.status, 200)
-  assert.deepEqual(generated.data.item.proposal.stages, ['cutting', 'welding'])
+  assert.deepEqual(generated.data.item.proposal.stages, ['welding', 'cutting'])
   assert.equal(generated.data.item.proposal.kind, 'product')
   const pdf = await fetch(`${fixture.url}/api/offers/${id}/proposal.pdf`)
   assert.equal(pdf.status, 200)
@@ -50,7 +50,7 @@ test('offer settings, materials and editable machine rate survive proposal PDF a
   assert.equal(accepted.data.item.resources.laborEntries[0].hourlyRate, 175)
   const offers = (await fixture.request('/offers')).data.items
   const orders = (await fixture.request('/operations/orders')).data.items
-  assert.deepEqual(orders[0].operation.stages.map((stage) => stage.name), ['Corte', 'Soldagem'])
+  assert.deepEqual(orders[0].operation.stages.map((stage) => stage.name), ['Soldagem', 'Corte'])
   assert.equal(materialRequests(offers, orders)[0].orderCode, accepted.data.item.code)
   assert.equal((await fixture.request(`/offers/${id}/resources`, 'PUT', resources)).status, 404)
 })

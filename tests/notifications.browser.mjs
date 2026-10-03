@@ -74,7 +74,7 @@ try {
   })
   await page.keyboard.press('Escape')
   await page.setViewportSize({ width: 1366, height: 900 })
-  for (const screen of ['Serviços em andamento', 'Estoque', 'Funcionários', 'Dashboard']) {
+  for (const screen of ['Serviços em andamento', 'Estoque', 'Funcionários', 'Início']) {
     await page.locator('.sidebar').getByRole('button', { name: screen, exact: true }).click()
     await bell.click()
     await popup.waitFor()

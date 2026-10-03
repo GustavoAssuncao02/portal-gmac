@@ -7,6 +7,9 @@ const sessions = new Map()
 const safe = ({ id, name, birthDate, cpf, email, createdAt }) => ({ id, name, birthDate, cpf, email, createdAt })
 const digits = (value) => String(value || '').replace(/\D/g, '')
 const fail = (status, message) => { const error = new Error(message); error.status = status; throw error }
+export function notificationSettings(store, userId) {
+  return { payableReminderDays: store.adminNotificationPreferences?.find((item) => String(item.userId) === String(userId))?.payableReminderDays ?? 3 }
+}
 export function issueAdminToken(user) {
   for (const [key, session] of sessions) if (session.expires < Date.now()) sessions.delete(key)
   const token = randomUUID()
@@ -109,10 +112,29 @@ export function createAccountService(pool, env = process.env) {
       const index = (store[kind] || []).findIndex((item) => String(item.id) === String(id))
       if (index < 0) fail(404, 'Cadastro não encontrado.')
       store[kind].splice(index, 1)
+      if (kind === 'admins' && store.adminNotificationPreferences) store.adminNotificationPreferences = store.adminNotificationPreferences.filter((item) => String(item.userId) !== String(id))
+    })
+    if (pool && kind === 'admins') await mutateStore((store) => {
+      if (store.adminNotificationPreferences) store.adminNotificationPreferences = store.adminNotificationPreferences.filter((item) => String(item.userId) !== String(id))
     })
     if (kind === 'admins') for (const [token, session] of sessions) if (String(session.id) === String(id)) sessions.delete(token)
   }
-  return { admins, clients, authenticate, updateAccount, save, remove }
+  async function getNotificationSettings(id) {
+    if (!(await admins()).some((item) => String(item.id) === String(id))) fail(404, 'Conta não encontrada.')
+    return notificationSettings(await readStore(), id)
+  }
+  async function updateNotificationSettings(id, fields) {
+    if (![3, 5, 7, 'never'].includes(fields?.payableReminderDays)) fail(400, 'Escolha 3, 5, 7 dias ou nunca.')
+    await getNotificationSettings(id)
+    return mutateStore((store) => {
+      store.adminNotificationPreferences ||= []
+      let preference = store.adminNotificationPreferences.find((item) => String(item.userId) === String(id))
+      if (!preference) { preference = { userId: id }; store.adminNotificationPreferences.push(preference) }
+      preference.payableReminderDays = fields.payableReminderDays
+      return notificationSettings(store, id)
+    })
+  }
+  return { admins, clients, authenticate, updateAccount, getNotificationSettings, updateNotificationSettings, save, remove }
 }
 
 export function createAccountsRouter(service) {
@@ -126,6 +148,12 @@ export function createAccountsRouter(service) {
     } catch (error) { next(error) }
   })
   router.post('/auth/logout', (request, response) => { sessions.delete(request.adminToken); response.json({ ok: true }) })
+  router.get('/account/notifications', async (request, response, next) => {
+    try { response.set('Cache-Control', 'no-store').json({ settings: await service.getNotificationSettings(request.adminId) }) } catch (error) { next(error) }
+  })
+  router.patch('/account/notifications', async (request, response, next) => {
+    try { response.json({ settings: await service.updateNotificationSettings(request.adminId, request.body) }) } catch (error) { next(error) }
+  })
   router.patch('/account', async (request, response, next) => {
     try { const user = await service.updateAccount(request.adminId, request.body); response.json({ user, token: issueAdminToken(user) }) } catch (error) { next(error) }
   })

@@ -9,11 +9,17 @@ import { createAccountService, createAccountsRouter, issueAdminToken, requireAdm
 import createMachinesRouter from './machines.js'
 import createReportsRouter from './reports.js'
 import createPayablesRouter from './payables.js'
+import createInventoryImportRouter from './inventoryImport.js'
+import createMaterialRequestsRouter from './materialRequests.js'
+import { createApiRateLimiter } from './rateLimit.js'
 
 const app = express()
 const port = Number(process.env.PORT || 3001)
+const host = process.env.API_HOST || '127.0.0.1'
 
+app.set('trust proxy', 'loopback')
 app.use(cors())
+app.use('/api', createApiRateLimiter())
 app.use(express.json())
 app.use('/api', offersRouter)
 
@@ -35,6 +41,8 @@ const accounts = createAccountService(pool)
 app.use('/api', createAccountsRouter(accounts))
 app.use('/api', createMachinesRouter(requireAdmin))
 app.use('/api', createReportsRouter(pool, accounts, requireAdmin))
+app.use('/api', createInventoryImportRouter(pool, requireAdmin))
+app.use('/api', createMaterialRequestsRouter(requireAdmin))
 const payablesRouter = createPayablesRouter(accounts, requireAdmin)
 app.use('/api', payablesRouter)
 setInterval(() => payablesRouter.sweep().catch((error) => console.error('Falha ao verificar vencimentos:', error.message)), 60000).unref()
@@ -46,8 +54,13 @@ app.post('/api/auth/operator-login', (request, response) => {
   return response.json({ token: issueOperatorToken(), role: 'operator' })
 })
 
-app.get('/api/health', (_request, response) => {
-  response.json({ status: 'ok', databaseConfigured: Boolean(pool) })
+app.get('/api/health', async (_request, response) => {
+  try {
+    if (pool) await pool.execute('SELECT 1')
+    response.json({ status: 'ok', databaseConfigured: Boolean(pool), databaseConnected: Boolean(pool) })
+  } catch {
+    response.status(503).json({ status: 'unavailable', databaseConfigured: true, databaseConnected: false })
+  }
 })
 
 app.get('/api/inventory', async (_request, response) => {
@@ -265,6 +278,6 @@ app.use((error, _request, response, _next) => {
   response.status(error.status || 500).json({ message: error.status ? error.message : 'Não foi possível concluir a operação.' })
 })
 
-app.listen(port, () => {
-  console.log(`API GMAC disponível em http://localhost:${port}`)
+app.listen(port, host, () => {
+  console.log(`API GMAC disponível em http://${host}:${port}`)
 })

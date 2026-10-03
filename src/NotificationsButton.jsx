@@ -7,16 +7,27 @@ export default function NotificationsButton({ onOpenAccount }) {
   const id = useId()
   const button = useRef(null)
   const panel = useRef(null)
+  const requestQueue = useRef(Promise.resolve())
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState([])
   const [error, setError] = useState('')
+  const token = sessionStorage.getItem('gmac-admin-token')
   useEffect(() => {
-    if (!sessionStorage.getItem('gmac-admin-token')) return undefined
+    if (!token) return undefined
     let active = true
-    const refresh = () => payableRequest('/payables/notifications').then((result) => { if (active) { setItems(result.items); setError('') } }).catch(() => { if (active) setError('Não foi possível carregar as notificações.') })
+    const refresh = () => {
+      // A closing refresh waits for the read acknowledgement, avoiding a stale badge.
+      requestQueue.current = requestQueue.current.then(async () => {
+        if (sessionStorage.getItem('gmac-admin-token') !== token || !active && !open) return
+        const result = await payableRequest(open ? '/payables/notifications/read-all' : '/payables/notifications', open ? 'POST' : 'GET')
+        if (active) { setItems(result.items); setError('') }
+      }).catch(() => { if (active) setError(open ? 'Não foi possível marcar as notificações como lidas. Abra o sino novamente para tentar.' : 'Não foi possível carregar as notificações.') })
+    }
     refresh(); const timer = setInterval(refresh, 30000)
-    return () => { active = false; clearInterval(timer) }
-  }, [open])
+    window.addEventListener('gmac-notification-settings-changed', refresh)
+    return () => { active = false; clearInterval(timer); window.removeEventListener('gmac-notification-settings-changed', refresh) }
+  }, [open, token])
+  const unreadCount = items.filter((item) => !item.readAt).length
 
   function position() {
     const box = button.current.getBoundingClientRect()
@@ -45,10 +56,11 @@ export default function NotificationsButton({ onOpenAccount }) {
   }, [open])
 
   return <div className="workspace-notifications">
-    <button ref={button} className="notifications-trigger" type="button" title="Notificações" aria-label="Notificações" aria-haspopup="dialog" aria-expanded={open} aria-controls={id} popovertarget={id} onClick={position}><Bell size={19} strokeWidth={1.7} aria-hidden="true" />{items.length > 0 && <span className="notifications-count">{items.length}</span>}</button>
+    <button ref={button} className="notifications-trigger" type="button" title="Notificações" aria-label="Notificações" aria-haspopup="dialog" aria-expanded={open} aria-controls={id} popovertarget={id} onClick={position}><Bell size={19} strokeWidth={1.7} aria-hidden="true" />{!open && unreadCount > 0 && <span className="notifications-count">{unreadCount}</span>}</button>
     <div ref={panel} id={id} popover="auto" className="notifications-popup" role="dialog" aria-labelledby={`${id}-title`}>
       <header><h2 id={`${id}-title`}>Notificações</h2><button className="notifications-close" type="button" title="Fechar notificações" aria-label="Fechar notificações" onClick={() => { panel.current.hidePopover(); button.current.focus({ preventScroll: true }) }}><X size={16} aria-hidden="true" /></button></header>
-      {error ? <p role="alert" className="notifications-error">{error}</p> : items.length ? <div className="notifications-payables">{items.map((item) => <button type="button" key={item.id} onClick={() => { panel.current.hidePopover(); onOpenAccount?.(item.accountId) }}><strong>{item.accountId} · {item.account.daysUntil < 0 ? `Vencida há ${Math.abs(item.account.daysUntil)} dias` : item.account.daysUntil === 0 ? 'Vence hoje' : `Vence em ${item.account.daysUntil} dias`}</strong><span>{item.account.supplierName} · {money(item.account.valueCents)}</span><small>{dateLabel(item.dueDate)} · {item.account.description}</small></button>)}</div> : <div className="notifications-empty"><Bell size={26} strokeWidth={1.5} aria-hidden="true" /><p>Nenhuma notificação no momento.</p></div>}
+      {error && <p role="alert" className="notifications-error">{error}</p>}
+      {items.length ? <div className="notifications-payables">{items.map((item) => <button type="button" key={item.id} onClick={() => { panel.current.hidePopover(); onOpenAccount?.(item.accountId) }}><strong>{item.accountId} · {item.account.daysUntil < 0 ? `Vencida há ${Math.abs(item.account.daysUntil)} dias` : item.account.daysUntil === 0 ? 'Vence hoje' : `Vence em ${item.account.daysUntil} dias`}</strong><span>{item.account.supplierName} · {money(item.account.valueCents)}</span><small>{dateLabel(item.dueDate)} · {item.account.description}</small></button>)}</div> : <div className="notifications-empty"><Bell size={26} strokeWidth={1.5} aria-hidden="true" /><p>Nenhuma notificação no momento.</p></div>}
     </div>
   </div>
 }

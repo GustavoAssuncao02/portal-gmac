@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import './employeeActivity.css'
 
 const periods = [['today', 'Hoje'], ['yesterday', 'Ontem'], ['7days', 'Últimos 7 dias'], ['30days', 'Últimos 30 dias'], ['all', 'Desde sempre'], ['date', 'Data específica']]
-const labels = { started: 'Trabalho iniciado', resumed: 'Trabalho retomado', paused: 'Trabalho pausado', stage_progress: 'Peças registradas', completed: 'OS concluída', admin_interrupted: 'Interrupção administrativa' }
+const labels = { started: 'Trabalho iniciado', resumed: 'Trabalho retomado', paused: 'Trabalho pausado', machine_changed: 'Troca de máquina', stage_progress: 'Peças registradas', completed: 'OS concluída', admin_interrupted: 'Interrupção administrativa' }
 const formatMoment = (at) => new Date(at).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })
 
 function details(event) {
@@ -12,7 +12,7 @@ function details(event) {
   if (event.durationMs != null) {
     const seconds = Math.max(0, Math.floor(Number(event.durationMs) / 1000))
     const duration = [Math.floor(seconds / 3600), Math.floor(seconds % 3600 / 60), seconds % 60].map((value) => String(value).padStart(2, '0')).join(':')
-    parts.push(`Tempo da sessão: ${duration}`)
+    parts.push(`${event.type === 'machine_changed' ? 'Tempo na máquina anterior' : 'Tempo da sessão'}: ${duration}`)
   }
   if (event.type === 'admin_interrupted') parts.push('Encerrada pelo administrador')
   if (event.details) parts.push(Array.isArray(event.details) ? event.details.join(', ') : String(event.details))

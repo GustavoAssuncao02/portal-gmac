@@ -10,7 +10,7 @@ const duration = (value) => {
   return [Math.floor(seconds / 3600), Math.floor(seconds % 3600 / 60), seconds % 60].map((part) => String(part).padStart(2, '0')).join(':')
 }
 const statusLabels = { waiting: 'Aguardando', running: 'Em execução', paused: 'Pausado', finalizing: 'Finalizando', completed: 'Concluído' }
-const eventLabels = { started: 'Início', resumed: 'Retomada', paused: 'Pausa', stage_progress: 'Peças registradas', completed: 'Conclusão', completion_acknowledged: 'Conclusão confirmada no painel', admin_interrupted: 'Interrupção administrativa', stages_configured: 'Etapas configuradas' }
+const eventLabels = { started: 'Início', resumed: 'Retomada', paused: 'Pausa', machine_changed: 'Troca de máquina', stage_progress: 'Peças registradas', completed: 'Conclusão', completion_acknowledged: 'Conclusão confirmada no painel', admin_interrupted: 'Interrupção administrativa', stages_configured: 'Etapas configuradas' }
 
 function Facts({ items, className = '' }) {
   return <dl className={`os-facts ${className}`}>{items.map(([label, value, detail]) => <div key={label}><dt>{label}</dt><dd>{value ?? 'Não informado'}{detail && <small>{detail}</small>}</dd></div>)}</dl>
@@ -63,7 +63,7 @@ function OrderHistoryModal({ order, onClose, Icon }) {
       {loading ? <p className="os-history-empty" role="status">Carregando operações...</p> : !error && !items.length ? <p className="os-history-empty">Nenhuma interação registrada.</p> : items.length > 0 && <>
         <p className="os-history-count" role="status">{items.length} {items.length === 1 ? 'operação registrada' : 'operações registradas'}</p>
         <div className="os-history-table-wrap"><table><thead><tr><th>Data e hora</th><th>Operação</th><th>Responsável</th><th>Detalhes</th></tr></thead><tbody>{items.map((event) => <tr key={event.id}>
-          <td>{new Date(event.at).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })}</td><td><strong>{eventLabels[event.type] || event.type}</strong></td><td>{event.employeeName || 'Administrador'}{event.affectedEmployeeName && <small>Operador: {event.affectedEmployeeName}</small>}</td><td>{event.reason && <span>{event.reason}</span>}{event.stageName && <span>{event.stageName}: +{number(event.quantity)} peça(s), {number(event.stageTotal)}/{number(order.quantity)} no total</span>}{event.details && <span>{Array.isArray(event.details) ? event.details.join(', ') : String(event.details)}</span>}{event.durationMs != null && <span>Tempo da sessão: {duration(event.durationMs)}</span>}{!event.reason && !event.stageName && !event.details && event.durationMs == null && '—'}</td>
+          <td>{new Date(event.at).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })}</td><td><strong>{eventLabels[event.type] || event.type}</strong></td><td>{event.employeeName || 'Administrador'}{event.affectedEmployeeName && <small>Operador: {event.affectedEmployeeName}</small>}</td><td>{event.reason && <span>{event.reason}</span>}{event.stageName && <span>{event.stageName}: +{number(event.quantity)} peça(s), {number(event.stageTotal)}/{number(order.quantity)} no total</span>}{event.details && <span>{Array.isArray(event.details) ? event.details.join(', ') : String(event.details)}</span>}{event.durationMs != null && <span>{event.type === 'machine_changed' ? 'Tempo na máquina anterior' : 'Tempo da sessão'}: {duration(event.durationMs)}</span>}{!event.reason && !event.stageName && !event.details && event.durationMs == null && '—'}</td>
         </tr>)}</tbody></table></div>
       </>}
     </div>
@@ -105,6 +105,7 @@ export default function OrderDetails({ order, activeTime, stageNamesInput, onCha
         ]} />
         <h4>Planejamento</h4><Facts className="os-planning-facts" items={[
           ['Tipo', (proposal.kind || order.resources?.kind) === 'product' ? 'Produto' : 'Serviço'], ['Tempo de máquina', proposal.machine || 'Não informado'], ['Tempo de serviço', proposal.serviceTime || 'Não informado'],
+          ['Processo', order.resources?.strictProcess === false ? 'Etapas livres' : 'Sequência obrigatória'],
           ['Fabricado a partir de', order.resources?.manufacturedFrom === 'sample' ? 'Amostra' : order.resources?.manufacturedFrom === 'drawing' ? 'Desenho' : 'Não informado'], ['Têmpera', order.resources?.tempering === true ? 'Sim' : order.resources?.tempering === false ? 'Não' : 'Não informada'], ...(proposalStages.includes('painting') ? [['Cor/Tipo', order.resources?.paintColor || 'Não informado']] : []),
         ]} />
         {order.resources?.serviceDescription && <p className="os-description">{order.resources.serviceDescription}</p>}

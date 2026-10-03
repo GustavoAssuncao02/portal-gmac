@@ -22,16 +22,20 @@ export function workIntervals(orders, now = Date.now()) {
     const closed = new Set()
     for (const event of [...(order.operationEvents || [])].sort((a, b) => Date.parse(a.at) - Date.parse(b.at))) {
       if (['started', 'resumed'].includes(event.type) && event.sessionId) starts.set(event.sessionId, event)
-      if (!['paused', 'completed', 'admin_interrupted'].includes(event.type) || closed.has(event.sessionId)) continue
+      if (!['paused', 'completed', 'admin_interrupted', 'machine_changed'].includes(event.type) || closed.has(event.sessionId)) continue
       const initial = starts.get(event.sessionId)
       const end = Math.min(now, Date.parse(event.at))
       const start = initial ? Date.parse(initial.at) : Number.isFinite(Number(event.durationMs)) ? Date.parse(event.at) - Number(event.durationMs) : NaN
-      if (Number.isFinite(start) && Number.isFinite(end) && end > start) intervals.push({ start, end, employeeId: initial?.employeeId ?? event.employeeId, employeeName: initial?.employeeName || event.affectedEmployeeName || event.employeeName, machineId: initial?.machineId ?? event.machineId, machineName: initial?.machineName || event.machineName, orderCode: order.code })
+      if (Number.isFinite(start) && Number.isFinite(end) && end > start) intervals.push({ start, end, employeeId: initial?.employeeId ?? event.employeeId, employeeName: initial?.employeeName || event.affectedEmployeeName || event.employeeName, machineId: initial ? initial.machineId : event.machineId, machineName: initial ? initial.machineName : event.machineName, orderCode: order.code })
+      if (event.type === 'machine_changed') {
+        starts.set(event.sessionId, { ...event, machineId: event.nextMachineId, machineName: event.nextMachineName })
+        continue
+      }
       if (event.sessionId) closed.add(event.sessionId)
     }
     const active = order.operation?.activeSession
     if (active && !closed.has(active.id)) {
-      const start = Date.parse(active.startedAt)
+      const start = Date.parse(starts.get(active.id)?.at || active.machineStartedAt || active.startedAt)
       if (Number.isFinite(start) && now > start) intervals.push({ start, end: now, employeeId: active.employeeId, employeeName: active.employeeName, machineId: active.machineId, machineName: active.machineName, orderCode: order.code })
     }
   }

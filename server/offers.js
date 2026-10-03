@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { setTimeout as delay } from 'node:timers/promises'
 import express from 'express'
 import PDFDocument from 'pdfkit'
-import { productionStages, stageLabel, serviceDetails } from './serviceStages.js'
+import { productionStages, stageLabel, serviceDetails, readStageLayout, validStageLayout } from './serviceStages.js'
 
 const dataDirectory = path.join(path.dirname(fileURLToPath(import.meta.url)), 'data')
 const filesDirectory = path.join(dataDirectory, 'files')
@@ -53,7 +53,7 @@ const date = (value) => new Date(value).toLocaleDateString('pt-BR', { timeZone: 
 const stageKeys = productionStages.map(([key]) => key)
 
 function serviceSettings(offer) {
-  return { stages: offer.resources?.stages ?? offer.proposal?.stages ?? [], kind: offer.resources?.kind ?? offer.proposal?.kind ?? 'service' }
+  return { stages: offer.resources?.stages ?? offer.proposal?.stages ?? [], kind: offer.resources?.kind ?? offer.proposal?.kind ?? 'service', strictProcess: serviceDetails(offer.resources).strictProcess }
 }
 
 function nextCode(prefix, rows) {
@@ -105,6 +105,7 @@ function createPdf(offer, proposal, resources, layout) {
       .text(`Tempo de máquina: ${proposal.machine}`)
       .text(`Tempo de serviço: ${proposal.serviceTime}`)
       .text(`Etapas: ${(proposal.stages || []).map(stageLabel).join(', ') || 'A definir'}`)
+      .text(`Processo: ${serviceDetails(resources).strictProcess ? 'Sequência obrigatória' : 'Etapas livres'}`)
       .text(`Tipo: ${proposal.kind === 'product' ? 'Produto' : 'Serviço'}`)
       .text(`Fabricado a partir de: ${resources.manufacturedFrom === 'sample' ? 'Amostra' : resources.manufacturedFrom === 'drawing' ? 'Desenho' : 'Não informado'}`)
       .text(`Têmpera: ${resources.tempering === true ? 'Sim' : resources.tempering === false ? 'Não' : 'Não informada'}`)
@@ -146,16 +147,18 @@ router.put('/offers/:id/resources', async (request, response) => {
   const resources = request.body ?? {}
   if (!Array.isArray(resources.materials) || !Array.isArray(resources.laborEntries)) return response.status(400).json({ message: 'Recursos inválidos.' })
   if (resources.stages !== undefined && (!Array.isArray(resources.stages) || resources.stages.some((stage) => !stageKeys.includes(stage)))) return response.status(400).json({ message: 'Etapas inválidas.' })
+  if (resources.stageLayout !== undefined && !validStageLayout(resources.stageLayout)) return response.status(400).json({ message: 'Ordem dos grupos ou subetapas inválida.' })
   if (resources.kind !== undefined && !['service', 'product'].includes(resources.kind)) return response.status(400).json({ message: 'Tipo inválido.' })
   if (resources.manufacturedFrom != null && !['sample', 'drawing'].includes(resources.manufacturedFrom)) return response.status(400).json({ message: 'Origem de fabricação inválida.' })
   if (resources.tempering != null && typeof resources.tempering !== 'boolean') return response.status(400).json({ message: 'Têmpera inválida.' })
+  if (resources.strictProcess !== undefined && typeof resources.strictProcess !== 'boolean') return response.status(400).json({ message: 'Informe se o processo segue uma sequência obrigatória.' })
   if (['paintColor', 'serviceDescription'].some((field) => resources[field] != null && typeof resources[field] !== 'string')) return response.status(400).json({ message: 'Descrição inválida.' })
   try {
     const offer = await mutateStore((store) => {
       const item = store.offers.find((entry) => entry.id === request.params.id)
       if (!item || item.orderCode) return null
       const settings = serviceSettings(item)
-      const nextResources = { materials: resources.materials, laborEntries: resources.laborEntries, stages: stageKeys.filter((stage) => (resources.stages ?? settings.stages).includes(stage)), kind: resources.kind ?? settings.kind, ...serviceDetails({ ...item.resources, ...resources }), paintColor: clean(resources.paintColor ?? item.resources?.paintColor, 160), serviceDescription: clean(resources.serviceDescription ?? item.resources?.serviceDescription, 5000) }
+      const nextResources = { materials: resources.materials, laborEntries: resources.laborEntries, stages: [...new Set(resources.stages ?? settings.stages)], stageLayout: readStageLayout({ stages: resources.stages ?? settings.stages, stageLayout: resources.stageLayout ?? item.resources?.stageLayout }), kind: resources.kind ?? settings.kind, ...serviceDetails({ ...item.resources, ...resources }), paintColor: clean(resources.paintColor ?? item.resources?.paintColor, 160), serviceDescription: clean(resources.serviceDescription ?? item.resources?.serviceDescription, 5000) }
       if (JSON.stringify(item.resources) !== JSON.stringify(nextResources)) {
         item.proposal = null
         item.status = 'review'

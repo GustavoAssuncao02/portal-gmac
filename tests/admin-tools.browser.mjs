@@ -102,7 +102,7 @@ try {
     await page.screenshot({ path: `test-results/account-settings-${width}.png`, fullPage: true })
   }
   await page.setViewportSize({ width: 1366, height: 900 })
-  await navigate('Dashboard')
+  await navigate('In\u00edcio')
   await page.getByRole('heading', { name: 'Bem-vindo, Gustavo', exact: true }).waitFor()
   await page.getByRole('button', { name: 'Sair', exact: true }).click()
   await login('novaSenha123')

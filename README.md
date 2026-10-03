@@ -49,6 +49,20 @@ Com MySQL configurado, aplique `database/migrations/003_operator_workflow.sql` e
 
 Para bancos existentes, aplique também `database/migrations/004_clients.sql` antes de usar o cadastro e os relatórios de clientes.
 
+## Testar na rede local
+
+O Vite atende em todas as interfaces na porta 5174. Outros computadores na mesma rede devem abrir `http://IP-DESTE-COMPUTADOR:5174`. No servidor, `http://localhost:5174` continua funcionando. O IP pode mudar se o roteador atribuir outro endereco.
+
+Preencha as credenciais MySQL em `.env` e execute `npm run db:setup` antes de iniciar `npm run dev`. O preparo cria o banco dedicado `portal_gmac`, faz backup de `server/data/offers.json` e importa funcionarios, administradores, clientes e historicos/estados de operacao. O comando nao sobrescreve tabelas ja populadas; uma importacao concluida nao se repete. A conta local principal mantem seu login e senha. Campos cadastrais ausentes dessa conta de demonstracao recebem data/e-mail ficticios.
+
+Frontend e API precisam permanecer executando neste computador, com o MySQL80 ativo. A API fica em `127.0.0.1:3002` e o frontend encaminha `/api` para ela. Nao e necessario abrir a porta 3306 nem instalar MySQL nos computadores clientes. Confira a conexao real em `/api/health`: `databaseConnected: true`.
+
+As rotas `/api` aceitam ate 200 requisicoes por minuto por IP, somadas entre todas as rotas, incluindo login. Ao atingir o limite, retornam HTTP 429 com `Retry-After`. O proxy local encaminha o IP real de cada computador e substitui cabecalhos de encaminhamento enviados pelo cliente. Arquivos da interface nao entram nessa contagem. A contagem fica na memoria de cada processo da API e reinicia com o servidor; para usar varias instancias, sera necessario um armazenamento compartilhado. Em outro proxy de producao, configure explicitamente os enderecos confiaveis e a substituicao de `X-Forwarded-For`.
+
+O estoque anterior do navegador e copiado para a chave local `gmac-inventory-before-mysql` antes da primeira importacao. Materiais ausentes sao importados para o MySQL; saldos ja existentes no servidor nao sao sobrescritos por caches de outros computadores. Um navegador novo so inicializa o catalogo de demonstracao quando o estoque compartilhado esta vazio. Edicoes e entradas usam os IDs e saldos retornados pelo servidor; a tela consulta o estoque a cada 10 segundos.
+
+Ofertas, conteudo das OS, maquinas, aprovacoes de compra e contas a pagar continuam em `server/data/`, agora compartilhados pela mesma API. A primeira sessao administrativa importa aprovacoes validas do navegador sem apagar as de outros computadores; novas aprovacoes sao persistidas no servidor e consultadas a cada 10 segundos. Portanto, faca backup tanto do MySQL quanto dessa pasta, incluindo anexos. Nao copie a pasta de dados para cada cliente. Este ambiente e de teste em rede confiavel; nao publique a porta do Vite na internet. Se houver bloqueio no Firewall do Windows, permita Node.js/porta TCP 5174 apenas na rede local. Nao desative o firewall.
+
 ## Cadastros e Conta
 
 Clientes e administradores são persistidos pela API: no MySQL quando configurado, ou no arquivo local. Máquinas ficam no arquivo local e o catálogo anterior do navegador é importado uma única vez ao entrar como administrador. Horas e nomes de máquina ficam registrados em cada sessão, inclusive após excluir um cadastro.

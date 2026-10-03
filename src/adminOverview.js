@@ -1,5 +1,20 @@
 import { deliveryTimestamp, serviceDeadline } from './serviceDeadline.js'
 import { pendingInventoryRequests, purchaseMaterialRequests } from './offerResources.js'
+import { DAY, filterPayables, todayBahia } from '../server/payableRules.js'
+
+export function payableOverview(rows, now = Date.now()) {
+  const today = todayBahia(new Date(now))
+  const shiftDay = (days) => new Date(Date.parse(`${today}T12:00:00Z`) + days * DAY).toISOString().slice(0, 10)
+  return [
+    { key: 'open', label: 'Total em aberto', filters: {} },
+    { key: 'overdue', label: 'Contas vencidas', filters: { status: 'overdue' } },
+    { key: 'today', label: 'Vencem hoje', filters: { status: 'pending', start: today, end: today } },
+    { key: 'upcoming', label: 'Próximos 7 dias', filters: { status: 'pending', start: shiftDay(1), end: shiftDay(7) } },
+  ].map((item) => {
+    const selected = filterPayables(rows, item.filters, today)
+    return { ...item, count: selected.length, valueCents: selected.reduce((sum, row) => sum + row.valueCents, 0) }
+  })
+}
 
 export function adminOverview(orders, offers, inventory, savedRequests = [], now = Date.now()) {
   const openOrders = orders.filter((order) => order.operation?.status !== 'completed').map((order) => {

@@ -18,7 +18,7 @@ let inventory = [
   { id: 4, name: 'Aluminio disponivel', detail: 'Chapa', quantity: 50, minimum: 10, unitPrice: 30 },
 ]
 const home = page.locator('.admin-home-main')
-const navigate = (label) => page.locator('.sidebar').getByRole('button', { name: label, exact: true }).click()
+const navigate = (label) => page.locator('.sidebar').getByRole('button', { name: label === 'Dashboard' ? 'In\u00edcio' : label, exact: true }).click()
 const order = (code, service, deadline, status = 'waiting', fields = {}) => ({
   code, offerId: `offer-${code}`, service, company: 'Cliente industrial', cnpj: '12345678000190', labelNumber: '120', description: 'Estrutura conforme desenho', quantity: 10,
   requestedAt: '2026-09-01T12:00:00Z', createdAt: '2026-09-01T12:00:00Z', deadline, attachments: [], resources: { materials: [], laborEntries: [] },
@@ -44,11 +44,12 @@ try {
     ]
   })
   await page.route('**/api/auth/login', (route) => route.fulfill({ status: 200, json: { user: { id: 1, name: userName, cpf: '12345678901' } } }))
+  await page.route('**/api/payables', (route) => route.fulfill({ status: 200, json: { items: [] } }))
   await page.route('**/api/inventory', (route) => route.fulfill({ status: inventoryStatus, json: inventoryStatus === 200 ? { items: inventory } : { message: 'Estoque indisponivel' } }))
   await page.clock.install({ time: new Date('2026-10-03T15:00:00-03:00') })
   await page.goto(fixture.url)
   await login('Gustavo')
-  assert.equal(await page.getByRole('tab', { name: 'Dashboard', exact: true }).getAttribute('aria-selected'), 'true')
+  assert.equal(await page.getByRole('tab', { name: 'In\u00edcio', exact: true }).getAttribute('aria-selected'), 'true')
   assert.equal(await page.locator('.account-copy strong').innerText(), 'Gustavo Almeida')
   assert.equal(await page.locator('.account-copy > span').innerText(), 'Administrador')
   assert.equal(await metric('OS em aberto'), '5')

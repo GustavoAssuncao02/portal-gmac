@@ -1,0 +1,80 @@
+import assert from 'node:assert/strict'
+import { chromium } from 'playwright'
+import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
+
+const fixture = await createWorkflowFixture()
+const browser = await chromium.launch({ headless: true })
+const context = await browser.newContext({ viewport: { width: 1366, height: 900 } })
+const page = await context.newPage()
+const errors = []
+page.on('pageerror', (error) => errors.push(error.message))
+try {
+  await fixture.mutateStore((store) => { store.machines = [{ id: 'torno', name: 'Torno 01' }, { id: 'fresa', name: 'Fresa 02' }] })
+  const employee = (await fixture.request('/employees', 'POST', { name: 'Ana Teste', birthDate: '1990-01-01', cpf: '00000000001', email: 'ana@example.invalid', identification: '001' })).data.item
+  const offer = (await fixture.request('/offers', 'POST', offerDraft)).data.item
+  await fixture.request(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], kind: 'service', stages: ['turning'] })
+  await fixture.request(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', deadline: offerDraft.deadline, serviceValue: 100 } })
+  const order = (await fixture.request(`/offers/${offer.id}/accept`, 'POST')).data.item
+  await context.addInitScript((token) => sessionStorage.setItem('gmac-operator-token', token), fixture.operatorToken)
+  await page.goto(fixture.url)
+  assert.equal(await page.getByRole('button', { name: 'Trocar máquina', exact: true }).count(), 0)
+  await page.getByRole('button', { name: 'Trabalhar neste projeto', exact: true }).click()
+  await page.getByLabel('Funcionário', { exact: true }).selectOption(String(employee.id))
+  await page.getByLabel('Máquina', { exact: true }).selectOption('torno')
+  await page.getByRole('button', { name: 'Iniciar trabalho', exact: true }).click()
+  const swap = page.getByRole('button', { name: 'Trocar máquina', exact: true })
+  await swap.waitFor()
+  const before = (await fixture.request('/operations/orders')).data.items[0].operation
+  const session = await page.evaluate((code) => sessionStorage.getItem(`gmac-operator-session-${code}`), order.code)
+  const quantities = page.locator('.operator-stage-action input')
+  await quantities.first().fill('2')
+  await swap.click()
+  const dialog = page.getByRole('dialog')
+  await dialog.waitFor()
+  assert.match(await dialog.innerText(), /Máquina atual: Torno 01/)
+  assert.equal(await page.getByLabel('Nova máquina', { exact: true }).inputValue(), 'torno')
+  assert.equal(await page.getByRole('button', { name: 'Confirmar troca', exact: true }).isEnabled(), false)
+  await page.screenshot({ path: 'test-results/operator-machine-change-desktop.png' })
+  await page.getByLabel('Nova máquina', { exact: true }).selectOption('fresa')
+  await page.getByRole('button', { name: 'Confirmar troca', exact: true }).click()
+  await dialog.waitFor({ state: 'hidden' })
+  const after = (await fixture.request('/operations/orders')).data.items[0].operation
+  assert.equal(after.activeSession.machineId, 'fresa')
+  assert.equal(after.activeSession.id, before.activeSession.id)
+  assert.equal(after.activeSession.startedAt, before.activeSession.startedAt)
+  assert.equal(await quantities.first().inputValue(), '2')
+  assert.equal(await page.evaluate((code) => sessionStorage.getItem(`gmac-operator-session-${code}`), order.code), session)
+  await page.locator('.operator-history summary').click()
+  await page.getByText('Trocou de máquina', { exact: true }).waitFor()
+  assert.match(await page.locator('.operator-history').innerText(), /Torno 01 → Fresa 02/)
+  await page.reload()
+  await swap.waitFor()
+  await page.getByRole('button', { name: 'Visualizar informações do projeto', exact: true }).click()
+  await page.locator('.operator-project-info').waitFor()
+  assert.match(await page.locator('.operator-project-info').innerText(), /Máquina atual\s*Fresa 02/)
+  await page.getByRole('button', { name: /Voltar/ }).click()
+  await page.setViewportSize({ width: 390, height: 844 })
+  await swap.click()
+  await dialog.waitFor()
+  await page.screenshot({ path: 'test-results/operator-machine-change-mobile.png' })
+  const bounds = await dialog.boundingBox()
+  assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= 390)
+  await page.getByLabel('Nova máquina', { exact: true }).selectOption('')
+  await page.getByRole('button', { name: 'Confirmar troca', exact: true }).click()
+  await dialog.waitFor({ state: 'hidden' })
+  assert.equal((await fixture.request('/operations/orders')).data.items[0].operation.activeSession.machineId, null)
+  await page.getByRole('button', { name: 'Pausar trabalho', exact: true }).click()
+  await dialog.locator('select').selectOption('Descanso')
+  await page.getByRole('button', { name: 'Confirmar pausa', exact: true }).click()
+  await dialog.waitFor({ state: 'hidden' })
+  assert.equal(await swap.count(), 0)
+  assert.equal((await fixture.request('/operations/orders')).data.items[0].operation.status, 'paused')
+  assert.deepEqual(errors, [])
+  console.log('Operator machine change passed: owner-only button, current/new machine, same work session, reload, manual work, history, pause and desktop/mobile layout.')
+} catch (error) {
+  await page.screenshot({ path: 'test-results/operator-machine-change-failure.png' })
+  throw error
+} finally {
+  await browser.close()
+  await fixture.close()
+}

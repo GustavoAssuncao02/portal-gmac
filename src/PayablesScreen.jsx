@@ -45,10 +45,15 @@ function MiniBI({ rows, onOpen }) {
     <div className="payable-bi-lists">{[['Próximas contas a pagar', result.upcoming], ['Contas vencidas', result.overdue]].map(([title, accounts]) => <section key={title}><h2>{title}</h2>{!accounts.length && <p className="payable-muted">Nenhuma conta.</p>}<div>{accounts.map((r) => <button type="button" key={r.id} onClick={() => onOpen(r.id)}><strong>{r.id} · {r.description || r.supplierName}{r.inactive ? ' (D)' : ''}</strong><span>{dateLabel(r.dueDate)} · {money(r.valueCents)}</span><PayableStatus row={r} /></button>)}</div></section>)}</div>
   </>
 }
-export default function PayablesScreen({ mode = 'accounts', ...props }) {
+export default function PayablesScreen({ mode = 'accounts', accountFilters, ...props }) {
   const [data, setData] = useState({ items: [], suppliers: [], classifications: [] }), [loading, setLoading] = useState(true), [error, setError] = useState(''), [version, setVersion] = useState(0)
   const [filters, setFilters] = useState(initialFilters), [advanced, setAdvanced] = useState(false), [page, setPage] = useState(1), [pageSize, setPageSize] = useState(20), [sort, setSort] = useState({ key: 'dueDate', direction: 1 }), [selected, setSelected] = useState([])
   const [detailId, setDetailId] = useState(() => sessionStorage.getItem('gmac-payable-open') || ''), [form, setForm] = useState(null), [payRows, setPayRows] = useState(null), [confirm, setConfirm] = useState(null), [history, setHistory] = useState(null), [registry, setRegistry] = useState(null), [linked, setLinked] = useState(null), [exporting, setExporting] = useState(false)
+  useEffect(() => {
+    if (mode !== 'accounts') return
+    setFilters({ ...initialFilters(), ...accountFilters })
+    setAdvanced(Boolean(accountFilters?.start || accountFilters?.end))
+  }, [mode, accountFilters])
   async function refresh() { const result = await payableRequest('/payables'); setData(result); setVersion((v) => v + 1); setError(''); return result }
   useEffect(() => {
     let active = true

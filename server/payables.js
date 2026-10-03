@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { readStore, mutateStore } from './offers.js'
 import { exportPdf, exportWorkbook } from './reports.js'
 import { cents, validDate, todayBahia, payableStatus, daysUntil, makeInstallments, shiftMonth, filterPayables } from './payableRules.js'
+import { notificationSettings } from './accounts.js'
 
 const directory = path.join(path.dirname(fileURLToPath(import.meta.url)), 'data', 'payable-files')
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), { status }) }
@@ -66,6 +67,17 @@ function payment(body, valueCents, bulk = false) {
 function view(row, store) {
   return { ...row, supplierName: (store.suppliers || []).find((item) => String(item.id) === String(row.supplierId))?.name || row.supplierName, classificationName: store.classifications.find((item) => item.id === row.classificationId)?.name || row.classificationName, status: payableStatus(row), daysUntil: daysUntil(row.dueDate) }
 }
+function activeNotifications(store, userId) {
+  const { payableReminderDays } = notificationSettings(store, userId)
+  if (payableReminderDays === 'never') return []
+  return store.payableNotifications.filter((notice) => {
+    const row = store.payables.find((item) => item.id === notice.accountId)
+    return row && !row.payment && !row.inactive && notice.dueDate === row.dueDate && [0, payableReminderDays].includes(notice.days)
+  })
+}
+function notificationItems(store, userId) {
+  return activeNotifications(store, userId).map(({ readBy, ...notice }) => ({ ...notice, readAt: readBy?.find((entry) => String(entry.userId) === String(userId))?.at || null, account: view(find(store, notice.accountId), store) })).reverse()
+}
 function report(rows, store, individual = false, filters = {}) {
   const columns = ['ID', 'Fornecedor', 'Descrição', 'Classificação', 'Documento', 'Emissão', 'Valor (R$)', 'Vencimento', 'Status', 'Parcela', 'Pagamento', 'Forma', 'Juros (R$)', 'Desconto (R$)', 'Pago (R$)', 'Observação da baixa', 'Compra original (R$)', 'Origem recorrente']
   const sections = [{ name: 'Contas a pagar', columns, rows: rows.map((raw) => { const r = view(raw, store), p = r.payment; return [r.id, r.supplierName, `${r.description}${r.inactive ? ' (D)' : ''}`, r.classificationName, r.documentNumber, r.issueDate, r.valueCents / 100, r.dueDate, `${statusLabel[r.status]}${r.inactive ? ' (D)' : ''}`, r.groupId ? `${r.installmentNumber} de ${r.installmentCount}` : '', p?.date, p?.method, (p?.interestCents || 0) / 100, (p?.discountCents || 0) / 100, p ? p.finalCents / 100 : '', p?.note, (r.originalTotalCents || r.valueCents) / 100, r.previousId] }) }]
@@ -82,12 +94,17 @@ export default function createPayablesRouter(accounts, requireAdmin) {
   router.use(['/payables', '/classifications', '/suppliers'], requireAdmin)
   router.use(['/payables', '/classifications', '/suppliers'], async (request, _response, next) => { try { request.actor = (await accounts.admins()).find((item) => String(item.id) === String(request.adminId)); if (!request.actor) fail('Administrador não encontrado.', 401); next() } catch (error) { next(error) } })
   const handle = (fn) => async (req, res, next) => { try { await fn(req, res) } catch (error) { next(error) } }
-  async function sweep() {
+  async function sweep(userId) {
     const today = todayBahia()
     const snapshot = await readStore(); init(snapshot)
-    const needsWrite = snapshot.payables.some((row) => {
+    const reminderDay = (store, row) => {
+      const { payableReminderDays } = notificationSettings(store, userId)
       const days = daysUntil(row.dueDate, today)
-      return row.lastStatus !== payableStatus(row, today) || !row.payment && !row.inactive && [0, 3].includes(days) && !snapshot.payableNotifications.some((n) => n.id === `${row.id}:${row.dueDate}:${days}`)
+      return payableReminderDays !== 'never' && days >= 0 && days <= payableReminderDays ? days === 0 ? 0 : payableReminderDays : null
+    }
+    const needsWrite = snapshot.payables.some((row) => {
+      const days = reminderDay(snapshot, row)
+      return row.lastStatus !== payableStatus(row, today) || !row.payment && !row.inactive && days !== null && !snapshot.payableNotifications.some((n) => n.id === `${row.id}:${row.dueDate}:${days}`)
     })
     if (!needsWrite) return snapshot
     return mutateStore((store) => {
@@ -95,8 +112,8 @@ export default function createPayablesRouter(accounts, requireAdmin) {
       for (const row of store.payables) {
         const status = payableStatus(row, today)
         if (row.lastStatus !== status) { event(store, null, 'status_changed', row.id, { details: { before: row.lastStatus || 'pending', after: status } }); row.lastStatus = status }
-        const days = daysUntil(row.dueDate, today)
-        if (!row.payment && !row.inactive && [0, 3].includes(days)) {
+        const days = reminderDay(store, row)
+        if (!row.payment && !row.inactive && days !== null) {
           const id = `${row.id}:${row.dueDate}:${days}`
           if (!store.payableNotifications.some((n) => n.id === id)) store.payableNotifications.push({ id, accountId: row.id, dueDate: row.dueDate, days, at: new Date().toISOString() })
         }
@@ -106,7 +123,22 @@ export default function createPayablesRouter(accounts, requireAdmin) {
   }
   router.get('/payables', handle(async (_req, res) => { const store = await sweep(); res.json({ items: store.payables.map((r) => view(r, store)), classifications: store.classifications, suppliers: store.suppliers || [] }) }))
   router.get('/payables/history', handle(async (_req, res) => { const store = await sweep(); res.json({ items: [...store.payableEvents].reverse() }) }))
-  router.get('/payables/notifications', handle(async (_req, res) => { const store = await sweep(); res.json({ items: store.payableNotifications.filter((n) => { const row = store.payables.find((r) => r.id === n.accountId); return row && !row.payment && !row.inactive && n.dueDate === row.dueDate }).map((n) => ({ ...n, account: view(find(store, n.accountId), store) })).reverse() }) }))
+  router.get('/payables/notifications', handle(async (req, res) => { const store = await sweep(req.actor.id); res.set('Cache-Control', 'no-store').json({ items: notificationItems(store, req.actor.id) }) }))
+  router.post('/payables/notifications/read-all', handle(async (req, res) => {
+    let store = await sweep(req.actor.id)
+    if (notificationItems(store, req.actor.id).some((notice) => !notice.readAt)) {
+      store = await mutateStore((current) => {
+        init(current)
+        const at = new Date().toISOString()
+        for (const notice of activeNotifications(current, req.actor.id)) {
+          notice.readBy ||= []
+          if (!notice.readBy.some((entry) => String(entry.userId) === String(req.actor.id))) notice.readBy.push({ userId: req.actor.id, at })
+        }
+        return current
+      })
+    }
+    res.json({ items: notificationItems(store, req.actor.id) })
+  }))
   router.get('/payables/:id', handle(async (req, res) => { const store = await sweep(), row = find(store, req.params.id); const siblings = row.groupId ? store.payables.filter((r) => r.groupId === row.groupId) : []; res.json({ item: view(row, store), siblings: siblings.map((r) => view(r, store)), structureLocked: siblings.some((r) => r.payment), canDelete: !row.payment && !row.groupId && !store.payableEvents.some((e) => e.accountId === row.id && ['paid', 'reversed'].includes(e.type)) && !store.payables.some((r) => r.previousId === row.id), history: store.payableEvents.filter((e) => e.accountId === row.id).reverse() }) }))
   router.post('/payables', handle(async (req, res) => {
     const result = await mutateStore((store) => {

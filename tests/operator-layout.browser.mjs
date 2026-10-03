@@ -31,6 +31,7 @@ try {
   await page.goto(fixture.url)
   await page.locator('.operator-project').filter({ hasText: order.service }).click()
   await page.getByRole('button', { name: 'Pausar trabalho', exact: true }).waitFor()
+  await page.getByRole('button', { name: 'Mostrar projetos', exact: true }).click()
   const list = page.locator('.operator-project-list')
   const detail = page.locator('.operator-detail')
   const sidebarBox = await page.locator('.operator-sidebar').boundingBox()

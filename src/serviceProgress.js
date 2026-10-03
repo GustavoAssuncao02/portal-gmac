@@ -1,3 +1,16 @@
+import { stageGroupLabel } from '../server/serviceStages.js'
+
+export function groupProjectStages(stages = []) {
+  const groups = []
+  stages.forEach((stage, index) => {
+    const name = stageGroupLabel(stage) || 'Outras etapas'
+    // Keep consecutive groups so legacy/custom sequences retain their execution order.
+    if (groups.at(-1)?.name !== name) groups.push({ name, stages: [] })
+    groups.at(-1).stages.push({ stage, index })
+  })
+  return groups
+}
+
 export function currentPieceProgress(operation, quantity) {
   const total = Math.max(0, Math.floor(Number(quantity) || 0))
   const stages = operation?.stages || []

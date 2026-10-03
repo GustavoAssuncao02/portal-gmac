@@ -235,6 +235,7 @@ export default function createOperationsRouter(pool) {
 
   router.get('/operations/operator/orders', requireOperator, async (_request, response) => {
     try {
+      response.set('Cache-Control', 'no-store')
       response.json({ items: (await operationOrders()).map((order) => operatorOrder(order, order.operation)) })
     } catch (error) { sendError(response, error) }
   })
@@ -286,6 +287,30 @@ export default function createOperationsRouter(pool) {
     } catch (error) { sendError(response, error) }
   })
 
+  router.post('/operations/orders/:code/machine', requireOperator, async (request, response) => {
+    try {
+      const machineId = request.body?.machineId
+      if (machineId === undefined) throw new OperationError(400, 'Selecione a máquina ou o trabalho manual.')
+      const machine = machineId == null || machineId === '' ? null : (await machineRows()).find((item) => String(item.id) === String(machineId))
+      if (machineId != null && machineId !== '' && !machine) throw new OperationError(400, 'Selecione uma máquina cadastrada.')
+      const result = await changeOperation(request.params.code, (state) => {
+        assertSession(state, request.body?.sessionId, request.body?.sessionToken)
+        const session = state.activeSession
+        if (String(session.machineId ?? '') === String(machine?.id ?? '')) throw new OperationError(409, 'Selecione uma máquina diferente da atual.')
+        const event = eventFor('machine_changed', state, {
+          nextMachineId: machine?.id ?? null, nextMachineName: machine?.name ?? null,
+          durationMs: Math.max(0, Date.now() - Date.parse(session.machineStartedAt || session.startedAt)),
+          details: `${session.machineName || 'Trabalho manual'} → ${machine?.name || 'Trabalho manual'}`,
+        })
+        session.machineId = machine?.id ?? null
+        session.machineName = machine?.name ?? null
+        session.machineStartedAt = event.at
+        return event
+      })
+      response.json({ ...result, order: operatorOrder(result.order, result.operation) })
+    } catch (error) { sendError(response, error) }
+  })
+
   router.post('/operations/orders/:code/pause', requireOperator, async (request, response) => {
     try {
       if (!pauseReasons.includes(request.body?.reason)) throw new OperationError(400, 'Selecione uma justificativa para a pausa.')
@@ -314,7 +339,7 @@ export default function createOperationsRouter(pool) {
         const stage = state.stages[index]
         const next = Number(state.stageCounts[stage.key] || 0) + quantity
         if (next > Number(order.quantity)) throw new OperationError(409, 'A quantidade não pode ultrapassar o total da OS.')
-        if (index > 0 && next > Number(state.stageCounts[state.stages[index - 1].key] || 0)) throw new OperationError(409, 'As peças precisam passar pela etapa anterior antes desta etapa.')
+        if (serviceDetails(order.resources).strictProcess && index > 0 && next > Number(state.stageCounts[state.stages[index - 1].key] || 0)) throw new OperationError(409, 'As peças precisam passar pela etapa anterior antes desta etapa.')
         state.stageCounts[stage.key] = next
         const event = eventFor('stage_progress', state, { stageKey: stage.key, stageName: stage.name, quantity, stageTotal: next })
         if (state.stages.every((item) => Number(state.stageCounts[item.key] || 0) === Number(order.quantity))) state.status = 'finalizing'

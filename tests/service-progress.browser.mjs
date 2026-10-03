@@ -30,6 +30,11 @@ for (const [code, counts] of [['piece-eight', [8, 7]], ['piece-nine', [8, 8]], [
   sample.operation.stages[1].name = 'Pintura'
   orders.push(sample)
 }
+for (const [code, name] of [['machining', 'Freza'], ['boilermaking', 'Esmirilhamento'], ['painting', 'Pintura']]) {
+  const sample = order(code, samples[0][1], samples[0][2], [0])
+  sample.operation.stages[0].name = name
+  orders.push(sample)
+}
 
 try {
   await mkdir('test-results', { recursive: true })
@@ -48,6 +53,10 @@ try {
   await page.locator('.sidebar').getByRole('button', { name: 'Servi\u00e7os em andamento', exact: true }).click()
   await page.getByRole('heading', { name: 'Painel de servi\u00e7os em andamento' }).waitFor()
   const rowFor = (code) => page.locator('.admin-os-table tbody tr').filter({ has: page.locator('td:first-child small', { hasText: new RegExp(`^${code} `) }) })
+  for (const [code, group] of [['machining', 'Usinagem'], ['boilermaking', 'Caldeiraria'], ['painting', 'Pintura'], ['piece-eight', 'Pintura'], ['piece-nine', 'Caldeiraria'], ['all-pieces', 'Etapas conclu\u00eddas'], ['no-stages', 'N\u00e3o definida']]) {
+    assert.equal(await rowFor(code).locator('td').nth(3).innerText(), group)
+  }
+  assert.equal(await rowFor('machining').locator('.admin-os-stage-label').innerText(), '1. Freza')
   for (const [code, , , color] of samples) {
     const row = rowFor(code)
     assert.equal(await row.locator('.admin-os-stage').count(), 5)
@@ -81,6 +90,16 @@ try {
   await rowFor('green').locator('.admin-os-stage-track').screenshot({ path: 'test-results/service-progress-reference.png' })
   for (const [name, width, height] of [['desktop', 1600, 950], ['notebook', 1366, 768], ['mobile', 390, 844]]) {
     await page.setViewportSize({ width, height })
+    assert.equal(await page.locator('.admin-os-table th').nth(6 - 1).evaluate((element) => getComputedStyle(element).textAlign), 'center', `${name} centered progress heading`)
+    const remainingWidth = await rowFor('green').locator('.admin-os-remaining').evaluate((element) => element.getBoundingClientRect().width)
+    assert.ok(remainingWidth <= 100, `${name} compact remaining-time column: ${remainingWidth}`)
+    const statusGap = await rowFor('green').evaluate((row) => {
+      const cell = row.querySelector('.admin-os-remaining')
+      const text = document.createRange()
+      text.selectNodeContents(cell)
+      return row.querySelector('.admin-os-status').getBoundingClientRect().left - text.getBoundingClientRect().right
+    })
+    assert.ok(statusGap <= 56, `${name} reduced remaining/status gap: ${statusGap}`)
     await page.screenshot({ path: `test-results/service-progress-${name}.png`, fullPage: true })
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), name)
     assert.ok(await page.locator('.admin-os-stage-label').evaluateAll((elements) => elements.every((element) => element.scrollWidth <= element.clientWidth)), `${name} stage labels`)

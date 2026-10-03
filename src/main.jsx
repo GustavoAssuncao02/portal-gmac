@@ -1,4 +1,4 @@
-import { StrictMode, createContext, useContext, useEffect, useRef, useState } from 'react'
+import { StrictMode, createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import OperatorDashboard from './OperatorDashboard.jsx'
 import EmployeeActivityModal from './EmployeeActivityModal.jsx'
@@ -8,8 +8,9 @@ import NotificationsButton from './NotificationsButton.jsx'
 import ReportsScreen from './ReportsScreen.jsx'
 import AccountSettings from './AccountSettings.jsx'
 import PayablesScreen from './PayablesScreen.jsx'
-import { Monitor, Minimize2, CreditCard, ChartColumn, Tags, Truck } from 'lucide-react'
-import { productionStages, serviceStageGroups, legacyStages, stageLabel, serviceDetails } from '../server/serviceStages.js'
+import ServiceStageEditor from './ServiceStageEditor.jsx'
+import { Monitor, Minimize2, CreditCard, ChartColumn, Tags, Truck, ChevronLeft, ChevronRight, ChevronDown, UsersRound, X } from 'lucide-react'
+import { stageLabel, stageGroupLabel, serviceDetails, readStageLayout, orderedStageSelection } from '../server/serviceStages.js'
 import { findInventoryMaterial, materialStock, normalizeSearch, pendingInventoryRequests, purchaseMaterialRequests } from './offerResources.js'
 import { deadlineCategories, serviceDeadline } from './serviceDeadline.js'
 import { currentPieceProgress } from './serviceProgress.js'
@@ -19,11 +20,12 @@ async function apiRequest(url, options = {}) {
   const token = window.sessionStorage.getItem('gmac-admin-token')
   const response = await fetch(url, { ...options, headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...options.headers } })
   const data = await response.json().catch(() => ({}))
-  if (!response.ok) throw new Error(data.message || 'Não foi possível concluir a operação.')
+  if (!response.ok) throw Object.assign(new Error(data.message || 'Não foi possível concluir a operação.'), { status: response.status })
   return data
 }
 
 const jsonOptions = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+const pageLabel = (name) => name === 'Dashboard' ? 'Início' : name
 const attachmentUrl = (offerId, attachmentId) => `/api/offers/${offerId}/attachments/${attachmentId}`
 const displayDate = (value) => value ? new Date(value).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '—'
 const currency = (value) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -113,10 +115,32 @@ const navigation = [
   ['Configurações', 'settings'],
 ]
 
+const registrationNavigation = ['Fornecedores', 'Administradores', 'Funcionários', 'Clientes'].map((label) => navigation.find(([name]) => name === label))
+const isRegistrationPage = (label) => registrationNavigation.some(([name]) => name === label)
+
 const AdminIdentityContext = createContext(null)
+const WorkspaceTabsContext = createContext(null)
 
 function Sidebar({ collapsed, onToggle, activeNav, onNavigate, onLogout }) {
   const user = useContext(AdminIdentityContext)
+  const [registrationsOpen, setRegistrationsOpen] = useState(() => isRegistrationPage(activeNav) || window.sessionStorage.getItem('gmac-cadastros-open') !== 'false')
+  useEffect(() => {
+    if (isRegistrationPage(activeNav)) {
+      setRegistrationsOpen(true)
+      window.sessionStorage.setItem('gmac-cadastros-open', 'true')
+    }
+  }, [activeNav])
+  function toggleRegistrations() {
+    const next = !registrationsOpen
+    setRegistrationsOpen(next)
+    window.sessionStorage.setItem('gmac-cadastros-open', String(next))
+  }
+  function navigationItem([label, icon]) {
+    return <button className={`nav-item ${activeNav === label ? 'nav-item--active' : ''}`} key={label} type="button" title={pageLabel(label)} aria-label={pageLabel(label)} onClick={() => onNavigate(label)}>
+      {['payables', 'bi', 'classifications', 'suppliers'].includes(icon) ? (() => { const NavIcon = { payables: CreditCard, bi: ChartColumn, classifications: Tags, suppliers: Truck }[icon]; return <NavIcon className="icon nav-icon" size={20} /> })() : <Icon name={icon} className="nav-icon" />}
+      <span>{pageLabel(label)}</span>
+    </button>
+  }
   const name = user?.name || 'Administrador'
   const words = name.trim().split(/\s+/)
   const initials = [words[0], words.length > 1 ? words.at(-1) : ''].map((word) => word?.[0] || '').join('').toUpperCase()
@@ -129,12 +153,15 @@ function Sidebar({ collapsed, onToggle, activeNav, onNavigate, onLogout }) {
         </button>
       </div>
       <nav className="sidebar-nav" aria-label="Navegação principal">
-        {navigation.map(([label, icon]) => (
-          <button className={`nav-item ${activeNav === label ? 'nav-item--active' : ''}`} key={label} type="button" title={label} aria-label={label} onClick={() => onNavigate(label)}>
-            {['payables', 'bi', 'classifications', 'suppliers'].includes(icon) ? (() => { const NavIcon = { payables: CreditCard, bi: ChartColumn, classifications: Tags, suppliers: Truck }[icon]; return <NavIcon className="icon nav-icon" size={20} /> })() : <Icon name={icon} className="nav-icon" />}
-            <span>{label}</span>
-          </button>
-        ))}
+        {navigation.flatMap((item) => {
+          if (item[0] === 'Funcionários') return [<div className="sidebar-nav-group" key="cadastros">
+            <button className={`nav-item sidebar-nav-group-toggle ${!registrationsOpen && isRegistrationPage(activeNav) ? 'nav-item--active' : ''}`} type="button" title="Cadastros" aria-label="Cadastros" aria-expanded={registrationsOpen} aria-controls="sidebar-cadastros-menu" onClick={toggleRegistrations}>
+              <UsersRound className="icon nav-icon" size={20} aria-hidden="true" /><span>Cadastros</span>{registrationsOpen ? <ChevronDown className="sidebar-group-chevron" size={15} aria-hidden="true" /> : <ChevronRight className="sidebar-group-chevron" size={15} aria-hidden="true" />}
+            </button>
+            <div className="sidebar-submenu" id="sidebar-cadastros-menu" hidden={!registrationsOpen}>{registrationNavigation.map(navigationItem)}</div>
+          </div>]
+          return isRegistrationPage(item[0]) ? [] : [navigationItem(item)]
+        })}
       </nav>
       <div className="sidebar-account"><div className="account-avatar">{initials}</div><div className="account-copy"><strong title={name}>{name}</strong><span>Administrador</span></div><span className="account-chevron">›</span></div>
       <button className="logout-button" type="button" onClick={onLogout} title="Sair" aria-label="Sair"><span className="logout-icon" aria-hidden="true">↪</span><span>Sair</span></button>
@@ -143,8 +170,54 @@ function Sidebar({ collapsed, onToggle, activeNav, onNavigate, onLogout }) {
 }
 
 function WorkspaceTabs({ tabs, activeNav, onNavigate, onCloseTab, onReorderTabs }) {
+  const closeAllTabs = useContext(WorkspaceTabsContext)
+  const listRef = useRef(null)
+  const leftArrowRef = useRef(null)
+  const rightArrowRef = useRef(null)
+  const [scrollState, setScrollState] = useState({ overflow: false, left: false, right: false })
   const [draggedTab, setDraggedTab] = useState(null)
   const [currentTime, setCurrentTime] = useState(() => new Date())
+
+  function measureTabs() {
+    const list = listRef.current
+    if (!list) return
+    // Measure the space without arrows so their own width cannot keep overflow enabled.
+    const arrowWidth = (leftArrowRef.current?.getBoundingClientRect().width || 0) + (rightArrowRef.current?.getBoundingClientRect().width || 0)
+    const next = {
+      overflow: list.scrollWidth > list.clientWidth + arrowWidth + 1,
+      left: list.scrollLeft > 1,
+      right: list.scrollLeft + list.clientWidth < list.scrollWidth - 1,
+    }
+    setScrollState((previous) => previous.overflow === next.overflow && previous.left === next.left && previous.right === next.right ? previous : next)
+  }
+
+  useLayoutEffect(() => {
+    let active = true
+    const measure = () => { if (active) measureTabs() }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(listRef.current)
+    for (const tab of listRef.current.children) observer.observe(tab)
+    document.fonts?.ready.then(measure)
+    return () => { active = false; observer.disconnect() }
+  }, [tabs])
+
+  useLayoutEffect(() => {
+    const list = listRef.current
+    const selected = list.querySelector('.workspace-tab--active')
+    if (!selected) return
+    const viewport = list.getBoundingClientRect()
+    const tab = selected.getBoundingClientRect()
+    if (tab.left < viewport.left) list.scrollLeft += tab.left - viewport.left
+    else if (tab.right > viewport.right) list.scrollLeft += tab.right - viewport.right
+    measureTabs()
+  }, [tabs, activeNav, scrollState.overflow])
+
+  function scrollTabs(direction) {
+    const list = listRef.current
+    list.scrollBy({ left: direction * Math.max(120, list.clientWidth * 0.75), behavior: 'auto' })
+    measureTabs()
+  }
 
   useEffect(() => {
     const timer = window.setInterval(() => setCurrentTime(new Date()), 1000)
@@ -156,7 +229,16 @@ function WorkspaceTabs({ tabs, activeNav, onNavigate, onCloseTab, onReorderTabs 
     setDraggedTab(null)
   }
 
-  return <div className="workspace-tabs"><div className="workspace-tabs-list" role="tablist" aria-label="Telas abertas">{tabs.map((tab) => <div className={`workspace-tab ${activeNav === tab ? 'workspace-tab--active' : ''} ${draggedTab === tab ? 'workspace-tab--dragging' : ''}`} key={tab} draggable onDragStart={() => setDraggedTab(tab)} onDragOver={(event) => event.preventDefault()} onDrop={() => dropTab(tab)} onDragEnd={() => setDraggedTab(null)}><button type="button" role="tab" aria-selected={activeNav === tab} onClick={() => onNavigate(tab)}>{tab}</button>{tabs.length > 1 && <button className="workspace-tab-close" type="button" aria-label={`Fechar aba ${tab}`} onClick={() => onCloseTab(tab)}>×</button>}</div>)}</div><NotificationsButton onOpenAccount={(id) => { sessionStorage.setItem('gmac-payable-open', id); onNavigate('Contas a Pagar'); window.dispatchEvent(new CustomEvent('gmac-payable-open', { detail: id })) }} /><div className="workspace-tabs-clock" aria-label="Data e hora atual"><strong>{currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</strong><span>{currentTime.toLocaleDateString('pt-BR')}</span></div></div>
+  return <div className="workspace-tabs">
+    {scrollState.overflow && <button ref={leftArrowRef} className="workspace-tabs-control" type="button" aria-label="Rolar abas para a esquerda" title="Rolar abas para a esquerda" disabled={!scrollState.left} onClick={() => scrollTabs(-1)}><ChevronLeft size={17} aria-hidden="true" /></button>}
+    <div ref={listRef} className="workspace-tabs-list" role="tablist" aria-label="Telas abertas" onScroll={measureTabs}>
+      {tabs.map((tab) => <div className={`workspace-tab ${activeNav === tab ? 'workspace-tab--active' : ''} ${draggedTab === tab ? 'workspace-tab--dragging' : ''}`} key={tab} draggable onDragStart={() => setDraggedTab(tab)} onDragOver={(event) => event.preventDefault()} onDrop={() => dropTab(tab)} onDragEnd={() => setDraggedTab(null)}><button type="button" role="tab" aria-selected={activeNav === tab} onClick={() => onNavigate(tab)}>{pageLabel(tab)}</button>{tabs.length > 1 && <button className="workspace-tab-close" type="button" aria-label={`Fechar aba ${pageLabel(tab)}`} onClick={() => onCloseTab(tab)}>×</button>}</div>)}
+    </div>
+    {scrollState.overflow && <button ref={rightArrowRef} className="workspace-tabs-control" type="button" aria-label="Rolar abas para a direita" title="Rolar abas para a direita" disabled={!scrollState.right} onClick={() => scrollTabs(1)}><ChevronRight size={17} aria-hidden="true" /></button>}
+    {tabs.length > 3 && <button className="workspace-tabs-control workspace-tabs-close-all" type="button" aria-label="Fechar todas as abas" title="Fechar todas as abas" onClick={closeAllTabs}><X size={17} aria-hidden="true" /></button>}
+    <NotificationsButton onOpenAccount={(id) => { sessionStorage.setItem('gmac-payable-open', id); onNavigate('Contas a Pagar'); window.dispatchEvent(new CustomEvent('gmac-payable-open', { detail: id })) }} />
+    <div className="workspace-tabs-clock" aria-label="Data e hora atual"><strong>{currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</strong><span>{currentTime.toLocaleDateString('pt-BR')}</span></div>
+  </div>
 }
 
 const initialMachines = [
@@ -224,14 +306,34 @@ function persistInventory(items) {
   window.localStorage.setItem('gmac-inventory', JSON.stringify(items))
 }
 
+let inventoryImport
+async function importLocalInventory() {
+  if (window.localStorage.getItem('gmac-inventory-migrated-v1')) return
+  if (!window.sessionStorage.getItem('gmac-admin-token')) return
+  if (!inventoryImport) inventoryImport = (async () => {
+    const previous = window.localStorage.getItem('gmac-inventory')
+    if (previous && !window.localStorage.getItem('gmac-inventory-before-mysql')) window.localStorage.setItem('gmac-inventory-before-mysql', previous)
+    try {
+      await apiRequest('/api/inventory/import', jsonOptions('POST', { items: readInventory(), onlyIfEmpty: !previous }))
+      window.localStorage.setItem('gmac-inventory-migrated-v1', 'true')
+    } catch (error) {
+      if (error.status !== 503 && error.status !== 404) throw error
+    }
+  })().finally(() => { inventoryImport = null })
+  return inventoryImport
+}
+
+const loadOverviewPayables = (signal) => apiRequest('/api/payables', { signal, cache: 'no-store' })
+
 async function loadOverviewInventory(signal) {
+  await importLocalInventory()
   const response = await fetch('/api/inventory', { signal })
   if (response.status === 503) return { items: readInventory(), source: 'local' }
   if (!response.ok) throw new Error('Não foi possível carregar o estoque.')
   const data = await response.json()
   if (!Array.isArray(data.items)) throw new Error('Dados de estoque inválidos.')
   const items = normalizeInventory(data.items)
-  if (!signal.aborted) persistInventory(items)
+  if (!signal?.aborted) persistInventory(items)
   return { items, source: 'server' }
 }
 
@@ -245,6 +347,31 @@ function readPendingMaterialRequests() {
 
 function persistPendingMaterialRequests(requests) {
   window.localStorage.setItem('gmac-pending-materials', JSON.stringify(requests))
+}
+
+function useMaterialRequestStatuses() {
+  const [items, setItems] = useState(readPendingMaterialRequests)
+  useEffect(() => {
+    let active = true, fetching = false
+    const refresh = async () => {
+      if (fetching) return
+      fetching = true
+      try {
+        let result
+        if (!window.localStorage.getItem('gmac-pending-materials-migrated-v1')) {
+          const previous = readPendingMaterialRequests().filter((item) => item.status === 'purchase-requested')
+          result = await apiRequest('/api/material-requests/import', jsonOptions('POST', { items: previous }))
+          window.localStorage.setItem('gmac-pending-materials-migrated-v1', 'true')
+        } else result = await apiRequest('/api/material-requests')
+        if (active) { setItems(result.items); persistPendingMaterialRequests(result.items) }
+      } catch { /* Keep the cached requests visible during a temporary outage. */ }
+      finally { fetching = false }
+    }
+    refresh()
+    const polling = window.setInterval(refresh, 10000)
+    return () => { active = false; window.clearInterval(polling) }
+  }, [])
+  return [items, setItems]
 }
 
 function MachineModal({ machine, onClose, onSave }) {
@@ -327,13 +454,15 @@ function Machines({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, 
   )
 }
 
-function InventoryScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, offers, orders, onSelectOffer, onSelectOrder }) {
+function InventoryScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, offers, orders, onSelectOffer, onSelectOrder, requestStatuses, onRequestStatuses }) {
   const [items, setItems] = useState(readInventory)
-  const [requestStatuses, setRequestStatuses] = useState(readPendingMaterialRequests)
   const [search, setSearch] = useState('')
   const [modalItem, setModalItem] = useState(undefined)
   const [purchaseRequest, setPurchaseRequest] = useState(null)
   const [historyItem, setHistoryItem] = useState(null)
+  const [source, setSource] = useState(null)
+  const [error, setError] = useState('')
+  const [savingInventory, setSavingInventory] = useState(false)
   const filteredItems = items.filter((item) => `${item.name} ${item.detail}`.toLowerCase().includes(search.trim().toLowerCase()))
   const totalWeight = items.reduce((total, item) => total + Number(item.quantity || 0), 0)
   const lowStock = items.filter((item) => Number(item.quantity) <= Number(item.minimum)).length
@@ -341,22 +470,38 @@ function InventoryScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout,
 
   useEffect(() => {
     let active = true
-    fetch('/api/inventory')
-      .then((response) => {
-        if (!response.ok) throw new Error('database unavailable')
-        return response.json()
-      })
+    const refresh = () => loadOverviewInventory()
       .then((payload) => {
         if (!active || !Array.isArray(payload.items)) return
-        const nextItems = normalizeInventory(payload.items)
-        setItems(nextItems)
-        persistInventory(nextItems)
+        setItems(payload.items)
+        setSource(payload.source)
+        setError('')
       })
-      .catch(() => {})
-    return () => { active = false }
+      .catch((failure) => { if (active) setError(failure.message) })
+    refresh()
+    const polling = window.setInterval(refresh, 10000)
+    return () => { active = false; window.clearInterval(polling) }
   }, [])
 
-  function saveItem(item) {
+  async function saveItem(item) {
+    if (savingInventory || !source) return
+    if (source === 'server') {
+      setSavingInventory(true)
+      setError('')
+      try {
+        if (item.id && Number(item.stockEntryQuantity) > 0) {
+          await apiRequest(`/api/inventory/${item.id}/movements`, jsonOptions('POST', { type: 'entry', quantityKg: Number(item.stockEntryQuantity), unitPrice: Number(item.unitPrice), destination: 'Entrada de estoque' }))
+        } else {
+          const body = { name: item.name, detail: item.detail, minimum: item.minimum, unitPrice: item.unitPrice, ...(!item.id ? { quantity: item.quantity } : {}) }
+          await apiRequest(item.id ? `/api/inventory/${item.id}` : '/api/inventory', jsonOptions(item.id ? 'PATCH' : 'POST', body))
+        }
+        setModalItem(undefined)
+        const result = await loadOverviewInventory()
+        setItems(result.items)
+      } catch (failure) { setError(failure.message) }
+      finally { setSavingInventory(false) }
+      return
+    }
     const isNew = !item.id
     const nextId = isNew ? Math.max(0, ...items.map((current) => current.id)) + 1 : item.id
     const currentItem = items.find((current) => current.id === item.id)
@@ -381,8 +526,6 @@ function InventoryScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout,
       setItems(nextItems)
       persistInventory(nextItems)
       setModalItem(undefined)
-      fetch(`/api/inventory/${item.id}/movements`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'entry', quantityKg: entryQuantity, unitPrice: entryUnitPrice, destination: 'Entrada de estoque' }) }).catch(() => {})
-      fetch(`/api/inventory/${item.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: nextItem.name, detail: nextItem.detail, minimum: nextItem.minimum, unitPrice: nextItem.unitPrice }) }).catch(() => {})
       return
     }
     const nextItem = isNew
@@ -394,20 +537,25 @@ function InventoryScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout,
     persistInventory(nextItems)
     setModalItem(undefined)
 
-    const endpoint = isNew ? '/api/inventory' : `/api/inventory/${item.id}`
-    const method = isNew ? 'POST' : 'PATCH'
-    const body = isNew
-      ? { name: nextItem.name, detail: nextItem.detail, quantity: nextItem.quantity, minimum: nextItem.minimum, unitPrice: nextItem.unitPrice }
-      : { name: nextItem.name, detail: nextItem.detail, minimum: nextItem.minimum, unitPrice: nextItem.unitPrice }
-    fetch(endpoint, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => {})
   }
 
-  function removeItem(item) {
+  async function removeItem(item) {
+    if (savingInventory || !source) return
     if (!window.confirm(`Remover ${item.name} do estoque?`)) return
+    if (source === 'server') {
+      setSavingInventory(true)
+      try {
+        await apiRequest(`/api/inventory/${item.id}`, { method: 'DELETE' })
+        const result = await loadOverviewInventory()
+        setItems(result.items)
+        setError('')
+      } catch (failure) { setError(failure.message) }
+      finally { setSavingInventory(false) }
+      return
+    }
     const nextItems = items.filter((current) => current.id !== item.id)
     setItems(nextItems)
     persistInventory(nextItems)
-    fetch(`/api/inventory/${item.id}`, { method: 'DELETE' }).catch(() => {})
   }
 
   async function openHistory(item) {
@@ -422,12 +570,17 @@ function InventoryScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout,
     }
   }
 
-  function confirmPurchaseRequest() {
-    if (!purchaseRequest) return
-    const nextRequests = [...requestStatuses.filter((request) => request.id !== purchaseRequest.id), { id: purchaseRequest.id, status: 'purchase-requested' }]
-    setRequestStatuses(nextRequests)
-    persistPendingMaterialRequests(nextRequests)
-    setPurchaseRequest(null)
+  async function confirmPurchaseRequest() {
+    if (!purchaseRequest || savingInventory) return
+    setSavingInventory(true)
+    try {
+      const { items } = await apiRequest(`/api/material-requests/${encodeURIComponent(purchaseRequest.id)}/approve`, { method: 'POST' })
+      onRequestStatuses(items)
+      persistPendingMaterialRequests(items)
+      setPurchaseRequest(null)
+      setError('')
+    } catch (failure) { setError(failure.message); setPurchaseRequest(null) }
+    finally { setSavingInventory(false) }
   }
 
   return (
@@ -450,8 +603,9 @@ function InventoryScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout,
             </div>)}
           </div> : <div className="pending-material-empty">Nenhum produto solicitado pendente.</div>}
         </section>
+        {error && modalItem === undefined && <p role="alert" className="workflow-error">{error}</p>}
       </main>
-      {modalItem !== undefined && <InventoryModal item={modalItem} inventoryItems={items} onClose={() => setModalItem(undefined)} onSave={saveItem} />}
+      {modalItem !== undefined && <InventoryModal item={modalItem} inventoryItems={items} saving={savingInventory || !source} error={error} onClose={() => { if (!savingInventory) setModalItem(undefined) }} onSave={saveItem} />}
       {historyItem && <InventoryHistoryModal item={historyItem} onClose={() => setHistoryItem(null)} />}
       {purchaseRequest && <div className="modal-backdrop purchase-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setPurchaseRequest(null) }}><section className="purchase-modal" role="dialog" aria-modal="true" aria-labelledby="purchase-modal-title" onMouseDown={(event) => event.stopPropagation()}><button className="purchase-modal-close" type="button" onClick={() => setPurchaseRequest(null)} aria-label="Fechar">×</button><span className="inventory-kicker">Solicitação de compra</span><h2 id="purchase-modal-title">Abrir compra de material</h2><p>Confirme a solicitação para que o setor responsável possa providenciar o material.</p><div className="purchase-modal-summary"><strong>{purchaseRequest.name}</strong><span>{purchaseRequest.detail || 'Especificação não informada'}</span><span>{Number(purchaseRequest.quantity).toLocaleString('pt-BR')} kg · {purchaseRequest.os}</span></div><div className="inventory-modal-actions"><button className="offer-modal-cancel" type="button" onClick={() => setPurchaseRequest(null)}>Cancelar</button><button className="purchase-request-button" type="button" onClick={confirmPurchaseRequest}>Confirmar solicitação</button></div></section></div>}
     </div>
@@ -469,7 +623,7 @@ function InventoryHistoryModal({ item, onClose }) {
   return <div className="modal-backdrop inventory-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><section className="inventory-history-modal" role="dialog" aria-modal="true" aria-labelledby="inventory-history-title" onMouseDown={(event) => event.stopPropagation()}><button className="inventory-modal-close" type="button" onClick={onClose} aria-label="Fechar">×</button><span className="inventory-kicker">Rastreabilidade do estoque</span><h2 id="inventory-history-title">Histórico do material</h2><div className="inventory-history-summary"><div><small>Material</small><strong>{item.name}</strong><span>{item.detail || 'Sem especificação'}</span></div><div><small>Saldo atual</small><strong>{Number(item.quantity).toLocaleString('pt-BR')} kg</strong></div></div><div className="inventory-history-heading"><h3>Movimentações registradas</h3><span>{history.length} {history.length === 1 ? 'registro' : 'registros'}</span></div><div className="inventory-history-table"><div className="inventory-history-row inventory-history-row--header"><span>Data</span><span>Movimentação</span><span>Quantidade</span><span>Valor por kg</span><span>Saldo após movimento</span><span>Destino / OS</span></div>{history.map((entry) => <div className="inventory-history-row" key={entry.id}><span>{formatDate(entry.date)}</span><strong className={`inventory-history-type inventory-history-type--${entry.type}`}>{movementLabel[entry.type] || 'Movimentação'}</strong><span className={entry.type === 'exit' ? 'inventory-history-quantity--exit' : 'inventory-history-quantity--entry'}>{entry.type === 'exit' ? '−' : '+'}{Number(entry.quantity || 0).toLocaleString('pt-BR')} kg</span><strong className="inventory-history-price">{Number(entry.unitPrice || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/kg</strong><span>{Number(entry.balance || 0).toLocaleString('pt-BR')} kg</span><span>{entry.destination || '—'}{entry.order && entry.order !== '—' ? <small>{entry.order}</small> : null}</span></div>)}</div><p className="inventory-history-note">O valor exibido é o preço unitário praticado em cada movimentação. O saldo atual usa o preço médio ponderado.</p></section></div>
 }
 
-function InventoryModal({ item, inventoryItems = [], onClose, onSave }) {
+function InventoryModal({ item, inventoryItems = [], saving = false, error = '', onClose, onSave }) {
   const [form, setForm] = useState(item || { name: '', detail: '', quantity: '', minimum: '', unitPrice: '' })
   const [nameSuggestionsOpen, setNameSuggestionsOpen] = useState(false)
   const [selectedExistingId, setSelectedExistingId] = useState(null)
@@ -496,6 +650,7 @@ function InventoryModal({ item, inventoryItems = [], onClose, onSave }) {
   }
   function submit(event) {
     event.preventDefault()
+    if (saving) return
     if (isStockEntry) {
       const entryQuantity = Number(form.quantity) || 0
       if (entryQuantity <= 0) return
@@ -505,7 +660,20 @@ function InventoryModal({ item, inventoryItems = [], onClose, onSave }) {
     onSave({ ...form, quantity: item ? Number(item.quantity) || 0 : Number(form.quantity) || 0, minimum: Number(form.minimum) || 0, unitPrice: Number(form.unitPrice) || 0 })
   }
 
-  return <div className="modal-backdrop inventory-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><section className="inventory-modal" role="dialog" aria-modal="true" aria-labelledby="inventory-modal-title" onMouseDown={(event) => event.stopPropagation()}><button className="inventory-modal-close" type="button" onClick={onClose} aria-label="Fechar">×</button><span className="inventory-kicker">Estoque</span><h2 id="inventory-modal-title">{item ? 'Editar material' : 'Adicionar material'}</h2><form onSubmit={submit}><label>Nome do material *<div className="material-autocomplete"><div className="material-autocomplete-input"><input value={form.name} onFocus={() => setNameSuggestionsOpen(true)} onBlur={() => setTimeout(() => setNameSuggestionsOpen(false), 120)} onChange={(event) => { update('name', event.target.value); setSelectedExistingId(null); setNameSuggestionsOpen(true) }} placeholder="Digite para buscar no estoque" required /><span>⌄</span></div>{nameSuggestionsOpen && <div className="material-suggestions">{matchingMaterials.length > 0 ? matchingMaterials.map((material) => <button type="button" key={material.id} onMouseDown={(event) => event.preventDefault()} onClick={() => selectExistingMaterial(material)}><strong>{material.name}</strong><small>{material.detail}</small></button>) : <div className="material-suggestion-empty"><strong>Novo material</strong><span>Preencha os dados para cadastrar um novo material.</span></div>}</div>}</div></label><label>Especificação<input value={form.detail} onChange={(event) => update('detail', event.target.value)} placeholder="Ex.: Chapa Alumínio 6061" /></label>{isStockEntry ? <label className="inventory-entry-field">Quantidade de entrada (kg) *<input type="number" min="0.001" step="0.001" value={form.quantity} onChange={(event) => update('quantity', event.target.value)} placeholder="0,00" required /><small>Saldo atual: {currentQuantity.toLocaleString('pt-BR')} kg. Preço médio após a entrada: {projectedUnitPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/kg.</small></label> : <div className="inventory-form-grid"><label className={item ? 'inventory-readonly-field' : ''}>{item ? 'Quantidade disponível (kg) — somente leitura' : 'Quantidade disponível (kg) *'}<input type="number" min="0" step="0.001" value={form.quantity} onChange={(event) => update('quantity', event.target.value)} readOnly={Boolean(item)} aria-readonly={Boolean(item)} required /><small>{item ? 'Altere o saldo usando uma entrada ou saída de estoque.' : 'Informe o saldo inicial do material.'}</small></label><label>Estoque mínimo (kg)<input type="number" min="0" step="0.001" value={form.minimum} onChange={(event) => update('minimum', event.target.value)} /></label></div>}<label>Valor por kg<input type="number" min="0" step="0.01" value={form.unitPrice} onChange={(event) => update('unitPrice', event.target.value)} /></label><div className="inventory-modal-actions"><button className="offer-modal-cancel" type="button" onClick={onClose}>Cancelar</button><button className="inventory-add-button" type="submit">{isStockEntry ? 'Registrar entrada' : item ? 'Salvar alterações' : 'Adicionar material'}</button></div></form></section></div>
+  return <div className="modal-backdrop inventory-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
+    <section className="inventory-modal" role="dialog" aria-modal="true" aria-labelledby="inventory-modal-title" aria-busy={saving} onMouseDown={(event) => event.stopPropagation()}>
+      <button className="inventory-modal-close" type="button" onClick={onClose} disabled={saving} aria-label="Fechar">×</button>
+      <span className="inventory-kicker">Estoque</span><h2 id="inventory-modal-title">{item ? 'Editar material' : 'Adicionar material'}</h2>
+      {error && <p role="alert" className="workflow-error">{error}</p>}
+      <form onSubmit={submit}>
+        <label>Nome do material *<div className="material-autocomplete"><div className="material-autocomplete-input"><input value={form.name} onFocus={() => setNameSuggestionsOpen(true)} onBlur={() => setTimeout(() => setNameSuggestionsOpen(false), 120)} onChange={(event) => { update('name', event.target.value); setSelectedExistingId(null); setNameSuggestionsOpen(true) }} placeholder="Digite para buscar no estoque" required /><span>⌄</span></div>{nameSuggestionsOpen && <div className="material-suggestions">{matchingMaterials.length > 0 ? matchingMaterials.map((material) => <button type="button" key={material.id} onMouseDown={(event) => event.preventDefault()} onClick={() => selectExistingMaterial(material)}><strong>{material.name}</strong><small>{material.detail}</small></button>) : <div className="material-suggestion-empty"><strong>Novo material</strong><span>Preencha os dados para cadastrar um novo material.</span></div>}</div>}</div></label>
+        <label>Especificação<input value={form.detail} onChange={(event) => update('detail', event.target.value)} placeholder="Ex.: Chapa Alumínio 6061" /></label>
+        {isStockEntry ? <label className="inventory-entry-field">Quantidade de entrada (kg) *<input type="number" min="0.001" step="0.001" value={form.quantity} onChange={(event) => update('quantity', event.target.value)} placeholder="0,00" required /><small>Saldo atual: {currentQuantity.toLocaleString('pt-BR')} kg. Preço médio após a entrada: {projectedUnitPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/kg.</small></label> : <div className="inventory-form-grid"><label className={item ? 'inventory-readonly-field' : ''}>{item ? 'Quantidade disponível (kg) — somente leitura' : 'Quantidade disponível (kg) *'}<input type="number" min="0" step="0.001" value={form.quantity} onChange={(event) => update('quantity', event.target.value)} readOnly={Boolean(item)} aria-readonly={Boolean(item)} required /><small>{item ? 'Altere o saldo usando uma entrada ou saída de estoque.' : 'Informe o saldo inicial do material.'}</small></label><label>Estoque mínimo (kg)<input type="number" min="0" step="0.001" value={form.minimum} onChange={(event) => update('minimum', event.target.value)} /></label></div>}
+        <label>Valor por kg<input type="number" min="0" step="0.01" value={form.unitPrice} onChange={(event) => update('unitPrice', event.target.value)} /></label>
+        <div className="inventory-modal-actions"><button className="offer-modal-cancel" type="button" onClick={onClose} disabled={saving}>Cancelar</button><button className="inventory-add-button" type="submit" disabled={saving}>{saving ? 'Salvando...' : isStockEntry ? 'Registrar entrada' : item ? 'Salvar alterações' : 'Adicionar material'}</button></div>
+      </form>
+    </section>
+  </div>
 }
 
 const calculatorMaterials = [
@@ -921,6 +1089,7 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
   const [machines, setMachines] = useState(readMachines)
   const [materials, setMaterials] = useState(offer?.resources?.materials || [])
   const [stages, setStages] = useState(offer?.resources?.stages ?? offer?.proposal?.stages ?? [])
+  const [stageLayout, setStageLayout] = useState(() => readStageLayout({ ...offer?.resources, stages: offer?.resources?.stages ?? offer?.proposal?.stages ?? [] }))
   const [kind, setKind] = useState(offer?.resources?.kind ?? offer?.proposal?.kind ?? 'service')
   const [details, setDetails] = useState(() => serviceDetails(offer?.resources))
   const [materialFormOpen, setMaterialFormOpen] = useState(false)
@@ -931,7 +1100,7 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
   const [materialSuggestionsOpen, setMaterialSuggestionsOpen] = useState(false)
   const [attachmentError, setAttachmentError] = useState('')
   const [saving, setSaving] = useState(false)
-  const resourceDraft = useRef({ materials, laborEntries, stages, kind, ...details })
+  const resourceDraft = useRef({ materials, laborEntries, stages, stageLayout, kind, ...details })
   const persistedResources = useRef(resourceDraft.current)
   const saveQueue = useRef(Promise.resolve())
   const pendingSaves = useRef(0)
@@ -942,12 +1111,14 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
     setMaterials(offer?.resources?.materials || [])
     setLaborEntries(offer?.resources?.laborEntries || [])
     setStages(offer?.resources?.stages ?? offer?.proposal?.stages ?? [])
+    setStageLayout(readStageLayout({ ...offer?.resources, stages: offer?.resources?.stages ?? offer?.proposal?.stages ?? [] }))
     setKind(offer?.resources?.kind ?? offer?.proposal?.kind ?? 'service')
     setDetails(serviceDetails(offer?.resources))
     resourceDraft.current = {
       materials: offer?.resources?.materials || [],
       laborEntries: offer?.resources?.laborEntries || [],
       stages: offer?.resources?.stages ?? offer?.proposal?.stages ?? [],
+      stageLayout: readStageLayout({ ...offer?.resources, stages: offer?.resources?.stages ?? offer?.proposal?.stages ?? [] }),
       kind: offer?.resources?.kind ?? offer?.proposal?.kind ?? 'service',
       ...serviceDetails(offer?.resources),
     }
@@ -957,7 +1128,7 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
   useEffect(() => {
     let active = true
     apiRequest('/api/machines').then((data) => { if (active) setMachines(data.items) }).catch(() => {})
-    apiRequest('/api/inventory').then((data) => {
+    loadOverviewInventory().then((data) => {
       if (active && Array.isArray(data.items)) setInventory(data.items)
     }).catch(() => {})
     return () => { active = false }
@@ -994,6 +1165,7 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
           setMaterials(item.resources.materials)
           setLaborEntries(item.resources.laborEntries)
           setStages(item.resources.stages)
+          setStageLayout(readStageLayout(item.resources))
           setKind(item.resources.kind)
           setDetails(serviceDetails(item.resources))
         }
@@ -1005,6 +1177,7 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
           setMaterials(persistedResources.current.materials)
           setLaborEntries(persistedResources.current.laborEntries)
           setStages(persistedResources.current.stages)
+          setStageLayout(readStageLayout(persistedResources.current))
           setKind(persistedResources.current.kind)
           setDetails(serviceDetails(persistedResources.current))
         }
@@ -1061,9 +1234,16 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
   function toggleStage(stage) {
     const currentStages = resourceDraft.current.stages
     const selected = currentStages.includes(stage) ? currentStages.filter((key) => key !== stage) : [...currentStages, stage]
-    const nextStages = productionStages.map(([key]) => key).filter((key) => selected.includes(key))
+    const nextStages = orderedStageSelection(resourceDraft.current.stageLayout, selected)
     setStages(nextStages)
     saveResources({ stages: nextStages })
+  }
+
+  function reorderStageLayout(nextLayout) {
+    const nextStages = orderedStageSelection(nextLayout, resourceDraft.current.stages)
+    setStageLayout(nextLayout)
+    setStages(nextStages)
+    saveResources({ stageLayout: nextLayout, stages: nextStages })
   }
 
   function selectKind(nextKind) {
@@ -1149,12 +1329,13 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
               {laborEntries.length > 0 ? <div className="offer-labor-list"><div className="offer-labor-row offer-labor-row--header"><span>Tipo</span><span>Máquina / serviço</span><span>Tempo</span><span>Valor/h</span><span>Total</span><span>Ações</span></div>{laborEntries.map((entry) => <div className="offer-labor-row" key={entry.id}><span>{entry.type === 'machine' ? 'Hora máquina' : 'Hora homem'}</span><strong>{entry.resource}</strong><span>{entry.hours.toLocaleString('pt-BR')} h</span><span>{formatMoney(entry.hourlyRate)}</span><strong>{formatMoney(entry.hours * entry.hourlyRate)}</strong><button className="offer-resource-remove" type="button" disabled={saving} onClick={() => removeLabor(entry.id)} aria-label={`Remover ${entry.resource}`}>×</button></div>)}</div> : <div className="offer-empty-state offer-empty-state--labor"><strong>Nenhuma mão de obra adicionada</strong><span>Informe a máquina ou o serviço e o tempo utilizado.</span></div>}
             </div>
             <div className="offer-resource-subsection offer-process-settings">
-              <fieldset><legend>Etapas do serviço</legend><div className="offer-stage-groups">{serviceStageGroups.map(([group, options]) => <div className="offer-stage-group" key={group}><h3>{group}</h3><div className="offer-stage-options">{options.map(([key, label]) => <label key={key}><input type="checkbox" checked={stages.includes(key)} onChange={() => toggleStage(key)} />{label}</label>)}</div></div>)}{legacyStages.some(([key]) => stages.includes(key)) && <div className="offer-stage-group offer-stage-group--legacy"><h3>Etapas do cadastro anterior</h3><div className="offer-stage-options">{legacyStages.filter(([key]) => stages.includes(key)).map(([key, label]) => <label key={key}><input type="checkbox" checked onChange={() => toggleStage(key)} />{label}</label>)}</div></div>}</div></fieldset>
+              <ServiceStageEditor layout={stageLayout} stages={stages} onLayoutChange={reorderStageLayout} onToggle={toggleStage} disabled={Boolean(offer.orderCode)} />
               <fieldset><legend>Tipo</legend><div className="offer-kind-options"><label><input type="radio" name="offer-kind" checked={kind === 'service'} onChange={() => selectKind('service')} />Serviço</label><label><input type="radio" name="offer-kind" checked={kind === 'product'} onChange={() => selectKind('product')} />Produto</label></div></fieldset>
               <fieldset><legend>Fabricado a partir de</legend><div className="offer-kind-options">{[['sample', 'Amostra'], ['drawing', 'Desenho']].map(([key, label]) => <label key={key}><input type="radio" name="manufactured-from" checked={details.manufacturedFrom === key} onChange={() => updateDetails('manufacturedFrom', key)} />{label}</label>)}</div></fieldset>
               <fieldset><legend>Têmpera</legend><div className="offer-kind-options">{[[true, 'Sim'], [false, 'Não']].map(([key, label]) => <label key={label}><input type="radio" name="tempering" checked={details.tempering === key} onChange={() => updateDetails('tempering', key)} />{label}</label>)}</div></fieldset>
               {stages.includes('painting') && <label className="offer-service-field">Cor/Tipo<input value={details.paintColor} maxLength={160} onChange={(event) => updateDetails('paintColor', event.target.value, false)} onBlur={() => saveResources()} /></label>}
               <label className="offer-service-field">Descrição do serviço<textarea aria-label="Descrição do serviço" value={details.serviceDescription} maxLength={5000} rows={4} onChange={(event) => updateDetails('serviceDescription', event.target.value, false)} onBlur={() => saveResources()} /></label>
+              <div className="offer-kind-options offer-strict-process"><label><input type="checkbox" checked={details.strictProcess} onChange={(event) => updateDetails('strictProcess', event.target.checked)} />Processo Injessado</label></div>
             </div>
             <div className="offer-resource-totals"><div><span>Total de materiais</span><strong>{formatMoney(materialsTotal)}</strong></div><div><span>Total de mão de obra</span><strong>{formatMoney(laborTotal)}</strong></div><div className="offer-resource-total"><span>Total estimado</span><strong>{formatMoney(materialsTotal + laborTotal)}</strong></div></div>
             </fieldset>
@@ -1180,10 +1361,10 @@ function ProposalBuilder({ collapsed, onToggle, activeNav, onNavigate, onLogout,
   const laborCost = resourceData.laborEntries.reduce((total, item) => total + Number(item.hours) * Number(item.hourlyRate), 0)
   const defaultProposal = { deadline: offer?.deadline || '', serviceValue: materialCost + laborCost, materials: materialCost, labor: laborCost, machine: `${resourceData.laborEntries.filter((item) => item.type === 'machine').reduce((total, item) => total + Number(item.hours), 0)} horas`, serviceTime: `${resourceData.laborEntries.reduce((total, item) => total + Number(item.hours), 0)} horas`, margin: 0, discount: 0, kind: resourceData.kind ?? offer?.proposal?.kind ?? 'service', stages: resourceData.stages ?? offer?.proposal?.stages ?? [] }
   const [proposals, setProposals] = useState(() => [
-    { ...defaultProposal, key: 'A', tone: 'green', icon: '♢', title: 'Opção A', tag: 'Personalizável', description: 'Defina os valores e o prazo desta opção.' },
-    { ...defaultProposal, key: 'B', tone: 'blue', icon: '◎', title: 'Opção B', tag: 'Personalizável', description: 'Defina os valores e o prazo desta opção.' },
-    { ...defaultProposal, key: 'C', tone: 'purple', icon: '✧', title: 'Opção C', tag: 'Personalizável', description: 'Defina os valores e o prazo desta opção.' },
-    { ...defaultProposal, key: 'D', tone: 'red', icon: 'ϟ', title: 'Opção D', tag: 'Personalizável', description: 'Defina os valores e o prazo desta opção.' },
+    { ...defaultProposal, key: 'A', margin: 15, tone: 'green', icon: '♢', title: 'Opção A', tag: 'Personalizável', description: 'Defina os valores e o prazo desta opção.' },
+    { ...defaultProposal, key: 'B', margin: 20, tone: 'blue', icon: '◎', title: 'Opção B', tag: 'Personalizável', description: 'Defina os valores e o prazo desta opção.' },
+    { ...defaultProposal, key: 'C', margin: 25, tone: 'purple', icon: '✧', title: 'Opção C', tag: 'Personalizável', description: 'Defina os valores e o prazo desta opção.' },
+    { ...defaultProposal, key: 'D', margin: 30, tone: 'red', icon: 'ϟ', title: 'Opção D', tag: 'Personalizável', description: 'Defina os valores e o prazo desta opção.' },
   ].map((proposal) => offer?.proposal?.key === proposal.key ? { ...proposal, ...offer.proposal, kind: defaultProposal.kind, stages: defaultProposal.stages } : proposal))
   const calculateProfit = (proposal) => proposal.serviceValue * (1 - proposal.discount / 100) * (proposal.margin / 100)
   const visibleProposals = proposals.map((proposal) => ({ ...proposal, profit: calculateProfit(proposal) }))
@@ -1266,9 +1447,9 @@ function ProposalBuilder({ collapsed, onToggle, activeNav, onNavigate, onLogout,
   )
 }
 
-function OrdersScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, offers, orders, selectedOrderCode, onSelectOffer, onSelectOrder, onRefresh }) {
+function OrdersScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, offers, orders, selectedOrderCode, onSelectOffer, onSelectOrder, onRefresh, requestStatuses }) {
   const selectedOrder = orders.find((order) => order.code === selectedOrderCode)
-  const requests = purchaseMaterialRequests(offers, orders, readPendingMaterialRequests())
+  const requests = purchaseMaterialRequests(offers, orders, requestStatuses)
   const [stageNamesInput, setStageNamesInput] = useState('')
   const [operationError, setOperationError] = useState('')
   const [now, setNow] = useState(Date.now())
@@ -1383,12 +1564,11 @@ function AdminServicesView({ collapsed, onToggle, activeNav, onNavigate, onLogou
       <div className="admin-os-filters">{[['open', 'Abertas'], ['waiting', 'Aguardando'], ['running', 'Em execução'], ['paused', 'Pausadas'], ['finalizing', 'Finalizando'], ['completed', 'Concluídas']].map(([key, label]) => <button className={filter === key ? 'selected' : ''} type="button" key={key} onClick={() => setFilter(key)}>{label}<strong>{orders.filter((order) => key === 'open' ? order.operation.status !== 'completed' : order.operation.status === key).length}</strong></button>)}</div>
       <div className="admin-os-table-wrap"><table className="admin-os-table"><thead><tr><th>OS / Serviço</th><th>Cliente</th><th>Operador</th><th>Etapa atual</th><th>Peças concluídas</th><th>Progresso</th><th>Tempo ativo</th><th>Tempo restante</th><th>Status</th><th></th></tr></thead><tbody>{visible.map((order) => {
         const operation = order.operation
-        const lastStage = operation.stages.at(-1)
-        const completedPieces = Number(operation.stageCounts[lastStage?.key] || 0)
-        const current = operation.stages.find((stage) => Number(operation.stageCounts[stage.key] || 0) < Number(order.quantity))
         const due = operation.status === 'completed' ? { key: 'completed', label: 'Concluído', remaining: '—' } : deadlineState(order)
         const pieceProgress = currentPieceProgress(operation, order.quantity)
-        return <tr key={order.code}><td><strong>{order.service}</strong><small>{order.code} · Etiqueta {order.labelNumber}</small></td><td>{order.company}</td><td>{operation.activeSession?.employeeName || '—'}</td><td>{current?.name || (operation.stages.length ? 'Etapas concluídas' : 'Não definida')}</td><td>{completedPieces}/{order.quantity}</td>
+        const completedPieces = pieceProgress.completedPieces
+        const current = pieceProgress.stages.find((stage) => !stage.filled)
+        return <tr key={order.code}><td><strong>{order.service}</strong><small>{order.code} · Etiqueta {order.labelNumber}</small></td><td>{order.company}</td><td>{operation.activeSession?.employeeName || '—'}</td><td>{current ? stageGroupLabel(current) || 'Não definida' : operation.stages.length ? 'Etapas concluídas' : 'Não definida'}</td><td>{completedPieces}/{order.quantity}</td>
           <td>{operation.stages.length ? <div className={`admin-os-stage-track admin-os-stage-track--${due.key}`} style={{ '--stage-count': operation.stages.length }} role="group" aria-label={`Progresso da peça ${pieceProgress.pieceNumber} de ${order.quantity}. Progresso total: ${operation.progress}%. ${due.label}`}>
             {pieceProgress.stages.map((stage, index) => {
               const done = stage.filled && stage.count >= Number(order.quantity)
@@ -1409,14 +1589,15 @@ function AdminServicesView({ collapsed, onToggle, activeNav, onNavigate, onLogou
   </div>
 }
 
-function Dashboard({ user, onUpdateUser, collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, offers, orders, selectedOfferId, selectedOrderCode, onRefresh, onSelectOffer, onSelectOrder, workflowError, workflowLoading }) {
+function Dashboard({ user, onUpdateUser, collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, offers, orders, selectedOfferId, selectedOrderCode, onRefresh, onSelectOffer, onSelectOrder, onOpenPayables, payableFilters, workflowError, workflowLoading }) {
+  const [requestStatuses, setRequestStatuses] = useMaterialRequestStatuses()
   const toolProps = { Sidebar, WorkspaceTabs, navigationProps: { collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs } }
-  if (['Contas a Pagar', 'Business Intelligence', 'Classificações', 'Fornecedores'].includes(activeNav)) return <PayablesScreen {...toolProps} mode={{ 'Contas a Pagar': 'accounts', 'Business Intelligence': 'bi', 'Classificações': 'classifications', 'Fornecedores': 'suppliers' }[activeNav]} />
+  if (['Contas a Pagar', 'Business Intelligence', 'Classificações', 'Fornecedores'].includes(activeNav)) return <PayablesScreen {...toolProps} accountFilters={payableFilters} mode={{ 'Contas a Pagar': 'accounts', 'Business Intelligence': 'bi', 'Classificações': 'classifications', 'Fornecedores': 'suppliers' }[activeNav]} />
   if (activeNav === 'Relatórios') return <ReportsScreen {...toolProps} />
   if (activeNav === 'Configurações') return <AccountSettings {...toolProps} user={user} onUpdateUser={onUpdateUser} />
-  if (activeNav === 'Dashboard') return <AdminHome user={user} orders={orders} offers={offers} workflowError={workflowError} workflowLoading={workflowLoading} onRefresh={onRefresh} onNavigate={onNavigate} onSelectOrder={onSelectOrder} loadInventory={loadOverviewInventory} readInventory={readInventory} readPendingMaterialRequests={readPendingMaterialRequests} Sidebar={Sidebar} WorkspaceTabs={WorkspaceTabs} navigationProps={{ collapsed, onToggle, activeNav, onLogout, tabs, onCloseTab, onReorderTabs }} />
+  if (activeNav === 'Dashboard') return <AdminHome user={user} orders={orders} offers={offers} workflowError={workflowError} workflowLoading={workflowLoading} onRefresh={onRefresh} onNavigate={onNavigate} onSelectOrder={onSelectOrder} onOpenPayables={onOpenPayables} loadPayables={loadOverviewPayables} loadInventory={loadOverviewInventory} readInventory={readInventory} readPendingMaterialRequests={() => requestStatuses} Sidebar={Sidebar} WorkspaceTabs={WorkspaceTabs} navigationProps={{ collapsed, onToggle, activeNav, onLogout, tabs, onCloseTab, onReorderTabs }} />
   if (activeNav === 'Máquinas') return <Machines collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} />
-  if (activeNav === 'Estoque') return <InventoryScreen collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} offers={offers} orders={orders} onSelectOffer={onSelectOffer} onSelectOrder={onSelectOrder} />
+  if (activeNav === 'Estoque') return <InventoryScreen collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} offers={offers} orders={orders} onSelectOffer={onSelectOffer} onSelectOrder={onSelectOrder} requestStatuses={requestStatuses} onRequestStatuses={setRequestStatuses} />
   if (activeNav === 'Calculadora de pesos e medidas') return <Calculator collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} />
   if (activeNav === 'Funcionários') return <RegistrationScreen key="employee" kind="employee" collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} />
   if (activeNav === 'Administradores') return <RegistrationScreen key="admin" kind="admin" collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} />
@@ -1424,7 +1605,7 @@ function Dashboard({ user, onUpdateUser, collapsed, onToggle, activeNav, onNavig
   if (activeNav === 'Ofertas e serviços') return <Offers collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} offers={offers} onRefresh={onRefresh} onSelectOffer={onSelectOffer} onSelectOrder={onSelectOrder} workflowError={workflowError} />
   if (activeNav === 'Detalhes da oferta') return <OfferDetailsV2 collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} offer={offers.find((item) => item.id === selectedOfferId)} onRefresh={onRefresh} onSelectOrder={onSelectOrder} />
   if (activeNav === 'Fazer proposta') return <ProposalBuilder collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} offer={offers.find((item) => item.id === selectedOfferId)} onRefresh={onRefresh} onSelectOrder={onSelectOrder} />
-  if (activeNav === 'Pedidos') return <OrdersScreen collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} offers={offers} orders={orders} selectedOrderCode={selectedOrderCode} onSelectOffer={onSelectOffer} onSelectOrder={onSelectOrder} onRefresh={onRefresh} />
+  if (activeNav === 'Pedidos') return <OrdersScreen collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} offers={offers} orders={orders} selectedOrderCode={selectedOrderCode} onSelectOffer={onSelectOffer} onSelectOrder={onSelectOrder} onRefresh={onRefresh} requestStatuses={requestStatuses} />
   return <AdminServicesView collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} orders={orders} onSelectOrder={onSelectOrder} onRefresh={onRefresh} workflowError={workflowError} />
 }
 function App() {
@@ -1446,6 +1627,7 @@ function App() {
   const [openTabs, setOpenTabs] = useState(['Dashboard'])
   const [offers, setOffers] = useState([])
   const [orders, setOrders] = useState([])
+  const [payableFilters, setPayableFilters] = useState(null)
   const [selectedOfferId, setSelectedOfferId] = useState(null)
   const [selectedOrderCode, setSelectedOrderCode] = useState(null)
   const [workflowError, setWorkflowError] = useState('')
@@ -1524,9 +1706,15 @@ function App() {
   }
 
   function navigateTo(label) {
+    if (label === 'Contas a Pagar') setPayableFilters(null)
     if (label === 'Pedidos') setSelectedOrderCode(null)
     setActiveNav(label)
     setOpenTabs((current) => current.includes(label) ? current : [...current, label])
+  }
+
+  function openPayables(filters) {
+    navigateTo('Contas a Pagar')
+    setPayableFilters(filters)
   }
 
   function closeTab(label) {
@@ -1535,6 +1723,13 @@ function App() {
     const nextTabs = openTabs.filter((tab) => tab !== label)
     setOpenTabs(nextTabs)
     if (activeNav === label) setActiveNav(nextTabs[Math.max(0, Math.min(index, nextTabs.length - 1))])
+  }
+
+  function closeAllTabs() {
+    setOpenTabs(['Dashboard'])
+    setActiveNav('Dashboard')
+    setSelectedOfferId(null)
+    setSelectedOrderCode(null)
   }
 
   function reorderTabs(sourceTab, targetTab) {
@@ -1614,7 +1809,7 @@ function App() {
 
   if (operatorToken) return <OperatorDashboard token={operatorToken} onLogout={() => { window.sessionStorage.removeItem('gmac-operator-token'); setOperatorToken(null) }} />
   if (restoringSession) return <main className="session-restore"><img src="/images/gmac-logo-transparent.png" alt="GMAC Metalúrgica" />{restoreError ? <><p role="alert">{restoreError}</p><div><button type="button" className="admin-tool-button admin-tool-button--primary" onClick={() => setRestoreAttempt((value) => value + 1)}>Tentar novamente</button><button type="button" className="admin-tool-button" onClick={logoutAdmin}>Sair</button></div></> : <p role="status">Restaurando sessão...</p>}</main>
-  if (isDashboard) return <AdminIdentityContext.Provider value={adminUser}><Dashboard user={adminUser} onUpdateUser={setAdminUser} collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((current) => !current)} activeNav={activeNav} onNavigate={navigateTo} onCloseTab={closeTab} onReorderTabs={reorderTabs} tabs={openTabs} onLogout={logoutAdmin} offers={offers} orders={orders} selectedOfferId={selectedOfferId} selectedOrderCode={selectedOrderCode} onRefresh={refreshWorkflow} onSelectOffer={selectOffer} onSelectOrder={selectOrder} workflowError={workflowError} workflowLoading={workflowLoading} /></AdminIdentityContext.Provider>
+  if (isDashboard) return <AdminIdentityContext.Provider value={adminUser}><WorkspaceTabsContext.Provider value={closeAllTabs}><Dashboard user={adminUser} onUpdateUser={setAdminUser} collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((current) => !current)} activeNav={activeNav} onNavigate={navigateTo} onCloseTab={closeTab} onReorderTabs={reorderTabs} tabs={openTabs} onLogout={logoutAdmin} offers={offers} orders={orders} selectedOfferId={selectedOfferId} selectedOrderCode={selectedOrderCode} onRefresh={refreshWorkflow} onSelectOffer={selectOffer} onSelectOrder={selectOrder} onOpenPayables={openPayables} payableFilters={payableFilters} workflowError={workflowError} workflowLoading={workflowLoading} /></WorkspaceTabsContext.Provider></AdminIdentityContext.Provider>
 
   return (
     <main className="login-page">
