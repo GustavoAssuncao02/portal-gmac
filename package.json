@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "test": "node --test tests/*.test.js",
     "pretest:browser": "npm run build",
-    "test:browser": "node tests/admin-tools.browser.mjs"
+    "test:browser": "node tests/admin-tools.browser.mjs",
+    "pretest:payables": "npm run build",
+    "test:payables": "node --test tests/payables.test.js && node tests/payables.browser.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

@@ -2,6 +2,18 @@
 
 Sistema de gestão da GMAC Metalúrgica, construído com React, Vite, Node/Express e MySQL.
 
+## Contas a Pagar
+
+O menu inclui **Contas a Pagar**, **Mini BI**, **Classificações** e **Fornecedores**. A gestão usa modais para cadastro, detalhes, baixa total, estorno, anexos e histórico. Cadastre fornecedores e classificações antes de lançar contas. Contas novas podem ser normais, parceladas ou recorrentes; a próxima recorrência sempre exige confirmação e revisão.
+
+Valores são validados em centavos. Duplicidades por fornecedor, valor e vencimento são bloqueadas, inclusive em lançamentos concorrentes. Parcelamentos preservam o total original; a estrutura fica bloqueada enquanto houver parcela paga. Contas pagas só permitem alterações após estorno. Contas com pagamentos anteriores ou vínculos não são apagadas definitivamente. A exclusão de uma conta lançada por engano preserva sua auditoria no histórico geral.
+
+O Mini BI filtra por **vencimento** e agrupa pagamentos pela **data da baixa**, incluindo contas desativadas e valores efetivamente pagos. Os gráficos aplicam filtros na própria tela. PDF e Excel respeitam os filtros ou a seleção atual. Notificações de três dias antes e do dia do vencimento usam o sininho existente; a API verifica vencimentos a cada minuto enquanto estiver em execução e o portal atualiza a lista a cada 30 segundos.
+
+O módulo usa a persistência JSON serializada e os anexos privados em `server/data/`, seguindo o fluxo local já utilizado pelas ofertas/OS. Faça backup dessa pasta; não é enviada ao GitHub. O acesso às contas, anexos, histórico e exportações exige sessão administrativa. Não há contas financeiras fictícias criadas automaticamente.
+
+Validação isolada, sem alterar dados locais: `npm run test:payables`.
+
 ## Executar localmente
 
 ```bash

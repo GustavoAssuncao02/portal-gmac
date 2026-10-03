@@ -7,7 +7,8 @@ import AdminHome from './AdminHome.jsx'
 import NotificationsButton from './NotificationsButton.jsx'
 import ReportsScreen from './ReportsScreen.jsx'
 import AccountSettings from './AccountSettings.jsx'
-import { Monitor, Minimize2 } from 'lucide-react'
+import PayablesScreen from './PayablesScreen.jsx'
+import { Monitor, Minimize2, CreditCard, ChartColumn, Tags, Truck } from 'lucide-react'
 import { productionStages, serviceStageGroups, legacyStages, stageLabel, serviceDetails } from '../server/serviceStages.js'
 import { findInventoryMaterial, materialStock, normalizeSearch, pendingInventoryRequests, purchaseMaterialRequests } from './offerResources.js'
 import { deadlineCategories, serviceDeadline } from './serviceDeadline.js'
@@ -104,6 +105,10 @@ const navigation = [
   ['Ofertas e serviços', 'offers'],
   ['Clientes', 'clients'],
   ['Pedidos', 'orders'],
+  ['Contas a Pagar', 'payables'],
+  ['Mini BI', 'bi'],
+  ['Classificações', 'classifications'],
+  ['Fornecedores', 'suppliers'],
   ['Relatórios', 'reports'],
   ['Configurações', 'settings'],
 ]
@@ -126,7 +131,7 @@ function Sidebar({ collapsed, onToggle, activeNav, onNavigate, onLogout }) {
       <nav className="sidebar-nav" aria-label="Navegação principal">
         {navigation.map(([label, icon]) => (
           <button className={`nav-item ${activeNav === label ? 'nav-item--active' : ''}`} key={label} type="button" title={label} aria-label={label} onClick={() => onNavigate(label)}>
-            <Icon name={icon} className="nav-icon" />
+            {['payables', 'bi', 'classifications', 'suppliers'].includes(icon) ? (() => { const NavIcon = { payables: CreditCard, bi: ChartColumn, classifications: Tags, suppliers: Truck }[icon]; return <NavIcon className="icon nav-icon" size={20} /> })() : <Icon name={icon} className="nav-icon" />}
             <span>{label}</span>
           </button>
         ))}
@@ -151,7 +156,7 @@ function WorkspaceTabs({ tabs, activeNav, onNavigate, onCloseTab, onReorderTabs 
     setDraggedTab(null)
   }
 
-  return <div className="workspace-tabs"><div className="workspace-tabs-list" role="tablist" aria-label="Telas abertas">{tabs.map((tab) => <div className={`workspace-tab ${activeNav === tab ? 'workspace-tab--active' : ''} ${draggedTab === tab ? 'workspace-tab--dragging' : ''}`} key={tab} draggable onDragStart={() => setDraggedTab(tab)} onDragOver={(event) => event.preventDefault()} onDrop={() => dropTab(tab)} onDragEnd={() => setDraggedTab(null)}><button type="button" role="tab" aria-selected={activeNav === tab} onClick={() => onNavigate(tab)}>{tab}</button>{tabs.length > 1 && <button className="workspace-tab-close" type="button" aria-label={`Fechar aba ${tab}`} onClick={() => onCloseTab(tab)}>×</button>}</div>)}</div><NotificationsButton /><div className="workspace-tabs-clock" aria-label="Data e hora atual"><strong>{currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</strong><span>{currentTime.toLocaleDateString('pt-BR')}</span></div></div>
+  return <div className="workspace-tabs"><div className="workspace-tabs-list" role="tablist" aria-label="Telas abertas">{tabs.map((tab) => <div className={`workspace-tab ${activeNav === tab ? 'workspace-tab--active' : ''} ${draggedTab === tab ? 'workspace-tab--dragging' : ''}`} key={tab} draggable onDragStart={() => setDraggedTab(tab)} onDragOver={(event) => event.preventDefault()} onDrop={() => dropTab(tab)} onDragEnd={() => setDraggedTab(null)}><button type="button" role="tab" aria-selected={activeNav === tab} onClick={() => onNavigate(tab)}>{tab}</button>{tabs.length > 1 && <button className="workspace-tab-close" type="button" aria-label={`Fechar aba ${tab}`} onClick={() => onCloseTab(tab)}>×</button>}</div>)}</div><NotificationsButton onOpenAccount={(id) => { sessionStorage.setItem('gmac-payable-open', id); onNavigate('Contas a Pagar'); window.dispatchEvent(new CustomEvent('gmac-payable-open', { detail: id })) }} /><div className="workspace-tabs-clock" aria-label="Data e hora atual"><strong>{currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</strong><span>{currentTime.toLocaleDateString('pt-BR')}</span></div></div>
 }
 
 const initialMachines = [
@@ -1406,6 +1411,7 @@ function AdminServicesView({ collapsed, onToggle, activeNav, onNavigate, onLogou
 
 function Dashboard({ user, onUpdateUser, collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, offers, orders, selectedOfferId, selectedOrderCode, onRefresh, onSelectOffer, onSelectOrder, workflowError, workflowLoading }) {
   const toolProps = { Sidebar, WorkspaceTabs, navigationProps: { collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs } }
+  if (['Contas a Pagar', 'Mini BI', 'Classificações', 'Fornecedores'].includes(activeNav)) return <PayablesScreen {...toolProps} mode={{ 'Contas a Pagar': 'accounts', 'Mini BI': 'bi', 'Classificações': 'classifications', 'Fornecedores': 'suppliers' }[activeNav]} />
   if (activeNav === 'Relatórios') return <ReportsScreen {...toolProps} />
   if (activeNav === 'Configurações') return <AccountSettings {...toolProps} user={user} onUpdateUser={onUpdateUser} />
   if (activeNav === 'Dashboard') return <AdminHome user={user} orders={orders} offers={offers} workflowError={workflowError} workflowLoading={workflowLoading} onRefresh={onRefresh} onNavigate={onNavigate} onSelectOrder={onSelectOrder} loadInventory={loadOverviewInventory} readInventory={readInventory} readPendingMaterialRequests={readPendingMaterialRequests} Sidebar={Sidebar} WorkspaceTabs={WorkspaceTabs} navigationProps={{ collapsed, onToggle, activeNav, onLogout, tabs, onCloseTab, onReorderTabs }} />

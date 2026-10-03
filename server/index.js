@@ -8,6 +8,7 @@ import { issueOperatorToken, operatorConfigured, operatorCredentialsMatch } from
 import { createAccountService, createAccountsRouter, issueAdminToken, requireAdmin } from './accounts.js'
 import createMachinesRouter from './machines.js'
 import createReportsRouter from './reports.js'
+import createPayablesRouter from './payables.js'
 
 const app = express()
 const port = Number(process.env.PORT || 3001)
@@ -34,6 +35,9 @@ const accounts = createAccountService(pool)
 app.use('/api', createAccountsRouter(accounts))
 app.use('/api', createMachinesRouter(requireAdmin))
 app.use('/api', createReportsRouter(pool, accounts, requireAdmin))
+const payablesRouter = createPayablesRouter(accounts, requireAdmin)
+app.use('/api', payablesRouter)
+setInterval(() => payablesRouter.sweep().catch((error) => console.error('Falha ao verificar vencimentos:', error.message)), 60000).unref()
 
 app.post('/api/auth/operator-login', (request, response) => {
   if (typeof request.body?.username !== 'string' || !/^\d{11}$/.test(request.body.username)) return response.status(400).json({ message: 'Informe os 11 dígitos do usuário, sem pontos ou traços.' })

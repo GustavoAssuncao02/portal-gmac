@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { setTimeout as delay } from 'node:timers/promises'
 import express from 'express'
 import PDFDocument from 'pdfkit'
 import { productionStages, stageLabel, serviceDetails } from './serviceStages.js'
@@ -28,7 +29,13 @@ export function mutateStore(change) {
     const result = await change(store)
     const temporaryPath = `${storePath}.${randomUUID()}.tmp`
     await writeFile(temporaryPath, JSON.stringify(store, null, 2), 'utf8')
-    await rename(temporaryPath, storePath)
+    // Windows may temporarily lock the destination during reads or antivirus scans.
+    for (let attempt = 0; ; attempt++) {
+      try { await rename(temporaryPath, storePath); break } catch (error) {
+        if (!['EPERM', 'EACCES', 'EBUSY'].includes(error.code) || attempt >= 5) throw error
+        await delay(20 * (attempt + 1))
+      }
+    }
     return result
   })
   pendingWrite = operation

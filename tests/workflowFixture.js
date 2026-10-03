@@ -9,7 +9,7 @@ export async function createWorkflowFixture({ pool, accountsEnv } = {}) {
   const results = path.join(root, 'test-results')
   await mkdir(results, { recursive: true })
   const directory = await mkdtemp(path.join(results, 'workflow-'))
-  for (const name of ['offers.js', 'operations.js', 'operatorAuth.js', 'employeeActivity.js', 'serviceStages.js', 'machines.js', 'accounts.js', 'reports.js', 'reportData.js']) {
+  for (const name of ['offers.js', 'operations.js', 'operatorAuth.js', 'employeeActivity.js', 'serviceStages.js', 'machines.js', 'accounts.js', 'reports.js', 'reportData.js', 'payables.js', 'payableRules.js']) {
     await copyFile(path.join(root, 'server', name), path.join(directory, name))
   }
   const { default: offersRouter, mutateStore } = await import(pathToFileURL(path.join(directory, 'offers.js')))
@@ -18,6 +18,7 @@ export async function createWorkflowFixture({ pool, accountsEnv } = {}) {
   const { createAccountService, createAccountsRouter, issueAdminToken, requireAdmin } = await import(pathToFileURL(path.join(directory, 'accounts.js')))
   const { default: machinesRouter } = await import(pathToFileURL(path.join(directory, 'machines.js')))
   const { default: reportsRouter } = await import(pathToFileURL(path.join(directory, 'reports.js')))
+  const { default: payablesRouter } = await import(pathToFileURL(path.join(directory, 'payables.js')))
   const accounts = createAccountService(pool, accountsEnv || {})
   const app = express()
   app.use(express.json())
@@ -26,6 +27,7 @@ export async function createWorkflowFixture({ pool, accountsEnv } = {}) {
   app.use('/api', createAccountsRouter(accounts))
   app.use('/api', machinesRouter(requireAdmin))
   app.use('/api', reportsRouter(pool, accounts, requireAdmin))
+  app.use('/api', payablesRouter(accounts, requireAdmin))
   app.get('/api/inventory', (_request, response) => response.status(503).json({ message: 'O banco de dados ainda não está configurado.' }))
   app.post('/api/auth/login', async (request, response, next) => {
     if (!accountsEnv) return response.status(503).json({ message: 'O banco de dados ainda não está configurado.' })
