@@ -14,6 +14,8 @@ O módulo usa a persistência JSON serializada e os anexos privados em `server/d
 
 Validação isolada, sem alterar dados locais: `npm run test:payables`.
 
+Para popular a demonstração local solicitada de setembro a dezembro de 2026, com a API em execução e as credenciais administrativas locais configuradas, execute `node scripts/seed-payables.mjs`. O script cria 120 contas (30 por mês), 10 fornecedores fictícios e 10 classificações de teste. Registros são identificados por `DEMO-CP-2026`; executar novamente não duplica os lançamentos. As baixas nunca usam data futura. A execução não é automática na inicialização do sistema.
+
 ## Executar localmente
 
 ```bash
@@ -52,6 +54,8 @@ Para bancos existentes, aplique também `database/migrations/004_clients.sql` an
 Clientes e administradores são persistidos pela API: no MySQL quando configurado, ou no arquivo local. Máquinas ficam no arquivo local e o catálogo anterior do navegador é importado uma única vez ao entrar como administrador. Horas e nomes de máquina ficam registrados em cada sessão, inclusive após excluir um cadastro.
 
 Em **Configurações**, cada administrador pode alterar seu nome e senha após confirmar a senha atual. Senhas são armazenadas como hashes e nunca são incluídas em relatórios. O acesso a cadastros administrativos, configurações e relatórios exige a sessão administrativa. Trocas de senha invalidam sessões anteriores; reiniciar a API também exige um novo login.
+
+Ao recarregar a página, a sessão administrativa válida é confirmada pelo servidor e a tela aberta é restaurada, sem pedir a senha novamente. A validade continua sendo de 12 horas; **Sair** encerra a sessão e limpa o estado salvo. Indisponibilidade temporária da API permite tentar novamente sem apagar a credencial. Senhas e dados de conta não são usados como prova de autenticação no navegador.
 
 ## Relatórios
 

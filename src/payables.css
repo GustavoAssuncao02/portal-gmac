@@ -65,3 +65,17 @@
 .payable-bi-lists { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:30px; margin-top:32px; padding-top:26px; border-top:1px solid #dce6ef; }.payable-bi-lists > section > div { max-height:380px; overflow:auto; }.payable-bi-lists button { display:flex; width:100%; flex-direction:column; align-items:flex-start; text-align:left; gap:8px; padding:14px 0; border:0; border-bottom:1px solid #e2ebf3; background:none; color:#345979; cursor:pointer; font:inherit; font-size:12px; }
 @media(max-width:1100px) { .payable-bi-summary > div { grid-template-columns:repeat(3,minmax(0,1fr)); } }
 @media(max-width:760px) { .payable-heading-actions { margin:0 0 24px; justify-content:flex-start; }.payable-advanced { grid-template-columns:minmax(0,1fr); }.payable-bi-summary > div { grid-template-columns:repeat(2,minmax(0,1fr)); }.payable-bi-charts,.payable-bi-lists { grid-template-columns:minmax(0,1fr); }.payable-modal-body { padding:18px; }.payable-modal > header,.payable-modal > footer { padding:14px 18px; }.payable-facts { grid-template-columns:minmax(0,1fr); }.payable-installment { grid-template-columns:30px minmax(0,1fr); }.payable-installment > label:last-child { grid-column:2; }.payable-pagination { gap:8px; }.payable-bi-filters label { min-width:0; width:100%; }.payable-metric { padding:12px; }.payable-metric strong { font-size:17px; }.payable-chart-bar { grid-template-columns:minmax(60px,1fr) minmax(20px,1fr) 90px; gap:8px; } }
+.session-restore { display:flex; min-height:100dvh; flex-direction:column; align-items:center; justify-content:center; gap:20px; background:#f8fbfe; color:#24486b; padding:24px; font:14px Arial,sans-serif; }
+.session-restore img { width:140px; height:108px; object-fit:contain; }.session-restore > div { display:flex; flex-wrap:wrap; gap:10px; }.session-restore p { max-width:500px; text-align:center; }
+.payable-modal--form > header { padding:12px 20px; }.payable-modal--form h2 { font-size:17px; }
+.payable-modal--form .payable-modal-body { padding:14px 20px; }
+.payable-modal--form .payable-entry-form > fieldset { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px 18px; }
+.payable-modal--form .payable-entry-form label { gap:4px; font-size:12px; }
+.payable-modal--form .payable-entry-form :is(input:not([type=radio]),select) { height:32px; min-height:32px; padding:5px 9px; }
+.payable-modal--form .payable-entry-form textarea { height:40px; min-height:40px; padding:6px 9px; }
+.payable-form-wide,.payable-modal--form :is(.payable-files,.payable-installments,.admin-tool-error) { grid-column:1 / -1; }
+.payable-supplier-field { position:relative; }.payable-supplier-field > .payable-link { position:absolute; right:0; top:0; font-size:11px; }
+.payable-modal--form .payable-type legend { margin-bottom:8px; font-size:12px; }.payable-modal--form .payable-type { align-content:start; gap:10px; }
+.payable-modal--form .payable-files { padding-top:10px; }.payable-modal--form .payable-files h3 { margin-bottom:8px; font-size:13px; }.payable-modal--form .payable-drop { padding:8px 12px; gap:12px; }.payable-modal--form .payable-files ul:empty { display:none; }
+.payable-modal--form > footer { padding:10px 20px; }.payable-modal--form .admin-tool-button { min-height:32px; padding:6px 10px; font-size:12px; }
+@media(max-width:760px) { .payable-modal--form .payable-entry-form > fieldset { grid-template-columns:minmax(0,1fr); }.payable-modal--form .payable-modal-body { padding:14px; } }

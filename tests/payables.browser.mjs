@@ -96,7 +96,7 @@ try {
   const supplier = (await req('/suppliers')).data.items[0], category = (await req('/classifications')).data.items[0]
   console.log('Payables: individual payment, locks, reversal, installment, duplicate and recurrence verified')
   for (let i = 0; i < 26; i++) await req('/payables', 'POST', { supplierId: supplier.id, classificationId: category.id, issueDate: todayBahia(), dueDate: todayBahia(), value: String(i + 1), description: `Conta lote ${i}`, kind: 'normal' })
-  await nav('Mini BI'); await page.getByRole('heading', { name: 'Resumo financeiro', exact: true }).waitFor(); await nav('Contas a Pagar')
+  await nav('Business Intelligence'); await page.getByRole('heading', { name: 'Resumo financeiro', exact: true }).waitFor(); await nav('Contas a Pagar')
   await page.getByRole('button', { name: 'Filtros', exact: true }).click(); await page.getByLabel('Fornecedor', { exact: true }).selectOption(supplier.id)
   await page.getByLabel('Busca rápida', { exact: true }).fill('Conta lote')
   await page.waitForFunction(() => document.querySelectorAll('.payable-table tbody tr').length === 20)
@@ -111,12 +111,12 @@ try {
   for (const format of ['PDF', 'Excel']) { const downloadEvent = page.waitForEvent('download'); await page.getByRole('button', { name: format, exact: true }).click(); await (await downloadEvent).saveAs(`test-results/payable-filtered.${format === 'PDF' ? 'pdf' : 'xlsx'}`) }
   await page.getByRole('button', { name: 'Histórico geral', exact: true }).click(); await modal().getByText('Baixa em massa', { exact: false }).first().waitFor(); await closeDialog()
   await page.getByRole('button', { name: 'Notificações', exact: true }).click(); await page.locator('.notifications-payables').waitFor(); await page.locator('.notifications-payables button').first().click(); await modal().getByRole('heading', { name: 'Dados principais', exact: true }).waitFor(); await closeDialog()
-  for (const screen of ['Contas a Pagar', 'Mini BI', 'Classificações', 'Fornecedores']) {
+  for (const screen of ['Contas a Pagar', 'Business Intelligence', 'Classificações', 'Fornecedores']) {
     await nav(screen)
-    if (screen === 'Mini BI') { await page.locator('.payable-chart-bar').first().click(); assert.equal(await page.locator('.payable-chart-bar[aria-pressed=true]').count(), 1); await page.locator('.payable-chart-bar[aria-pressed=true]').click() }
+    if (screen === 'Business Intelligence') { await page.locator('.payable-chart-bar').first().click(); assert.equal(await page.locator('.payable-chart-bar[aria-pressed=true]').count(), 1); await page.locator('.payable-chart-bar[aria-pressed=true]').click() }
     for (const [width, height] of [[1440, 1000], [900, 800], [390, 844], [320, 740]]) {
       await page.setViewportSize({ width, height }); assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${screen} fits ${width}`)
-      await page.screenshot({ path: `test-results/payables-${screen === 'Contas a Pagar' ? 'accounts' : screen === 'Mini BI' ? 'bi' : screen === 'Classificações' ? 'classifications' : 'suppliers'}-${width}.png`, fullPage: true })
+      await page.screenshot({ path: `test-results/payables-${screen === 'Contas a Pagar' ? 'accounts' : screen === 'Business Intelligence' ? 'bi' : screen === 'Classificações' ? 'classifications' : 'suppliers'}-${width}.png`, fullPage: true })
     }
     await page.setViewportSize({ width: 1440, height: 1000 })
   }

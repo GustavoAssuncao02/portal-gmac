@@ -117,7 +117,14 @@ export function createAccountService(pool, env = process.env) {
 
 export function createAccountsRouter(service) {
   const router = express.Router()
-  router.use(['/admins', '/clients', '/account', '/auth/logout'], requireAdmin)
+  router.use(['/admins', '/clients', '/account', '/auth/logout', '/auth/session'], requireAdmin)
+  router.get('/auth/session', async (request, response, next) => {
+    try {
+      const user = (await service.admins()).find((item) => String(item.id) === String(request.adminId))
+      if (!user) return response.status(401).json({ message: 'Entre novamente como administrador.' })
+      response.json({ user })
+    } catch (error) { next(error) }
+  })
   router.post('/auth/logout', (request, response) => { sessions.delete(request.adminToken); response.json({ ok: true }) })
   router.patch('/account', async (request, response, next) => {
     try { const user = await service.updateAccount(request.adminId, request.body); response.json({ user, token: issueAdminToken(user) }) } catch (error) { next(error) }

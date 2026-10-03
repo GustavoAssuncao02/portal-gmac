@@ -106,7 +106,7 @@ const navigation = [
   ['Clientes', 'clients'],
   ['Pedidos', 'orders'],
   ['Contas a Pagar', 'payables'],
-  ['Mini BI', 'bi'],
+  ['Business Intelligence', 'bi'],
   ['Classificações', 'classifications'],
   ['Fornecedores', 'suppliers'],
   ['Relatórios', 'reports'],
@@ -1411,7 +1411,7 @@ function AdminServicesView({ collapsed, onToggle, activeNav, onNavigate, onLogou
 
 function Dashboard({ user, onUpdateUser, collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, offers, orders, selectedOfferId, selectedOrderCode, onRefresh, onSelectOffer, onSelectOrder, workflowError, workflowLoading }) {
   const toolProps = { Sidebar, WorkspaceTabs, navigationProps: { collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs } }
-  if (['Contas a Pagar', 'Mini BI', 'Classificações', 'Fornecedores'].includes(activeNav)) return <PayablesScreen {...toolProps} mode={{ 'Contas a Pagar': 'accounts', 'Mini BI': 'bi', 'Classificações': 'classifications', 'Fornecedores': 'suppliers' }[activeNav]} />
+  if (['Contas a Pagar', 'Business Intelligence', 'Classificações', 'Fornecedores'].includes(activeNav)) return <PayablesScreen {...toolProps} mode={{ 'Contas a Pagar': 'accounts', 'Business Intelligence': 'bi', 'Classificações': 'classifications', 'Fornecedores': 'suppliers' }[activeNav]} />
   if (activeNav === 'Relatórios') return <ReportsScreen {...toolProps} />
   if (activeNav === 'Configurações') return <AccountSettings {...toolProps} user={user} onUpdateUser={onUpdateUser} />
   if (activeNav === 'Dashboard') return <AdminHome user={user} orders={orders} offers={offers} workflowError={workflowError} workflowLoading={workflowLoading} onRefresh={onRefresh} onNavigate={onNavigate} onSelectOrder={onSelectOrder} loadInventory={loadOverviewInventory} readInventory={readInventory} readPendingMaterialRequests={readPendingMaterialRequests} Sidebar={Sidebar} WorkspaceTabs={WorkspaceTabs} navigationProps={{ collapsed, onToggle, activeNav, onLogout, tabs, onCloseTab, onReorderTabs }} />
@@ -1438,6 +1438,9 @@ function App() {
   const [message, setMessage] = useState('')
   const [isDashboard, setIsDashboard] = useState(false)
   const [adminUser, setAdminUser] = useState(null)
+  const [restoringSession, setRestoringSession] = useState(() => !operatorToken && Boolean(window.sessionStorage.getItem('gmac-admin-token')))
+  const [restoreError, setRestoreError] = useState('')
+  const [restoreAttempt, setRestoreAttempt] = useState(0)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [activeNav, setActiveNav] = useState('Dashboard')
   const [openTabs, setOpenTabs] = useState(['Dashboard'])
@@ -1461,6 +1464,48 @@ function App() {
   }
 
   useEffect(() => { if (!operatorToken) refreshWorkflow().catch(() => {}) }, [operatorToken])
+
+  useEffect(() => {
+    if (!restoringSession) return undefined
+    const controller = new AbortController()
+    async function restore() {
+      setRestoreError('')
+      try {
+        const response = await fetch('/api/auth/session', { headers: { Authorization: `Bearer ${window.sessionStorage.getItem('gmac-admin-token') || ''}` }, signal: controller.signal })
+        if (response.status === 401) {
+          window.sessionStorage.removeItem('gmac-admin-token')
+          window.sessionStorage.removeItem('gmac-admin-workspace')
+          setRestoringSession(false)
+          return
+        }
+        if (!response.ok) throw new Error('Não foi possível restaurar sua sessão. Tente novamente.')
+        const { user } = await response.json()
+        if (!user || user.id == null || !user.name) throw new Error('Não foi possível confirmar sua conta.')
+        let workspace
+        try { workspace = JSON.parse(window.sessionStorage.getItem('gmac-admin-workspace') || 'null') } catch { workspace = null }
+        const validPages = [...navigation.map(([name]) => name), 'Detalhes da oferta', 'Fazer proposta']
+        if (String(workspace?.userId) === String(user.id) && validPages.includes(workspace?.activeNav)) {
+          setActiveNav(workspace.activeNav)
+          setOpenTabs([...new Set([...(Array.isArray(workspace.tabs) ? workspace.tabs.filter((tab) => validPages.includes(tab)) : []), workspace.activeNav])])
+          setSidebarCollapsed(Boolean(workspace.collapsed))
+          setSelectedOfferId(typeof workspace.offerId === 'string' ? workspace.offerId : null)
+          setSelectedOrderCode(typeof workspace.orderCode === 'string' ? workspace.orderCode : null)
+        }
+        setAdminUser(user)
+        setIsDashboard(true)
+        setRestoringSession(false)
+      } catch (error) {
+        if (!controller.signal.aborted) setRestoreError(error.message === 'Failed to fetch' ? 'Não foi possível conectar ao servidor. Tente novamente.' : error.message)
+      }
+    }
+    restore()
+    return () => controller.abort()
+  }, [restoringSession, restoreAttempt])
+
+  useEffect(() => {
+    if (!isDashboard || !adminUser || !window.sessionStorage.getItem('gmac-admin-token')) return
+    window.sessionStorage.setItem('gmac-admin-workspace', JSON.stringify({ userId: adminUser.id, activeNav, tabs: openTabs, collapsed: sidebarCollapsed, offerId: selectedOfferId, orderCode: selectedOrderCode }))
+  }, [isDashboard, adminUser, activeNav, openTabs, sidebarCollapsed, selectedOfferId, selectedOrderCode])
 
   useEffect(() => {
     if (!isDashboard || !['Serviços em andamento', 'Dashboard'].includes(activeNav)) return undefined
@@ -1509,6 +1554,8 @@ function App() {
   }
 
   function enterAdmin(user, token) {
+    window.sessionStorage.removeItem('gmac-admin-workspace')
+    setRestoringSession(false)
     if (token) {
       window.sessionStorage.setItem('gmac-admin-token', token)
       apiRequest('/api/machines/import', jsonOptions('POST', { items: readMachines() })).catch(() => {})
@@ -1526,6 +1573,8 @@ function App() {
   function logoutAdmin() {
     apiRequest('/api/auth/logout', { method: 'POST' }).catch(() => {})
     window.sessionStorage.removeItem('gmac-admin-token')
+    window.sessionStorage.removeItem('gmac-admin-workspace')
+    setRestoringSession(false)
     setIsDashboard(false)
     setAdminUser(null)
     setPassword('')
@@ -1564,6 +1613,7 @@ function App() {
   }
 
   if (operatorToken) return <OperatorDashboard token={operatorToken} onLogout={() => { window.sessionStorage.removeItem('gmac-operator-token'); setOperatorToken(null) }} />
+  if (restoringSession) return <main className="session-restore"><img src="/images/gmac-logo-transparent.png" alt="GMAC Metalúrgica" />{restoreError ? <><p role="alert">{restoreError}</p><div><button type="button" className="admin-tool-button admin-tool-button--primary" onClick={() => setRestoreAttempt((value) => value + 1)}>Tentar novamente</button><button type="button" className="admin-tool-button" onClick={logoutAdmin}>Sair</button></div></> : <p role="status">Restaurando sessão...</p>}</main>
   if (isDashboard) return <AdminIdentityContext.Provider value={adminUser}><Dashboard user={adminUser} onUpdateUser={setAdminUser} collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((current) => !current)} activeNav={activeNav} onNavigate={navigateTo} onCloseTab={closeTab} onReorderTabs={reorderTabs} tabs={openTabs} onLogout={logoutAdmin} offers={offers} orders={orders} selectedOfferId={selectedOfferId} selectedOrderCode={selectedOrderCode} onRefresh={refreshWorkflow} onSelectOffer={selectOffer} onSelectOrder={selectOrder} workflowError={workflowError} workflowLoading={workflowLoading} /></AdminIdentityContext.Provider>
 
   return (
