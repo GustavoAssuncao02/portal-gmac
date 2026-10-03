@@ -1,0 +1,570 @@
+ENTENDIMENTO DO PROJETO - PORTAL GMAC
+Sistema de gestão para uma metalúrgica
+
+1. OBJETIVO DO SISTEMA
+
+O sistema será um portal interno de gestão para uma empresa metalúrgica chamada GMAC Metalúrgica.
+
+O objetivo é centralizar:
+- Serviços em andamento;
+- Máquinas e parque industrial;
+- Funcionários e administradores;
+- Clientes;
+- Ofertas de serviços recebidas;
+- Propostas comerciais;
+- Materiais e estoque;
+- Produção, pedidos e qualidade futuramente;
+- Cálculos de pesos e medidas para materiais metálicos.
+
+O projeto deve utilizar:
+- React no frontend;
+- Node.js no backend;
+- MySQL no banco de dados.
+
+Neste momento várias informações são demonstrativas, usando dados de exemplo, estado local e localStorage. A gravação definitiva deverá ser conectada ao Node.js e ao MySQL.
+
+2. IDENTIDADE VISUAL
+
+- A tela inicial de login deve seguir o protótipo da GMAC enviado em PDF.
+- O sistema deve manter o estilo visual dos protótipos enviados.
+- A identidade principal usa azul escuro/azul institucional, branco, cinza claro e detalhes de status em verde, amarelo, vermelho e azul.
+- A interface deve ser compacta e aproveitar bem a tela.
+- Os elementos não devem ficar exageradamente grandes nem exigir rolagem desnecessária.
+- As telas devem se adaptar ao espaço disponível sem cortar o conteúdo.
+- A logo da GMAC deve aparecer sem o fundo quadrado da imagem.
+- O menu lateral não deve ter o traço azul vertical ao lado da logo.
+- O visual da calculadora deve combinar com o restante do portal, sem parecer uma tela separada.
+
+3. LOGIN
+
+A tela de login possui:
+- Logo e apresentação da GMAC Metalúrgica;
+- Campo de CPF;
+- Campo de senha;
+- Botão Entrar;
+- Opção para mostrar/ocultar senha;
+- Link Esqueci minha senha.
+
+O cartão de login deve caber na tela sem exigir rolagem vertical em resoluções comuns.
+
+Atualmente o login possui comportamento demonstrativo. O acesso real deverá ser validado no backend, com senha protegida e usuários cadastrados no MySQL.
+
+4. MENU LATERAL
+
+O menu lateral deve conter as opções:
+- Dashboard;
+- Máquinas;
+- Estoque;
+- Calculadora de pesos e medidas;
+- Funcionários;
+- Administradores;
+- Serviços em andamento;
+- Ofertas e serviços;
+- Clientes;
+- Peças e serviços;
+- Pedidos;
+- Produção;
+- Qualidade;
+- Relatórios;
+- Configurações.
+
+O menu possui:
+- Opção para retrair/expandir;
+- Ícones para cada item;
+- Estado visual indicando a tela ativa;
+- Logo no topo;
+- Área do usuário logado e opção Sair.
+
+Quando retraído, deve ocupar pouco espaço e continuar permitindo identificar as opções pelos ícones/tooltips.
+
+5. ABAS DE NAVEGAÇÃO
+
+Ao clicar em uma opção do menu, a tela deve abrir em uma aba na barra superior.
+
+Comportamentos necessários:
+- É possível manter várias telas abertas ao mesmo tempo;
+- É possível clicar em uma aba para voltar à tela;
+- É possível fechar uma aba pelo X;
+- Deve existir pelo menos uma aba aberta;
+- As abas podem ser arrastadas para alterar a ordem, como em um navegador;
+- A aba ativa deve ficar destacada;
+- A barra superior não pode cobrir nem cortar o conteúdo das telas;
+- O relógio/data global fica no lado direito da barra superior, sempre visível;
+- O relógio global deve atualizar em tempo real, a cada segundo;
+- Não deve aparecer uma barra/controle estreito entre as abas e o relógio.
+
+6. DASHBOARD - SERVIÇOS EM ANDAMENTO
+
+Essa é a tela principal após o login.
+
+Deve mostrar uma tabela compacta com informações como:
+- Peça;
+- Etapas de serviço;
+- Cliente;
+- OS;
+- Etapa atual;
+- Previsão;
+- Dias restantes;
+- Horas trabalhadas;
+- Grau de dificuldade;
+- Andamento;
+- Status final.
+
+Não deve existir a coluna Horas previstas restantes na tabela principal.
+
+Filtros de status:
+- Todos;
+- Dentro do prazo;
+- Próximo do prazo;
+- Urgente.
+
+Ao clicar em um filtro, a tabela deve mostrar somente os serviços correspondentes.
+
+A busca deve funcionar pesquisando, pelo menos:
+- Peça;
+- Cliente;
+- Código;
+- Número da OS;
+- Etapa/status quando aplicável.
+
+O filtro de busca deve ignorar diferenças entre letras maiúsculas/minúsculas e acentos.
+
+A tabela deve ter:
+- Colunas iniciais com largura suficiente para não apertar o texto;
+- Títulos alinhados com o conteúdo das colunas;
+- Etapas de Serviço, Cliente e OS alinhados à esquerda;
+- Espaçamento proporcional, sem deixar a última coluna com espaço excessivo;
+- Barra de andamento compacta e legível;
+- Status visual com cores.
+
+Legenda de prazos:
+- Dentro do prazo: serviços com folga em relação à data de entrega;
+- Próximo do prazo: serviços próximos da data limite de entrega;
+- Vermelho/Atrasado: serviços que ultrapassaram a data de entrega.
+
+A tela também possui cards de resumo, como resumo de horas e resumo geral.
+
+7. MÁQUINAS
+
+A tela de Máquinas gerencia o parque de máquinas da metalúrgica.
+
+Deve mostrar:
+- Filtros Todas, Em funcionamento e Ociosas;
+- Quantidade total de máquinas;
+- Quantidade em funcionamento;
+- Quantidade ociosa;
+- Lista de máquinas;
+- Tipo;
+- Setor;
+- Status;
+- Operador atual;
+- Início de uso.
+
+Funções necessárias:
+- Adicionar máquina;
+- Editar máquina;
+- Remover máquina;
+- Pesquisar por máquina, setor ou operador;
+- Selecionar uma máquina para editar/remover.
+
+O botão/relógio de data e hora não deve aparecer no cabeçalho da tela de Máquinas. A data e hora ficam somente na barra superior global.
+
+8. CADASTRO DE FUNCIONÁRIOS
+
+Essa área é destinada aos administradores.
+
+Campos necessários:
+- Nome;
+- Data de nascimento;
+- CPF;
+- E-mail;
+- Senha;
+- Código de identificação com exatamente 3 dígitos.
+
+No banco de dados devem existir:
+- id do banco;
+- i_identificacao, contendo o código de identificação de 3 dígitos.
+
+Exemplo de código:
+- 001;
+- 002;
+- 003.
+
+A tela deve possuir:
+- Formulário de cadastro;
+- Lista de funcionários já cadastrados;
+- Edição de funcionário;
+- Exclusão de funcionário;
+- Mensagens de sucesso/erro.
+
+9. CADASTRO DE ADMINISTRADORES
+
+Também é uma área exclusiva da administração.
+
+Campos:
+- Nome;
+- Data de nascimento;
+- CPF;
+- E-mail;
+- Senha.
+
+A tela deve possuir:
+- Formulário de cadastro;
+- Lista de administradores já cadastrados;
+- Edição;
+- Exclusão;
+- Possibilidade de manter a senha atual ao editar, caso uma nova senha não seja informada.
+
+10. CADASTRO DE CLIENTES
+
+Clientes podem ser pessoas jurídicas ou pessoas físicas.
+
+Campos:
+- Nome/Razão social;
+- Tipo de documento: CPF ou CNPJ;
+- CPF ou CNPJ;
+- E-mail.
+
+Regras:
+- O formulário deve formatar CPF e CNPJ;
+- Deve validar a quantidade esperada de dígitos;
+- Deve listar clientes cadastrados;
+- Deve permitir editar;
+- Deve permitir excluir.
+
+11. CALCULADORA DE PESOS E MEDIDAS
+
+Deve existir no menu a opção Calculadora de pesos e medidas.
+
+A funcionalidade deve seguir a calculadora do site Coppermetal:
+https://coppermetal.com.br/pesos-e-medidas/
+
+O usuário deve selecionar:
+- Material;
+- Formato/perfil;
+- Medidas necessárias.
+
+O sistema deve retornar o peso por metro ou resultado correspondente.
+
+Materiais demonstrados:
+- Aço Carbono;
+- Aço Inox;
+- Alumínio;
+- Bronze;
+- Cobre;
+- Latão.
+
+Formatos/perfis previstos:
+- Barra chata;
+- Barra quadrada;
+- Barra redonda;
+- Barra sextavada;
+- Bobina;
+- Chapa;
+- Chapa xadrez;
+- Perfil L;
+- Perfil U;
+- Perfil U com abas desiguais/dobrado;
+- Tubo quadrado;
+- Tubo redondo;
+- Tubo retangular;
+- Tubo Schedule.
+
+Cada formato deve solicitar somente as medidas necessárias. Exemplos:
+- Barra chata: espessura e largura;
+- Barra quadrada: lado;
+- Barra redonda: diâmetro;
+- Tubos: diâmetro, espessura ou dimensões específicas;
+- Chapa: espessura e largura/comprimento;
+- Perfis: dimensões próprias do perfil.
+
+Requisitos funcionais:
+- Densidade específica por material;
+- Precisão específica dos perfis e tubos;
+- Fórmulas compatíveis com o site de referência;
+- Conversão de medidas;
+- Fórmulas avançadas quando necessárias;
+- Resultado em kg/m ou unidade correspondente;
+- Botão para limpar medidas;
+- Resultado atualizado conforme as medidas são alteradas.
+
+O resultado deve ser conferido com exemplos reais do site. Diferenças de arredondamento ou fórmula devem ser corrigidas para que o funcionamento fique equivalente ao Coppermetal.
+
+12. OFERTAS DE SERVIÇOS
+
+A tela de Ofertas e serviços representa solicitações recebidas de clientes.
+
+No futuro, as propostas poderão vir por API de outros sites. Por enquanto, a tela mostra apenas ofertas inseridas manualmente e persistidas pela API.
+
+A tela deve seguir o protótipo enviado, com uma única adição:
+- Botão azul Inserir Oferta Manualmente, posicionado à direita dos filtros.
+
+Deve exibir filtros como:
+- Novas;
+- Em análise;
+- Aprovado;
+- Recusadas.
+
+Também deve possuir busca das ofertas cadastradas.
+
+13. INSERÇÃO MANUAL DE OFERTA
+
+Ao clicar em Inserir Oferta Manualmente, abrir um modal sobre a tela, com fundo escurecido.
+
+Campos:
+- CNPJ;
+- Empresa;
+- Prazo solicitado;
+- Peça/Serviço;
+- Quantidade;
+- Descrição do serviço;
+- Anexo.
+
+Botão:
+- Adicionar solicitação.
+
+Comportamentos:
+- O modal fecha pelo X;
+- Clicar fora do quadrado/modal deve fechar, com o mesmo efeito do X;
+- Ao adicionar a solicitação, abrir uma segunda confirmação sobreposta;
+- Pergunta: Deseja ir para a proposta?
+- Opções Sim e Não;
+- Sim leva para a tela de proposta/detalhamento;
+- Não mantém o usuário na tela de ofertas.
+
+14. DETALHES DA OFERTA
+
+A tela de detalhes apresenta:
+- Informações do serviço;
+- Cliente solicitante;
+- Data da solicitação;
+- Quantidade solicitada;
+- Prazo;
+- Descrição completa;
+- Observações do cliente;
+- Materiais necessários;
+- Botão Fazer proposta.
+
+A área Informações do serviço deve ser compacta para liberar espaço para Materiais necessários.
+
+Materiais necessários:
+- A lista deve começar vazia;
+- O usuário adiciona materiais por meio de um botão +;
+- Deve informar o material e a quantidade necessária em kg;
+- A unidade de quantidade é kg, não unidades;
+- O sistema deve mostrar valor unitário e valor total;
+- Deve indicar se o material está disponível, parcial ou faltando no estoque.
+
+Ao começar a digitar um material, o sistema deve sugerir materiais já cadastrados no estoque. Exemplo:
+- Ao digitar Alum, sugerir Alumínio 1, Alumínio 2 e Alumínio 3.
+
+Também deve existir uma área para adicionar mão de obra:
+- Hora máquina;
+- Hora homem.
+
+Para mão de obra:
+- Selecionar qual máquina será usada ou qual serviço de homem será utilizado;
+- Informar a quantidade de tempo;
+- Mostrar valor da hora;
+- Mostrar valor total;
+- Permitir editar o valor da hora;
+- Atualizar os totais automaticamente.
+
+O botão Fazer proposta deve ter um ícone visual adequado, sem o quadrado estranho usado anteriormente.
+
+15. PROPOSTA COMERCIAL
+
+Ao clicar em Fazer proposta, o usuário vai para a tela de proposta baseada no PDF enviado.
+
+A tela deve apresentar diferentes opções de preço, com percentuais de lucro bruto crescentes.
+
+Cada proposta deve indicar, por exemplo:
+- Prazo de entrega;
+- Tempo de máquina;
+- Valor do serviço;
+- Etapas do serviço;
+- Materiais;
+- Mão de obra;
+- Tipo: Serviço, Produto, Usinagem e Caldeiraria;
+- Percentual de lucro bruto;
+- Desconto;
+- Lucro bruto esperado.
+
+Comportamentos:
+- A proposta selecionada deve ficar claramente identificada por uma borda/destaque;
+- Deve ser possível selecionar e deselecionar Serviço, Produto, Usinagem e Caldeiraria;
+- Os textos e opções devem caber dentro do card, sem transbordar;
+- Os ícones de edição devem funcionar;
+- Ao editar um valor, os demais dados devem ser recalculados;
+- Se o desconto aumentar, o lucro bruto deve diminuir;
+- Materiais, mão de obra, prazo e totais devem refletir as alterações.
+
+16. PDF DA PROPOSTA
+
+Ao clicar em Enviar proposta selecionada, abrir uma caixa para selecionar o layout do PDF.
+
+O PDF gerado deve conter:
+- Informações do serviço;
+- Cliente;
+- Descrição;
+- Precificação dos materiais;
+- Descrição dos tipos selecionados;
+- Etapas que serão realizadas;
+- Prazo e condições necessárias.
+
+O PDF não deve conter:
+- Percentual de lucro da GMAC;
+- Lucro bruto interno;
+- Informações comerciais internas que não devem ser enviadas ao cliente.
+
+17. ESTOQUE
+
+Deve existir uma opção Estoque no menu lateral.
+
+A tela deve permitir:
+- Adicionar material;
+- Editar material;
+- Remover material;
+- Pesquisar por material ou especificação;
+- Visualizar quantidade total;
+- Visualizar materiais cadastrados;
+- Identificar estoque baixo;
+- Informar estoque mínimo;
+- Informar valor por kg;
+- Ver status do estoque.
+
+Cada material deve possuir, no mínimo:
+- Nome;
+- Especificação;
+- Quantidade disponível em kg;
+- Estoque mínimo em kg;
+- Valor médio por kg.
+
+Ao editar um material já cadastrado:
+- Não pode ser possível alterar diretamente a quantidade disponível;
+- A quantidade só pode mudar por meio de uma entrada ou saída de estoque.
+
+Ao adicionar um material que já existe:
+- O sistema deve sugerir o material cadastrado;
+- Devem desaparecer os campos Quantidade disponível e Estoque mínimo;
+- Deve aparecer o campo com quantos kg a mais estão entrando;
+- O usuário informa o novo valor por kg daquela entrada.
+
+Exemplo de preço médio:
+- Estoque atual: 20 kg a R$ 28,00/kg;
+- Nova entrada: 10 kg a R$ 30,00/kg;
+- Novo total: 30 kg;
+- Novo preço médio: aproximadamente R$ 28,67/kg;
+- O preço não deve simplesmente mudar para R$ 30,00.
+
+18. HISTÓRICO DO ESTOQUE
+
+Cada material deve manter um log/histórico salvo no banco.
+
+O histórico deve registrar:
+- Data de criação do material;
+- Entradas de quantidade;
+- Saídas de quantidade;
+- Data e hora do movimento;
+- Quantidade movimentada;
+- Valor por kg em cada entrada;
+- Preço médio resultante;
+- Origem/destino do material;
+- OS relacionada quando houver;
+- Usuário responsável pela movimentação.
+
+O valor da entrada deve aparecer no histórico individual. O usuário não deve ver somente o preço médio, mas também o preço pago em cada inserção.
+
+Ao lado das ações da tabela deve existir um ícone de informação. Ao clicar nele, abrir o histórico daquele material.
+
+19. MATERIAIS NÃO CADASTRADOS E SOLICITAÇÃO DE COMPRA
+
+Caso um material solicitado ainda não exista no estoque:
+- Deve ser permitido informar o material mesmo assim;
+- O material deve gerar um pré-cadastro;
+- Deve ficar registrado como produto/material solicitado pendente;
+- Deve guardar a quantidade necessária;
+- Deve guardar a OS relacionada;
+- Deve aparecer em uma área Produtos solicitados pendentes;
+- Deve existir um botão de destaque Abrir solicitação de compra.
+
+O status do material na oferta deve indicar:
+- Disponível;
+- Parcial;
+- Faltando.
+
+20. INTEGRAÇÃO ENTRE OFERTA E ESTOQUE
+
+Quando um material é adicionado no detalhamento da oferta:
+- A busca deve consultar os materiais do estoque;
+- A sugestão deve ser feita durante a digitação;
+- O sistema deve comparar a quantidade necessária com a quantidade disponível;
+- Deve indicar a situação do estoque;
+- Deve calcular o custo usando o valor por kg do material;
+- Deve permitir criar pré-cadastro/solicitação de compra se o material não existir;
+- Deve relacionar o material à OS/oferta.
+
+21. PERSISTÊNCIA E BACKEND FUTURO
+
+O comportamento definitivo deve usar Node.js e MySQL.
+
+Entidades esperadas:
+- Usuários;
+- Administradores;
+- Funcionários;
+- Clientes;
+- Máquinas;
+- Materiais;
+- Movimentações de estoque;
+- Solicitações de compra;
+- Ofertas;
+- Materiais da oferta;
+- Mão de obra da oferta;
+- Propostas;
+- Itens da proposta;
+- Etapas de produção;
+- Pedidos;
+- Logs de auditoria.
+
+O sistema deve manter os vínculos entre:
+- Cliente e oferta;
+- Oferta e OS;
+- OS e materiais;
+- OS e mão de obra;
+- Material e movimentações de estoque;
+- Entrada/saída e usuário responsável.
+
+22. ESTADO ATUAL OBSERVADO
+
+- O login administrativo usa o banco quando configurado; sem banco, permanece o acesso demonstrativo existente. O operador usa uma conta compartilhada configurada no servidor.
+- As telas principais foram construídas em React;
+- As abas superiores funcionam com navegação, fechamento e reordenação;
+- O relógio global está na barra superior e atualiza em tempo real;
+- A tela de Máquinas não deve ter relógio próprio no cabeçalho;
+- Funcionários possuem cadastro persistido para identificação na operação das OS; Administradores e Clientes ainda usam cadastros demonstrativos;
+- Foi corrigido o erro que impedia a abertura dessas três telas: o componente de cadastro precisava receber onToggle;
+- O build do projeto foi validado após essa correção;
+- A aplicação roda localmente em http://127.0.0.1:5173/.
+
+23. VISÃO DO OPERADOR E APONTAMENTO DE OS
+
+- Existe uma única conta compartilhada para acesso à visão do operador; usuário e senha são configurados no servidor, sem credencial padrão.
+- Funcionários cadastrados no admin aparecem na seleção ao clicar em "Trabalhar neste projeto".
+- Cada sessão pertence ao funcionário selecionado. Para registrar peças, pausar ou concluir, é exigida a credencial privada recebida ao iniciar aquela sessão.
+- As etapas vêm da proposta aceita e seguem a ordem em que aparecem na proposta.
+- Cada etapa registra quantas peças passaram por ela. O total não pode ultrapassar a quantidade da OS, e uma etapa não pode avançar além da anterior.
+- O tempo ativo total da OS e o tempo da sessão atual são medidos a partir dos horários persistidos.
+- Ao pausar, o operador escolhe entre Descanso, Horário de almoço, Gilson mandou parar e Troca de atividade.
+- Início, retomada, avanços de etapa, pausa, conclusão e interrupção administrativa formam o histórico da OS com funcionário, horário e dados da ação.
+- O painel administrativo de serviços usa somente OS reais e consulta as alterações a cada 10 segundos.
+- Quando o MySQL está configurado, funcionários e apontamentos operacionais usam as tabelas de `database/migrations/003_operator_workflow.sql`; sem MySQL, usam o arquivo local de dados.
+
+24. PRINCÍPIOS PARA CONTINUAR O PROJETO
+
+- Manter o visual próximo dos protótipos enviados;
+- Priorizar telas compactas e aproveitamento de espaço;
+- Não remover funcionalidades já implementadas;
+- Não alterar regras de negócio sem confirmar;
+- Quando uma informação for demonstrativa, deixar preparado para futura integração com API/MySQL;
+- Toda mudança visual deve ser conferida em uma resolução real do navegador;
+- Toda funcionalidade nova deve ser testada no fluxo completo, não apenas visualmente.

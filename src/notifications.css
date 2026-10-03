@@ -1,0 +1,11 @@
+.workspace-notifications { display: flex; flex: 0 0 48px; align-items: center; justify-content: center; }
+.notifications-trigger { display: grid; width: 32px; height: 32px; place-items: center; padding: 0; border: 0; border-radius: 5px; background: transparent; color: #255c8f; cursor: pointer; }
+.notifications-trigger:hover, .notifications-trigger[aria-expanded="true"] { background: #edf4fc; }
+.notifications-popup { position: fixed; inset: auto; width: min(320px, calc(100vw - 24px)); max-height: calc(100dvh - 64px); margin: 0; padding: 0; overflow: auto; border: 1px solid #d8e3ed; border-radius: 8px; box-shadow: 0 10px 32px #17334f24; background: #fff; color: #244764; font-family: Arial, sans-serif; }
+.notifications-popup *, .notifications-popup { box-sizing: border-box; animation: none !important; transition: none !important; letter-spacing: 0; }
+.notifications-popup > header { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 15px 16px; border-bottom: 1px solid #e5ecf2; }
+.notifications-popup h2 { margin: 0; color: #214663; font-size: 15px; }
+.notifications-close { display: grid; flex: 0 0 26px; width: 26px; height: 26px; place-items: center; padding: 0; border: 0; border-radius: 4px; background: transparent; color: #7890a2; cursor: pointer; }
+.notifications-close:hover { background: #f0f5fa; color: #214663; }
+.notifications-empty { display: flex; min-height: 138px; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 20px 16px; color: #8ba0b1; }
+.notifications-empty p { margin: 0; color: #71889a; font-size: 12px; text-align: center; line-height: 1.5; }
