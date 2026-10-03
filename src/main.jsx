@@ -9,7 +9,7 @@ import ReportsScreen from './ReportsScreen.jsx'
 import AccountSettings from './AccountSettings.jsx'
 import PayablesScreen from './PayablesScreen.jsx'
 import ServiceStageEditor from './ServiceStageEditor.jsx'
-import { Monitor, Minimize2, CreditCard, ChartColumn, Tags, Truck, ChevronLeft, ChevronRight, ChevronDown, UsersRound, X } from 'lucide-react'
+import { Monitor, Minimize2, CreditCard, ChartColumn, Tags, Truck, WalletCards, ChevronLeft, ChevronRight, ChevronDown, UsersRound, X } from 'lucide-react'
 import { stageLabel, stageGroupLabel, serviceDetails, readStageLayout, orderedStageSelection } from '../server/serviceStages.js'
 import { findInventoryMaterial, materialStock, normalizeSearch, pendingInventoryRequests, purchaseMaterialRequests } from './offerResources.js'
 import { deadlineCategories, serviceDeadline } from './serviceDeadline.js'
@@ -117,6 +117,8 @@ const navigation = [
 
 const registrationNavigation = ['Fornecedores', 'Administradores', 'Funcionários', 'Clientes'].map((label) => navigation.find(([name]) => name === label))
 const isRegistrationPage = (label) => registrationNavigation.some(([name]) => name === label)
+const financialNavigation = ['Contas a Pagar', 'Business Intelligence', 'Classificações'].map((label) => navigation.find(([name]) => name === label))
+const isFinancialPage = (label) => financialNavigation.some(([name]) => name === label)
 
 const AdminIdentityContext = createContext(null)
 const WorkspaceTabsContext = createContext(null)
@@ -124,16 +126,28 @@ const WorkspaceTabsContext = createContext(null)
 function Sidebar({ collapsed, onToggle, activeNav, onNavigate, onLogout }) {
   const user = useContext(AdminIdentityContext)
   const [registrationsOpen, setRegistrationsOpen] = useState(() => isRegistrationPage(activeNav) || window.sessionStorage.getItem('gmac-cadastros-open') !== 'false')
+  const [financialOpen, setFinancialOpen] = useState(() => isFinancialPage(activeNav) || window.sessionStorage.getItem('gmac-finance-open') !== 'false')
   useEffect(() => {
     if (isRegistrationPage(activeNav)) {
       setRegistrationsOpen(true)
       window.sessionStorage.setItem('gmac-cadastros-open', 'true')
     }
   }, [activeNav])
+  useEffect(() => {
+    if (isFinancialPage(activeNav)) {
+      setFinancialOpen(true)
+      window.sessionStorage.setItem('gmac-finance-open', 'true')
+    }
+  }, [activeNav])
   function toggleRegistrations() {
     const next = !registrationsOpen
     setRegistrationsOpen(next)
     window.sessionStorage.setItem('gmac-cadastros-open', String(next))
+  }
+  function toggleFinancial() {
+    const next = !financialOpen
+    setFinancialOpen(next)
+    window.sessionStorage.setItem('gmac-finance-open', String(next))
   }
   function navigationItem([label, icon]) {
     return <button className={`nav-item ${activeNav === label ? 'nav-item--active' : ''}`} key={label} type="button" title={pageLabel(label)} aria-label={pageLabel(label)} onClick={() => onNavigate(label)}>
@@ -160,7 +174,13 @@ function Sidebar({ collapsed, onToggle, activeNav, onNavigate, onLogout }) {
             </button>
             <div className="sidebar-submenu" id="sidebar-cadastros-menu" hidden={!registrationsOpen}>{registrationNavigation.map(navigationItem)}</div>
           </div>]
-          return isRegistrationPage(item[0]) ? [] : [navigationItem(item)]
+          if (item[0] === 'Contas a Pagar') return [<div className="sidebar-nav-group" key="finance">
+            <button className={`nav-item sidebar-nav-group-toggle ${!financialOpen && isFinancialPage(activeNav) ? 'nav-item--active' : ''}`} type="button" title="Gestão Financeira" aria-label="Gestão Financeira" aria-expanded={financialOpen} aria-controls="sidebar-finance-menu" onClick={toggleFinancial}>
+              <WalletCards className="icon nav-icon" size={20} aria-hidden="true" /><span>Gestão Financeira</span>{financialOpen ? <ChevronDown className="sidebar-group-chevron" size={15} aria-hidden="true" /> : <ChevronRight className="sidebar-group-chevron" size={15} aria-hidden="true" />}
+            </button>
+            <div className="sidebar-submenu" id="sidebar-finance-menu" hidden={!financialOpen}>{financialNavigation.map(navigationItem)}</div>
+          </div>]
+          return isRegistrationPage(item[0]) || isFinancialPage(item[0]) ? [] : [navigationItem(item)]
         })}
       </nav>
       <div className="sidebar-account"><div className="account-avatar">{initials}</div><div className="account-copy"><strong title={name}>{name}</strong><span>Administrador</span></div><span className="account-chevron">›</span></div>
