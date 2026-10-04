@@ -55,6 +55,7 @@ try {
   await navigate('Dashboard')
   await sidebar.getByRole('button', { name: 'Expandir menu lateral', exact: true }).click()
   await page.setViewportSize({ width: 390, height: 844 })
+  await page.getByRole('button', { name: 'Abrir menu de navegação', exact: true }).click()
   await page.screenshot({ path: 'test-results/sidebar-cadastros-mobile.png' })
   for (const name of members) {
     const button = await sidebar.getByRole('button', { name, exact: true }).boundingBox()

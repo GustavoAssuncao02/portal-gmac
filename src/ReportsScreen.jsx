@@ -16,6 +16,7 @@ export default function ReportsScreen(props) {
   const [all, setAll] = useState(true)
   const [ids, setIds] = useState([])
   const [search, setSearch] = useState('')
+  const [idleHours, setIdleHours] = useState(false)
   const [report, setReport] = useState(null)
   const [section, setSection] = useState(0)
   const [busy, setBusy] = useState('')
@@ -45,7 +46,7 @@ export default function ReportsScreen(props) {
     pending.current = controller
     setBusy(format || 'preview'); setError('')
     try {
-      const response = await fetch(`/api/reports/${format ? 'export' : 'generate'}`, { method: 'POST', headers: headers(), signal: controller.signal, body: JSON.stringify({ kind, start, end, ids: all ? [] : ids, ...(format ? { format } : {}) }) })
+      const response = await fetch(`/api/reports/${format ? 'export' : 'generate'}`, { method: 'POST', headers: headers(), signal: controller.signal, body: JSON.stringify({ kind, start, end, ids: all ? [] : ids, idleHours: kind === 'machine-hours' && idleHours, ...(format ? { format } : {}) }) })
       if (!response.ok) { const data = await response.json(); throw new Error(data.message || 'Falha ao gerar o relat\u00f3rio.') }
       if (format) {
         const blob = await response.blob()
@@ -67,6 +68,7 @@ export default function ReportsScreen(props) {
       {hasSelection && <section className="reports-selection" aria-label={selectionLabel}><header><strong>{selectionLabel}</strong><label className="reports-check"><input type="checkbox" checked={all} onChange={(event) => change(() => { setAll(event.target.checked); setIds([]) })} />Todos</label><label className="reports-search"><Search size={15} aria-hidden="true" /><input aria-label={`Buscar ${selectionLabel.toLowerCase()}`} type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por nome" /></label></header>
         {catalogLoading ? <p role="status">Carregando cadastros...</p> : <div className="reports-selection-list">{items.filter((item) => item.name.toLocaleLowerCase().includes(search.toLocaleLowerCase())).map((item) => <label className="reports-check" key={item.id}><input type="checkbox" checked={all || ids.includes(String(item.id))} onChange={(event) => change(() => { const current = all ? items.map((row) => String(row.id)) : ids; setAll(false); setIds(event.target.checked ? [...new Set([...current, String(item.id)])] : current.filter((id) => id !== String(item.id))) })} />{item.name}</label>)}{!items.length && <p>Nenhum cadastro encontrado.</p>}</div>}
       </section>}
+      {kind === 'machine-hours' && <label className="reports-check reports-idle-option"><input type="checkbox" checked={idleHours} onChange={(event) => change(() => setIdleHours(event.target.checked))} />Horas ociosas</label>}
       <div className="reports-actions"><button className="admin-tool-button admin-tool-button--primary" type="submit" disabled={hasSelection && catalogLoading}><Search size={16} />{busy === 'preview' ? 'Gerando...' : 'Consultar'}</button><button className="admin-tool-button" type="button" onClick={() => generate('pdf')}><FileDown size={16} />{busy === 'pdf' ? 'Gerando...' : 'Baixar PDF'}</button><button className="admin-tool-button" type="button" onClick={() => generate('xlsx')}><Sheet size={16} />{busy === 'xlsx' ? 'Gerando...' : 'Baixar Excel'}</button></div>
       </fieldset>
     </form>

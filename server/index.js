@@ -12,6 +12,7 @@ import createPayablesRouter from './payables.js'
 import createInventoryImportRouter from './inventoryImport.js'
 import createMaterialRequestsRouter from './materialRequests.js'
 import { createApiRateLimiter } from './rateLimit.js'
+import { ensureInventoryAppearance, inventoryAppearance } from './inventoryAppearance.js'
 
 const app = express()
 const port = Number(process.env.PORT || 3001)
@@ -34,12 +35,13 @@ if (process.env.DB_HOST && process.env.DB_USER && process.env.DB_NAME) {
     waitForConnections: true,
     connectionLimit: 10,
   })
+  await ensureInventoryAppearance(pool)
 }
 
 app.use('/api', createOperationsRouter(pool))
 const accounts = createAccountService(pool)
 app.use('/api', createAccountsRouter(accounts))
-app.use('/api', createMachinesRouter(requireAdmin))
+app.use('/api', createMachinesRouter(requireAdmin, pool))
 app.use('/api', createReportsRouter(pool, accounts, requireAdmin))
 app.use('/api', createInventoryImportRouter(pool, requireAdmin))
 app.use('/api', createMaterialRequestsRouter(requireAdmin))
@@ -71,7 +73,7 @@ app.get('/api/inventory', async (_request, response) => {
   try {
     const [materials] = await pool.execute(
       `SELECT id, name, detail, quantity_kg AS quantity, minimum_kg AS minimum,
-              unit_price AS unitPrice, created_at
+              unit_price AS unitPrice, icon, photo, created_at
          FROM inventory_materials
         ORDER BY name ASC`,
     )
@@ -98,7 +100,7 @@ app.get('/api/inventory', async (_request, response) => {
   }
 })
 
-app.post('/api/inventory', async (request, response) => {
+app.post('/api/inventory', requireAdmin, async (request, response) => {
   if (!pool) {
     return response.status(503).json({ message: 'O banco de dados ainda não está configurado.' })
   }
@@ -111,12 +113,13 @@ app.post('/api/inventory', async (request, response) => {
 
   let connection
   try {
+    const appearance = await inventoryAppearance(request.body)
     connection = await pool.getConnection()
     await connection.beginTransaction()
     const [result] = await connection.execute(
-      `INSERT INTO inventory_materials (name, detail, quantity_kg, minimum_kg, unit_price)
-       VALUES (?, ?, ?, ?, ?)`,
-      [String(name).trim(), detail || null, initialQuantity, Number(minimum) || 0, Number(unitPrice) || 0],
+      `INSERT INTO inventory_materials (name, detail, quantity_kg, minimum_kg, unit_price, icon, photo)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [String(name).trim(), detail || null, initialQuantity, Number(minimum) || 0, Number(unitPrice) || 0, appearance.icon || 'sheet', appearance.photo || null],
     )
     await connection.execute(
       `INSERT INTO inventory_movements
@@ -128,6 +131,7 @@ app.post('/api/inventory', async (request, response) => {
     return response.status(201).json({ id: result.insertId })
   } catch (error) {
     if (connection) await connection.rollback()
+    if (error.status === 400) return response.status(400).json({ message: error.message })
     console.error('Falha ao cadastrar material:', error)
     return response.status(500).json({ message: 'Não foi possível cadastrar o material.' })
   } finally {
@@ -135,22 +139,25 @@ app.post('/api/inventory', async (request, response) => {
   }
 })
 
-app.patch('/api/inventory/:materialId', async (request, response) => {
+app.patch('/api/inventory/:materialId', requireAdmin, async (request, response) => {
   if (!pool) {
     return response.status(503).json({ message: 'O banco de dados ainda não está configurado.' })
   }
 
   const { name, detail, minimum, unitPrice } = request.body ?? {}
   try {
+    const appearance = await inventoryAppearance(request.body)
+    const appearanceFields = Object.keys(appearance)
     const [result] = await pool.execute(
       `UPDATE inventory_materials
-          SET name = ?, detail = ?, minimum_kg = ?, unit_price = ?
+          SET name = ?, detail = ?, minimum_kg = ?, unit_price = ?${appearanceFields.map((field) => `, ${field} = ?`).join('')}
         WHERE id = ?`,
-      [String(name || '').trim(), detail || null, Number(minimum) || 0, Number(unitPrice) || 0, request.params.materialId],
+      [String(name || '').trim(), detail || null, Number(minimum) || 0, Number(unitPrice) || 0, ...appearanceFields.map((field) => appearance[field]), request.params.materialId],
     )
     if (!result.affectedRows) return response.status(404).json({ message: 'Material não encontrado.' })
     return response.json({ ok: true })
   } catch (error) {
+    if (error.status === 400) return response.status(400).json({ message: error.message })
     console.error('Falha ao editar material:', error)
     return response.status(500).json({ message: 'Não foi possível editar o material.' })
   }

@@ -10,18 +10,26 @@ const fail = (status, message) => { const error = new Error(message); error.stat
 export function notificationSettings(store, userId) {
   return { payableReminderDays: store.adminNotificationPreferences?.find((item) => String(item.userId) === String(userId))?.payableReminderDays ?? 3 }
 }
+export function appearanceSettings(store, userId) {
+  return { theme: store.adminAppearancePreferences?.find((item) => String(item.userId) === String(userId))?.theme === 'dark' ? 'dark' : 'light' }
+}
 export function issueAdminToken(user) {
   for (const [key, session] of sessions) if (session.expires < Date.now()) sessions.delete(key)
   const token = randomUUID()
-  sessions.set(token, { id: user.id, expires: Date.now() + 12 * 3600000 })
+  sessions.set(token, { id: user.id, name: user.name, expires: Date.now() + 12 * 3600000 })
   return token
 }
-export function requireAdmin(request, response, next) {
+export function adminIdentity(request) {
   const token = String(request.headers.authorization || '').replace(/^Bearer /, '')
   const session = sessions.get(token)
+  return session && session.expires >= Date.now() ? { ...session, token } : null
+}
+export function requireAdmin(request, response, next) {
+  const session = adminIdentity(request)
   if (!session || session.expires < Date.now()) return response.status(401).json({ message: 'Entre novamente como administrador.' })
   request.adminId = session.id
-  request.adminToken = token
+  request.adminName = session.name
+  request.adminToken = session.token
   next()
 }
 
@@ -134,7 +142,22 @@ export function createAccountService(pool, env = process.env) {
       return notificationSettings(store, id)
     })
   }
-  return { admins, clients, authenticate, updateAccount, getNotificationSettings, updateNotificationSettings, save, remove }
+  async function getAppearanceSettings(id) {
+    if (!(await admins()).some((item) => String(item.id) === String(id))) fail(404, 'Conta não encontrada.')
+    return appearanceSettings(await readStore(), id)
+  }
+  async function updateAppearanceSettings(id, fields) {
+    if (!['light', 'dark'].includes(fields?.theme)) fail(400, 'Escolha o modo claro ou escuro.')
+    await getAppearanceSettings(id)
+    return mutateStore((store) => {
+      store.adminAppearancePreferences ||= []
+      let preference = store.adminAppearancePreferences.find((item) => String(item.userId) === String(id))
+      if (!preference) { preference = { userId: id }; store.adminAppearancePreferences.push(preference) }
+      preference.theme = fields.theme
+      return appearanceSettings(store, id)
+    })
+  }
+  return { admins, clients, authenticate, updateAccount, getNotificationSettings, updateNotificationSettings, getAppearanceSettings, updateAppearanceSettings, save, remove }
 }
 
 export function createAccountsRouter(service) {
@@ -153,6 +176,12 @@ export function createAccountsRouter(service) {
   })
   router.patch('/account/notifications', async (request, response, next) => {
     try { response.json({ settings: await service.updateNotificationSettings(request.adminId, request.body) }) } catch (error) { next(error) }
+  })
+  router.get('/account/appearance', async (request, response, next) => {
+    try { response.set('Cache-Control', 'no-store').json({ settings: await service.getAppearanceSettings(request.adminId) }) } catch (error) { next(error) }
+  })
+  router.patch('/account/appearance', async (request, response, next) => {
+    try { response.json({ settings: await service.updateAppearanceSettings(request.adminId, request.body) }) } catch (error) { next(error) }
   })
   router.patch('/account', async (request, response, next) => {
     try { const user = await service.updateAccount(request.adminId, request.body); response.json({ user, token: issueAdminToken(user) }) } catch (error) { next(error) }

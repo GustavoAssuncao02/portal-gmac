@@ -4,7 +4,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { setTimeout as delay } from 'node:timers/promises'
 import express from 'express'
-import PDFDocument from 'pdfkit'
+import { exportPdf } from './documentExports.js'
 import { productionStages, stageLabel, serviceDetails, readStageLayout, validStageLayout } from './serviceStages.js'
 
 const dataDirectory = path.join(path.dirname(fileURLToPath(import.meta.url)), 'data')
@@ -22,21 +22,36 @@ export async function readStore() {
   }
 }
 
-export function mutateStore(change) {
+async function writeStore(store) {
+  const temporaryPath = `${storePath}.${randomUUID()}.tmp`
+  await writeFile(temporaryPath, JSON.stringify(store, null, 2), 'utf8')
+  // Windows may temporarily lock the destination during reads or antivirus scans.
+  for (let attempt = 0; ; attempt++) {
+    try { await rename(temporaryPath, storePath); break } catch (error) {
+      if (!['EPERM', 'EACCES', 'EBUSY'].includes(error.code) || attempt >= 5) throw error
+      await delay(20 * (attempt + 1))
+    }
+  }
+}
+
+export function mutateStore(change, { commit, rollback } = {}) {
   const operation = pendingWrite.catch(() => {}).then(async () => {
     await mkdir(dataDirectory, { recursive: true })
     const store = await readStore()
-    const result = await change(store)
-    const temporaryPath = `${storePath}.${randomUUID()}.tmp`
-    await writeFile(temporaryPath, JSON.stringify(store, null, 2), 'utf8')
-    // Windows may temporarily lock the destination during reads or antivirus scans.
-    for (let attempt = 0; ; attempt++) {
-      try { await rename(temporaryPath, storePath); break } catch (error) {
-        if (!['EPERM', 'EACCES', 'EBUSY'].includes(error.code) || attempt >= 5) throw error
-        await delay(20 * (attempt + 1))
+    const previous = commit ? structuredClone(store) : null
+    try {
+      const result = await change(store)
+      await writeStore(store)
+      try { await commit?.() } catch (error) {
+        // Keep the JSON metadata aligned if the SQL transaction cannot commit.
+        await writeStore(previous)
+        throw error
       }
+      return result
+    } catch (error) {
+      await rollback?.()
+      throw error
     }
-    return result
   })
   pendingWrite = operation
   return operation
@@ -64,60 +79,17 @@ function nextCode(prefix, rows) {
 }
 
 function createPdf(offer, proposal, resources, layout) {
-  return new Promise((resolve, reject) => {
-    const document = new PDFDocument({ margin: 48, size: 'A4' })
-    const chunks = []
-    document.on('data', (chunk) => chunks.push(chunk))
-    document.on('error', reject)
-    document.on('end', () => resolve(Buffer.concat(chunks)))
-    const heading = layout === 'executive' ? '#173f6a' : '#0c4c91'
-    document.fillColor(heading).fontSize(layout === 'compact' ? 19 : 23).text('GMAC Metalúrgica')
-    document.fillColor('#333333').fontSize(11).text(`Proposta ${offer.code} · Modelo ${layout}`)
-    document.moveDown().fontSize(17).text(offer.service)
-    document.moveDown(0.5).fontSize(11)
-      .text(`Cliente: ${offer.company}`)
-      .text(`CNPJ: ${offer.cnpj}`)
-      .text(`Número da etiqueta: ${offer.labelNumber}`)
-      .text(`Quantidade: ${offer.quantity}`)
-      .text(`Prazo solicitado: ${date(offer.deadline)}`)
-    document.moveDown().fontSize(13).fillColor(heading).text('Descrição do serviço')
-    document.fillColor('#333333').fontSize(11).text(offer.description)
-    document.moveDown().fontSize(13).fillColor(heading).text('Materiais necessários')
-    document.fillColor('#333333').fontSize(11)
-    if (resources.materials?.length) {
-      resources.materials.forEach((item) => document.text(`${item.name} · ${item.detail || 'Sem especificação'} · ${item.quantity} kg · ${money(item.quantity * item.unitPrice)}`))
-    } else document.text('Nenhum material informado.')
-    document.moveDown().fontSize(13).fillColor(heading).text('Mão de obra')
-    document.fillColor('#333333').fontSize(11)
-    if (resources.laborEntries?.length) {
-      resources.laborEntries.forEach((item) => document.text(`${item.resource} · ${item.hours} h · ${money(item.hours * item.hourlyRate)}`))
-    } else document.text('Nenhuma mão de obra informada.')
-    document.moveDown().fontSize(13).fillColor(heading).text('Condições da proposta')
-    document.fillColor('#333333').fontSize(11)
-      .text(`Opção ${proposal.key} · ${proposal.title}`)
-      .text(`Prazo de entrega: ${proposal.deadline}`)
-      .text(`Valor do serviço: ${money(proposal.serviceValue)}`)
-      .text(`Materiais: ${money(proposal.materials)}`)
-      .text(`Mão de obra: ${money(proposal.labor)}`)
-      .text(`Margem de lucro bruto: ${proposal.margin}%`)
-      .text(`Desconto: ${proposal.discount}%`)
-      .text(`Lucro bruto esperado: ${money(proposal.profit)}`)
-      .text(`Tempo de máquina: ${proposal.machine}`)
-      .text(`Tempo de serviço: ${proposal.serviceTime}`)
-      .text(`Etapas: ${(proposal.stages || []).map(stageLabel).join(', ') || 'A definir'}`)
-      .text(`Processo: ${serviceDetails(resources).strictProcess ? 'Sequência obrigatória' : 'Etapas livres'}`)
-      .text(`Tipo: ${proposal.kind === 'product' ? 'Produto' : 'Serviço'}`)
-      .text(`Fabricado a partir de: ${resources.manufacturedFrom === 'sample' ? 'Amostra' : resources.manufacturedFrom === 'drawing' ? 'Desenho' : 'Não informado'}`)
-      .text(`Têmpera: ${resources.tempering === true ? 'Sim' : resources.tempering === false ? 'Não' : 'Não informada'}`)
-    if (resources.stages?.includes('painting')) document.text(`Cor/Tipo: ${resources.paintColor || 'Não informado'}`)
-    if (resources.serviceDescription) document.moveDown().text(`Detalhes do serviço: ${resources.serviceDescription}`)
-    if (offer.attachments?.length) {
-      document.moveDown().fontSize(13).fillColor(heading).text('Documentos vinculados')
-      document.fillColor('#333333').fontSize(11)
-      offer.attachments.forEach((attachment) => document.text(attachment.name))
-    }
-    document.end()
-  })
+  const facts = (name, entries) => ({ name, records: true, singleRecord: true, columns: entries.map(([label]) => label), rows: [entries.map(([, value]) => value)] })
+  const sections = [
+    facts('Dados da solicitação', [['Serviço', offer.service], ['Cliente', offer.company], ['CNPJ', offer.cnpj], ['Número da etiqueta', offer.labelNumber], ['Quantidade', offer.quantity], ['Prazo solicitado', date(offer.deadline)]]),
+    facts('Descrição do serviço', [['Descrição', offer.description], ...(resources.serviceDescription ? [['Detalhes do serviço', resources.serviceDescription]] : [])]),
+    { name: 'Materiais necessários', columns: ['Material', 'Especificação', 'Quantidade (kg)', 'Valor/kg', 'Total (R$)'], rows: (resources.materials || []).map((item) => [item.name, item.detail, Number(item.quantity), Number(item.unitPrice), item.quantity * item.unitPrice]) },
+    { name: 'Mão de obra', columns: ['Recurso', 'Horas previstas', 'Valor/hora', 'Total (R$)'], rows: (resources.laborEntries || []).map((item) => [item.resource, Number(item.hours), Number(item.hourlyRate), item.hours * item.hourlyRate]) },
+    facts('Condições da proposta', [['Opção', `${proposal.key} · ${proposal.title || `Opção ${proposal.key}`}`], ['Prazo de entrega', proposal.deadline], ['Valor do serviço', Number(proposal.serviceValue || 0)], ['Materiais (R$)', Number(proposal.materials || 0)], ['Mão de obra (R$)', Number(proposal.labor || 0)], ['Margem de lucro bruto (%)', Number(proposal.margin || 0)], ['Desconto (%)', Number(proposal.discount || 0)], ['Lucro bruto esperado (R$)', Number(proposal.profit || 0)], ['Tempo de máquina', proposal.machine], ['Tempo de serviço', proposal.serviceTime]]),
+    facts('Processo de fabricação', [['Etapas', (proposal.stages || []).map(stageLabel).join(' > ') || 'A definir'], ['Processo', serviceDetails(resources).strictProcess ? 'Sequência obrigatória' : 'Etapas livres'], ['Tipo', proposal.kind === 'product' ? 'Produto' : 'Serviço'], ['Fabricado a partir de', resources.manufacturedFrom === 'sample' ? 'Amostra' : resources.manufacturedFrom === 'drawing' ? 'Desenho' : 'Não informado'], ['Têmpera', resources.tempering === true ? 'Sim' : resources.tempering === false ? 'Não' : 'Não informada'], ...(resources.stages?.includes('painting') ? [['Cor/Tipo', resources.paintColor || 'Não informado']] : [])]),
+  ]
+  if (offer.attachments?.length) sections.push({ name: 'Documentos vinculados', columns: ['Arquivo'], rows: offer.attachments.map((item) => [item.name]) })
+  return exportPdf({ title: `Proposta ${offer.code}`, generatedAt: new Date().toISOString(), summary: [['Valor do serviço', money(proposal.serviceValue)], ['Prazo de entrega', proposal.deadline]], notes: [`Modelo: ${{ classic: 'Clássico', executive: 'Executivo', compact: 'Compacto' }[layout]}`], sections }, { layout, orientation: 'portrait' })
 }
 
 router.get('/offers', async (_request, response) => {
@@ -187,7 +159,11 @@ router.post('/offers/:id/attachments', express.raw({ type: 'application/octet-st
         item.status = 'review'
       }
       const order = store.orders.find((entry) => entry.offerId === item.id)
-      if (order) order.attachments = [...item.attachments]
+      if (order) {
+        order.attachments = [...item.attachments]
+        order.updatedAt = new Date().toISOString()
+        item.updatedAt = order.updatedAt
+      }
       return item
     })
     if (!offer) return response.status(404).json({ message: 'Oferta não encontrada.' })
@@ -233,7 +209,12 @@ router.post('/offers/:id/proposal', async (request, response) => {
 router.get('/offers/:id/proposal.pdf', async (request, response) => {
   try {
     const offer = (await readStore()).offers.find((item) => item.id === request.params.id)
-    if (!offer?.proposal?.pdfId) return response.status(404).json({ message: 'Proposta não encontrada.' })
+    if (!offer?.proposal) return response.status(404).json({ message: 'Proposta não encontrada.' })
+    if (offer.orderCode) {
+      const pdf = await createPdf(offer, offer.proposal, offer.resources, offer.proposal.layout || 'classic')
+      return response.type('pdf').attachment(`Proposta-${offer.code}.pdf`).send(pdf)
+    }
+    if (!offer.proposal.pdfId) return response.status(404).json({ message: 'Proposta não encontrada.' })
     response.download(path.join(filesDirectory, offer.proposal.pdfId), `Proposta-${offer.code}.pdf`)
   } catch (error) { handleError(response, error) }
 })

@@ -36,6 +36,8 @@ test('authenticated imports are serialized, skip existing materials, and never r
   const item = { name: 'Aluminio', detail: 'Chapa', quantity: 5, minimum: 1, unitPrice: 10 }
   assert.equal((await send({ items: [item] }, false)).status, 401)
   assert.equal((await send({ items: [{}] })).status, 400)
+  assert.equal((await send({ items: [{ ...item, icon: 'invalid' }] })).status, 400)
+  assert.equal((await send({ items: [{ ...item, photo: 'not-an-image' }] })).status, 400)
   assert.deepEqual(await (await send({ items: [item, { ...item, name: 'Ferro' }], onlyIfEmpty: true })).json(), { imported: 0 })
   assert.deepEqual(await (await send({ items: [item, { ...item, name: 'Ferro' }] })).json(), { imported: 1 })
   assert.equal(calls.filter(({ sql }) => sql.startsWith('INSERT INTO inventory_materials')).length, 1)

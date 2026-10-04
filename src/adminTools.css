@@ -15,6 +15,7 @@
 .admin-tools-main .reports-search { display: flex; flex-direction: row; align-items: center; gap: 8px; margin-left: auto; }
 .reports-selection-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px 20px; max-height: 230px; overflow: auto; padding: 16px 0 4px; }
 .reports-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+.reports-idle-option { margin-top: 18px; min-height: 44px; }
 .admin-tool-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px; border: 1px solid #bfd2e3; padding: 8px 13px; border-radius: 5px; background: #fff; color: #0c4c91; font: inherit; font-size: 13px; cursor: pointer; }
 .admin-tool-button--primary { background: #0c4c91; color: #fff; border-color: #0c4c91; }
 .admin-tool-button:hover { filter: brightness(.97); }

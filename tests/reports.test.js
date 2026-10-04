@@ -1,10 +1,32 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import ExcelJS from 'exceljs'
-import { hourReport, reportRange, workIntervals } from '../server/reportData.js'
+import { hourReport, machineUtilization, reportRange, workIntervals } from '../server/reportData.js'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
 
 const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Gustavo' }
+test('machine idle hours use 24/7 observed time, include unused days and machines, and never count the future', () => {
+  const range = reportRange('2026-10-01', '2026-10-02')
+  const result = hourReport([{ start: range.start, end: range.start + 12 * 3600000, machineId: 1, orderCode: 'OS-1' }], [{ id: 1, name: 'Torno' }, { id: 2, name: 'Plaina' }], 'machineId', range)
+  const report = machineUtilization(result, range, range.end)
+  assert.equal(report.totals[0].name, 'Plaina')
+  assert.equal(report.totals[0].idleMs, 48 * 3600000)
+  assert.equal(report.totals[0].idlePercent, 100)
+  assert.equal(report.totals[1].activePercent, 25)
+  assert.equal(report.totals[1].idleMs, 36 * 3600000)
+  assert.equal(report.details.length, 4)
+  assert.equal(report.availableMs, 96 * 3600000)
+  assert.equal(report.activePercent, 12.5)
+  const partial = machineUtilization(result, range, range.start + 12 * 3600000)
+  assert.equal(partial.totals[1].activePercent, 100)
+  assert.equal(partial.details.length, 2)
+  const future = machineUtilization(result, range, range.start - 1)
+  assert.equal(future.availableMs, 0)
+  assert.equal(future.activePercent, 0)
+  assert.deepEqual(future.details, [])
+  const selected = hourReport([], [{ id: 1, name: 'Torno' }, { id: 2, name: 'Plaina' }], 'machineId', range, [2])
+  assert.equal(machineUtilization(selected, range, range.end).availableMs, 48 * 3600000)
+})
 test('hour reports split Bahia midnight, clip the interval and merge overlapping work without counting pauses', () => {
   const orders = [{ code: 'OS-1', operationEvents: [
     { type: 'started', sessionId: 'a', at: '2026-10-01T23:30:00-03:00', employeeId: 1, employeeName: 'Ana', machineId: 2, machineName: 'Torno' },
@@ -77,6 +99,19 @@ test('accounts and registries persist; protected reports export actual PDF/XLSX 
       }
     }
     assert.equal((await fixture.request('/reports/generate', 'POST', { kind: 'machine-hours', start: '2026-10-03', end: '2026-10-01' }, headers)).status, 400)
+    const idleBody = { kind: 'machine-hours', start: '2026-10-01', end: '2026-10-03', ids: [machine.id], idleHours: true }
+    const idle = await fixture.request('/reports/generate', 'POST', idleBody, headers)
+    assert.equal(idle.status, 200)
+    assert.equal(idle.data.sections.length, 4)
+    assert.ok(idle.data.sections[2].rows[0][4] > 0)
+    assert.equal(idle.data.sections[2].rows[0][4] + idle.data.sections[2].rows[0][5], 100)
+    assert.ok(idle.data.notes.some((note) => note.includes('24 horas')))
+    const idleExport = await fetch(`${fixture.url}/api/reports/export`, { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ ...idleBody, format: 'xlsx' }) })
+    const idleWorkbook = new ExcelJS.Workbook()
+    await idleWorkbook.xlsx.load(Buffer.from(await idleExport.arrayBuffer()))
+    assert.equal(idleWorkbook.worksheets[2].getCell('E2').numFmt, '0.00"%"')
+    assert.equal(typeof idleWorkbook.worksheets[2].getCell('E2').value, 'number')
+    assert.equal((await fixture.request('/reports/generate', 'POST', { ...idleBody, idleHours: 'true' }, headers)).status, 400)
     assert.equal((await fixture.request('/account', 'PATCH', { name: 'Novo Nome', currentPassword: 'errada' }, headers)).status, 403)
     const updated = await fixture.request('/account', 'PATCH', { name: 'Gustavo Atualizado', currentPassword: env.DEMO_ADMIN_PASSWORD, password: 'novaSenha123' }, headers)
     assert.equal(updated.status, 200)

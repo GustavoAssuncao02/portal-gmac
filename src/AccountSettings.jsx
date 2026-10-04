@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Save, Eye, EyeOff } from 'lucide-react'
+import { Save, Eye, EyeOff, Sun, Moon } from 'lucide-react'
 import AdminWorkspace from './AdminWorkspace.jsx'
 import { payableRequest } from './payablesApi.js'
+import { useAccountAppearance } from './accountTheme.js'
 
 export default function AccountSettings({ user, onUpdateUser, ...props }) {
+  const appearance = useAccountAppearance()
   const [name, setName] = useState(user?.name || '')
   const [currentPassword, setCurrentPassword] = useState('')
   const [password, setPassword] = useState('')
@@ -50,7 +52,7 @@ export default function AccountSettings({ user, onUpdateUser, ...props }) {
     } catch (caught) { setError(caught.message) }
     finally { setBusy(false) }
   }
-  return <AdminWorkspace title="Configurações da conta" {...props}><form className="account-settings-form" onSubmit={save}>
+  return <AdminWorkspace title="Configurações da conta" {...props}><section className="account-appearance-settings" aria-labelledby="account-appearance-title"><h2 id="account-appearance-title">Aparência</h2><div className="account-theme-options" role="radiogroup" aria-label="Tema da conta">{[['light', 'Modo claro', Sun], ['dark', 'Modo escuro', Moon]].map(([value, label, Symbol]) => <label key={value} className={`account-theme-option${appearance?.theme === value ? ' selected' : ''}`}><input type="radio" name="account-theme" value={value} checked={(appearance?.theme || 'light') === value} disabled={appearance?.busy || appearance?.loading} onChange={() => appearance?.changeTheme(value)} /><Symbol size={20} /><span>{label}</span></label>)}</div>{appearance?.busy && <p role="status">Salvando aparência...</p>}{appearance?.error && <div><p className="admin-tool-error" role="alert">{appearance.error}</p><button className="admin-tool-button" type="button" onClick={appearance.retry}>Tentar novamente</button></div>}{appearance?.message && <p className="admin-tool-success" role="status">{appearance.message}</p>}</section><form className="account-settings-form" onSubmit={save}>
     <fieldset disabled={busy}><h2>Dados da conta</h2><div className="account-settings-fields"><label>Nome<input value={name} onChange={(event) => setName(event.target.value)} required maxLength={120} autoComplete="name" /></label><label>CPF<input value={user?.cpf || ''} readOnly /></label></div>
     <h2>Segurança</h2><div className="account-settings-fields"><label>Senha atual<input type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} required autoComplete="current-password" /></label><label>Nova senha<span className="account-password-input"><input type={show ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} minLength={6} maxLength={72} autoComplete="new-password" /><button type="button" title={show ? 'Ocultar senha' : 'Mostrar senha'} aria-label={show ? 'Ocultar senha' : 'Mostrar senha'} onClick={() => setShow((value) => !value)}>{show ? <EyeOff size={17} /> : <Eye size={17} />}</button></span></label><label>Confirmar nova senha<input type="password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} required={Boolean(password)} minLength={password ? 6 : undefined} maxLength={72} autoComplete="new-password" /></label></div>
     {error && <p className="admin-tool-error" role="alert">{error}</p>}{message && <p className="admin-tool-success" role="status">{message}</p>}<button className="admin-tool-button admin-tool-button--primary" type="submit"><Save size={16} />{busy ? 'Salvando...' : 'Salvar alterações'}</button></fieldset>

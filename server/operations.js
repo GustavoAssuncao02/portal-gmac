@@ -5,6 +5,8 @@ import { requireOperator } from './operatorAuth.js'
 import { activityDateRange } from './employeeActivity.js'
 import { stageLabel, serviceDetails } from './serviceStages.js'
 import { machineRows } from './machines.js'
+import { requireAdmin, adminIdentity } from './accounts.js'
+import { editOrder } from './orderEditing.js'
 
 const pauseReasons = ['Descanso', 'Horário de almoço', 'Gilson mandou parar', 'Troca de atividade']
 const json = (value) => typeof value === 'string' ? JSON.parse(value) : value
@@ -84,12 +86,12 @@ export default function createOperationsRouter(pool) {
     return rows.length ? json(rows[0].data) : null
   }
 
-  async function changeOperation(code, change) {
-    const order = await orderByCode(code)
+  async function changeOperation(code, change, persistOrder = false) {
+    let order = await orderByCode(code)
     if (!pool) return mutateStore((store) => {
       const current = store.orders.find((item) => item.code === code)
       const state = current.operation || defaultOperation(current)
-      const event = change(state, current)
+      const event = change(state, current, store)
       current.operation = state
       current.operationEvents ||= []
       if (event) current.operationEvents.push(event)
@@ -98,17 +100,30 @@ export default function createOperationsRouter(pool) {
 
     const connection = await pool.getConnection()
     try {
+      if (persistOrder) return await mutateStore(async (store) => {
+        const current = store.orders.find((item) => item.code === code)
+        if (!current) throw new OperationError(404, 'OS não encontrada.')
+        await connection.beginTransaction()
+        await connection.execute('INSERT IGNORE INTO order_operations (order_code, data) VALUES (?, ?)', [code, JSON.stringify(defaultOperation(current))])
+        const [rows] = await connection.execute('SELECT data FROM order_operations WHERE order_code = ? FOR UPDATE', [code])
+        const state = json(rows[0].data)
+        const event = change(state, current, store)
+        await connection.execute('UPDATE order_operations SET data = ? WHERE order_code = ?', [JSON.stringify(state), code])
+        if (event) await connection.execute('INSERT INTO order_operation_events (id, order_code, data, occurred_at) VALUES (?, ?, ?, ?)', [event.id, code, JSON.stringify(event), new Date(event.at)])
+        return { order: current, operation: publicOperation(current, state), event }
+      }, { commit: () => connection.commit(), rollback: () => connection.rollback() })
       await connection.beginTransaction()
       await connection.execute('INSERT IGNORE INTO order_operations (order_code, data) VALUES (?, ?)', [code, JSON.stringify(defaultOperation(order))])
       const [rows] = await connection.execute('SELECT data FROM order_operations WHERE order_code = ? FOR UPDATE', [code])
       const state = json(rows[0].data)
+      order = await orderByCode(code)
       const event = change(state, order)
       await connection.execute('UPDATE order_operations SET data = ? WHERE order_code = ?', [JSON.stringify(state), code])
       if (event) await connection.execute('INSERT INTO order_operation_events (id, order_code, data, occurred_at) VALUES (?, ?, ?, ?)', [event.id, code, JSON.stringify(event), new Date(event.at)])
       await connection.commit()
       return { order, operation: publicOperation(order, state), event }
     } catch (error) {
-      await connection.rollback()
+      if (!persistOrder) await connection.rollback()
       throw error
     } finally {
       connection.release()
@@ -116,7 +131,7 @@ export default function createOperationsRouter(pool) {
   }
 
   function sendError(response, error) {
-    if (!(error instanceof OperationError)) console.error('Falha na operação da OS:', error)
+    if (!error.status) console.error('Falha na operação da OS:', error)
     response.status(error.status || 500).json({ message: error.status ? error.message : 'Não foi possível registrar a operação.' })
   }
 
@@ -243,9 +258,47 @@ export default function createOperationsRouter(pool) {
   router.get('/operations/orders/:code/events', async (request, response) => {
     try {
       const order = await orderByCode(request.params.code)
-      if (!pool) return response.json({ items: order.operationEvents || [] })
+      const history = (items) => items.map((event) => {
+        if (adminIdentity(request)) return event
+        const { changes, ...publicEvent } = event
+        return publicEvent
+      })
+      if (!pool) return response.json({ items: history(order.operationEvents || []) })
       const [rows] = await pool.execute('SELECT data FROM order_operation_events WHERE order_code = ? ORDER BY seq', [request.params.code])
-      response.json({ items: rows.map((row) => json(row.data)) })
+      response.json({ items: history(rows.map((row) => json(row.data))) })
+    } catch (error) { sendError(response, error) }
+  })
+
+  router.put('/operations/orders/:code', requireAdmin, async (request, response) => {
+    try {
+      const result = await changeOperation(request.params.code, (state, order, store) => {
+        const changes = editOrder(order, state, request.body || {})
+        const offer = store.offers.find((item) => item.id === order.offerId)
+        if (!offer) throw new OperationError(409, 'A oferta vinculada à OS não foi encontrada.')
+        for (const key of Object.keys(changes.after).filter((key) => !['stages', 'stageCounts'].includes(key))) offer[key] = structuredClone(order[key])
+        offer.updatedAt = order.updatedAt
+        const labels = { company: 'Cliente', cnpj: 'CNPJ', service: 'Serviço', description: 'Descrição', labelNumber: 'Etiqueta', quantity: 'Quantidade da OS', deadline: 'Prazo solicitado', requestedAt: 'Data da solicitação', resources: 'Materiais e processo', proposal: 'Proposta', attachments: 'Anexos', stages: 'Etapas', stageCounts: 'Peças por etapa' }
+        return eventFor('order_edited', state, { employeeId: null, employeeName: request.adminName || 'Administrador', sessionId: null, machineId: null, machineName: null, adminId: request.adminId, changes, details: `Campos atualizados: ${changes.changed.map((key) => labels[key] || key).join(', ') || 'nenhuma alteração'}.` })
+      }, true)
+      response.json({ item: { ...result.order, operation: result.operation }, event: result.event })
+    } catch (error) { sendError(response, error) }
+  })
+
+  router.post('/operations/orders/:code/reopen', requireAdmin, async (request, response) => {
+    try {
+      const result = await changeOperation(request.params.code, (state, order) => {
+        if (state.status !== 'completed') throw new OperationError(409, 'Somente uma OS finalizada pode ser reaberta.')
+        const previousCompletedAt = state.completedAt
+        state.status = state.startedAt ? 'paused' : 'waiting'
+        state.completedAt = null
+        state.completionAcknowledgedAt = null
+        state.lastPauseReason = null
+        state.reopenedAt = new Date().toISOString()
+        order.status = 'Em andamento'
+        order.updatedAt = state.reopenedAt
+        return eventFor('order_reopened', state, { employeeId: null, employeeName: request.adminName || 'Administrador', adminId: request.adminId, previousCompletedAt, details: 'OS reaberta com as quantidades produzidas e o histórico preservados.' })
+      }, true)
+      response.json({ item: { ...result.order, operation: result.operation }, event: result.event })
     } catch (error) { sendError(response, error) }
   })
 

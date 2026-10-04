@@ -6,7 +6,7 @@ import './operator.css'
 
 const pauseReasons = ['Descanso', 'Horário de almoço', 'Gilson mandou parar', 'Troca de atividade']
 const statusLabels = { waiting: 'Aguardando', running: 'Em execução', paused: 'Pausado', finalizing: 'Finalizando', completed: 'Concluído' }
-const eventLabels = { started: 'Iniciou o trabalho', resumed: 'Retomou o trabalho', paused: 'Pausou o trabalho', machine_changed: 'Trocou de máquina', stage_progress: 'Registrou peças', completed: 'Concluiu a OS', completion_acknowledged: 'Conclusão confirmada no painel', admin_interrupted: 'Sessão encerrada pelo admin', stages_configured: 'Etapas configuradas' }
+const eventLabels = { started: 'Iniciou o trabalho', resumed: 'Retomou o trabalho', paused: 'Pausou o trabalho', machine_changed: 'Trocou de máquina', stage_progress: 'Registrou peças', completed: 'Concluiu a OS', completion_acknowledged: 'Conclusão confirmada no painel', admin_interrupted: 'Sessão encerrada pelo admin', stages_configured: 'Etapas configuradas', order_edited: 'OS editada pelo admin', order_reopened: 'OS reaberta pelo admin' }
 
 async function request(url, options = {}) {
   const response = await fetch(url, options)

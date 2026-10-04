@@ -59,6 +59,8 @@ try {
   await sidebar.getByRole('button', { name: 'Expandir menu lateral', exact: true }).click()
   for (const width of [1366, 390, 320]) {
     await page.setViewportSize({ width, height: 900 })
+    const opener = page.getByRole('button', { name: 'Abrir menu de navegação', exact: true })
+    if (width <= 760 && await opener.getAttribute('aria-expanded') === 'false') await opener.click()
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${width}: no overflow`)
     for (const name of ['Gest\u00e3o Financeira', ...members]) {
       const button = sidebar.getByRole('button', { name, exact: true })

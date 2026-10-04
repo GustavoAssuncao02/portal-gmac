@@ -1,68 +1,17 @@
 import express from 'express'
-import PDFDocument from 'pdfkit'
-import ExcelJS from 'exceljs'
 import { readStore } from './offers.js'
 import { machineRows } from './machines.js'
 import { stageLabel } from './serviceStages.js'
-import { duration, hourReport, reportRange, workIntervals } from './reportData.js'
+import { duration, hourReport, machineUtilization, ordersWithOperations, reportRange, workIntervals } from './reportData.js'
+import { exportPdf, exportWorkbook } from './documentExports.js'
+export { exportPdf, exportWorkbook } from './documentExports.js'
 
 const titles = { employees: 'Funcionários', clients: 'Clientes', admins: 'Administradores', 'employee-hours': 'Horas trabalhadas', 'machine-hours': 'Horas de máquinas', orders: 'Ordens de serviço' }
 const status = { waiting: 'Aguardando', running: 'Em execução', paused: 'Pausado', finalizing: 'Finalizando', completed: 'Concluído' }
+const operationLabel = { started: 'Trabalho iniciado', resumed: 'Trabalho retomado', paused: 'Trabalho pausado', completed: 'Serviço concluído', admin_interrupted: 'Interrompido pelo administrador', machine_changed: 'Máquina alterada', stage_progress: 'Produção registrada', completion_acknowledged: 'Conclusão confirmada', order_edited: 'OS editada', order_reopened: 'OS reaberta' }
 const date = (value) => value ? new Date(value).toLocaleDateString('pt-BR', { timeZone: /^\d{4}-\d{2}-\d{2}$/.test(value) ? 'UTC' : 'America/Bahia' }) : ''
 const moment = (value) => value ? new Date(value).toLocaleString('pt-BR', { timeZone: 'America/Bahia' }) : ''
-const blank = (value) => value ?? ''
 const section = (name, columns, rows) => ({ name, columns, rows })
-
-export async function exportWorkbook(report) {
-  const workbook = new ExcelJS.Workbook()
-  workbook.creator = 'GMAC Metalúrgica'
-  for (const [index, part] of report.sections.entries()) {
-    const sheet = workbook.addWorksheet(`${index + 1} ${part.name}`.slice(0, 31))
-    sheet.columns = part.columns.map((header) => ({ header, width: Math.min(48, Math.max(18, header.length + 4)) }))
-    sheet.getRow(1).font = { bold: true, color: { argb: 'FF0C4C91' } }
-    sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F6FB' } }
-    sheet.views = [{ state: 'frozen', ySplit: 1 }]
-    for (const row of part.rows) sheet.addRow(row.map(blank)).alignment = { vertical: 'top', wrapText: true }
-    sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: Math.max(1, sheet.rowCount), column: part.columns.length } }
-  }
-  const info = workbook.addWorksheet('Informações')
-  info.addRows([['Relatório', report.title], ['Período inicial', report.start || 'Todos'], ['Período final', report.end || 'Todos'], ['Gerado em (Bahia)', moment(report.generatedAt)], ...report.summary.map(([label, value]) => [label, value]), ...report.notes.map((note) => ['Observação', note])])
-  info.getColumn(1).width = 35
-  info.getColumn(2).width = 85
-  info.getColumn(2).alignment = { wrapText: true }
-  return workbook.xlsx.writeBuffer()
-}
-
-export function exportPdf(report) {
-  return new Promise((resolve, reject) => {
-    const document = new PDFDocument({ margin: 40, size: 'A4', bufferPages: true })
-    const chunks = []
-    document.on('data', (chunk) => chunks.push(chunk))
-    document.on('error', reject)
-    document.on('end', () => resolve(Buffer.concat(chunks)))
-    document.fillColor('#0c4c91').font('Helvetica-Bold').fontSize(20).text('GMAC Metalúrgica')
-    document.fontSize(15).text(report.title)
-    document.fillColor('#334155').font('Helvetica').fontSize(10).text(`Gerado em: ${moment(report.generatedAt)}`)
-    if (report.start) document.text(`Período: ${date(report.start)} a ${date(report.end)}`)
-    for (const [label, value] of report.summary) document.moveDown(0.4).font('Helvetica-Bold').text(`${label}: ${value}`)
-    for (const note of report.notes) document.moveDown(0.3).font('Helvetica').fontSize(9).text(note)
-    for (const part of report.sections) {
-      document.moveDown().fillColor('#0c4c91').font('Helvetica-Bold').fontSize(13).text(part.name)
-      document.fillColor('#26384c').font('Helvetica').fontSize(10)
-      if (!part.rows.length) document.text('Nenhum registro no período selecionado.')
-      for (const row of part.rows) {
-        document.moveDown(0.6)
-        for (let i = 0; i < part.columns.length; i++) document.text(`${part.columns[i]}: ${blank(row[i]) || 'Não informado'}`)
-      }
-    }
-    const pages = document.bufferedPageRange()
-    for (let i = 0; i < pages.count; i++) {
-      document.switchToPage(i)
-      document.fontSize(8).fillColor('#71859a').text(`${i + 1}/${pages.count}`, 40, document.page.height - 30, { lineBreak: false, align: 'right' })
-    }
-    document.end()
-  })
-}
 
 export default function createReportsRouter(pool, accounts, requireAdmin) {
   const router = express.Router()
@@ -73,15 +22,7 @@ export default function createReportsRouter(pool, accounts, requireAdmin) {
     return rows
   }
   async function ordersWithEvents() {
-    const orders = (await readStore()).orders
-    if (!pool) return orders
-    const [states] = await pool.execute('SELECT order_code, data FROM order_operations')
-    const [events] = await pool.execute('SELECT order_code, data FROM order_operation_events ORDER BY seq')
-    const parse = (value) => typeof value === 'string' ? JSON.parse(value) : value
-    const operations = new Map(states.map((row) => [row.order_code, parse(row.data)]))
-    const history = new Map()
-    for (const event of events) { if (!history.has(event.order_code)) history.set(event.order_code, []); history.get(event.order_code).push(parse(event.data)) }
-    return orders.map((order) => ({ ...order, operation: operations.get(order.code), operationEvents: history.get(order.code) || [] }))
+    return ordersWithOperations((await readStore()).orders, pool)
   }
   async function build(input) {
     const kind = input.kind
@@ -91,6 +32,7 @@ export default function createReportsRouter(pool, accounts, requireAdmin) {
       try { range = reportRange(input.start, input.end) } catch (error) { error.status = 400; throw error }
     }
     if (input.ids !== undefined && (!Array.isArray(input.ids) || input.ids.length > 1000 || input.ids.some((id) => !['string', 'number'].includes(typeof id)))) throw Object.assign(new Error('Seleção inválida.'), { status: 400 })
+    if (input.idleHours !== undefined && typeof input.idleHours !== 'boolean') throw Object.assign(new Error('Opção de horas ociosas inválida.'), { status: 400 })
     const report = { title: titles[kind], kind, start: range ? input.start : null, end: range ? input.end : null, generatedAt: new Date().toISOString(), summary: [], notes: [], sections: [] }
     if (['employees', 'admins', 'clients'].includes(kind)) {
       const rows = kind === 'employees' ? await employees() : await accounts[kind]()
@@ -111,6 +53,14 @@ export default function createReportsRouter(pool, accounts, requireAdmin) {
       const label = machine ? 'Máquina' : 'Funcionário'
       report.sections.push(section('Totais por cadastro', [label, 'Horas totais', 'Horas (decimal)'], result.totals.map((row) => [row.name, duration(row.ms), row.ms / 3600000])))
       report.sections.push(section('Detalhamento diário', ['Data', label, 'Horas trabalhadas', 'Horas (decimal)', 'OS vinculadas'], result.details.map((row) => [date(row.date), row.name, duration(row.ms), row.ms / 3600000, row.orders])))
+      if (machine && input.idleHours) {
+        const utilization = machineUtilization(result, range, Date.parse(report.generatedAt))
+        const percent = (value) => `${value.toLocaleString('pt-BR', { maximumFractionDigits: 2, minimumFractionDigits: 2 })}%`
+        report.summary.push(['Horas disponíveis', duration(utilization.availableMs)], ['Horas ociosas', duration(utilization.idleMs)], ['Utilização das máquinas', percent(utilization.activePercent)])
+        report.sections.push(section('Utilização e ociosidade', ['Máquina', 'Horas disponíveis', 'Horas utilizadas', 'Horas ociosas', 'Ativa (%)', 'Ociosa (%)'], utilization.totals.map((row) => [row.name, duration(row.availableMs), duration(row.ms), duration(row.idleMs), row.activePercent, row.idlePercent])))
+        report.sections.push(section('Ociosidade diária', ['Data', 'Máquina', 'Horas disponíveis', 'Horas utilizadas', 'Horas ociosas', 'Ativa (%)', 'Ociosa (%)'], utilization.details.map((row) => [date(row.date), row.name, duration(row.availableMs), duration(row.ms), duration(row.idleMs), row.activePercent, row.idlePercent])))
+        report.notes.push('Disponibilidade: 24 horas por dia, todos os dias (Bahia). O tempo sem uso registrado é considerado ocioso. Horários posteriores à emissão não entram no cálculo. Totais de disponibilidade somam o período observado de cada máquina selecionada.')
+      }
       return report
     }
     const selected = orders.filter((order) => { const time = Date.parse(order.createdAt); return time >= range.start && time < range.end }).sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt))
@@ -125,7 +75,7 @@ export default function createReportsRouter(pool, accounts, requireAdmin) {
     report.sections.push(section('Mão de obra prevista', ['OS', 'Tipo', 'Recurso', 'Horas previstas', 'Valor/hora'], selected.flatMap((order) => (order.resources?.laborEntries || []).map((row) => [order.code, row.type === 'machine' ? 'Máquina' : 'Profissional', row.resource, row.hours, row.hourlyRate]))))
     report.sections.push(section('Etapas', ['OS', 'Ordem', 'Etapa', 'Peças registradas', 'Total de peças'], selected.flatMap((order) => (order.operation?.stages || (order.proposal?.stages || []).map((key) => ({ key, name: stageLabel(key) }))).map((row, index) => [order.code, index + 1, row.name, order.operation?.stageCounts?.[row.key] || 0, order.quantity]))))
     report.sections.push(section('Arquivos', ['OS', 'Arquivo', 'Tipo', 'Tamanho (bytes)', 'Link'], selected.flatMap((order) => (order.attachments || []).map((row) => [order.code, row.name, row.contentType, row.size, `/api/offers/${order.offerId}/attachments/${row.id}`]))))
-    report.sections.push(section('Operações', ['OS', 'Data/hora', 'Operação', 'Funcionário', 'Máquina', 'Motivo', 'Etapa', 'Quantidade', 'Total da etapa', 'Duração da sessão', 'Detalhes'], selected.flatMap((order) => (order.operationEvents || []).map((row) => [order.code, moment(row.at), row.type, row.affectedEmployeeName || row.employeeName || '', row.machineName, row.reason, row.stageName, row.quantity, row.stageTotal, row.durationMs != null ? duration(row.durationMs) : '', Array.isArray(row.details) ? row.details.join(', ') : row.details || '']))))
+    report.sections.push(section('Operações', ['OS', 'Data/hora', 'Operação', 'Funcionário', 'Máquina', 'Motivo', 'Etapa', 'Quantidade', 'Total da etapa', 'Duração da sessão', 'Detalhes'], selected.flatMap((order) => (order.operationEvents || []).map((row) => [order.code, moment(row.at), operationLabel[row.type] || row.type, row.affectedEmployeeName || row.employeeName || '', row.machineName, row.reason, row.stageName, row.quantity, row.stageTotal, row.durationMs != null ? duration(row.durationMs) : '', Array.isArray(row.details) ? row.details.join(', ') : row.details || '']))))
     return report
   }
   router.get('/reports/catalog', async (_request, response, next) => {

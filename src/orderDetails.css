@@ -83,6 +83,19 @@
 .os-attachments a span { min-width: 0; flex: 1; overflow-wrap: anywhere; }
 .os-history-modal { width: min(980px, calc(100% - 24px)); max-width: calc(100% - 24px); max-height: calc(100dvh - 32px); padding: 0; border: 1px solid #dce6ed; border-radius: 8px; background: #fff; color: #31516d; }
 .os-history-modal::backdrop { background: #142b4480; }
+.os-interrupt-modal { width: min(520px, calc(100% - 24px)); }
+.os-interrupt-form { padding: 20px 24px 24px; }
+.os-interrupt-operator { margin: 0 0 20px; font-size: 13px; overflow-wrap: anywhere; }
+.os-interrupt-form label { display: block; margin-bottom: 8px; font-size: 13px; font-weight: 600; }
+.os-interrupt-form label span { color: #647d92; font-weight: 400; }
+.os-interrupt-form textarea { display: block; width: 100%; box-sizing: border-box; min-height: 112px; max-height: 35dvh; padding: 10px 12px; border: 1px solid #c6d9ea; border-radius: 5px; color: #31516d; background: #fff; font: inherit; font-size: 14px; line-height: 1.5; resize: vertical; }
+.os-interrupt-form textarea:focus-visible { outline: 2px solid #155691; outline-offset: 2px; }
+.os-interrupt-form textarea[aria-invalid="true"] { border-color: #b43942; }
+.os-interrupt-error { margin: 10px 0 0; color: #b43942; font-size: 13px; overflow-wrap: anywhere; }
+.os-interrupt-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
+.os-interrupt-actions .os-interrupt-confirm { color: #fff; border-color: #b43942; background: #b43942; }
+.os-interrupt-actions .os-interrupt-confirm:hover { color: #fff; border-color: #a12430; background: #a12430; }
+.os-interrupt-modal button:disabled { opacity: .6; cursor: wait; }
 .os-history-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 22px 24px; border-bottom: 1px solid #e0e8ef; }
 .os-history-heading > div { min-width: 0; }
 .os-history-heading h2 { margin: 0 0 7px; color: #203e58; font-size: 19px; }
@@ -122,6 +135,8 @@
   .os-resource-table th { font-size: 9px; }
   .os-history-heading { padding: 18px 16px; }
   .os-history-heading h2 { font-size: 17px; }
+  .os-interrupt-form { padding: 16px; }
+  .os-interrupt-actions > button { flex: 1; justify-content: center; }
 }
 @media (max-width: 360px) {
   .os-proposal-summary { grid-template-columns: minmax(0, 1fr); }

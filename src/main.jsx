@@ -9,12 +9,19 @@ import ReportsScreen from './ReportsScreen.jsx'
 import AccountSettings from './AccountSettings.jsx'
 import PayablesScreen from './PayablesScreen.jsx'
 import ServiceStageEditor from './ServiceStageEditor.jsx'
-import { Monitor, Minimize2, CreditCard, ChartColumn, Tags, Truck, WalletCards, ChevronLeft, ChevronRight, ChevronDown, UsersRound, X } from 'lucide-react'
+import MaterialAppearance, { MaterialVisual } from './MaterialAppearance.jsx'
+import MachineHistoryModal from './MachineHistoryModal.jsx'
+import { useMobileModal } from './useMobileModal.js'
+import { ThemeContext, useAccountTheme } from './accountTheme.js'
+import { Monitor, Minimize2, CreditCard, ChartColumn, Tags, Truck, WalletCards, ChevronLeft, ChevronRight, ChevronDown, UsersRound, Menu, X, Info } from 'lucide-react'
 import { stageLabel, stageGroupLabel, serviceDetails, readStageLayout, orderedStageSelection } from '../server/serviceStages.js'
 import { findInventoryMaterial, materialStock, normalizeSearch, pendingInventoryRequests, purchaseMaterialRequests } from './offerResources.js'
 import { deadlineCategories, serviceDeadline } from './serviceDeadline.js'
 import { currentPieceProgress } from './serviceProgress.js'
 import './styles.css'
+import './mobile.css'
+import './darkTheme.generated.css'
+import './theme.css'
 
 async function apiRequest(url, options = {}) {
   const token = window.sessionStorage.getItem('gmac-admin-token')
@@ -25,6 +32,7 @@ async function apiRequest(url, options = {}) {
 }
 
 const jsonOptions = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+const loadMachineHistory = (id, query, signal) => apiRequest(`/api/machines/${encodeURIComponent(id)}/history?${query}`, { signal, cache: 'no-store' })
 const pageLabel = (name) => name === 'Dashboard' ? 'Início' : name
 const attachmentUrl = (offerId, attachmentId) => `/api/offers/${offerId}/attachments/${attachmentId}`
 const displayDate = (value) => value ? new Date(value).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '—'
@@ -125,6 +133,37 @@ const WorkspaceTabsContext = createContext(null)
 
 function Sidebar({ collapsed, onToggle, activeNav, onNavigate, onLogout }) {
   const user = useContext(AdminIdentityContext)
+  const [mobileOpen, setMobileOpen] = useState(false)
+  const menuRef = useRef(null)
+  const menuButtonRef = useRef(null)
+  useEffect(() => {
+    const breakpoint = window.matchMedia('(max-width: 760px)')
+    const closeOnDesktop = () => { if (!breakpoint.matches) setMobileOpen(false) }
+    breakpoint.addEventListener('change', closeOnDesktop)
+    return () => breakpoint.removeEventListener('change', closeOnDesktop)
+  }, [])
+  useEffect(() => {
+    if (!mobileOpen) return
+    const main = menuRef.current.closest('.dashboard-shell').querySelector('main')
+    const previousOverflow = document.body.style.overflow
+    main.inert = true
+    document.body.style.overflow = 'hidden'
+    menuRef.current.querySelector('.mobile-menu-close').focus()
+    return () => {
+      main.inert = false
+      document.body.style.overflow = previousOverflow
+      menuButtonRef.current?.focus({ preventScroll: true })
+    }
+  }, [mobileOpen])
+  function menuKeyDown(event) {
+    if (!mobileOpen) return
+    if (event.key === 'Escape') { event.preventDefault(); setMobileOpen(false) }
+    if (event.key !== 'Tab') return
+    const buttons = [...menuRef.current.querySelectorAll('button')].filter((button) => button.getClientRects().length && !button.disabled)
+    const first = buttons[0], last = buttons.at(-1)
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
+  }
   const [registrationsOpen, setRegistrationsOpen] = useState(() => isRegistrationPage(activeNav) || window.sessionStorage.getItem('gmac-cadastros-open') !== 'false')
   const [financialOpen, setFinancialOpen] = useState(() => isFinancialPage(activeNav) || window.sessionStorage.getItem('gmac-finance-open') !== 'false')
   useEffect(() => {
@@ -150,7 +189,7 @@ function Sidebar({ collapsed, onToggle, activeNav, onNavigate, onLogout }) {
     window.sessionStorage.setItem('gmac-finance-open', String(next))
   }
   function navigationItem([label, icon]) {
-    return <button className={`nav-item ${activeNav === label ? 'nav-item--active' : ''}`} key={label} type="button" title={pageLabel(label)} aria-label={pageLabel(label)} onClick={() => onNavigate(label)}>
+    return <button className={`nav-item ${activeNav === label ? 'nav-item--active' : ''}`} key={label} type="button" title={pageLabel(label)} aria-label={pageLabel(label)} onClick={() => { setMobileOpen(false); onNavigate(label) }}>
       {['payables', 'bi', 'classifications', 'suppliers'].includes(icon) ? (() => { const NavIcon = { payables: CreditCard, bi: ChartColumn, classifications: Tags, suppliers: Truck }[icon]; return <NavIcon className="icon nav-icon" size={20} /> })() : <Icon name={icon} className="nav-icon" />}
       <span>{pageLabel(label)}</span>
     </button>
@@ -159,9 +198,13 @@ function Sidebar({ collapsed, onToggle, activeNav, onNavigate, onLogout }) {
   const words = name.trim().split(/\s+/)
   const initials = [words[0], words.length > 1 ? words.at(-1) : ''].map((word) => word?.[0] || '').join('').toUpperCase()
   return (
-    <aside className={`sidebar ${collapsed ? 'sidebar--collapsed' : ''}`}>
+    <>
+    <button ref={menuButtonRef} className="mobile-menu-open" type="button" aria-label="Abrir menu de navegação" aria-expanded={mobileOpen} aria-controls="admin-navigation" onClick={() => setMobileOpen(true)}><Menu size={23} aria-hidden="true" /></button>
+    {mobileOpen && <button className="mobile-menu-backdrop" type="button" aria-label="Fechar menu de navegação" tabIndex={-1} onClick={() => setMobileOpen(false)} />}
+    <aside ref={menuRef} id="admin-navigation" className={`sidebar ${collapsed ? 'sidebar--collapsed' : ''} ${mobileOpen ? 'sidebar--mobile-open' : ''}`} role={mobileOpen ? 'dialog' : undefined} aria-modal={mobileOpen || undefined} aria-label={mobileOpen ? 'Menu de navegação' : undefined} onKeyDown={menuKeyDown}>
       <div className="sidebar-logo">
         <img src="/images/gmac-logo-transparent.png" alt="GMAC Metalúrgica" />
+        <button className="mobile-menu-close" type="button" onClick={() => setMobileOpen(false)} aria-label="Fechar menu"><X size={22} aria-hidden="true" /></button>
         <button className="sidebar-toggle" type="button" onClick={onToggle} aria-label={collapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'}>
           <Icon name={collapsed ? 'expand' : 'collapse'} />
         </button>
@@ -186,6 +229,7 @@ function Sidebar({ collapsed, onToggle, activeNav, onNavigate, onLogout }) {
       <div className="sidebar-account"><div className="account-avatar">{initials}</div><div className="account-copy"><strong title={name}>{name}</strong><span>Administrador</span></div><span className="account-chevron">›</span></div>
       <button className="logout-button" type="button" onClick={onLogout} title="Sair" aria-label="Sair"><span className="logout-icon" aria-hidden="true">↪</span><span>Sair</span></button>
     </aside>
+    </>
   )
 }
 
@@ -250,6 +294,7 @@ function WorkspaceTabs({ tabs, activeNav, onNavigate, onCloseTab, onReorderTabs 
   }
 
   return <div className="workspace-tabs">
+    <span className="mobile-page-title">{pageLabel(activeNav)}</span>
     {scrollState.overflow && <button ref={leftArrowRef} className="workspace-tabs-control" type="button" aria-label="Rolar abas para a esquerda" title="Rolar abas para a esquerda" disabled={!scrollState.left} onClick={() => scrollTabs(-1)}><ChevronLeft size={17} aria-hidden="true" /></button>}
     <div ref={listRef} className="workspace-tabs-list" role="tablist" aria-label="Telas abertas" onScroll={measureTabs}>
       {tabs.map((tab) => <div className={`workspace-tab ${activeNav === tab ? 'workspace-tab--active' : ''} ${draggedTab === tab ? 'workspace-tab--dragging' : ''}`} key={tab} draggable onDragStart={() => setDraggedTab(tab)} onDragOver={(event) => event.preventDefault()} onDrop={() => dropTab(tab)} onDragEnd={() => setDraggedTab(null)}><button type="button" role="tab" aria-selected={activeNav === tab} onClick={() => onNavigate(tab)}>{pageLabel(tab)}</button>{tabs.length > 1 && <button className="workspace-tab-close" type="button" aria-label={`Fechar aba ${pageLabel(tab)}`} onClick={() => onCloseTab(tab)}>×</button>}</div>)}
@@ -395,6 +440,7 @@ function useMaterialRequestStatuses() {
 }
 
 function MachineModal({ machine, onClose, onSave }) {
+  useMobileModal(true, '.machine-modal', onClose)
   const [draft, setDraft] = useState(machine ? { ...machine, hourlyRate: machine.hourlyRate ?? '' } : { name: '', type: '', sector: '', hourlyRate: '', status: 'idle', operator: '—', started: '—', usage: '0h 00min' })
   const isEditing = Boolean(machine)
   const update = (field, value) => setDraft((current) => ({ ...current, [field]: value }))
@@ -412,7 +458,7 @@ function MachineModal({ machine, onClose, onSave }) {
           <label>Nome da máquina<input value={draft.name} onChange={(event) => update('name', event.target.value)} required /></label>
           <div className="modal-fields"><label>Tipo<input value={draft.type} onChange={(event) => update('type', event.target.value)} required /></label><label>Setor<input value={draft.sector} onChange={(event) => update('sector', event.target.value)} required /></label></div>
           <label>Valor da hora (R$)<input type="number" min="0" step="0.01" value={draft.hourlyRate} onChange={(event) => update('hourlyRate', event.target.value)} required /></label>
-          <label>Status<select value={draft.status} onChange={(event) => update('status', event.target.value)}><option value="working">Em funcionamento</option><option value="idle">Ociosa</option></select></label>
+          <label>Status atual<input value={machine?.status === 'working' ? 'Em funcionamento' : 'Ociosa'} readOnly /></label>
           <div className="modal-actions"><button className="modal-cancel" type="button" onClick={onClose}>Cancelar</button><button className="modal-save" type="submit">Salvar máquina</button></div>
         </form>
       </div>
@@ -421,13 +467,43 @@ function MachineModal({ machine, onClose, onSave }) {
 }
 
 function Machines({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs }) {
-  const [machines, setMachines] = useState(readMachines)
+  const [machines, setMachines] = useState([])
   const [selectedId, setSelectedId] = useState(() => readMachines()[0]?.id ?? null)
   const [filter, setFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [modalMachine, setModalMachine] = useState(undefined)
+  const [historyMachine, setHistoryMachine] = useState(null)
   const [machineError, setMachineError] = useState('')
-  useEffect(() => { apiRequest('/api/machines').then((data) => setMachines(data.items)).catch((error) => setMachineError(error.message)) }, [])
+  useEffect(() => {
+    let active = true, pending = false
+    const controller = new AbortController()
+    async function refresh() {
+      if (pending) return
+      pending = true
+      try {
+        const data = await apiRequest('/api/machines', { signal: controller.signal, cache: 'no-store' })
+        if (!active) return
+        setMachines(data.items)
+        setSelectedId((current) => data.items.some((item) => item.id === current) ? current : data.items[0]?.id ?? null)
+        setMachineError('')
+      } catch (error) { if (active) setMachineError(error.message) }
+      finally { pending = false }
+    }
+    const resume = () => { if (document.visibilityState !== 'hidden') refresh() }
+    refresh()
+    const polling = window.setInterval(refresh, 10000)
+    window.addEventListener('focus', resume)
+    window.addEventListener('online', resume)
+    document.addEventListener('visibilitychange', resume)
+    return () => {
+      active = false
+      controller.abort()
+      window.clearInterval(polling)
+      window.removeEventListener('focus', resume)
+      window.removeEventListener('online', resume)
+      document.removeEventListener('visibilitychange', resume)
+    }
+  }, [])
   const filteredMachines = machines.filter((machine) => {
     const matchesFilter = filter === 'all' || machine.status === filter
     const query = search.toLowerCase()
@@ -445,10 +521,12 @@ function Machines({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, 
   async function saveMachine(machine) {
     try {
       const data = await apiRequest(machine.id != null ? `/api/machines/${machine.id}` : '/api/machines', jsonOptions(machine.id != null ? 'PUT' : 'POST', machine))
-      setMachines((current) => machine.id != null ? current.map((item) => String(item.id) === String(machine.id) ? data.item : item) : [...current, data.item])
+      setMachines((current) => machine.id != null ? current.map((item) => String(item.id) === String(machine.id) ? { ...data.item, status: item.status, operator: item.operator, started: item.started, usage: item.usage } : item) : [...current, data.item])
       setSelectedId(data.item.id)
       setMachineError('')
       setModalMachine(undefined)
+      const snapshot = await apiRequest('/api/machines', { cache: 'no-store' })
+      setMachines(snapshot.items)
     } catch (error) { setMachineError(error.message) }
   }
 
@@ -463,13 +541,14 @@ function Machines({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, 
       <main className="machines-main">
         <WorkspaceTabs tabs={tabs} activeNav={activeNav} onNavigate={onNavigate} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} />
         {machineError && <p className="workflow-error" role="alert">{machineError}</p>}
-        <div className="machines-header"><div><h1>Máquinas</h1><p>Gerencie o parque de máquinas, disponibilidade e utilização em tempo real.</p></div><div className="machines-header-actions"><div className="machine-search"><Icon name="search" /><input placeholder="Buscar máquina, setor ou operador..." value={search} onChange={(event) => setSearch(event.target.value)} /></div><button className="machine-bell" type="button" aria-label="Notificações"><Icon name="bell" /></button></div></div>
+        <div className="machines-header"><div><h1>Máquinas</h1><p>Gerencie o parque de máquinas, disponibilidade e utilização em tempo real.</p></div><div className="machines-header-actions"><div className="machine-search"><Icon name="search" /><input placeholder="Buscar máquina, setor ou operador..." value={search} onChange={(event) => setSearch(event.target.value)} /></div></div></div>
         <div className="machine-toolbar"><div className="machine-filters"><button className={`machine-filter ${filter === 'all' ? 'machine-filter--selected' : ''}`} type="button" onClick={() => setFilter('all')}>Todas</button><button className={`machine-filter ${filter === 'working' ? 'machine-filter--selected' : ''}`} type="button" onClick={() => setFilter('working')}><span className="status-dot status-dot--green" />Em funcionamento</button><button className={`machine-filter ${filter === 'idle' ? 'machine-filter--selected' : ''}`} type="button" onClick={() => setFilter('idle')}><span className="status-dot status-dot--gray" />Ociosas</button></div><div className="machine-actions"><button className="machine-action machine-action--primary" type="button" onClick={() => setModalMachine(null)}><Icon name="plus" />Adicionar máquina</button><button className="machine-action" type="button" disabled={!selectedMachine} onClick={() => setModalMachine(selectedMachine)}><Icon name="edit" />Editar máquina</button><button className="machine-action machine-action--danger" type="button" disabled={!selectedMachine} onClick={() => removeSelected()}><Icon name="trash" />Remover máquina</button></div></div>
         <div className="machine-metrics"><div className="machine-metric"><span className="metric-icon metric-icon--blue"><Icon name="machines" /></span><div><span>Máquinas totais</span><strong>{machines.length}</strong><small>Parque de máquinas</small></div></div><div className="machine-metric"><span className="metric-icon metric-icon--green">▷</span><div><span>Em funcionamento</span><strong>{workingCount}</strong><small>{percentage(workingCount)} do total</small></div></div><div className="machine-metric"><span className="metric-icon metric-icon--blue">Ⅱ</span><div><span>Ociosas</span><strong>{idleCount}</strong><small>{percentage(idleCount)} do total</small></div></div></div>
-        <section className="machine-list-card"><h2>Lista de máquinas</h2><div className="machine-table-scroll"><div className="machine-table"><div className="machine-row machine-row--header"><span>Máquina</span><span>Tipo</span><span>Setor</span><span>Status</span><span>Operador atual</span><span>Início de uso</span><span>Tempo de uso<br />Total hoje</span><span>Ações</span></div>{filteredMachines.map((machine) => <div className={`machine-row ${selectedId === machine.id ? 'machine-row--selected' : ''}`} key={machine.id} onClick={() => setSelectedId(machine.id)}><div className="machine-name"><Icon name="machines" /><strong>{machine.name}</strong></div><span>{machine.type}</span><span>{machine.sector}</span><span><span className={`machine-status machine-status--${machine.status}`}><i />{machine.status === 'working' ? 'Em funcionamento' : 'Ociosa'}</span></span><span>{machine.operator}</span><span>{machine.started}</span><span>{machine.usage}</span><div className="row-actions"><button type="button" onClick={(event) => { event.stopPropagation(); setSelectedId(machine.id) }} aria-label={`Visualizar ${machine.name}`}><Icon name="eye" /></button><button type="button" onClick={(event) => { event.stopPropagation(); setModalMachine(machine) }} aria-label={`Editar ${machine.name}`}><Icon name="edit" /></button><button className="row-delete" type="button" onClick={(event) => { event.stopPropagation(); removeSelected(machine) }} aria-label={`Remover ${machine.name}`}><Icon name="trash" /></button></div></div>)}</div></div></section>
+        <section className="machine-list-card"><h2>Lista de máquinas</h2><div className="machine-table-scroll"><div className="machine-table"><div className="machine-row machine-row--header"><span>Máquina</span><span>Tipo</span><span>Setor</span><span>Status</span><span>Operador atual</span><span>Início de uso</span><span>Tempo de uso<br />Total hoje</span><span>Ações</span></div>{filteredMachines.map((machine) => <div className={`machine-row ${selectedId === machine.id ? 'machine-row--selected' : ''}`} key={machine.id} onClick={() => setSelectedId(machine.id)}><div className="machine-name"><Icon name="machines" /><strong>{machine.name}</strong></div><span>{machine.type}</span><span>{machine.sector}</span><span><span className={`machine-status machine-status--${machine.status}`}><i />{machine.status === 'working' ? 'Em funcionamento' : 'Ociosa'}</span></span><span>{machine.operator}</span><span><span className="machine-started-content"><span>{machine.started}</span><button className="machine-history-button" type="button" title="Histórico de uso" aria-label={`Ver histórico de uso de ${machine.name}`} onClick={(event) => { event.stopPropagation(); event.currentTarget.focus({ preventScroll: true }); setHistoryMachine(machine) }}><Info size={16} aria-hidden="true" /></button></span></span><span>{machine.usage}</span><div className="row-actions"><button type="button" onClick={(event) => { event.stopPropagation(); setSelectedId(machine.id) }} aria-label={`Visualizar ${machine.name}`}><Icon name="eye" /></button><button type="button" onClick={(event) => { event.stopPropagation(); setModalMachine(machine) }} aria-label={`Editar ${machine.name}`}><Icon name="edit" /></button><button className="row-delete" type="button" onClick={(event) => { event.stopPropagation(); removeSelected(machine) }} aria-label={`Remover ${machine.name}`}><Icon name="trash" /></button></div></div>)}</div></div></section>
         <div className="machine-summary-grid"><section className="machine-summary-card availability-card"><h2>Visão de disponibilidade</h2><div className="availability-content"><div className="availability-donut" style={{ '--working': percentage(workingCount) }}><strong>{machines.length}</strong><span>máquinas</span></div><div className="availability-legend"><div><i className="dot-green" />Em funcionamento <strong>{workingCount}</strong><span>{percentage(workingCount)}</span></div><div><i className="dot-gray" />Ociosas <strong>{idleCount}</strong><span>{percentage(idleCount)}</span></div></div></div></section><section className="machine-summary-card"><h2>Tempo de uso (hoje)</h2>{machines.filter((machine) => machine.status === 'working').map((machine) => <div className="usage-line" key={machine.id}><i className="dot-green" /><span>{machine.name}</span><strong>{machine.usage}</strong></div>)}</section><section className="machine-summary-card"><h2>Máquinas ociosas (hoje)</h2>{machines.filter((machine) => machine.status === 'idle').map((machine) => <div className="usage-line" key={machine.id}><i className="dot-gray" /><span>{machine.name}</span><strong>{machine.usage}</strong></div>)}</section></div>
       </main>
-      {modalMachine !== undefined && <MachineModal machine={modalMachine} onClose={() => setModalMachine(undefined)} onSave={saveMachine} />}
+      {modalMachine !== undefined && <MachineModal machine={modalMachine == null ? modalMachine : machines.find((machine) => machine.id === modalMachine.id) || modalMachine} onClose={() => setModalMachine(undefined)} onSave={saveMachine} />}
+      {historyMachine && <MachineHistoryModal machine={historyMachine} loadHistory={loadMachineHistory} onClose={() => setHistoryMachine(null)} />}
     </div>
   )
 }
@@ -483,6 +562,7 @@ function InventoryScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout,
   const [source, setSource] = useState(null)
   const [error, setError] = useState('')
   const [savingInventory, setSavingInventory] = useState(false)
+  useMobileModal(Boolean(purchaseRequest), '.purchase-modal', () => { if (!savingInventory) setPurchaseRequest(null) })
   const filteredItems = items.filter((item) => `${item.name} ${item.detail}`.toLowerCase().includes(search.trim().toLowerCase()))
   const totalWeight = items.reduce((total, item) => total + Number(item.quantity || 0), 0)
   const lowStock = items.filter((item) => Number(item.quantity) <= Number(item.minimum)).length
@@ -512,7 +592,7 @@ function InventoryScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout,
         if (item.id && Number(item.stockEntryQuantity) > 0) {
           await apiRequest(`/api/inventory/${item.id}/movements`, jsonOptions('POST', { type: 'entry', quantityKg: Number(item.stockEntryQuantity), unitPrice: Number(item.unitPrice), destination: 'Entrada de estoque' }))
         } else {
-          const body = { name: item.name, detail: item.detail, minimum: item.minimum, unitPrice: item.unitPrice, ...(!item.id ? { quantity: item.quantity } : {}) }
+          const body = { name: item.name, detail: item.detail, minimum: item.minimum, unitPrice: item.unitPrice, icon: item.icon || 'sheet', photo: item.photo || null, ...(!item.id ? { quantity: item.quantity } : {}) }
           await apiRequest(item.id ? `/api/inventory/${item.id}` : '/api/inventory', jsonOptions(item.id ? 'PATCH' : 'POST', body))
         }
         setModalItem(undefined)
@@ -610,7 +690,7 @@ function InventoryScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout,
         <WorkspaceTabs tabs={tabs} activeNav={activeNav} onNavigate={onNavigate} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} />
         <div className="inventory-header"><div><span className="inventory-kicker">Controle de materiais</span><h1>Estoque</h1><p>Gerencie os materiais disponíveis para os serviços e propostas.</p></div><button className="inventory-add-button" type="button" onClick={() => setModalItem(null)}><Icon name="plus" />Adicionar material</button></div>
         <div className="inventory-metrics"><div><span className="inventory-metric-icon">▰</span><div><small>Materiais cadastrados</small><strong>{items.length}</strong></div></div><div><span className="inventory-metric-icon inventory-metric-icon--green">▣</span><div><small>Quantidade total</small><strong>{totalWeight.toLocaleString('pt-BR')} kg</strong></div></div><div><span className="inventory-metric-icon inventory-metric-icon--orange">!</span><div><small>Estoque baixo</small><strong>{lowStock}</strong></div></div></div>
-        <section className="inventory-card"><div className="inventory-toolbar"><h2>Materiais em estoque</h2><label className="inventory-search"><Icon name="search" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar material ou especificação..." /></label></div><div className="inventory-table-scroll"><div className="inventory-table"><div className="inventory-row inventory-row--header"><span>Material</span><span>Especificação</span><span>Disponível</span><span>Estoque mínimo</span><span>Valor por kg</span><span>Status</span><span>Ações</span></div>{filteredItems.map((item) => <div className="inventory-row" key={item.id}><div className="inventory-material-name"><span>▰</span><strong>{item.name}</strong></div><span>{item.detail}</span><strong>{Number(item.quantity).toLocaleString('pt-BR')} kg</strong><span>{Number(item.minimum).toLocaleString('pt-BR')} kg</span><span>{Number(item.unitPrice).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span><span className={`inventory-status inventory-status--${Number(item.quantity) <= Number(item.minimum) ? 'low' : 'available'}`}>{Number(item.quantity) <= Number(item.minimum) ? 'Estoque baixo' : 'Disponível'}</span><div className="inventory-row-actions"><button className="inventory-info" type="button" onClick={() => openHistory(item)} aria-label={`Ver histórico de ${item.name}`}><Icon name="info" /></button><button type="button" onClick={() => setModalItem(item)} aria-label={`Editar ${item.name}`}><Icon name="edit" /></button><button className="inventory-delete" type="button" onClick={() => removeItem(item)} aria-label={`Remover ${item.name}`}><Icon name="trash" /></button></div></div>)}</div></div>{filteredItems.length === 0 && <div className="inventory-empty">Nenhum material encontrado.</div>}</section>
+        <section className="inventory-card"><div className="inventory-toolbar"><h2>Materiais em estoque</h2><label className="inventory-search"><Icon name="search" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar material ou especificação..." /></label></div><div className="inventory-table-scroll"><div className="inventory-table"><div className="inventory-row inventory-row--header"><span>Material</span><span>Especificação</span><span>Disponível</span><span>Estoque mínimo</span><span>Valor por kg</span><span>Status</span><span>Ações</span></div>{filteredItems.map((item) => <div className="inventory-row" key={item.id}><div className="inventory-material-name"><MaterialVisual {...item} /><strong>{item.name}</strong></div><span>{item.detail}</span><strong>{Number(item.quantity).toLocaleString('pt-BR')} kg</strong><span>{Number(item.minimum).toLocaleString('pt-BR')} kg</span><span>{Number(item.unitPrice).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span><span className={`inventory-status inventory-status--${Number(item.quantity) <= Number(item.minimum) ? 'low' : 'available'}`}>{Number(item.quantity) <= Number(item.minimum) ? 'Estoque baixo' : 'Disponível'}</span><div className="inventory-row-actions"><button className="inventory-info" type="button" onClick={() => openHistory(item)} aria-label={`Ver histórico de ${item.name}`}><Icon name="info" /></button><button type="button" onClick={() => setModalItem(item)} aria-label={`Editar ${item.name}`}><Icon name="edit" /></button><button className="inventory-delete" type="button" onClick={() => removeItem(item)} aria-label={`Remover ${item.name}`}><Icon name="trash" /></button></div></div>)}</div></div>{filteredItems.length === 0 && <div className="inventory-empty">Nenhum material encontrado.</div>}</section>
         <section className="pending-material-card">
           <div className="pending-material-heading"><div><span className="inventory-kicker">Pré-cadastro</span><h2>Produtos solicitados pendentes</h2><p>Materiais usados em ofertas que ainda não foram cadastrados no estoque.</p></div><strong>{pendingRequests.length} {pendingRequests.length === 1 ? 'pendência' : 'pendências'}</strong></div>
           {pendingRequests.length > 0 ? <div className="pending-material-list">
@@ -633,6 +713,7 @@ function InventoryScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout,
 }
 
 function InventoryHistoryModal({ item, onClose }) {
+  useMobileModal(true, '.inventory-history-modal', onClose)
   const history = [...(item.history || [])].sort((left, right) => new Date(right.date) - new Date(left.date))
   const formatDate = (value) => {
     const date = new Date(value)
@@ -644,6 +725,9 @@ function InventoryHistoryModal({ item, onClose }) {
 }
 
 function InventoryModal({ item, inventoryItems = [], saving = false, error = '', onClose, onSave }) {
+  const [processingPhoto, setProcessingPhoto] = useState(false)
+  const busy = saving || processingPhoto
+  useMobileModal(true, '.inventory-modal', () => { if (!busy) onClose() })
   const [form, setForm] = useState(item || { name: '', detail: '', quantity: '', minimum: '', unitPrice: '' })
   const [nameSuggestionsOpen, setNameSuggestionsOpen] = useState(false)
   const [selectedExistingId, setSelectedExistingId] = useState(null)
@@ -670,7 +754,7 @@ function InventoryModal({ item, inventoryItems = [], saving = false, error = '',
   }
   function submit(event) {
     event.preventDefault()
-    if (saving) return
+    if (busy) return
     if (isStockEntry) {
       const entryQuantity = Number(form.quantity) || 0
       if (entryQuantity <= 0) return
@@ -680,17 +764,18 @@ function InventoryModal({ item, inventoryItems = [], saving = false, error = '',
     onSave({ ...form, quantity: item ? Number(item.quantity) || 0 : Number(form.quantity) || 0, minimum: Number(form.minimum) || 0, unitPrice: Number(form.unitPrice) || 0 })
   }
 
-  return <div className="modal-backdrop inventory-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-    <section className="inventory-modal" role="dialog" aria-modal="true" aria-labelledby="inventory-modal-title" aria-busy={saving} onMouseDown={(event) => event.stopPropagation()}>
-      <button className="inventory-modal-close" type="button" onClick={onClose} disabled={saving} aria-label="Fechar">×</button>
+  return <div className="modal-backdrop inventory-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose() }}>
+    <section className="inventory-modal" role="dialog" aria-modal="true" aria-labelledby="inventory-modal-title" aria-busy={busy} onMouseDown={(event) => event.stopPropagation()}>
+      <button className="inventory-modal-close" type="button" onClick={onClose} disabled={busy} aria-label="Fechar">×</button>
       <span className="inventory-kicker">Estoque</span><h2 id="inventory-modal-title">{item ? 'Editar material' : 'Adicionar material'}</h2>
       {error && <p role="alert" className="workflow-error">{error}</p>}
       <form onSubmit={submit}>
+        {!isStockEntry && <MaterialAppearance value={form} disabled={saving} processing={processingPhoto} onProcessing={setProcessingPhoto} onChange={(appearance) => setForm((current) => ({ ...current, ...appearance }))} />}
         <label>Nome do material *<div className="material-autocomplete"><div className="material-autocomplete-input"><input value={form.name} onFocus={() => setNameSuggestionsOpen(true)} onBlur={() => setTimeout(() => setNameSuggestionsOpen(false), 120)} onChange={(event) => { update('name', event.target.value); setSelectedExistingId(null); setNameSuggestionsOpen(true) }} placeholder="Digite para buscar no estoque" required /><span>⌄</span></div>{nameSuggestionsOpen && <div className="material-suggestions">{matchingMaterials.length > 0 ? matchingMaterials.map((material) => <button type="button" key={material.id} onMouseDown={(event) => event.preventDefault()} onClick={() => selectExistingMaterial(material)}><strong>{material.name}</strong><small>{material.detail}</small></button>) : <div className="material-suggestion-empty"><strong>Novo material</strong><span>Preencha os dados para cadastrar um novo material.</span></div>}</div>}</div></label>
         <label>Especificação<input value={form.detail} onChange={(event) => update('detail', event.target.value)} placeholder="Ex.: Chapa Alumínio 6061" /></label>
         {isStockEntry ? <label className="inventory-entry-field">Quantidade de entrada (kg) *<input type="number" min="0.001" step="0.001" value={form.quantity} onChange={(event) => update('quantity', event.target.value)} placeholder="0,00" required /><small>Saldo atual: {currentQuantity.toLocaleString('pt-BR')} kg. Preço médio após a entrada: {projectedUnitPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/kg.</small></label> : <div className="inventory-form-grid"><label className={item ? 'inventory-readonly-field' : ''}>{item ? 'Quantidade disponível (kg) — somente leitura' : 'Quantidade disponível (kg) *'}<input type="number" min="0" step="0.001" value={form.quantity} onChange={(event) => update('quantity', event.target.value)} readOnly={Boolean(item)} aria-readonly={Boolean(item)} required /><small>{item ? 'Altere o saldo usando uma entrada ou saída de estoque.' : 'Informe o saldo inicial do material.'}</small></label><label>Estoque mínimo (kg)<input type="number" min="0" step="0.001" value={form.minimum} onChange={(event) => update('minimum', event.target.value)} /></label></div>}
         <label>Valor por kg<input type="number" min="0" step="0.01" value={form.unitPrice} onChange={(event) => update('unitPrice', event.target.value)} /></label>
-        <div className="inventory-modal-actions"><button className="offer-modal-cancel" type="button" onClick={onClose} disabled={saving}>Cancelar</button><button className="inventory-add-button" type="submit" disabled={saving}>{saving ? 'Salvando...' : isStockEntry ? 'Registrar entrada' : item ? 'Salvar alterações' : 'Adicionar material'}</button></div>
+        <div className="inventory-modal-actions"><button className="offer-modal-cancel" type="button" onClick={onClose} disabled={busy}>Cancelar</button><button className="inventory-add-button" type="submit" disabled={busy}>{processingPhoto ? 'Preparando foto...' : saving ? 'Salvando...' : isStockEntry ? 'Registrar entrada' : item ? 'Salvar alterações' : 'Adicionar material'}</button></div>
       </form>
     </section>
   </div>
@@ -846,6 +931,7 @@ function Calculator({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs
       <main className="calculator-main">
         <WorkspaceTabs tabs={tabs} activeNav={activeNav} onNavigate={onNavigate} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} />
         <div className="calculator-header"><div><span className="calculator-kicker">Ferramentas de produção</span><h1>Calculadora de pesos e medidas</h1><p>Selecione o material, o formato e informe as medidas em milímetros.</p></div><div className="calculator-unit-badge">Resultado por <strong>{selectedFormat.resultLabel}</strong></div></div>
+        <div className="calculator-mobile-choices"><label>Material<select aria-label="Material" value={material} onChange={(event) => selectMaterial(event.target.value)}>{calculatorMaterials.map((item) => <option key={item.key} value={item.key}>{item.name}</option>)}</select></label><label>Formato<select aria-label="Formato" value={format} onChange={(event) => { setFormat(event.target.value); setValues({}) }}>{visibleFormats.map((item) => <option key={item.key} value={item.key}>{item.name}</option>)}</select></label><div className="calculator-mobile-shape"><CalculatorFormatIcon format={format} /><span>{selectedFormat.name}</span><small>{selectedMaterial.density.toFixed(2).replace('.', ',')} g/cm³</small></div></div>
         <div className="calculator-workspace">
           <section className="calculator-materials"><h2>Primeiro escolha o <strong>Material</strong></h2><div className="material-list">{calculatorMaterials.map((item) => <button className={'material-option ' + (material === item.key ? 'material-option--selected' : '')} type="button" key={item.key} onClick={() => selectMaterial(item.key)}>{item.name}</button>)}</div><div className="density-note"><span>Densidade selecionada</span><strong>{selectedMaterial.density.toFixed(2).replace('.', ',')} g/cm³</strong></div></section>
           <section className="calculator-formats"><h2>Escolha o <strong>Formato</strong></h2><div className="format-grid">{visibleFormats.map((item) => <button className={'format-option ' + (format === item.key ? 'format-option--selected' : '')} type="button" key={item.key} onClick={() => { setFormat(item.key); setValues({}) }}><span className="format-icon"><CalculatorFormatIcon format={item.key} /></span><span>{item.name}</span></button>)}</div></section>
@@ -868,6 +954,7 @@ function RegistrationScreen({ kind, collapsed, onToggle, activeNav, onNavigate, 
   const [message, setMessage] = useState('')
   const [editingId, setEditingId] = useState(null)
   const [activityEmployee, setActivityEmployee] = useState(null)
+  const recordsRef = useRef(null)
 
   useEffect(() => {
     apiRequest(endpoint).then((data) => setRecords(data.items)).catch((error) => setMessage(error.message))
@@ -926,7 +1013,7 @@ function RegistrationScreen({ kind, collapsed, onToggle, activeNav, onNavigate, 
     setForm({ ...record, password: '' })
     setEditingId(record.id)
     setMessage('')
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    window.scrollTo({ top: 0, behavior: window.matchMedia('(max-width: 760px)').matches ? 'auto' : 'smooth' })
   }
 
   async function deleteRecord(id) {
@@ -955,6 +1042,7 @@ function RegistrationScreen({ kind, collapsed, onToggle, activeNav, onNavigate, 
       <main className="registration-main">
         <WorkspaceTabs tabs={tabs} activeNav={activeNav} onNavigate={onNavigate} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} />
         <div className="registration-header"><div><span className="registration-kicker">{isClient ? 'Relacionamento' : 'Administração'}</span><h1>Cadastro de {isEmployee ? 'funcionário' : isClient ? 'cliente' : 'administrador'}</h1><p>{isClient ? 'Cadastre empresas e pessoas físicas para acompanhar suas solicitações e serviços.' : 'Informe apenas os dados necessários para criar o acesso ao sistema.'}</p></div><div className="registration-badge"><Icon name={isClient ? 'clients' : isEmployee ? 'employees' : 'admins'} /><span>{isClient ? 'Novo cliente' : isEmployee ? 'Novo funcionário' : 'Novo administrador'}</span></div></div>
+        <button className="mobile-registration-jump" type="button" onClick={() => recordsRef.current?.scrollIntoView({ block: 'start', behavior: 'auto' })}>Ver cadastros ({records.length})<ChevronDown size={18} aria-hidden="true" /></button>
         <div className="registration-layout">
           <section className="registration-card">
             <div className="registration-card-heading"><div><h2>{editingId !== null ? 'Editar cadastro' : isClient ? 'Dados do cliente' : 'Dados de acesso'}</h2><p>Os campos marcados com <b>*</b> são obrigatórios.</p></div><span className="required-note">Cadastro {isEmployee ? 'de funcionário' : isClient ? 'de cliente' : 'de ADM'}</span></div>
@@ -969,12 +1057,12 @@ function RegistrationScreen({ kind, collapsed, onToggle, activeNav, onNavigate, 
           </section>
           <aside className="registration-help"><div className="registration-help-icon"><Icon name={isClient ? 'clients' : isEmployee ? 'employees' : 'admins'} /></div><h2>{isClient ? 'Cadastro do cliente' : isEmployee ? 'Acesso do funcionário' : 'Acesso administrativo'}</h2><p>{isClient ? 'Use CNPJ para empresas e CPF para pessoas físicas. O documento será usado para identificar o cliente.' : isEmployee ? 'Os funcionários usam uma conta compartilhada e se identificam antes de iniciar uma OS.' : 'Administradores poderão acessar as áreas de gestão do sistema.'}</p>{isEmployee && <div className="identification-example"><span>Campo no banco</span><strong>i_identificacao</strong><small>Exemplo: 001</small></div>}{isClient && <div className="identification-example"><span>Documentos aceitos</span><strong>CPF ou CNPJ</strong><small>Selecione o tipo no cadastro.</small></div>}<div className="registration-future"><span>Modo atual</span><strong>{isEmployee ? 'Cadastro persistido' : 'Dados demonstrativos'}</strong><small>{isEmployee ? 'Estes funcionários aparecem na seleção ao iniciar uma OS.' : 'A gravação definitiva será conectada ao MySQL.'}</small></div></aside>
         </div>
-        <section className="registration-list-card">
+        <section ref={recordsRef} className="registration-list-card">
           <div className="registration-list-heading"><div><span className="registration-kicker">Cadastros existentes</span><h2>{isEmployee ? 'Funcionários cadastrados' : isClient ? 'Clientes cadastrados' : 'Administradores cadastrados'}</h2></div><strong>{records.length} {records.length === 1 ? 'registro' : 'registros'}</strong></div>
           <div className={`registration-list${isEmployee ? ' registration-list--employees' : ''}`}>
             <div className="registration-list-row registration-list-row--header"><span>{isClient ? 'Tipo' : isEmployee ? 'Código' : 'ID'}</span><span>{isClient ? 'Nome / Razão social' : 'Nome'}</span><span>{isClient ? 'CPF / CNPJ' : 'CPF'}</span><span>E-mail</span><span>{isClient ? 'Cadastro' : 'Data de nascimento'}</span><span>Ações</span></div>
             {records.map((record) => <div className="registration-list-row" key={record.id}>
-              <span className="registration-identification">{isClient ? record.documentType.toUpperCase() : isEmployee ? record.identification : `ADM-${String(record.id).padStart(3, '0')}`}</span><strong>{record.name}</strong><span>{isClient ? record.document : record.cpf}</span><span>{record.email || '—'}</span><span>{isClient ? 'Cliente ativo' : record.birthDate ? record.birthDate.split('-').reverse().join('/') : '—'}</span>
+              <span className="registration-identification" data-label={isClient ? 'Tipo de documento' : isEmployee ? 'Código' : 'Identificação'}>{isClient ? record.documentType.toUpperCase() : isEmployee ? record.identification : `ADM-${String(record.id).padStart(3, '0')}`}</span><strong>{record.name}</strong><span data-label={isClient ? 'CPF / CNPJ' : 'CPF'}>{isClient ? record.document : record.cpf}</span><span data-label="E-mail">{record.email || '—'}</span><span data-label={isClient ? 'Cadastro' : 'Data de nascimento'}>{isClient ? 'Cliente ativo' : record.birthDate ? record.birthDate.split('-').reverse().join('/') : '—'}</span>
               <div className="registration-row-actions"><button className="registration-edit" type="button" onClick={() => !isEmployee && !isClient && Number(record.id) === 0 ? onNavigate('Configurações') : editRecord(record)}><Icon name="edit" />Editar</button><button className="registration-delete" type="button" onClick={() => deleteRecord(record.id)}><Icon name="trash" />Excluir</button>{isEmployee && <button className="registration-info" type="button" onClick={() => setActivityEmployee(record)} aria-label={`Ver histórico de ${record.name}`} title="Histórico de atividades"><Icon name="info" /></button>}</div>
             </div>)}
           </div>
@@ -996,6 +1084,7 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
   const [search, setSearch] = useState('')
   const [date, setDate] = useState('')
   const [manualOpen, setManualOpen] = useState(false)
+  useMobileModal(manualOpen, '.offer-manual-modal', () => setManualOpen(false))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const emptyForm = { cnpj: '', company: '', deadline: '', service: '', quantity: '', description: '', labelNumber: '', attachment: null }
@@ -1074,9 +1163,9 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
             <div className="offers-table-row offers-table-header"><span>Peça / Serviço</span><span>Cliente</span><span>Etiqueta</span><span>Quantidade</span><span>Data de solicitação</span><span>Prazo solicitado</span><span>Status</span><span>Origem</span><span>Ações</span></div>
             {filteredOffers.map((offer) => <div className="offers-table-row" key={offer.id}>
               <div className="offer-piece"><strong>{offer.service}</strong><span>{offer.code}</span></div>
-              <span>{offer.company}</span><span>{offer.labelNumber}</span><span>{offer.quantity} un</span><span>{displayDate(offer.requestedAt)}</span><span>{displayDate(offer.deadline)}</span>
+              <span data-label="Cliente">{offer.company}</span><span data-label="Etiqueta">{offer.labelNumber}</span><span data-label="Quantidade">{offer.quantity} un</span><span data-label="Solicitação">{displayDate(offer.requestedAt)}</span><span data-label="Prazo">{displayDate(offer.deadline)}</span>
               <div className={`offer-table-status offer-table-status--${offer.status}`}><strong>{offer.status === 'review' ? 'Em análise' : offer.status === 'proposed' ? 'Proposta gerada' : 'Aceita'}</strong>{offer.orderCode && <span>{offer.orderCode}</span>}</div>
-              <span>{offer.origin}</span>
+              <span data-label="Origem">{offer.origin}</span>
               <div className="offer-table-actions">
                 {offer.status === 'accepted'
                   ? <button className="offer-review-button" type="button" onClick={() => onSelectOrder(offer.orderCode)}>Ver OS</button>
@@ -1370,6 +1459,7 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
 function ProposalBuilder({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, offer, onRefresh, onSelectOrder }) {
   const [selectedKey, setSelectedKey] = useState(offer?.proposal?.key || 'A')
   const [layoutOpen, setLayoutOpen] = useState(false)
+  useMobileModal(layoutOpen, '.proposal-layout-modal', () => setLayoutOpen(false))
   const [selectedLayout, setSelectedLayout] = useState(offer?.proposal?.layout || 'classic')
   const [editingCell, setEditingCell] = useState(null)
   const [generated, setGenerated] = useState(Boolean(offer?.proposal))
@@ -1500,20 +1590,30 @@ function OrdersScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout, ta
     } catch (error) { setOperationError(error.message) }
   }
 
-  async function interruptSession() {
-    const reason = window.prompt('Informe a justificativa para encerrar esta sessão de trabalho:')
-    if (!reason?.trim()) return
-    try {
-      await apiRequest(`/api/operations/orders/${encodeURIComponent(selectedOrderCode)}/interrupt`, jsonOptions('POST', { reason }))
-      await onRefresh()
-      setOperationError('')
-    } catch (error) { setOperationError(error.message) }
+  async function interruptSession(reason) {
+    await apiRequest(`/api/operations/orders/${encodeURIComponent(selectedOrderCode)}/interrupt`, jsonOptions('POST', { reason }))
+    setOperationError('')
+    try { await onRefresh() } catch (error) { setOperationError(error.message) }
+  }
+  async function editOrder(draft) {
+    await apiRequest(`/api/operations/orders/${encodeURIComponent(selectedOrderCode)}`, jsonOptions('PUT', draft))
+    setOperationError('')
+    try { await onRefresh() } catch (error) { setOperationError(error.message) }
+  }
+  async function reopenOrder() {
+    await apiRequest(`/api/operations/orders/${encodeURIComponent(selectedOrderCode)}/reopen`, jsonOptions('POST', {}))
+    setOperationError('')
+    try { await onRefresh() } catch (error) { setOperationError(error.message) }
+  }
+  async function uploadOrderAttachment(file) {
+    await apiRequest(`/api/offers/${selectedOrder.offerId}/attachments?name=${encodeURIComponent(file.name)}&type=${encodeURIComponent(file.type)}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file })
+    try { await onRefresh() } catch (error) { setOperationError(error.message) }
   }
   return <div className={`dashboard-shell orders-shell${selectedOrder ? ' orders-shell--detail' : ''}`}>
     <Sidebar collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} />
     <main className="orders-main"><WorkspaceTabs tabs={tabs} activeNav={activeNav} onNavigate={onNavigate} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} />
       <div className="orders-header"><h1>{selectedOrder ? 'Ordem de serviço' : 'Pedidos de material'}</h1></div>
-      {selectedOrder ? <OrderDetails key={selectedOrder.code} order={selectedOrder} activeTime={activeTime} stageNamesInput={stageNamesInput} onChangeStages={setStageNamesInput} onConfigureStages={configureStages} onInterrupt={interruptSession} operationError={operationError} onBack={() => onSelectOrder(null)} Icon={Icon} /> : <div className="material-orders-table"><table><thead><tr><th>Material solicitado</th><th>Especificação</th><th>Quantidade a pedir</th><th>Quantidade necessária</th><th>OS / Oferta relacionada</th><th>Data</th></tr></thead><tbody>{requests.map((request) => <tr key={request.id}><td data-label="Material solicitado"><button className="material-order-link" type="button" onClick={() => request.orderCode ? onSelectOrder(request.orderCode) : onSelectOffer(request.offerId)}><strong>{request.name}</strong></button></td><td data-label="Especificação">{request.detail || '—'}</td><td data-label="Quantidade a pedir"><strong>{Number(request.quantity).toLocaleString('pt-BR')} kg</strong></td><td data-label="Quantidade necessária">{request.requiredQuantity.toLocaleString('pt-BR')} kg</td><td data-label="OS / Oferta relacionada"><button className="material-order-link" type="button" onClick={() => request.orderCode ? onSelectOrder(request.orderCode) : onSelectOffer(request.offerId)}>{request.orderCode || request.offerCode}<Icon name="eye" /></button>{!request.orderCode && <small>Aguardando OS</small>}</td><td data-label="Data">{displayDate(request.requestedAt)}</td></tr>)}</tbody></table>{!requests.length && <p className="material-orders-empty">Nenhum pedido de material.</p>}</div>}
+      {selectedOrder ? <OrderDetails key={selectedOrder.code} order={selectedOrder} activeTime={activeTime} stageNamesInput={stageNamesInput} onChangeStages={setStageNamesInput} onConfigureStages={configureStages} onInterrupt={interruptSession} onEdit={editOrder} onReopen={reopenOrder} onUpload={uploadOrderAttachment} operationError={operationError} onBack={() => onSelectOrder(null)} Icon={Icon} /> : <div className="material-orders-table"><table><thead><tr><th>Material solicitado</th><th>Especificação</th><th>Quantidade a pedir</th><th>Quantidade necessária</th><th>OS / Oferta relacionada</th><th>Data</th></tr></thead><tbody>{requests.map((request) => <tr key={request.id}><td data-label="Material solicitado"><button className="material-order-link" type="button" onClick={() => request.orderCode ? onSelectOrder(request.orderCode) : onSelectOffer(request.offerId)}><strong>{request.name}</strong></button></td><td data-label="Especificação">{request.detail || '—'}</td><td data-label="Quantidade a pedir"><strong>{Number(request.quantity).toLocaleString('pt-BR')} kg</strong></td><td data-label="Quantidade necessária">{request.requiredQuantity.toLocaleString('pt-BR')} kg</td><td data-label="OS / Oferta relacionada"><button className="material-order-link" type="button" onClick={() => request.orderCode ? onSelectOrder(request.orderCode) : onSelectOffer(request.offerId)}>{request.orderCode || request.offerCode}<Icon name="eye" /></button>{!request.orderCode && <small>Aguardando OS</small>}</td><td data-label="Data">{displayDate(request.requestedAt)}</td></tr>)}</tbody></table>{!requests.length && <p className="material-orders-empty">Nenhum pedido de material.</p>}</div>}
     </main>
   </div>
 }
@@ -1588,8 +1688,8 @@ function AdminServicesView({ collapsed, onToggle, activeNav, onNavigate, onLogou
         const pieceProgress = currentPieceProgress(operation, order.quantity)
         const completedPieces = pieceProgress.completedPieces
         const current = pieceProgress.stages.find((stage) => !stage.filled)
-        return <tr key={order.code}><td><strong>{order.service}</strong><small>{order.code} · Etiqueta {order.labelNumber}</small></td><td>{order.company}</td><td>{operation.activeSession?.employeeName || '—'}</td><td>{current ? stageGroupLabel(current) || 'Não definida' : operation.stages.length ? 'Etapas concluídas' : 'Não definida'}</td><td>{completedPieces}/{order.quantity}</td>
-          <td>{operation.stages.length ? <div className={`admin-os-stage-track admin-os-stage-track--${due.key}`} style={{ '--stage-count': operation.stages.length }} role="group" aria-label={`Progresso da peça ${pieceProgress.pieceNumber} de ${order.quantity}. Progresso total: ${operation.progress}%. ${due.label}`}>
+        return <tr key={order.code}><td><strong>{order.service}</strong><small>{order.code} · Etiqueta {order.labelNumber}</small></td><td data-label="Cliente">{order.company}</td><td data-label="Operador">{operation.activeSession?.employeeName || '—'}</td><td data-label="Etapa atual">{current ? stageGroupLabel(current) || 'Não definida' : operation.stages.length ? 'Etapas concluídas' : 'Não definida'}</td><td data-label="Peças concluídas">{completedPieces}/{order.quantity}</td>
+          <td data-label="Progresso">{operation.stages.length ? <div className={`admin-os-stage-track admin-os-stage-track--${due.key}${operation.stages.length > 8 ? ' admin-os-stage-track--many' : ''}`} style={{ '--stage-count': operation.stages.length, '--stage-columns': pieceProgress.stages.map((stage, index) => `${String(index + 1).length + stage.name.length + 3}fr`).join(' ') }} role="group" aria-label={`Progresso da peça ${pieceProgress.pieceNumber} de ${order.quantity}. Progresso total: ${operation.progress}%. ${due.label}`}>
             {pieceProgress.stages.map((stage, index) => {
               const done = stage.filled && stage.count >= Number(order.quantity)
               const state = !stage.filled ? 'pending' : done ? 'done' : 'started'
@@ -1600,7 +1700,7 @@ function AdminServicesView({ collapsed, onToggle, activeNav, onNavigate, onLogou
               </span>
             })}
           </div> : <span className="admin-os-stage-empty">Etapas não definidas</span>}</td>
-          <td>{duration(totalTime(operation))}</td><td className={`admin-os-remaining admin-os-remaining--${due.key}`}>{due.remaining}</td><td>{operation.status === 'completed' ? <button className="admin-os-status admin-os-status--completed" type="button" aria-label="Concluído" title="Confirmar leitura da conclusão e retirar do painel" disabled={Boolean(acknowledgingCode)} aria-busy={acknowledgingCode === order.code} onClick={() => acknowledgeCompletion(order.code)}>Concluído</button> : <span className={`admin-os-status admin-os-status--deadline-${due.key}`}>{due.label}</span>}</td><td><button type="button" onClick={() => onSelectOrder(order.code)}>Ver OS</button></td></tr>
+          <td data-label="Tempo ativo">{duration(totalTime(operation))}</td><td data-label="Tempo restante" className={`admin-os-remaining admin-os-remaining--${due.key}`}>{due.remaining}</td><td data-label="Status">{operation.status === 'completed' ? <button className="admin-os-status admin-os-status--completed" type="button" aria-label="Concluído" title="Confirmar leitura da conclusão e retirar do painel" disabled={Boolean(acknowledgingCode)} aria-busy={acknowledgingCode === order.code} onClick={() => acknowledgeCompletion(order.code)}>Concluído</button> : <span className={`admin-os-status admin-os-status--deadline-${due.key}`}>{due.label}</span>}</td><td><button type="button" onClick={() => onSelectOrder(order.code)}>Ver OS</button></td></tr>
       })}</tbody></table>{!visible.length && <p className="admin-os-empty">Nenhuma OS real encontrada para este filtro.</p>}</div>
       <div className="admin-os-summary"><div><strong>{orders.filter((order) => order.operation.status !== 'completed').length}</strong><span>OS abertas</span></div><div><strong>{orders.filter((order) => order.operation.status === 'running' || order.operation.status === 'finalizing').length}</strong><span>Em execução</span></div><div><strong>{duration(orders.reduce((total, order) => total + totalTime(order.operation), 0))}</strong><span>Tempo ativo somado</span></div><div><strong>{orders.filter((order) => order.operation.status === 'completed').length}</strong><span>Concluídas</span></div></div>
       {displayError && <p className="workflow-error" role="alert">{displayError}</p>}
@@ -1652,6 +1752,11 @@ function App() {
   const [selectedOrderCode, setSelectedOrderCode] = useState(null)
   const [workflowError, setWorkflowError] = useState('')
   const [workflowLoading, setWorkflowLoading] = useState(true)
+  const appearance = useAccountTheme(isDashboard ? adminUser : null, restoringSession)
+
+  useLayoutEffect(() => {
+    if (isDashboard && window.matchMedia('(max-width: 760px)').matches) window.scrollTo({ top: 0, behavior: 'auto' })
+  }, [isDashboard, activeNav, selectedOfferId, selectedOrderCode])
 
   async function refreshWorkflow() {
     try {
@@ -1829,7 +1934,7 @@ function App() {
 
   if (operatorToken) return <OperatorDashboard token={operatorToken} onLogout={() => { window.sessionStorage.removeItem('gmac-operator-token'); setOperatorToken(null) }} />
   if (restoringSession) return <main className="session-restore"><img src="/images/gmac-logo-transparent.png" alt="GMAC Metalúrgica" />{restoreError ? <><p role="alert">{restoreError}</p><div><button type="button" className="admin-tool-button admin-tool-button--primary" onClick={() => setRestoreAttempt((value) => value + 1)}>Tentar novamente</button><button type="button" className="admin-tool-button" onClick={logoutAdmin}>Sair</button></div></> : <p role="status">Restaurando sessão...</p>}</main>
-  if (isDashboard) return <AdminIdentityContext.Provider value={adminUser}><WorkspaceTabsContext.Provider value={closeAllTabs}><Dashboard user={adminUser} onUpdateUser={setAdminUser} collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((current) => !current)} activeNav={activeNav} onNavigate={navigateTo} onCloseTab={closeTab} onReorderTabs={reorderTabs} tabs={openTabs} onLogout={logoutAdmin} offers={offers} orders={orders} selectedOfferId={selectedOfferId} selectedOrderCode={selectedOrderCode} onRefresh={refreshWorkflow} onSelectOffer={selectOffer} onSelectOrder={selectOrder} onOpenPayables={openPayables} payableFilters={payableFilters} workflowError={workflowError} workflowLoading={workflowLoading} /></WorkspaceTabsContext.Provider></AdminIdentityContext.Provider>
+  if (isDashboard) return <ThemeContext.Provider value={appearance}><AdminIdentityContext.Provider value={adminUser}><WorkspaceTabsContext.Provider value={closeAllTabs}><Dashboard user={adminUser} onUpdateUser={setAdminUser} collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((current) => !current)} activeNav={activeNav} onNavigate={navigateTo} onCloseTab={closeTab} onReorderTabs={reorderTabs} tabs={openTabs} onLogout={logoutAdmin} offers={offers} orders={orders} selectedOfferId={selectedOfferId} selectedOrderCode={selectedOrderCode} onRefresh={refreshWorkflow} onSelectOffer={selectOffer} onSelectOrder={selectOrder} onOpenPayables={openPayables} payableFilters={payableFilters} workflowError={workflowError} workflowLoading={workflowLoading} /></WorkspaceTabsContext.Provider></AdminIdentityContext.Provider></ThemeContext.Provider>
 
   return (
     <main className="login-page">

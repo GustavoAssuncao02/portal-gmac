@@ -5,6 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#ffffff" />
     <title>GMAC Metalúrgica | Sistema de Gestão</title>
+    <script>
+      try {
+        const account = JSON.parse(sessionStorage.getItem('gmac-admin-workspace') || 'null');
+        const dark = sessionStorage.getItem('gmac-admin-token') && account?.userId != null && localStorage.getItem('gmac-theme-' + account.userId) === 'dark';
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+        if (dark) document.querySelector('meta[name="theme-color"]').content = '#0d1c2e';
+      } catch { document.documentElement.dataset.theme = 'light'; }
+    </script>
   </head>
   <body>
     <div id="root"></div>

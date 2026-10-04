@@ -3,6 +3,7 @@ import mysql from 'mysql2/promise'
 import bcrypt from 'bcryptjs'
 import { readFile, mkdir, copyFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
+import { ensureInventoryAppearance } from '../server/inventoryAppearance.js'
 
 const root = new URL('../', import.meta.url)
 const env = process.env
@@ -10,6 +11,7 @@ if (env.DB_NAME !== 'portal_gmac' || !env.DB_USER || !env.DB_HOST) throw new Err
 const connection = await mysql.createConnection({ host: env.DB_HOST, port: Number(env.DB_PORT || 3306), user: env.DB_USER, password: env.DB_PASSWORD || '', multipleStatements: true })
 try {
   await connection.query(await readFile(new URL('database/schema.sql', root), 'utf8'))
+  await ensureInventoryAppearance(connection)
   await connection.query('CREATE TABLE IF NOT EXISTS local_imports (name VARCHAR(80) PRIMARY KEY, imported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)')
   const [done] = await connection.execute("SELECT name FROM local_imports WHERE name = 'json-workflow-v1'")
   if (done.length) {

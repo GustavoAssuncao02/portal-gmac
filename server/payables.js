@@ -13,6 +13,18 @@ const fail = (message, status = 400) => { throw Object.assign(new Error(message)
 const clean = (value, limit = 1000) => String(value ?? '').trim().slice(0, limit)
 const money = (value) => (value / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const statusLabel = { pending: 'Pendente', overdue: 'Vencido', paid: 'Pago' }
+const actionLabel = { created: 'Conta criada', edited: 'Conta editada', paid: 'Pagamento baixado', reversed: 'Baixa estornada', deleted: 'Conta excluída', deactivated: 'Conta desativada', reactivated: 'Conta reativada', attachment_added: 'Anexo adicionado', attachment_removed: 'Anexo removido', status_changed: 'Status alterado' }
+const paymentLabel = { pix: 'Pix', boleto: 'Boleto', card: 'Cartão' }
+const detailLabel = { before: 'Antes', after: 'Depois', valueCents: 'Valor', finalCents: 'Valor pago', interestCents: 'Juros', discountCents: 'Desconto', dueDate: 'Vencimento', date: 'Data', method: 'Forma de pagamento', note: 'Observação', text: 'Descrição', name: 'Nome', supplierName: 'Fornecedor', classificationName: 'Classificação', description: 'Descrição', documentNumber: 'Documento', issueDate: 'Emissão', previousId: 'Origem recorrente', payment: 'Pagamento', bulk: 'Baixa em massa', receipt: 'Comprovante', changes: 'Alterações' }
+function readableDetails(value, key = '') {
+  if (value == null) return 'Não informado'
+  if (Array.isArray(value)) return value.map((item) => readableDetails(item)).join('\n')
+  if (typeof value === 'object') return Object.entries(value).map(([field, item]) => `${detailLabel[field] || field}: ${readableDetails(item, field)}`).join('\n')
+  if (/Cents$/.test(key)) return money(Number(value))
+  if (typeof value === 'boolean') return value ? 'Sim' : 'Não'
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(value))) return String(value).split('-').reverse().join('/')
+  return Object.hasOwn(statusLabel, value) ? statusLabel[value] : Object.hasOwn(paymentLabel, value) ? paymentLabel[value] : String(value)
+}
 const init = (store) => { store.payables ||= []; store.payableEvents ||= []; store.classifications ||= []; store.payableNotifications ||= [] }
 function event(store, actor, type, accountId, details = {}) {
   store.payableEvents.push({ id: randomUUID(), at: new Date().toISOString(), type, accountId, userId: actor?.id ?? null, userName: actor?.name || 'Sistema', ...details })
@@ -80,13 +92,14 @@ function notificationItems(store, userId) {
 }
 function report(rows, store, individual = false, filters = {}) {
   const columns = ['ID', 'Fornecedor', 'Descrição', 'Classificação', 'Documento', 'Emissão', 'Valor (R$)', 'Vencimento', 'Status', 'Parcela', 'Pagamento', 'Forma', 'Juros (R$)', 'Desconto (R$)', 'Pago (R$)', 'Observação da baixa', 'Compra original (R$)', 'Origem recorrente']
-  const sections = [{ name: 'Contas a pagar', columns, rows: rows.map((raw) => { const r = view(raw, store), p = r.payment; return [r.id, r.supplierName, `${r.description}${r.inactive ? ' (D)' : ''}`, r.classificationName, r.documentNumber, r.issueDate, r.valueCents / 100, r.dueDate, `${statusLabel[r.status]}${r.inactive ? ' (D)' : ''}`, r.groupId ? `${r.installmentNumber} de ${r.installmentCount}` : '', p?.date, p?.method, (p?.interestCents || 0) / 100, (p?.discountCents || 0) / 100, p ? p.finalCents / 100 : '', p?.note, (r.originalTotalCents || r.valueCents) / 100, r.previousId] }) }]
+  const sections = [{ name: 'Contas a pagar', columns, rows: rows.map((raw) => { const r = view(raw, store), p = r.payment; return [r.id, r.supplierName, `${r.description}${r.inactive ? ' (D)' : ''}`, r.classificationName, r.documentNumber, r.issueDate, r.valueCents / 100, r.dueDate, `${statusLabel[r.status]}${r.inactive ? ' (D)' : ''}`, r.groupId ? `${r.installmentNumber} de ${r.installmentCount}` : '', p?.date, paymentLabel[p?.method] || p?.method, (p?.interestCents || 0) / 100, (p?.discountCents || 0) / 100, p ? p.finalCents / 100 : '', p?.note, (r.originalTotalCents || r.valueCents) / 100, r.previousId] }) }]
   if (individual) {
     const ids = rows.map((row) => row.id)
-    sections.push({ name: 'Histórico', columns: ['Conta', 'Data/hora (Bahia)', 'Usuário', 'Ação', 'Detalhes'], rows: store.payableEvents.filter((e) => ids.includes(e.accountId)).map((e) => [e.accountId, new Date(e.at).toLocaleString('pt-BR', { timeZone: 'America/Bahia' }), e.userName, e.type, JSON.stringify(e.details || e.reason || e.changes || '')]) })
+    sections.push({ name: 'Histórico', columns: ['Conta', 'Data/hora (Bahia)', 'Usuário', 'Ação', 'Detalhes'], rows: store.payableEvents.filter((e) => ids.includes(e.accountId)).map((e) => [e.accountId, new Date(e.at).toLocaleString('pt-BR', { timeZone: 'America/Bahia' }), e.userName, actionLabel[e.type] || e.type, [e.reason, readableDetails(e.changes || e.details || '')].filter(Boolean).join('\n')]) })
     sections.push({ name: 'Anexos e comprovantes', columns: ['Conta', 'Arquivo', 'Tipo', 'Tamanho (bytes)'], rows: rows.flatMap((r) => [...(r.attachments || []), ...(r.payment?.receipts || [])].map((f) => [r.id, f.name, f.contentType, f.size])) })
   }
-  return { title: individual ? `Conta ${rows[0]?.id || ''}` : 'Contas a pagar', generatedAt: new Date().toISOString(), start: filters.start, end: filters.end, summary: [['Contas', rows.length], ['Valor original', money(rows.reduce((sum, r) => sum + r.valueCents, 0))]], notes: [JSON.stringify(filters)], sections }
+  const notes = individual ? [] : [`Situação: ${{ all: 'Todas', inactive: 'Desativadas', ...statusLabel }[filters.status] || 'Pendentes e vencidas'}`, ...(filters.search ? [`Busca: ${filters.search}`] : []), ...(filters.supplierId ? [`Fornecedor: ${store.suppliers?.find((row) => row.id === filters.supplierId)?.name || filters.supplierId}`] : []), ...(filters.classificationId ? [`Classificação: ${store.classifications.find((row) => row.id === filters.classificationId)?.name || filters.classificationId}`] : [])]
+  return { title: individual ? `Conta ${rows[0]?.id || ''}` : 'Contas a pagar', generatedAt: new Date().toISOString(), start: filters.start, end: filters.end, summary: [['Contas', rows.length], ['Valor original', money(rows.reduce((sum, r) => sum + r.valueCents, 0))]], notes, sections }
 }
 
 export default function createPayablesRouter(accounts, requireAdmin) {

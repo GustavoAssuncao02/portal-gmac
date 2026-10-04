@@ -3,6 +3,20 @@ export const duration = (ms) => {
   return [Math.floor(seconds / 3600), Math.floor(seconds % 3600 / 60), seconds % 60].map((part) => String(part).padStart(2, '0')).join(':')
 }
 export const localDate = (timestamp) => new Date(Number(timestamp) - 3 * 3600000).toISOString().slice(0, 10)
+export async function ordersWithOperations(orders, pool) {
+  if (!pool) return orders
+  const [states] = await pool.execute('SELECT order_code, data FROM order_operations')
+  const [events] = await pool.execute('SELECT order_code, data FROM order_operation_events ORDER BY seq')
+  const parse = (value) => typeof value === 'string' ? JSON.parse(value) : value
+  const operations = new Map(states.map((row) => [row.order_code, parse(row.data)]))
+  const history = new Map()
+  for (const event of events) {
+    if (!history.has(event.order_code)) history.set(event.order_code, [])
+    history.get(event.order_code).push(parse(event.data))
+  }
+  return orders.map((order) => ({ ...order, operation: operations.get(order.code), operationEvents: history.get(order.code) || [] }))
+}
+
 export function reportRange(start, end) {
   const parse = (value) => {
     if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error('Informe as datas de início e fim.')
@@ -26,7 +40,7 @@ export function workIntervals(orders, now = Date.now()) {
       const initial = starts.get(event.sessionId)
       const end = Math.min(now, Date.parse(event.at))
       const start = initial ? Date.parse(initial.at) : Number.isFinite(Number(event.durationMs)) ? Date.parse(event.at) - Number(event.durationMs) : NaN
-      if (Number.isFinite(start) && Number.isFinite(end) && end > start) intervals.push({ start, end, employeeId: initial?.employeeId ?? event.employeeId, employeeName: initial?.employeeName || event.affectedEmployeeName || event.employeeName, machineId: initial ? initial.machineId : event.machineId, machineName: initial ? initial.machineName : event.machineName, orderCode: order.code })
+      if (Number.isFinite(start) && Number.isFinite(end) && end > start) intervals.push({ start, end, employeeId: initial?.employeeId ?? event.employeeId, employeeName: initial?.employeeName || event.affectedEmployeeName || event.employeeName, machineId: initial ? initial.machineId : event.machineId, machineName: initial ? initial.machineName : event.machineName, orderCode: order.code, sessionId: event.sessionId, active: false, endedBy: event.type, reason: event.reason || null })
       if (event.type === 'machine_changed') {
         starts.set(event.sessionId, { ...event, machineId: event.nextMachineId, machineName: event.nextMachineName })
         continue
@@ -36,7 +50,7 @@ export function workIntervals(orders, now = Date.now()) {
     const active = order.operation?.activeSession
     if (active && !closed.has(active.id)) {
       const start = Date.parse(starts.get(active.id)?.at || active.machineStartedAt || active.startedAt)
-      if (Number.isFinite(start) && now > start) intervals.push({ start, end: now, employeeId: active.employeeId, employeeName: active.employeeName, machineId: active.machineId, machineName: active.machineName, orderCode: order.code })
+      if (Number.isFinite(start) && now > start) intervals.push({ start, end: now, employeeId: active.employeeId, employeeName: active.employeeName, machineId: active.machineId, machineName: active.machineName, orderCode: order.code, sessionId: active.id, active: true, endedBy: null, reason: null })
     }
   }
   return intervals
@@ -79,4 +93,24 @@ export function hourReport(intervals, entities, field, range, ids = []) {
   const details = [...daily.values()].map((row) => ({ id: row.id, name: names.get(row.id), date: row.date, ms: mergedTime(row.intervals), orders: [...row.orders].sort().join(', ') })).sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name, 'pt-BR'))
   const totals = [...names].filter(([id]) => !selected.size || selected.has(id)).map(([id, name]) => ({ id, name, ms: details.filter((row) => row.id === id).reduce((sum, row) => sum + row.ms, 0) })).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
   return { totals, details, totalMs: totals.reduce((sum, row) => sum + row.ms, 0), unidentifiedMs }
+}
+
+export function machineUtilization(result, range, now = Date.now()) {
+  const end = Math.min(range.end, now)
+  const availableMs = Math.max(0, end - range.start)
+  const stats = (ms, available) => {
+    const active = Math.min(available, Math.max(0, ms))
+    const activePercent = available ? active / available * 100 : 0
+    return { ms: active, availableMs: available, idleMs: available - active, activePercent, idlePercent: available ? 100 - activePercent : 0 }
+  }
+  const totals = result.totals.map((row) => ({ ...row, ...stats(row.ms, availableMs) }))
+  const recorded = new Map(result.details.map((row) => [`${row.id}|${row.date}`, row.ms]))
+  const details = []
+  for (let cursor = range.start; cursor < end; cursor += 86400000) {
+    const date = localDate(cursor), available = Math.min(end, cursor + 86400000) - cursor
+    for (const row of totals) details.push({ id: row.id, name: row.name, date, ...stats(recorded.get(`${row.id}|${date}`) || 0, available) })
+  }
+  const totalAvailable = availableMs * totals.length
+  const totalActive = totals.reduce((sum, row) => sum + row.ms, 0)
+  return { totals, details, ...stats(totalActive, totalAvailable) }
 }

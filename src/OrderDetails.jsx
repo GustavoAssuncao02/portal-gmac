@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import './orderDetails.css'
 import { stageLabel } from '../server/serviceStages.js'
+import OrderEditModal, { OrderActionModal } from './OrderEditModal.jsx'
 
 const currency = (value) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const date = (value) => value ? new Date(value).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : 'Não informado'
@@ -10,7 +11,7 @@ const duration = (value) => {
   return [Math.floor(seconds / 3600), Math.floor(seconds % 3600 / 60), seconds % 60].map((part) => String(part).padStart(2, '0')).join(':')
 }
 const statusLabels = { waiting: 'Aguardando', running: 'Em execução', paused: 'Pausado', finalizing: 'Finalizando', completed: 'Concluído' }
-const eventLabels = { started: 'Início', resumed: 'Retomada', paused: 'Pausa', machine_changed: 'Troca de máquina', stage_progress: 'Peças registradas', completed: 'Conclusão', completion_acknowledged: 'Conclusão confirmada no painel', admin_interrupted: 'Interrupção administrativa', stages_configured: 'Etapas configuradas' }
+const eventLabels = { started: 'Início', resumed: 'Retomada', paused: 'Pausa', machine_changed: 'Troca de máquina', stage_progress: 'Peças registradas', completed: 'Conclusão', completion_acknowledged: 'Conclusão confirmada no painel', admin_interrupted: 'Interrupção administrativa', stages_configured: 'Etapas configuradas', order_edited: 'OS editada', order_reopened: 'OS reaberta' }
 
 function Facts({ items, className = '' }) {
   return <dl className={`os-facts ${className}`}>{items.map(([label, value, detail]) => <div key={label}><dt>{label}</dt><dd>{value ?? 'Não informado'}{detail && <small>{detail}</small>}</dd></div>)}</dl>
@@ -37,7 +38,8 @@ function OrderHistoryModal({ order, onClose, Icon }) {
       if (fetching) return
       fetching = true
       try {
-        const response = await fetch(`/api/operations/orders/${encodeURIComponent(order.code)}/events`, { signal: controller.signal })
+        const token = sessionStorage.getItem('gmac-admin-token')
+        const response = await fetch(`/api/operations/orders/${encodeURIComponent(order.code)}/events`, { signal: controller.signal, headers: token ? { Authorization: `Bearer ${token}` } : {} })
         const data = await response.json()
         if (!response.ok) throw new Error(data.message || 'Não foi possível carregar o histórico.')
         if (!controller.signal.aborted) { setItems([...data.items].reverse()); setError('') }
@@ -70,15 +72,74 @@ function OrderHistoryModal({ order, onClose, Icon }) {
   </dialog>
 }
 
-export default function OrderDetails({ order, activeTime, stageNamesInput, onChangeStages, onConfigureStages, onInterrupt, operationError, onBack, Icon }) {
+function InterruptSessionModal({ order, onConfirm, onClose, Icon }) {
+  const dialog = useRef(null)
+  const submitting = useRef(false)
+  const [reason, setReason] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  useEffect(() => {
+    const element = dialog.current
+    const previousFocus = document.activeElement
+    const previousOverflow = document.body.style.overflow
+    element.showModal()
+    element.querySelector('textarea').focus({ preventScroll: true })
+    document.body.style.overflow = 'hidden'
+    return () => { element.close(); document.body.style.overflow = previousOverflow; previousFocus?.focus({ preventScroll: true }) }
+  }, [])
+  function close() {
+    if (!submitting.current) onClose()
+  }
+  async function submit(event) {
+    event.preventDefault()
+    if (submitting.current) return
+    if (!reason.trim()) {
+      setError('Informe a justificativa da interrupção.')
+      dialog.current.querySelector('textarea').focus()
+      return
+    }
+    submitting.current = true
+    setBusy(true)
+    setError('')
+    try {
+      await onConfirm(reason.trim())
+      onClose()
+    } catch (caught) {
+      setError(caught.message || 'Não foi possível encerrar a sessão. Tente novamente.')
+    } finally {
+      submitting.current = false
+      setBusy(false)
+    }
+  }
+  return <dialog ref={dialog} className="os-history-modal os-interrupt-modal" aria-labelledby="os-interrupt-title" onCancel={(event) => { event.preventDefault(); close() }} onClick={(event) => {
+    if (event.target !== event.currentTarget) return
+    const box = event.currentTarget.getBoundingClientRect()
+    if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) close()
+  }}>
+    <header className="os-history-heading"><div><h2 id="os-interrupt-title">Encerrar sessão de trabalho</h2><p>{order.code} · {order.service}</p></div><button className="os-icon-button" type="button" onClick={close} disabled={busy} aria-label="Fechar janela" title="Fechar janela">{'\u00d7'}</button></header>
+    <form className="os-interrupt-form" onSubmit={submit} aria-busy={busy}>
+      <p className="os-interrupt-operator">Operador: <strong>{order.operation.activeSession?.employeeName || 'Não informado'}</strong></p>
+      <label htmlFor="os-interrupt-reason">Justificativa <span>(obrigatória)</span></label>
+      <textarea id="os-interrupt-reason" autoFocus required maxLength={250} rows={4} value={reason} disabled={busy} onChange={(event) => { setReason(event.target.value); setError('') }} aria-invalid={Boolean(error)} aria-describedby={error ? 'os-interrupt-error' : undefined} />
+      {error && <p id="os-interrupt-error" className="os-interrupt-error" role="alert">{error}</p>}
+      <footer className="os-interrupt-actions"><button className="os-button" type="button" onClick={close} disabled={busy}>Cancelar</button><button className="os-button os-interrupt-confirm" type="submit" disabled={busy}><Icon name="admins" />{busy ? 'Encerrando...' : 'Encerrar sessão'}</button></footer>
+    </form>
+  </dialog>
+}
+
+export default function OrderDetails({ order, activeTime, stageNamesInput, onChangeStages, onConfigureStages, onInterrupt, onEdit, onReopen, onUpload, operationError, onBack, Icon }) {
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [interruptOpen, setInterruptOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
+  const [editConfirmed, setEditConfirmed] = useState(false)
+  const [action, setAction] = useState(null)
   const operation = order.operation
   const proposal = order.proposal || {}
   const materials = order.resources?.materials || []
   const labor = order.resources?.laborEntries || []
   const proposalStages = proposal.stages || order.resources?.stages || []
   return <article className="order-detail-card os-detail">
-    <header className="os-detail-heading"><div className="os-detail-title"><button className="os-icon-button" type="button" onClick={onBack} aria-label="Voltar à lista de ordens" title="Voltar à lista de ordens"><Icon name="collapse" /></button><div><span>{order.code}</span><h2>{order.service}</h2></div></div><button className="os-button os-history-trigger" type="button" onClick={() => setHistoryOpen(true)} aria-haspopup="dialog"><Icon name="services" />Histórico de operações</button></header>
+    <header className="os-detail-heading"><div className="os-detail-title"><button className="os-icon-button" type="button" onClick={onBack} aria-label="Voltar à lista de ordens" title="Voltar à lista de ordens"><Icon name="collapse" /></button><div><span>{order.code}</span><h2>{order.service}</h2></div></div><div className="os-detail-actions"><button className="os-button" type="button" aria-haspopup="dialog" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setEditConfirmed(false); if (operation?.status === 'completed') setAction('edit'); else setEditOpen(true) }}><Icon name="edit" />Editar OS</button>{operation?.status === 'completed' && <button className="os-button" type="button" aria-haspopup="dialog" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setAction('reopen') }}><Icon name="expand" />Reabrir OS</button>}<button className="os-button os-history-trigger" type="button" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setHistoryOpen(true) }} aria-haspopup="dialog"><Icon name="services" />Histórico de operações</button></div></header>
     <Facts className="os-order-summary" items={[
       ['Cliente', order.company, `CNPJ: ${order.cnpj || 'Não informado'}`], ['Número da etiqueta', order.labelNumber], ['Quantidade', `${number(order.quantity)} unidades`],
       ['Prazo solicitado', date(order.deadline)], ['Solicitação', date(order.requestedAt)], ['OS criada em', date(order.createdAt)],
@@ -89,7 +150,7 @@ export default function OrderDetails({ order, activeTime, stageNamesInput, onCha
           ['Tempo ativo acumulado', activeTime], ['Progresso total', `${number(operation.progress)}%`], ['Operador atual', operation.activeSession?.employeeName || 'Sem sessão ativa'],
         ]} />
         {operation.stages.length ? <div className="os-stage-list">{operation.stages.map((stage, index) => <div key={stage.key}><span className="os-stage-number">{index + 1}</span><div><strong>{stage.name}</strong><span>{number(operation.stageCounts[stage.key])}/{number(order.quantity)} peças</span></div><progress value={operation.stageCounts[stage.key] || 0} max={Number(order.quantity) || 1} aria-label={`Progresso de ${stage.name}`} /></div>)}</div> : operation.status === 'waiting' && <div className="os-stage-setup"><label htmlFor="os-stage-input">Etapas na ordem de produção</label><div><input id="os-stage-input" value={stageNamesInput} onChange={(event) => onChangeStages(event.target.value)} placeholder="Ex.: Corte, Usinagem, Soldagem" /><button className="os-button" type="button" onClick={onConfigureStages}><Icon name="plus" />Salvar etapas</button></div></div>}
-        {operation.activeSession && <button className="os-button os-interrupt-button" type="button" onClick={onInterrupt}><Icon name="admins" />Encerrar sessão ativa com justificativa</button>}
+        {operation.activeSession && <button className="os-button os-interrupt-button" type="button" aria-haspopup="dialog" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setInterruptOpen(true) }}><Icon name="admins" />Encerrar sessão ativa com justificativa</button>}
         {operationError && <p className="workflow-error" role="alert">{operationError}</p>}
       </section>}
       <section className="os-section"><div className="os-section-heading"><h3>Descrição do serviço</h3></div><p className="os-description">{order.description || 'Nenhuma descrição informada.'}</p></section>
@@ -115,5 +176,8 @@ export default function OrderDetails({ order, activeTime, stageNamesInput, onCha
       <section className="os-section os-attachments"><div className="os-section-heading"><h3>Anexos da OS</h3><span>{order.attachments?.length || 0} {order.attachments?.length === 1 ? 'arquivo' : 'arquivos'}</span></div>{order.attachments?.length ? <ul>{order.attachments.map((attachment) => <li key={attachment.id}><a href={`/api/offers/${order.offerId}/attachments/${attachment.id}`} download><Icon name="orders" /><span>{attachment.name}</span><Icon name="expand" /></a></li>)}</ul> : <p className="os-empty">Nenhum anexo.</p>}</section>
     </div></div>
     {historyOpen && <OrderHistoryModal order={order} onClose={() => setHistoryOpen(false)} Icon={Icon} />}
+    {interruptOpen && <InterruptSessionModal order={order} onConfirm={onInterrupt} onClose={() => setInterruptOpen(false)} Icon={Icon} />}
+    {action && <OrderActionModal order={order} action={action} onClose={() => setAction(null)} onConfirm={action === 'reopen' ? onReopen : () => { setEditConfirmed(true); setEditOpen(true) }} />}
+    {editOpen && <OrderEditModal order={order} confirmCompleted={editConfirmed} onSave={onEdit} onUpload={onUpload} onClose={() => setEditOpen(false)} />}
   </article>
 }

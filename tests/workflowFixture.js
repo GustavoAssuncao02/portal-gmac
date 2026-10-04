@@ -9,7 +9,7 @@ export async function createWorkflowFixture({ pool, accountsEnv } = {}) {
   const results = path.join(root, 'test-results')
   await mkdir(results, { recursive: true })
   const directory = await mkdtemp(path.join(results, 'workflow-'))
-  for (const name of ['offers.js', 'operations.js', 'operatorAuth.js', 'employeeActivity.js', 'serviceStages.js', 'machines.js', 'accounts.js', 'reports.js', 'reportData.js', 'payables.js', 'payableRules.js', 'materialRequests.js']) {
+  for (const name of ['offers.js', 'operations.js', 'orderEditing.js', 'operatorAuth.js', 'employeeActivity.js', 'serviceStages.js', 'machines.js', 'accounts.js', 'reports.js', 'reportData.js', 'documentExports.js', 'payables.js', 'payableRules.js', 'materialRequests.js']) {
     await copyFile(path.join(root, 'server', name), path.join(directory, name))
   }
   const { default: offersRouter, mutateStore } = await import(pathToFileURL(path.join(directory, 'offers.js')))
@@ -26,7 +26,7 @@ export async function createWorkflowFixture({ pool, accountsEnv } = {}) {
   app.use('/api', offersRouter)
   app.use('/api', operationsRouter(pool))
   app.use('/api', createAccountsRouter(accounts))
-  app.use('/api', machinesRouter(requireAdmin))
+  app.use('/api', machinesRouter(requireAdmin, pool))
   app.use('/api', reportsRouter(pool, accounts, requireAdmin))
   app.use('/api', payablesRouter(accounts, requireAdmin))
   app.use('/api', materialRequestsRouter(requireAdmin))
@@ -46,6 +46,7 @@ export async function createWorkflowFixture({ pool, accountsEnv } = {}) {
   const url = `http://127.0.0.1:${server.address().port}`
   return {
     url,
+    adminToken: issueAdminToken({ id: 0 }),
     operatorToken: issueOperatorToken(),
     mutateStore,
     async request(route, method = 'GET', body, headers = {}) {

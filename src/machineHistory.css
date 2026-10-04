@@ -1,0 +1,14 @@
+.machine-started-content { display: inline-flex; align-items: center; gap: 8px; }
+.machine-history-button { display: inline-grid; place-items: center; width: 26px; height: 26px; padding: 0; flex: 0 0 26px; border: 1px solid #d5e2ef; border-radius: 5px; color: #1b62aa; background: #f4f9ff; cursor: pointer; }
+.machine-history-button:hover { background: #e8f2fd; }
+.machine-history-button:focus-visible { outline: 2px solid #1b62aa; outline-offset: 2px; }
+.machine-history-modal { width: min(1100px, calc(100vw - 32px)); }
+.machine-history-modal table { table-layout: fixed; }
+.machine-history-modal .employee-activity-table-scroll td { min-width: 0; width: auto; overflow-wrap: anywhere; }
+.machine-history-status { color: #526d86; font-weight: 600; }
+.machine-history-status--active { color: #16834a; }
+.machine-history-duration { font-variant-numeric: tabular-nums; white-space: nowrap; }
+@media (max-width: 760px) {
+  .machine-history-button { width: 44px; height: 44px; flex-basis: 44px; }
+  .machine-history-modal td[data-label]::before { display: block; margin-bottom: 4px; color: #71869c; font-size: 12px; font-weight: normal; content: attr(data-label); }
+}
