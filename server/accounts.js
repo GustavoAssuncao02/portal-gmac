@@ -2,16 +2,19 @@ import express from 'express'
 import bcrypt from 'bcryptjs'
 import { randomUUID } from 'node:crypto'
 import { readStore, mutateStore } from './offers.js'
+import { notificationDefaults, notificationOptions } from './notificationRules.js'
 
 const sessions = new Map()
 const safe = ({ id, name, birthDate, cpf, email, createdAt }) => ({ id, name, birthDate, cpf, email, createdAt })
 const digits = (value) => String(value || '').replace(/\D/g, '')
 const fail = (status, message) => { const error = new Error(message); error.status = status; throw error }
 export function notificationSettings(store, userId) {
-  return { payableReminderDays: store.adminNotificationPreferences?.find((item) => String(item.userId) === String(userId))?.payableReminderDays ?? 3 }
+  const preference = store.adminNotificationPreferences?.find((item) => String(item.userId) === String(userId))
+  return { payableReminderDays: preference?.payableReminderDays ?? 3, ...Object.fromEntries(notificationOptions.map(([key]) => [key, preference?.[key] ?? notificationDefaults[key]])) }
 }
 export function appearanceSettings(store, userId) {
-  return { theme: store.adminAppearancePreferences?.find((item) => String(item.userId) === String(userId))?.theme === 'dark' ? 'dark' : 'light' }
+  const preference = store.adminAppearancePreferences?.find((item) => String(item.userId) === String(userId))
+  return { theme: preference?.theme === 'dark' ? 'dark' : 'light', fontSize: ['small', 'large'].includes(preference?.fontSize) ? preference.fontSize : 'default', fontFamily: ['system', 'verdana', 'tahoma', 'inter', 'roboto', 'open-sans', 'montserrat', 'source-sans-3'].includes(preference?.fontFamily) ? preference.fontFamily : 'default' }
 }
 export function issueAdminToken(user) {
   for (const [key, session] of sessions) if (session.expires < Date.now()) sessions.delete(key)
@@ -132,13 +135,17 @@ export function createAccountService(pool, env = process.env) {
     return notificationSettings(await readStore(), id)
   }
   async function updateNotificationSettings(id, fields) {
-    if (![3, 5, 7, 'never'].includes(fields?.payableReminderDays)) fail(400, 'Escolha 3, 5, 7 dias ou nunca.')
+    const keys = notificationOptions.map(([key]) => key)
+    if (!fields || fields.payableReminderDays === undefined && !keys.some((key) => fields[key] !== undefined)) fail(400, 'Informe uma preferencia de notificacoes.')
+    if (fields.payableReminderDays !== undefined && ![3, 5, 7, 'never'].includes(fields.payableReminderDays)) fail(400, 'Escolha 3, 5, 7 dias ou nunca.')
+    if (keys.some((key) => fields[key] !== undefined && typeof fields[key] !== 'boolean')) fail(400, 'Informe verdadeiro ou falso para as notificacoes.')
     await getNotificationSettings(id)
     return mutateStore((store) => {
       store.adminNotificationPreferences ||= []
       let preference = store.adminNotificationPreferences.find((item) => String(item.userId) === String(id))
       if (!preference) { preference = { userId: id }; store.adminNotificationPreferences.push(preference) }
-      preference.payableReminderDays = fields.payableReminderDays
+      if (fields.payableReminderDays !== undefined) preference.payableReminderDays = fields.payableReminderDays
+      for (const key of keys) if (fields[key] !== undefined) preference[key] = fields[key]
       return notificationSettings(store, id)
     })
   }
@@ -147,13 +154,18 @@ export function createAccountService(pool, env = process.env) {
     return appearanceSettings(await readStore(), id)
   }
   async function updateAppearanceSettings(id, fields) {
-    if (!['light', 'dark'].includes(fields?.theme)) fail(400, 'Escolha o modo claro ou escuro.')
+    if (fields?.theme === undefined && fields?.fontSize === undefined && fields?.fontFamily === undefined) fail(400, 'Informe uma preferência de aparência.')
+    if (fields.theme !== undefined && !['light', 'dark'].includes(fields.theme)) fail(400, 'Escolha o modo claro ou escuro.')
+    if (fields.fontSize !== undefined && !['small', 'default', 'large'].includes(fields.fontSize)) fail(400, 'Escolha a fonte pequena, padrão ou grande.')
+    if (fields.fontFamily !== undefined && !['default', 'system', 'verdana', 'tahoma', 'inter', 'roboto', 'open-sans', 'montserrat', 'source-sans-3'].includes(fields.fontFamily)) fail(400, 'Escolha uma das fontes disponíveis.')
     await getAppearanceSettings(id)
     return mutateStore((store) => {
       store.adminAppearancePreferences ||= []
       let preference = store.adminAppearancePreferences.find((item) => String(item.userId) === String(id))
       if (!preference) { preference = { userId: id }; store.adminAppearancePreferences.push(preference) }
-      preference.theme = fields.theme
+      if (fields.theme !== undefined) preference.theme = fields.theme
+      if (fields.fontSize !== undefined) preference.fontSize = fields.fontSize
+      if (fields.fontFamily !== undefined) preference.fontFamily = fields.fontFamily
       return appearanceSettings(store, id)
     })
   }

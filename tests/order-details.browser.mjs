@@ -39,11 +39,13 @@ try {
   const employee = (await fixture.request('/employees', 'POST', { name: 'Ana Teste', birthDate: '1990-01-01', cpf: '00000000001', email: 'ana@example.invalid', identification: '001' })).data.item
   const headers = { Authorization: `Bearer ${fixture.operatorToken}` }
   const route = `/operations/orders/${order.code}`
-  const started = await fixture.request(`${route}/start`, 'POST', { employeeId: employee.id }, headers)
+  // Materials still pending must be acknowledged before the work starts.
+  const pendingStart = await fixture.request(`${route}/start`, 'POST', { employeeId: employee.id }, headers)
+  const started = pendingStart.status === 409 ? await fixture.request(`${route}/start`, 'POST', { employeeId: employee.id, pendingMaterialsConfirmation: pendingStart.data.pendingMaterials?.map((row) => [row.key, row.quantity]) }, headers) : pendingStart
   const session = { sessionId: started.data.operation.activeSession.id, sessionToken: started.data.sessionToken }
   await fixture.request(`${route}/stages/stage-1`, 'POST', { ...session, quantity: 3 }, headers)
   await fixture.request(`${route}/pause`, 'POST', { ...session, reason: 'Descanso' }, headers)
-  await fixture.request(`${route}/start`, 'POST', { employeeId: employee.id }, headers)
+  await fixture.request(`${route}/start`, 'POST', { employeeId: employee.id, pendingMaterialsConfirmation: pendingStart.data.pendingMaterials?.map((row) => [row.key, row.quantity]) }, headers)
   await page.clock.install()
   await page.goto(fixture.url)
   await page.getByLabel('CPF', { exact: true }).fill('12345678901')

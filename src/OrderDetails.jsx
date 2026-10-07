@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import './orderDetails.css'
 import { stageLabel } from '../server/serviceStages.js'
 import OrderEditModal, { OrderActionModal } from './OrderEditModal.jsx'
+import { activeEmployeeNames, activeSessions } from '../server/operationSessions.js'
 
 const currency = (value) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const date = (value) => value ? new Date(value).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : 'Não informado'
@@ -11,7 +12,7 @@ const duration = (value) => {
   return [Math.floor(seconds / 3600), Math.floor(seconds % 3600 / 60), seconds % 60].map((part) => String(part).padStart(2, '0')).join(':')
 }
 const statusLabels = { waiting: 'Aguardando', running: 'Em execução', paused: 'Pausado', finalizing: 'Finalizando', completed: 'Concluído' }
-const eventLabels = { started: 'Início', resumed: 'Retomada', paused: 'Pausa', machine_changed: 'Troca de máquina', stage_progress: 'Peças registradas', completed: 'Conclusão', completion_acknowledged: 'Conclusão confirmada no painel', admin_interrupted: 'Interrupção administrativa', stages_configured: 'Etapas configuradas', order_edited: 'OS editada', order_reopened: 'OS reaberta' }
+const eventLabels = { started: 'Início', resumed: 'Retomada', paused: 'Pausa', machine_changed: 'Troca de máquina', labor_service_changed: 'Troca de serviço de hora homem', resource_changed: 'Troca entre máquina e serviço', session_ended: 'Sessão encerrada na conclusão', stage_progress: 'Peças registradas', completed: 'Conclusão', completion_acknowledged: 'Conclusão confirmada no painel', admin_interrupted: 'Interrupção administrativa', stages_configured: 'Etapas configuradas', order_edited: 'OS editada', order_reopened: 'OS reaberta' }
 
 function Facts({ items, className = '' }) {
   return <dl className={`os-facts ${className}`}>{items.map(([label, value, detail]) => <div key={label}><dt>{label}</dt><dd>{value ?? 'Não informado'}{detail && <small>{detail}</small>}</dd></div>)}</dl>
@@ -75,7 +76,9 @@ function OrderHistoryModal({ order, onClose, Icon }) {
 function InterruptSessionModal({ order, onConfirm, onClose, Icon }) {
   const dialog = useRef(null)
   const submitting = useRef(false)
+  const sessions = activeSessions(order.operation)
   const [reason, setReason] = useState('')
+  const [sessionId, setSessionId] = useState(sessions.length === 1 ? sessions[0].id : '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   useEffect(() => {
@@ -93,6 +96,11 @@ function InterruptSessionModal({ order, onConfirm, onClose, Icon }) {
   async function submit(event) {
     event.preventDefault()
     if (submitting.current) return
+    if (!sessionId) {
+      setError('Selecione o funcionário cuja sessão será encerrada.')
+      dialog.current.querySelector('select')?.focus()
+      return
+    }
     if (!reason.trim()) {
       setError('Informe a justificativa da interrupção.')
       dialog.current.querySelector('textarea').focus()
@@ -102,7 +110,7 @@ function InterruptSessionModal({ order, onConfirm, onClose, Icon }) {
     setBusy(true)
     setError('')
     try {
-      await onConfirm(reason.trim())
+      await onConfirm(reason.trim(), sessionId)
       onClose()
     } catch (caught) {
       setError(caught.message || 'Não foi possível encerrar a sessão. Tente novamente.')
@@ -118,7 +126,7 @@ function InterruptSessionModal({ order, onConfirm, onClose, Icon }) {
   }}>
     <header className="os-history-heading"><div><h2 id="os-interrupt-title">Encerrar sessão de trabalho</h2><p>{order.code} · {order.service}</p></div><button className="os-icon-button" type="button" onClick={close} disabled={busy} aria-label="Fechar janela" title="Fechar janela">{'\u00d7'}</button></header>
     <form className="os-interrupt-form" onSubmit={submit} aria-busy={busy}>
-      <p className="os-interrupt-operator">Operador: <strong>{order.operation.activeSession?.employeeName || 'Não informado'}</strong></p>
+      {sessions.length > 1 ? <><label htmlFor="os-interrupt-session">Funcionário <span>(obrigatório)</span></label><select id="os-interrupt-session" className="os-interrupt-session" value={sessionId} disabled={busy} onChange={(event) => { setSessionId(event.target.value); setError('') }}><option value="">Selecione o funcionário</option>{sessions.map((session) => <option key={session.id} value={session.id}>{session.employeeName}{session.machineName || session.laborServiceName ? ` · ${session.machineName || session.laborServiceName}` : ''}</option>)}</select></> : <p className="os-interrupt-operator">Operador: <strong>{sessions[0]?.employeeName || 'Não informado'}</strong></p>}
       <label htmlFor="os-interrupt-reason">Justificativa <span>(obrigatória)</span></label>
       <textarea id="os-interrupt-reason" autoFocus required maxLength={250} rows={4} value={reason} disabled={busy} onChange={(event) => { setReason(event.target.value); setError('') }} aria-invalid={Boolean(error)} aria-describedby={error ? 'os-interrupt-error' : undefined} />
       {error && <p id="os-interrupt-error" className="os-interrupt-error" role="alert">{error}</p>}
@@ -147,10 +155,10 @@ export default function OrderDetails({ order, activeTime, stageNamesInput, onCha
     <div className="os-detail-layout"><div className="os-detail-primary">
       {operation && <section className="os-section os-operation"><div className="os-section-heading"><h3>Operação da OS</h3><span className={`os-status os-status--${operation.status}`}>{statusLabels[operation.status] || operation.status}</span></div>
         <Facts className="os-operation-facts" items={[
-          ['Tempo ativo acumulado', activeTime], ['Progresso total', `${number(operation.progress)}%`], ['Operador atual', operation.activeSession?.employeeName || 'Sem sessão ativa'],
+          ['Tempo ativo acumulado', activeTime], ['Progresso total', `${number(operation.progress)}%`], [activeSessions(operation).length > 1 ? 'Operadores atuais' : 'Operador atual', activeEmployeeNames(operation) || 'Sem sessão ativa'],
         ]} />
         {operation.stages.length ? <div className="os-stage-list">{operation.stages.map((stage, index) => <div key={stage.key}><span className="os-stage-number">{index + 1}</span><div><strong>{stage.name}</strong><span>{number(operation.stageCounts[stage.key])}/{number(order.quantity)} peças</span></div><progress value={operation.stageCounts[stage.key] || 0} max={Number(order.quantity) || 1} aria-label={`Progresso de ${stage.name}`} /></div>)}</div> : operation.status === 'waiting' && <div className="os-stage-setup"><label htmlFor="os-stage-input">Etapas na ordem de produção</label><div><input id="os-stage-input" value={stageNamesInput} onChange={(event) => onChangeStages(event.target.value)} placeholder="Ex.: Corte, Usinagem, Soldagem" /><button className="os-button" type="button" onClick={onConfigureStages}><Icon name="plus" />Salvar etapas</button></div></div>}
-        {operation.activeSession && <button className="os-button os-interrupt-button" type="button" aria-haspopup="dialog" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setInterruptOpen(true) }}><Icon name="admins" />Encerrar sessão ativa com justificativa</button>}
+        {activeSessions(operation).length > 0 && <button className="os-button os-interrupt-button" type="button" aria-haspopup="dialog" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setInterruptOpen(true) }}><Icon name="admins" />Encerrar sessão ativa com justificativa</button>}
         {operationError && <p className="workflow-error" role="alert">{operationError}</p>}
       </section>}
       <section className="os-section"><div className="os-section-heading"><h3>Descrição do serviço</h3></div><p className="os-description">{order.description || 'Nenhuma descrição informada.'}</p></section>

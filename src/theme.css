@@ -1,8 +1,29 @@
 :root { color-scheme: light; }
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 400 700; font-display: swap; src: url("/fonts/inter.woff2") format("woff2"); }
+@font-face { font-family: "Roboto"; font-style: normal; font-weight: 400 700; font-display: swap; src: url("/fonts/roboto.woff2") format("woff2"); }
+@font-face { font-family: "Open Sans"; font-style: normal; font-weight: 400 700; font-display: swap; src: url("/fonts/open-sans.woff2") format("woff2"); }
+@font-face { font-family: "Montserrat"; font-style: normal; font-weight: 400 700; font-display: swap; src: url("/fonts/montserrat.woff2") format("woff2"); }
+@font-face { font-family: "Source Sans 3"; font-style: normal; font-weight: 400 700; font-display: swap; src: url("/fonts/source-sans-3.woff2") format("woff2"); }
+:root[data-font-family="system"] { --account-font-family: "Segoe UI", Tahoma, Arial, sans-serif; }
+:root[data-font-family="verdana"] { --account-font-family: Verdana, Geneva, sans-serif; }
+:root[data-font-family="tahoma"] { --account-font-family: Tahoma, Verdana, sans-serif; }
+:root[data-font-family="inter"] { --account-font-family: "Inter", Arial, sans-serif; }
+:root[data-font-family="roboto"] { --account-font-family: "Roboto", Arial, sans-serif; }
+:root[data-font-family="open-sans"] { --account-font-family: "Open Sans", Arial, sans-serif; }
+:root[data-font-family="montserrat"] { --account-font-family: "Montserrat", Arial, sans-serif; }
+:root[data-font-family="source-sans-3"] { --account-font-family: "Source Sans 3", Arial, sans-serif; }
+:root:is([data-font-family="system"], [data-font-family="verdana"], [data-font-family="tahoma"], [data-font-family="inter"], [data-font-family="roboto"], [data-font-family="open-sans"], [data-font-family="montserrat"], [data-font-family="source-sans-3"]) { font-family: var(--account-font-family); }
+:root:is([data-font-family="system"], [data-font-family="verdana"], [data-font-family="tahoma"], [data-font-family="inter"], [data-font-family="roboto"], [data-font-family="open-sans"], [data-font-family="montserrat"], [data-font-family="source-sans-3"]) :where(*, *::before, *::after) { font-family: var(--account-font-family) !important; }
+.account-font-family-field { margin-top: 24px; max-width: 400px; }
+.account-font-family-field select { min-height: 44px; width: 100%; }
 :root[data-theme="dark"] { color-scheme: dark; background: #0d1c2e; color: #e4edf7; scrollbar-color: #4a617a #112239; }
 :root[data-theme="dark"] body { background: #0d1c2e; }
 .account-appearance-settings { max-width: 800px; padding-bottom: 24px; margin-bottom: 28px; border-bottom: 1px solid #e0e8f0; }
 .account-appearance-settings h2 { font-size: 18px; margin: 0 0 18px; color: #22486b; }
+.account-appearance-settings h3 { font-size: 14px; margin: 24px 0 12px; color: #31516d; }
+.account-font-icon { display: grid; width: 24px; height: 24px; place-items: center; flex: 0 0 24px; }
+.account-font-options .account-theme-option { display: grid; grid-template-columns: 17px 24px auto; }
+.account-theme-option > svg { flex-shrink: 0; }
 .account-appearance-settings > p { margin: 14px 0 0; font-size: 13px; }
 .account-theme-options { display: flex; gap: 12px; flex-wrap: wrap; }
 .account-theme-option { display: flex; align-items: center; gap: 10px; padding: 13px 18px; min-height: 48px; border: 1px solid #cbdbea; border-radius: 6px; color: #31516d; background: #fff; cursor: pointer; font-size: 14px; }
@@ -11,6 +32,7 @@
 .account-theme-option:has(input:focus-visible) { outline: 2px solid #155691; outline-offset: 2px; }
 :root[data-theme="dark"] .account-appearance-settings { border-color: #30485f; }
 :root[data-theme="dark"] .account-appearance-settings h2 { color: #e4edf7; }
+:root[data-theme="dark"] .account-appearance-settings h3 { color: #c6d6e7; }
 :root[data-theme="dark"] .account-theme-option { color: #c6d6e7; background: #162b43; border-color: #36516f; }
 :root[data-theme="dark"] .account-theme-option.selected { background: #234364; border-color: #80b7f0; color: #e7f2ff; }
 :root[data-theme="dark"] .account-theme-option input { accent-color: #80b7f0; }
@@ -22,10 +44,15 @@
 :root[data-theme="dark"] :is(input, select, textarea):focus-visible { outline-color: #80b7f0; }
 :root[data-theme="dark"] ::selection { background: #366b9d; color: #fff; }
 :root[data-theme="dark"] ::placeholder { color: #9eafc3; opacity: 1; }
+:root[data-theme="dark"] :is(.admin-os-stage--done, .admin-os-stage--started) .admin-os-stage-block { background-color: var(--stage-color); }
+:root[data-theme="dark"] .admin-os-stage--started .admin-os-stage-block { background-image: repeating-linear-gradient(125deg, transparent 0 2px, #ffffff29 2px 3px); }
 :root[data-theme="dark"] .purchase-request-button { color: #fff; background: #72501d; border-color: #a58345; }
 :root[data-theme="dark"] dialog::backdrop { background: #06111dcc; }
 :root[data-theme="dark"] :is(.modal-backdrop, .mobile-menu-backdrop) { background: #06111dcc; }
 @media (max-width: 760px) {
   .account-theme-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .account-theme-option { padding: 12px 10px; gap: 8px; }
+  .account-font-options { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .account-font-options .account-theme-option { grid-template-columns: 20px 24px; justify-content: center; justify-items: center; padding: 10px 6px; gap: 6px; }
+  .account-font-options .account-theme-option > span:last-child { grid-column: 1 / -1; text-align: center; }
 }

@@ -1,0 +1,108 @@
+import assert from 'node:assert/strict'
+import { chromium } from 'playwright'
+import { createWorkflowFixture } from './workflowFixture.js'
+
+const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Gustavo' }
+const fixture = await createWorkflowFixture({ accountsEnv: env })
+const browser = await chromium.launch()
+try {
+  for (const viewport of [{ width: 1920, height: 1080 }, { width: 1440, height: 900 }, { width: 393, height: 852 }, { width: 430, height: 932 }, { width: 1440, height: 900, dark: true }]) {
+    await fixture.mutateStore((store) => { store.manualMaterialRequests = []; store.materialRequestStatuses = []; store.operationalNotifications = [] })
+    const page = await browser.newPage({ viewport })
+    const errors = [], writes = []
+    let items = [{ id: 8, name: 'Inox do estoque', detail: 'Chapa inoxidavel', quantity: 1, minimum: 5, unitPrice: 20 }]
+    let failOnce = true
+    page.on('pageerror', (error) => errors.push(error.message))
+    await page.addInitScript(() => localStorage.setItem('gmac-inventory-migrated-v1', 'true'))
+    await page.route('**/api/inventory**', async (route) => {
+      if (route.request().method() === 'GET') return route.fulfill({ status: 200, json: { items } })
+      const body = route.request().postDataJSON()
+      writes.push(body)
+      items[0].quantity += body.quantityKg
+      const received = await fixture.request(`/material-requests/${encodeURIComponent(body.materialRequestId)}/receive-local`, 'POST', { materialId: 8, quantity: body.quantityKg, receiptId: body.materialReceiptId }, { Authorization: `Bearer ${fixture.adminToken}` })
+      assert.equal(received.status, 200)
+      assert.equal(received.data.item.allocatedQuantity, 0)
+      return route.fulfill({ status: 201, json: received.data.item })
+    })
+    await page.route('**/api/material-requests', (route) => {
+      if (route.request().method() === 'POST' && failOnce) { failOnce = false; return route.fulfill({ status: 500, json: { message: 'Falha de teste' } }) }
+      return route.continue()
+    })
+    await page.goto(fixture.url)
+    await page.getByLabel('CPF', { exact: true }).fill(env.DEMO_ADMIN_CPF)
+    await page.getByLabel('Senha', { exact: true }).fill(env.DEMO_ADMIN_PASSWORD)
+    await page.getByRole('button', { name: 'Entrar', exact: true }).click()
+    await page.locator('.admin-home-main').waitFor()
+    if (viewport.dark) await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'))
+    if (viewport.width < 768) await page.getByRole('button', { name: 'Abrir menu de navega\u00e7\u00e3o', exact: true }).click()
+    await page.locator('.sidebar').getByRole('button', { name: 'Pedidos de material', exact: true }).click()
+    await page.locator('.material-request-create').click()
+    let dialog = page.getByRole('dialog', { name: 'Solicitar material', exact: true })
+    await dialog.getByRole('button', { name: 'Cancelar', exact: true }).click()
+    assert.equal((await fixture.request('/material-requests', 'GET', undefined, { Authorization: `Bearer ${fixture.adminToken}` })).data.manualRequests.length, 0)
+    await page.locator('.material-request-create').click()
+    await dialog.getByLabel('Nome do material', { exact: true }).fill('Titanio manual')
+    await dialog.getByLabel('Especifica\u00e7\u00e3o', { exact: true }).fill('Chapa 10mm')
+    await dialog.getByLabel('Quantidade solicitada (kg)', { exact: true }).fill('12.5')
+    const suffix = `${viewport.width}${viewport.dark ? '-dark' : ''}`
+    await page.screenshot({ path: `test-results/manual-material-request-${suffix}.png` })
+    await dialog.getByRole('button', { name: 'Solicitar material', exact: true }).click()
+    await dialog.getByRole('alert').waitFor()
+    assert.equal(await dialog.getByLabel('Nome do material', { exact: true }).inputValue(), 'Titanio manual')
+    await dialog.getByRole('button', { name: 'Solicitar material', exact: true }).click()
+    await dialog.waitFor({ state: 'hidden' })
+    const row = page.locator('.material-orders-table tbody tr').filter({ hasText: 'Titanio manual' })
+    await row.waitFor()
+    assert.ok((await row.innerText()).includes('Pedido manual'))
+    assert.equal(writes.length, 0, 'Request creation must not write stock')
+    await row.getByRole('button', { name: 'Recusar pedido', exact: true }).click()
+    dialog = page.getByRole('dialog', { name: 'Recusar pedido de material?', exact: true })
+    await dialog.getByRole('button', { name: 'Recusar pedido', exact: true }).click()
+    await dialog.waitFor({ state: 'hidden' })
+    await row.getByText('Pedido recusado', { exact: true }).waitFor()
+    assert.equal(await row.getByRole('button', { name: 'Adicionar material', exact: true }).count(), 0)
+    await row.getByRole('button', { name: 'Ver hist\u00f3rico do pedido de Titanio manual', exact: true }).click()
+    const history = page.getByRole('dialog', { name: 'Hist\u00f3rico do pedido', exact: true })
+    await history.getByText('Pedido recusado', { exact: true }).waitFor()
+    assert.equal(await history.getByText('Gustavo', { exact: true }).count(), 2)
+    await page.screenshot({ path: `test-results/material-request-history-${suffix}.png` })
+    await page.keyboard.press('Escape')
+    await page.locator('.material-request-create').click()
+    dialog = page.getByRole('dialog', { name: 'Solicitar material', exact: true })
+    await dialog.getByLabel('Material do estoque', { exact: true }).check()
+    await dialog.locator('select').waitFor({ timeout: 5000 })
+    await dialog.getByLabel('Material', { exact: true }).selectOption('8')
+    assert.equal(await dialog.getByLabel('Especifica\u00e7\u00e3o', { exact: true }).inputValue(), items[0].detail)
+    await dialog.getByLabel('Quantidade solicitada (kg)', { exact: true }).fill('6')
+    await dialog.getByRole('button', { name: 'Solicitar material', exact: true }).click()
+    await dialog.waitFor({ state: 'hidden' })
+    const stockRow = page.locator('.material-orders-table tbody tr').filter({ hasText: items[0].name })
+    await stockRow.getByRole('button', { name: 'Adicionar material', exact: true }).click()
+    const entry = page.getByRole('dialog', { name: 'Adicionar material', exact: true })
+    assert.equal(await entry.getByLabel(/^Quantidade de entrada/).inputValue(), '6')
+    await entry.getByRole('button', { name: 'Registrar entrada', exact: true }).click()
+    await entry.waitFor({ state: 'hidden' })
+    await stockRow.getByText('Material solicitado adicionado', { exact: true }).waitFor()
+    assert.equal(writes.length, 1)
+    assert.equal(items[0].quantity, 7, 'Manual stock requests retain all incoming kg in stock')
+    await stockRow.getByRole('button', { name: 'Ver hist\u00f3rico do pedido de Inox do estoque', exact: true }).click()
+    await history.getByText('Material adicionado', { exact: true }).waitFor()
+    assert.ok((await history.innerText()).includes('Entrada no estoque'))
+    assert.equal(await history.getByText('Gustavo', { exact: true }).count(), 2)
+    await page.keyboard.press('Escape')
+    await page.reload()
+    await row.getByText('Pedido recusado', { exact: true }).waitFor()
+    await stockRow.getByText('Material solicitado adicionado', { exact: true }).waitFor()
+    assert.equal(await page.locator('.material-orders-table tbody tr').count(), 2)
+    assert.equal(await page.locator('.material-request-history-button').count(), 2)
+    await page.screenshot({ path: `test-results/material-requests-manual-list-${suffix}.png`, fullPage: true })
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false)
+    assert.deepEqual(errors, [])
+    await page.close()
+  }
+  console.log('Manual new/existing requests, cancel/retry, retained refusal, creator/rejector/receiver history, stock-only receipt and reload: desktop/iPhone/dark passed.')
+} catch (error) {
+  const page = browser.contexts().flatMap((context) => context.pages()).at(-1)
+  if (page) { await page.screenshot({ path: 'test-results/manual-material-request-failure.png', fullPage: true }); console.error(await page.getByRole('dialog').innerText()) }
+  throw error
+} finally { await browser.close(); await fixture.close() }

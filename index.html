@@ -10,8 +10,12 @@
         const account = JSON.parse(sessionStorage.getItem('gmac-admin-workspace') || 'null');
         const dark = sessionStorage.getItem('gmac-admin-token') && account?.userId != null && localStorage.getItem('gmac-theme-' + account.userId) === 'dark';
         document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+        const fontSize = sessionStorage.getItem('gmac-admin-token') && account?.userId != null ? localStorage.getItem('gmac-font-size-' + account.userId) : 'default';
+        document.documentElement.dataset.fontSize = ['small', 'large'].includes(fontSize) ? fontSize : 'default';
+        const fontFamily = sessionStorage.getItem('gmac-admin-token') && account?.userId != null ? localStorage.getItem('gmac-font-family-' + account.userId) : 'default';
+        document.documentElement.dataset.fontFamily = ['system', 'verdana', 'tahoma', 'inter', 'roboto', 'open-sans', 'montserrat', 'source-sans-3'].includes(fontFamily) ? fontFamily : 'default';
         if (dark) document.querySelector('meta[name="theme-color"]').content = '#0d1c2e';
-      } catch { document.documentElement.dataset.theme = 'light'; }
+      } catch { document.documentElement.dataset.theme = 'light'; document.documentElement.dataset.fontSize = 'default'; document.documentElement.dataset.fontFamily = 'default'; }
     </script>
   </head>
   <body>

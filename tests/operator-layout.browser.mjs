@@ -22,7 +22,9 @@ try {
   const order = await createOrder('Soldagem e acabamento da estrutura', ['cutting', 'machining', 'welding', 'painting', 'assembly', 'boiler'])
   await createOrder('Projeto com soldagem e pintura', ['welding', 'painting'])
   const employee = (await fixture.request('/employees', 'POST', { name: 'Carla Teste', birthDate: '1990-01-01', cpf: '00000000001', email: 'teste@example.invalid', identification: '001' })).data.item
-  const started = await fixture.request(`/operations/orders/${order.code}/start`, 'POST', { employeeId: employee.id }, { Authorization: `Bearer ${fixture.operatorToken}` })
+  // Materials still pending must be acknowledged before the work starts.
+  const pending = await fixture.request(`/operations/orders/${order.code}/start`, 'POST', { employeeId: employee.id }, { Authorization: `Bearer ${fixture.operatorToken}` })
+  const started = pending.status === 409 ? await fixture.request(`/operations/orders/${order.code}/start`, 'POST', { employeeId: employee.id, pendingMaterialsConfirmation: pending.data.pendingMaterials?.map((row) => [row.key, row.quantity]) }, { Authorization: `Bearer ${fixture.operatorToken}` }) : pending
   const session = { id: started.data.operation.activeSession.id, token: started.data.sessionToken }
   await context.addInitScript(({ token, code, session }) => {
     sessionStorage.setItem('gmac-operator-token', token)
@@ -30,6 +32,7 @@ try {
   }, { token: fixture.operatorToken, code: order.code, session })
   await page.goto(fixture.url)
   await page.locator('.operator-project').filter({ hasText: order.service }).click()
+  await page.locator('.operator-worker-toggle').first().click()
   await page.getByRole('button', { name: 'Pausar trabalho', exact: true }).waitFor()
   await page.getByRole('button', { name: 'Mostrar projetos', exact: true }).click()
   const list = page.locator('.operator-project-list')

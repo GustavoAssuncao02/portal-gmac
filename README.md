@@ -25,7 +25,11 @@ npm run dev
 
 Abra [http://localhost:5174](http://localhost:5174). A API usa a porta 3002.
 
+`npm run dev` inicia frontend e backend juntos, identificados no terminal como `FRONTEND` e `BACKEND`. O terminal mostra automaticamente os endereços de acesso deste computador e da rede local (por exemplo, `http://192.168.1.100:5174`). Use o endereço real exibido para acessar de outros computadores no mesmo Wi-Fi. `Ctrl+C` encerra os dois serviços; se um deles falhar, o outro também é encerrado. A porta da API é definida por `PORT` em `.env`, e o proxy do frontend acompanha essa configuração.
+
 Preencha `.env` a partir de `.env.example`. No modo local, configure `DEMO_ADMIN_CPF` (11 dígitos), `DEMO_ADMIN_PASSWORD` e `DEMO_ADMIN_NAME`. Não há senha padrão. `.env`, dados locais, anexos e resultados de testes não são publicados no Git.
+
+Para testes temporários, `TEST_LOGIN_ENABLED=true` em `.env` permite clicar em **Entrar** como administrador ou operador com os campos vazios. O administrador será a conta cadastrada com o CPF de `DEMO_ADMIN_CPF`, ou o primeiro administrador disponível. As sessões e permissões continuam funcionando normalmente; não são criadas contas fictícias. Todos na rede com acesso ao portal poderão entrar sem senha enquanto essa opção estiver ativa. Para restaurar o login obrigatório, altere para `TEST_LOGIN_ENABLED=false` e reinicie `npm run dev`. O acesso de teste é sempre bloqueado com `NODE_ENV=production`, mesmo se a opção estiver ativada.
 
 ## Ofertas e ordens de serviço
 

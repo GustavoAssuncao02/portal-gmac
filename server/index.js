@@ -2,27 +2,30 @@ import 'dotenv/config'
 import cors from 'cors'
 import express from 'express'
 import mysql from 'mysql2/promise'
-import offersRouter from './offers.js'
+import createOffersRouter, { mutateStore } from './offers.js'
 import createOperationsRouter from './operations.js'
-import { issueOperatorToken, operatorConfigured, operatorCredentialsMatch } from './operatorAuth.js'
-import { createAccountService, createAccountsRouter, issueAdminToken, requireAdmin } from './accounts.js'
+import { createAccountService, createAccountsRouter, requireAdmin } from './accounts.js'
+import createLoginRouter, { testLoginEnabled } from './authLogin.js'
 import createMachinesRouter from './machines.js'
+import createLaborServicesRouter, { ensureLaborServices } from './laborServices.js'
 import createReportsRouter from './reports.js'
 import createPayablesRouter from './payables.js'
 import createInventoryImportRouter from './inventoryImport.js'
-import createMaterialRequestsRouter from './materialRequests.js'
+import createMaterialRequestsRouter, { saveRequestedMaterial } from './materialRequests.js'
+import createNotificationsRouter from './notifications.js'
+import { inventorySignal } from './notificationEvents.js'
+import { allocateReceivedMaterial } from './orderMaterials.js'
 import { createApiRateLimiter } from './rateLimit.js'
 import { ensureInventoryAppearance, inventoryAppearance } from './inventoryAppearance.js'
 
 const app = express()
-const port = Number(process.env.PORT || 3001)
+const port = Number(process.env.PORT || 3002)
 const host = process.env.API_HOST || '127.0.0.1'
 
 app.set('trust proxy', 'loopback')
 app.use(cors())
 app.use('/api', createApiRateLimiter())
 app.use(express.json())
-app.use('/api', offersRouter)
 
 let pool
 if (process.env.DB_HOST && process.env.DB_USER && process.env.DB_NAME) {
@@ -38,23 +41,30 @@ if (process.env.DB_HOST && process.env.DB_USER && process.env.DB_NAME) {
   await ensureInventoryAppearance(pool)
 }
 
+await ensureLaborServices()
+app.use('/api', createOffersRouter(pool, requireAdmin))
 app.use('/api', createOperationsRouter(pool))
 const accounts = createAccountService(pool)
 app.use('/api', createAccountsRouter(accounts))
+app.use('/api', createLoginRouter(accounts))
 app.use('/api', createMachinesRouter(requireAdmin, pool))
+app.use('/api', createLaborServicesRouter(requireAdmin, pool))
 app.use('/api', createReportsRouter(pool, accounts, requireAdmin))
 app.use('/api', createInventoryImportRouter(pool, requireAdmin))
-app.use('/api', createMaterialRequestsRouter(requireAdmin))
+app.use('/api', createMaterialRequestsRouter(requireAdmin, pool, accounts))
 const payablesRouter = createPayablesRouter(accounts, requireAdmin)
 app.use('/api', payablesRouter)
+const notificationsRouter = createNotificationsRouter({ requireAdmin, payables: payablesRouter, loadInventory: async () => {
+  if (!pool) return null
+  const [rows] = await pool.execute('SELECT id, name, quantity_kg AS quantity, minimum_kg AS minimum FROM inventory_materials')
+  return rows
+} })
+app.use('/api', notificationsRouter)
+const refreshInventoryNotifications = () => notificationsRouter.sweepInventory().catch((error) => console.error('Falha ao verificar avisos de estoque:', error.message))
+const recordInventoryNotification = (row, previousLow) => mutateStore((store) => inventorySignal(store, row, previousLow)).catch((error) => console.error('Falha ao registrar aviso de estoque:', error.message))
+await refreshInventoryNotifications()
+setInterval(refreshInventoryNotifications, 10000).unref()
 setInterval(() => payablesRouter.sweep().catch((error) => console.error('Falha ao verificar vencimentos:', error.message)), 60000).unref()
-
-app.post('/api/auth/operator-login', (request, response) => {
-  if (typeof request.body?.username !== 'string' || !/^\d{11}$/.test(request.body.username)) return response.status(400).json({ message: 'Informe os 11 dígitos do usuário, sem pontos ou traços.' })
-  if (!operatorConfigured()) return response.status(503).json({ message: 'A conta compartilhada do operador ainda não foi configurada no servidor.' })
-  if (!operatorCredentialsMatch(request.body?.username, request.body?.password)) return response.status(401).json({ message: 'Usuário ou senha do operador inválidos.' })
-  return response.json({ token: issueOperatorToken(), role: 'operator' })
-})
 
 app.get('/api/health', async (_request, response) => {
   try {
@@ -114,24 +124,28 @@ app.post('/api/inventory', requireAdmin, async (request, response) => {
   let connection
   try {
     const appearance = await inventoryAppearance(request.body)
-    connection = await pool.getConnection()
-    await connection.beginTransaction()
-    const [result] = await connection.execute(
-      `INSERT INTO inventory_materials (name, detail, quantity_kg, minimum_kg, unit_price, icon, photo)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [String(name).trim(), detail || null, initialQuantity, Number(minimum) || 0, Number(unitPrice) || 0, appearance.icon || 'sheet', appearance.photo || null],
-    )
-    await connection.execute(
-      `INSERT INTO inventory_movements
-        (material_id, movement_type, quantity_kg, unit_price_kg, balance_after_kg, destination)
-       VALUES (?, 'creation', ?, ?, ?, 'Cadastro inicial')`,
-      [result.insertId, initialQuantity, Number(unitPrice) || 0, initialQuantity],
-    )
-    await connection.commit()
-    return response.status(201).json({ id: result.insertId })
+    const receipt = await saveRequestedMaterial(request.body.materialRequestId, request.adminId, async ({ order } = {}) => {
+      if (request.body.materialRequestId && initialQuantity <= 0) throw Object.assign(new Error('Informe uma quantidade de entrada maior que zero.'), { status: 400 })
+      connection = await pool.getConnection()
+      await connection.beginTransaction()
+      const [result] = await connection.execute(
+        `INSERT INTO inventory_materials (name, detail, quantity_kg, minimum_kg, unit_price, icon, photo)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [String(name).trim(), detail || null, initialQuantity, Number(minimum) || 0, Number(unitPrice) || 0, appearance.icon || 'sheet', appearance.photo || null],
+      )
+      await connection.execute(
+        `INSERT INTO inventory_movements
+          (material_id, movement_type, quantity_kg, unit_price_kg, balance_after_kg, destination, order_code)
+         VALUES (?, 'creation', ?, ?, ?, ?, ?)`,
+        [result.insertId, initialQuantity, Number(unitPrice) || 0, initialQuantity, order ? 'Entrada de material para a OS' : 'Cadastro inicial', order?.code || null],
+      )
+      return { id: result.insertId, receivedQuantity: initialQuantity }
+    }, { commit: () => connection?.commit(), rollback: () => connection?.rollback(), receiptId: request.body.materialReceiptId, adminName: request.adminName, allocate: (result, context) => allocateReceivedMaterial(connection, result, context) })
+    if (!receipt.alreadyReceived) await recordInventoryNotification({ id: receipt.id, name: String(name).trim(), quantity: receipt.balance ?? initialQuantity, minimum: Number(minimum) || 0 }, false)
+    return response.status(201).json(receipt)
   } catch (error) {
     if (connection) await connection.rollback()
-    if (error.status === 400) return response.status(400).json({ message: error.message })
+    if (error.status) return response.status(error.status).json({ message: error.message })
     console.error('Falha ao cadastrar material:', error)
     return response.status(500).json({ message: 'Não foi possível cadastrar o material.' })
   } finally {
@@ -155,6 +169,7 @@ app.patch('/api/inventory/:materialId', requireAdmin, async (request, response) 
       [String(name || '').trim(), detail || null, Number(minimum) || 0, Number(unitPrice) || 0, ...appearanceFields.map((field) => appearance[field]), request.params.materialId],
     )
     if (!result.affectedRows) return response.status(404).json({ message: 'Material não encontrado.' })
+    await refreshInventoryNotifications()
     return response.json({ ok: true })
   } catch (error) {
     if (error.status === 400) return response.status(400).json({ message: error.message })
@@ -200,7 +215,7 @@ app.get('/api/inventory/:materialId/history', async (request, response) => {
   }
 })
 
-app.post('/api/inventory/:materialId/movements', async (request, response) => {
+app.post('/api/inventory/:materialId/movements', (request, response, next) => request.body?.materialRequestId != null ? requireAdmin(request, response, next) : next(), async (request, response) => {
   if (!pool) {
     return response.status(503).json({ message: 'O banco de dados ainda não está configurado.' })
   }
@@ -213,70 +228,53 @@ app.post('/api/inventory/:materialId/movements', async (request, response) => {
 
   let connection
   try {
-    connection = await pool.getConnection()
-    await connection.beginTransaction()
-    const [materials] = await connection.execute(
-      'SELECT id, quantity_kg, unit_price FROM inventory_materials WHERE id = ? FOR UPDATE',
-      [request.params.materialId],
-    )
-    const material = materials[0]
-    if (!material) {
-      await connection.rollback()
-      return response.status(404).json({ message: 'Material não encontrado.' })
-    }
+    let notification
+    const receipt = await saveRequestedMaterial(request.body.materialRequestId, request.adminId, async ({ order } = {}) => {
+      if (request.body.materialRequestId && type !== 'entry') throw Object.assign(new Error('O pedido exige uma entrada de material.'), { status: 400 })
+      connection = await pool.getConnection()
+      await connection.beginTransaction()
+      const [materials] = await connection.execute(
+        'SELECT id, name, quantity_kg, minimum_kg, unit_price FROM inventory_materials WHERE id = ? FOR UPDATE',
+        [request.params.materialId],
+      )
+      const material = materials[0]
+      if (!material) {
+        throw Object.assign(new Error('Material não encontrado.'), { status: 404 })
+      }
 
-    const currentBalance = Number(material.quantity_kg)
-    const currentUnitPrice = Number(material.unit_price)
-    const incomingUnitPrice = Number(unitPrice)
-    const nextBalance = type === 'entry' ? currentBalance + quantity : currentBalance - quantity
-    if (nextBalance < 0) {
-      await connection.rollback()
-      return response.status(409).json({ message: 'A saída não pode ser maior que o saldo disponível.' })
-    }
+      const currentBalance = Number(material.quantity_kg)
+      const currentUnitPrice = Number(material.unit_price)
+      const incomingUnitPrice = Number(unitPrice)
+      const nextBalance = type === 'entry' ? currentBalance + quantity : currentBalance - quantity
+      if (nextBalance < 0) {
+        throw Object.assign(new Error('A saída não pode ser maior que o saldo disponível.'), { status: 409 })
+      }
 
-    const nextUnitPrice = type === 'entry' && Number.isFinite(incomingUnitPrice) && incomingUnitPrice >= 0 && nextBalance > 0
-      ? ((currentBalance * currentUnitPrice) + (quantity * incomingUnitPrice)) / nextBalance
-      : currentUnitPrice
-    await connection.execute(
-      'UPDATE inventory_materials SET quantity_kg = ?, unit_price = ? WHERE id = ?',
-      [nextBalance, nextUnitPrice, request.params.materialId],
-    )
-    await connection.execute(
-      `INSERT INTO inventory_movements
-        (material_id, movement_type, quantity_kg, unit_price_kg, balance_after_kg, destination, order_code, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [request.params.materialId, type, quantity, type === 'entry' ? incomingUnitPrice : currentUnitPrice, nextBalance, destination || null, orderCode || null, notes || null],
-    )
-    await connection.commit()
-    return response.status(201).json({ materialId: Number(request.params.materialId), balance: nextBalance, unitPrice: nextUnitPrice })
+      const nextUnitPrice = type === 'entry' && Number.isFinite(incomingUnitPrice) && incomingUnitPrice >= 0 && nextBalance > 0
+        ? ((currentBalance * currentUnitPrice) + (quantity * incomingUnitPrice)) / nextBalance
+        : currentUnitPrice
+      await connection.execute(
+        'UPDATE inventory_materials SET quantity_kg = ?, unit_price = ? WHERE id = ?',
+        [nextBalance, nextUnitPrice, request.params.materialId],
+      )
+      await connection.execute(
+        `INSERT INTO inventory_movements
+          (material_id, movement_type, quantity_kg, unit_price_kg, balance_after_kg, destination, order_code, notes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [request.params.materialId, type, quantity, type === 'entry' ? incomingUnitPrice : currentUnitPrice, nextBalance, order ? 'Entrada de material para a OS' : destination || null, order?.code || orderCode || null, notes || null],
+      )
+      notification = { row: { id: material.id, name: material.name, quantity: nextBalance, minimum: Number(material.minimum_kg) }, previousLow: currentBalance <= Number(material.minimum_kg) }
+      return { materialId: Number(request.params.materialId), balance: nextBalance, unitPrice: nextUnitPrice, receivedQuantity: quantity }
+    }, { commit: () => connection?.commit(), rollback: () => connection?.rollback(), receiptId: request.body.materialReceiptId, adminName: request.adminName, allocate: (result, context) => allocateReceivedMaterial(connection, result, context) })
+    if (notification) await recordInventoryNotification({ ...notification.row, quantity: receipt.balance }, notification.previousLow)
+    return response.status(201).json(receipt)
   } catch (error) {
     if (connection) await connection.rollback()
+    if (error.status) return response.status(error.status).json({ message: error.message })
     console.error('Falha ao registrar movimentação do estoque:', error)
     return response.status(500).json({ message: 'Não foi possível registrar a movimentação.' })
   } finally {
     connection?.release()
-  }
-})
-
-app.post('/api/auth/login', async (request, response) => {
-  const { cpf, password } = request.body ?? {}
-
-  if (!cpf || !password) {
-    return response.status(400).json({ message: 'Informe seu CPF e sua senha.' })
-  }
-  if (typeof cpf !== 'string' || !/^\d{11}$/.test(cpf)) {
-    return response.status(400).json({ message: 'Informe os 11 dígitos do CPF, sem pontos ou traços.' })
-  }
-
-  try {
-    const user = await accounts.authenticate(cpf, password)
-    if (!user) {
-      return response.status(401).json({ message: 'CPF ou senha inválidos.' })
-    }
-    return response.json({ user, token: issueAdminToken(user) })
-  } catch (error) {
-    console.error('Falha no login:', error)
-    return response.status(500).json({ message: 'Não foi possível acessar o sistema agora.' })
   }
 })
 
@@ -287,4 +285,5 @@ app.use((error, _request, response, _next) => {
 
 app.listen(port, host, () => {
   console.log(`API GMAC disponível em http://${host}:${port}`)
+  if (testLoginEnabled()) console.warn('ATENCAO: acesso sem senha ativado para testes. Desative TEST_LOGIN_ENABLED antes de publicar o portal.')
 })

@@ -18,7 +18,9 @@ for (const device of ['desktop', 'iPhone 15', 'iPhone 15 Pro Max']) {
     const employee = (await fixture.request('/employees', 'POST', { name: 'Ana Teste', cpf: '00000000001', identification: '001', birthDate: '1990-01-01', email: 'ana@example.invalid' })).data.item
     const operatorHeaders = { Authorization: `Bearer ${fixture.operatorToken}` }
     const base = `/operations/orders/${order.code}`
-    const start = await fixture.request(`${base}/start`, 'POST', { employeeId: employee.id }, operatorHeaders)
+    // Materials still pending must be acknowledged before the work starts.
+    const pending = await fixture.request(`${base}/start`, 'POST', { employeeId: employee.id }, operatorHeaders)
+    const start = pending.status === 409 ? await fixture.request(`${base}/start`, 'POST', { employeeId: employee.id, pendingMaterialsConfirmation: pending.data.pendingMaterials?.map((row) => [row.key, row.quantity]) }, operatorHeaders) : pending
     const session = { sessionId: start.data.operation.activeSession.id, sessionToken: start.data.sessionToken }
     await fixture.request(`${base}/stages/stage-1`, 'POST', { ...session, quantity: 10 }, operatorHeaders)
     await fixture.request(`${base}/stages/stage-2`, 'POST', { ...session, quantity: 10 }, operatorHeaders)

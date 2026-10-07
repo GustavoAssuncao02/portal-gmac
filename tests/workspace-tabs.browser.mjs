@@ -34,7 +34,7 @@ try {
   await closeAll.waitFor()
   assert.equal(await page.getByRole('tab').count(), 4)
   await arrows(false)
-  for (const name of ['Calculadora de pesos e medidas', 'Servi\u00e7os em andamento', 'Ofertas e servi\u00e7os', 'Administradores', 'Clientes', 'Pedidos']) await navigate(name)
+  for (const name of ['Calculadora de pesos e medidas', 'Servi\u00e7os em andamento', 'Ofertas e servi\u00e7os', 'Administradores', 'Clientes', 'Pedidos de material']) await navigate(name)
   await arrows(true)
   const selectedVisible = await page.locator('.workspace-tabs-list').evaluate((list) => {
     const viewport = list.getBoundingClientRect(), selected = list.querySelector('.workspace-tab--active').getBoundingClientRect()

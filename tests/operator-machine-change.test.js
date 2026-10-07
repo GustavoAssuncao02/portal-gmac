@@ -111,8 +111,11 @@ test('MySQL machine change locks and commits the session and audit event togethe
     const body = { sessionId: 'session', sessionToken: 'private-token', machineId: 'new' }
     const result = await fixture.request('/operations/orders/OS-DB/machine', 'POST', body, headers)
     assert.equal(result.status, 200)
-    assert.equal(state.activeSession.machineId, 'new')
-    assert.equal(state.activeSession.tokenHash, createHash('sha256').update('private-token').digest('hex'))
+    // The former single session is migrated to the list of simultaneous sessions.
+    assert.equal(state.activeSession, undefined)
+    assert.equal(state.activeSessions.length, 1)
+    assert.equal(state.activeSessions[0].machineId, 'new')
+    assert.equal(state.activeSessions[0].tokenHash, createHash('sha256').update('private-token').digest('hex'))
     assert.equal(state.accumulatedMs, 10)
     assert.equal(events.length, 1)
     assert.equal(events[0].nextMachineId, 'new')

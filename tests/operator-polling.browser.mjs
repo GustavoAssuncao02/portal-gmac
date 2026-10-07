@@ -37,6 +37,7 @@ try {
   }, { token: fixture.operatorToken, code: first.code, session })
   await page.goto(fixture.url)
   await card(first.service).waitFor()
+  await page.locator('.operator-worker-toggle').first().click()
   await page.getByRole('button', { name: 'Pausar trabalho', exact: true }).waitFor()
   const quantities = page.locator('.operator-stage-action input')
   await quantities.first().fill('3')

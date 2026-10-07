@@ -1,11 +1,16 @@
-import { StrictMode, createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { StrictMode, createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import OperatorDashboard from './OperatorDashboard.jsx'
 import EmployeeActivityModal from './EmployeeActivityModal.jsx'
 import OrderDetails from './OrderDetails.jsx'
+import RejectOfferModal from './RejectOfferModal.jsx'
+import RejectMaterialRequestModal from './RejectMaterialRequestModal.jsx'
+import { MaterialRequestModal, MaterialRequestHistoryModal } from './MaterialRequestModals.jsx'
+import PendingMaterialsModal from './PendingMaterialsModal.jsx'
 import AdminHome from './AdminHome.jsx'
 import NotificationsButton from './NotificationsButton.jsx'
 import ReportsScreen from './ReportsScreen.jsx'
+import LaborServicesScreen from './LaborServicesScreen.jsx'
 import AccountSettings from './AccountSettings.jsx'
 import PayablesScreen from './PayablesScreen.jsx'
 import ServiceStageEditor from './ServiceStageEditor.jsx'
@@ -13,15 +18,20 @@ import MaterialAppearance, { MaterialVisual } from './MaterialAppearance.jsx'
 import MachineHistoryModal from './MachineHistoryModal.jsx'
 import { useMobileModal } from './useMobileModal.js'
 import { ThemeContext, useAccountTheme } from './accountTheme.js'
-import { Monitor, Minimize2, CreditCard, ChartColumn, Tags, Truck, WalletCards, ChevronLeft, ChevronRight, ChevronDown, UsersRound, Menu, X, Info } from 'lucide-react'
+import { Monitor, Minimize2, CreditCard, ChartColumn, Tags, Truck, WalletCards, ChevronLeft, ChevronRight, ChevronDown, UsersRound, Menu, X, Info, ArrowLeft, ListChecks, TriangleAlert, CircleCheck, CircleX } from 'lucide-react'
 import { stageLabel, stageGroupLabel, serviceDetails, readStageLayout, orderedStageSelection } from '../server/serviceStages.js'
-import { findInventoryMaterial, materialStock, normalizeSearch, pendingInventoryRequests, purchaseMaterialRequests } from './offerResources.js'
+import { findInventoryMaterial, materialsStock, normalizeSearch, purchaseMaterialRequests } from './offerResources.js'
 import { deadlineCategories, serviceDeadline } from './serviceDeadline.js'
 import { currentPieceProgress } from './serviceProgress.js'
+import { servicePanelOrders } from './servicePanels.js'
+import { pendingOrderMaterials } from '../server/pendingMaterials.js'
+import { activeEmployeeNames, operationElapsed } from '../server/operationSessions.js'
 import './styles.css'
+import './desktop.css'
 import './mobile.css'
 import './darkTheme.generated.css'
 import './theme.css'
+import './fontSize.generated.css'
 
 async function apiRequest(url, options = {}) {
   const token = window.sessionStorage.getItem('gmac-admin-token')
@@ -33,7 +43,7 @@ async function apiRequest(url, options = {}) {
 
 const jsonOptions = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 const loadMachineHistory = (id, query, signal) => apiRequest(`/api/machines/${encodeURIComponent(id)}/history?${query}`, { signal, cache: 'no-store' })
-const pageLabel = (name) => name === 'Dashboard' ? 'Início' : name
+const pageLabel = (name) => ({ Dashboard: 'Início', Pedidos: 'Pedidos de material' }[name] || name)
 const attachmentUrl = (offerId, attachmentId) => `/api/offers/${offerId}/attachments/${attachmentId}`
 const displayDate = (value) => value ? new Date(value).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '—'
 const currency = (value) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -107,14 +117,16 @@ function Icon({ name, className = '' }) {
 const navigation = [
   ['Dashboard', 'dashboard'],
   ['Máquinas', 'machines'],
+  ['Serviços', 'services'],
   ['Estoque', 'stock'],
+  ['Pedidos', 'orders'],
   ['Calculadora de pesos e medidas', 'calculator'],
   ['Funcionários', 'employees'],
   ['Administradores', 'admins'],
   ['Serviços em andamento', 'services'],
+  ['Serviços concluídos', 'completed-services'],
   ['Ofertas e serviços', 'offers'],
   ['Clientes', 'clients'],
-  ['Pedidos', 'orders'],
   ['Contas a Pagar', 'payables'],
   ['Business Intelligence', 'bi'],
   ['Classificações', 'classifications'],
@@ -166,6 +178,15 @@ function Sidebar({ collapsed, onToggle, activeNav, onNavigate, onLogout }) {
   }
   const [registrationsOpen, setRegistrationsOpen] = useState(() => isRegistrationPage(activeNav) || window.sessionStorage.getItem('gmac-cadastros-open') !== 'false')
   const [financialOpen, setFinancialOpen] = useState(() => isFinancialPage(activeNav) || window.sessionStorage.getItem('gmac-finance-open') !== 'false')
+  useLayoutEffect(() => {
+    if (!window.matchMedia('(min-width: 1101px)').matches) return
+    const nav = menuRef.current?.querySelector('.sidebar-nav')
+    const selected = nav?.querySelector('.nav-item--active')
+    if (!selected) return
+    const viewport = nav.getBoundingClientRect(), item = selected.getBoundingClientRect()
+    if (item.bottom > viewport.bottom) nav.scrollTop += item.bottom - viewport.bottom
+    else if (item.top < viewport.top) nav.scrollTop += item.top - viewport.top
+  }, [activeNav, collapsed, registrationsOpen, financialOpen])
   useEffect(() => {
     if (isRegistrationPage(activeNav)) {
       setRegistrationsOpen(true)
@@ -190,7 +211,7 @@ function Sidebar({ collapsed, onToggle, activeNav, onNavigate, onLogout }) {
   }
   function navigationItem([label, icon]) {
     return <button className={`nav-item ${activeNav === label ? 'nav-item--active' : ''}`} key={label} type="button" title={pageLabel(label)} aria-label={pageLabel(label)} onClick={() => { setMobileOpen(false); onNavigate(label) }}>
-      {['payables', 'bi', 'classifications', 'suppliers'].includes(icon) ? (() => { const NavIcon = { payables: CreditCard, bi: ChartColumn, classifications: Tags, suppliers: Truck }[icon]; return <NavIcon className="icon nav-icon" size={20} /> })() : <Icon name={icon} className="nav-icon" />}
+      {['payables', 'bi', 'classifications', 'suppliers', 'completed-services'].includes(icon) ? (() => { const NavIcon = { payables: CreditCard, bi: ChartColumn, classifications: Tags, suppliers: Truck, 'completed-services': ListChecks }[icon]; return <NavIcon className="icon nav-icon" size={20} /> })() : <Icon name={icon} className="nav-icon" />}
       <span>{pageLabel(label)}</span>
     </button>
   }
@@ -226,7 +247,7 @@ function Sidebar({ collapsed, onToggle, activeNav, onNavigate, onLogout }) {
           return isRegistrationPage(item[0]) || isFinancialPage(item[0]) ? [] : [navigationItem(item)]
         })}
       </nav>
-      <div className="sidebar-account"><div className="account-avatar">{initials}</div><div className="account-copy"><strong title={name}>{name}</strong><span>Administrador</span></div><span className="account-chevron">›</span></div>
+      <div className="sidebar-account"><div className="account-avatar">{initials}</div><div className="account-copy"><strong title={name}>{name}</strong><span>Administrador</span></div></div>
       <button className="logout-button" type="button" onClick={onLogout} title="Sair" aria-label="Sair"><span className="logout-icon" aria-hidden="true">↪</span><span>Sair</span></button>
     </aside>
     </>
@@ -301,7 +322,7 @@ function WorkspaceTabs({ tabs, activeNav, onNavigate, onCloseTab, onReorderTabs 
     </div>
     {scrollState.overflow && <button ref={rightArrowRef} className="workspace-tabs-control" type="button" aria-label="Rolar abas para a direita" title="Rolar abas para a direita" disabled={!scrollState.right} onClick={() => scrollTabs(1)}><ChevronRight size={17} aria-hidden="true" /></button>}
     {tabs.length > 3 && <button className="workspace-tabs-control workspace-tabs-close-all" type="button" aria-label="Fechar todas as abas" title="Fechar todas as abas" onClick={closeAllTabs}><X size={17} aria-hidden="true" /></button>}
-    <NotificationsButton onOpenAccount={(id) => { sessionStorage.setItem('gmac-payable-open', id); onNavigate('Contas a Pagar'); window.dispatchEvent(new CustomEvent('gmac-payable-open', { detail: id })) }} />
+    <NotificationsButton onOpenAccount={(id) => { sessionStorage.setItem('gmac-payable-open', id); onNavigate('Contas a Pagar'); window.dispatchEvent(new CustomEvent('gmac-payable-open', { detail: id })) }} onOpenNotice={(notice) => onNavigate({ 'material-request': 'Pedidos', 'low-stock': 'Estoque', 'service-completed': 'Serviços em andamento', 'service-added': 'Serviços em andamento' }[notice.type] || 'Dashboard')} />
     <div className="workspace-tabs-clock" aria-label="Data e hora atual"><strong>{currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</strong><span>{currentTime.toLocaleDateString('pt-BR')}</span></div>
   </div>
 }
@@ -324,8 +345,6 @@ const initialInventory = [
   { id: 4, name: 'Aço SAE 1020', detail: 'Barra redonda', quantity: 160, minimum: 30, unitPrice: 12.8 },
   { id: 5, name: 'Aço Inox 304', detail: 'Chapa inoxidável', quantity: 24, minimum: 20, unitPrice: 38.4 },
 ]
-
-const initialPendingMaterialRequests = []
 
 function readMachines() {
   try {
@@ -400,43 +419,6 @@ async function loadOverviewInventory(signal) {
   const items = normalizeInventory(data.items)
   if (!signal?.aborted) persistInventory(items)
   return { items, source: 'server' }
-}
-
-function readPendingMaterialRequests() {
-  try {
-    return JSON.parse(window.localStorage.getItem('gmac-pending-materials') || 'null') || initialPendingMaterialRequests
-  } catch {
-    return initialPendingMaterialRequests
-  }
-}
-
-function persistPendingMaterialRequests(requests) {
-  window.localStorage.setItem('gmac-pending-materials', JSON.stringify(requests))
-}
-
-function useMaterialRequestStatuses() {
-  const [items, setItems] = useState(readPendingMaterialRequests)
-  useEffect(() => {
-    let active = true, fetching = false
-    const refresh = async () => {
-      if (fetching) return
-      fetching = true
-      try {
-        let result
-        if (!window.localStorage.getItem('gmac-pending-materials-migrated-v1')) {
-          const previous = readPendingMaterialRequests().filter((item) => item.status === 'purchase-requested')
-          result = await apiRequest('/api/material-requests/import', jsonOptions('POST', { items: previous }))
-          window.localStorage.setItem('gmac-pending-materials-migrated-v1', 'true')
-        } else result = await apiRequest('/api/material-requests')
-        if (active) { setItems(result.items); persistPendingMaterialRequests(result.items) }
-      } catch { /* Keep the cached requests visible during a temporary outage. */ }
-      finally { fetching = false }
-    }
-    refresh()
-    const polling = window.setInterval(refresh, 10000)
-    return () => { active = false; window.clearInterval(polling) }
-  }, [])
-  return [items, setItems]
 }
 
 function MachineModal({ machine, onClose, onSave }) {
@@ -553,20 +535,53 @@ function Machines({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, 
   )
 }
 
-function InventoryScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, offers, orders, onSelectOffer, onSelectOrder, requestStatuses, onRequestStatuses }) {
+async function saveInventoryMaterial(item, items, source, materialRequestId, materialReceiptId) {
+  if (source === 'server') {
+    if (item.id && Number(item.stockEntryQuantity) > 0) {
+      await apiRequest(`/api/inventory/${item.id}/movements`, jsonOptions('POST', { type: 'entry', quantityKg: Number(item.stockEntryQuantity), unitPrice: Number(item.unitPrice), destination: 'Entrada de estoque', materialRequestId, materialReceiptId }))
+    } else {
+      const body = { name: item.name, detail: item.detail, minimum: item.minimum, unitPrice: item.unitPrice, icon: item.icon || 'sheet', photo: item.photo || null, materialRequestId, materialReceiptId, ...(!item.id ? { quantity: item.quantity } : {}) }
+      await apiRequest(item.id ? `/api/inventory/${item.id}` : '/api/inventory', jsonOptions(item.id ? 'PATCH' : 'POST', body))
+    }
+    return
+  }
+  const isNew = !item.id
+  const nextId = isNew ? Math.max(0, ...items.map((current) => current.id)) + 1 : item.id
+  const currentItem = items.find((current) => current.id === item.id)
+  const entryQuantity = Number(item.stockEntryQuantity || 0)
+  let nextItem
+  if (!isNew && entryQuantity > 0) {
+    const currentQuantity = Number(currentItem.quantity || 0)
+    const currentUnitPrice = Number(currentItem.unitPrice || 0)
+    const entryUnitPrice = Number(item.unitPrice || 0)
+    const nextBalance = currentQuantity + entryQuantity
+    nextItem = {
+      ...currentItem,
+      detail: item.detail,
+      unitPrice: nextBalance > 0 ? ((currentQuantity * currentUnitPrice) + (entryQuantity * entryUnitPrice)) / nextBalance : entryUnitPrice,
+      quantity: nextBalance,
+      history: [...(currentItem.history || [createInventoryCreationLog(currentItem)]), { id: `entry-${Date.now()}`, type: 'entry', date: new Date().toISOString(), quantity: entryQuantity, balance: nextBalance, unitPrice: entryUnitPrice, destination: 'Entrada de estoque', order: '—' }],
+    }
+  } else {
+    nextItem = isNew ? { ...item, id: nextId } : { ...currentItem, ...item, quantity: currentItem.quantity, history: currentItem.history || [createInventoryCreationLog(currentItem)] }
+    if (isNew) nextItem.history = [createInventoryCreationLog(nextItem)]
+  }
+  const nextItems = isNew ? [...items, nextItem] : items.map((current) => current.id === item.id ? nextItem : current)
+  persistInventory(nextItems)
+  return nextItems
+}
+
+function InventoryScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, onSelectOrder }) {
   const [items, setItems] = useState(readInventory)
   const [search, setSearch] = useState('')
   const [modalItem, setModalItem] = useState(undefined)
-  const [purchaseRequest, setPurchaseRequest] = useState(null)
   const [historyItem, setHistoryItem] = useState(null)
   const [source, setSource] = useState(null)
   const [error, setError] = useState('')
   const [savingInventory, setSavingInventory] = useState(false)
-  useMobileModal(Boolean(purchaseRequest), '.purchase-modal', () => { if (!savingInventory) setPurchaseRequest(null) })
   const filteredItems = items.filter((item) => `${item.name} ${item.detail}`.toLowerCase().includes(search.trim().toLowerCase()))
   const totalWeight = items.reduce((total, item) => total + Number(item.quantity || 0), 0)
   const lowStock = items.filter((item) => Number(item.quantity) <= Number(item.minimum)).length
-  const pendingRequests = pendingInventoryRequests(offers, orders, items, requestStatuses)
 
   useEffect(() => {
     let active = true
@@ -585,58 +600,14 @@ function InventoryScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout,
 
   async function saveItem(item) {
     if (savingInventory || !source) return
-    if (source === 'server') {
-      setSavingInventory(true)
-      setError('')
-      try {
-        if (item.id && Number(item.stockEntryQuantity) > 0) {
-          await apiRequest(`/api/inventory/${item.id}/movements`, jsonOptions('POST', { type: 'entry', quantityKg: Number(item.stockEntryQuantity), unitPrice: Number(item.unitPrice), destination: 'Entrada de estoque' }))
-        } else {
-          const body = { name: item.name, detail: item.detail, minimum: item.minimum, unitPrice: item.unitPrice, icon: item.icon || 'sheet', photo: item.photo || null, ...(!item.id ? { quantity: item.quantity } : {}) }
-          await apiRequest(item.id ? `/api/inventory/${item.id}` : '/api/inventory', jsonOptions(item.id ? 'PATCH' : 'POST', body))
-        }
-        setModalItem(undefined)
-        const result = await loadOverviewInventory()
-        setItems(result.items)
-      } catch (failure) { setError(failure.message) }
-      finally { setSavingInventory(false) }
-      return
-    }
-    const isNew = !item.id
-    const nextId = isNew ? Math.max(0, ...items.map((current) => current.id)) + 1 : item.id
-    const currentItem = items.find((current) => current.id === item.id)
-    const entryQuantity = Number(item.stockEntryQuantity || 0)
-    const isStockEntry = Boolean(!isNew && entryQuantity > 0)
-    if (isStockEntry) {
-      const currentQuantity = Number(currentItem.quantity || 0)
-      const currentUnitPrice = Number(currentItem.unitPrice || 0)
-      const entryUnitPrice = Number(item.unitPrice || 0)
-      const nextBalance = currentQuantity + entryQuantity
-      const weightedUnitPrice = nextBalance > 0
-        ? ((currentQuantity * currentUnitPrice) + (entryQuantity * entryUnitPrice)) / nextBalance
-        : entryUnitPrice
-      const nextItem = {
-        ...currentItem,
-        detail: item.detail,
-        unitPrice: weightedUnitPrice,
-        quantity: nextBalance,
-        history: [...(currentItem.history || [createInventoryCreationLog(currentItem)]), { id: `entry-${Date.now()}`, type: 'entry', date: new Date().toISOString(), quantity: entryQuantity, balance: nextBalance, unitPrice: entryUnitPrice, destination: 'Entrada de estoque', order: '—' }],
-      }
-      const nextItems = items.map((current) => current.id === item.id ? nextItem : current)
-      setItems(nextItems)
-      persistInventory(nextItems)
+    setSavingInventory(true)
+    setError('')
+    try {
+      const nextItems = await saveInventoryMaterial(item, items, source)
       setModalItem(undefined)
-      return
-    }
-    const nextItem = isNew
-      ? { ...item, id: nextId }
-      : { ...currentItem, ...item, quantity: currentItem.quantity, history: currentItem.history || [createInventoryCreationLog(currentItem)] }
-    if (isNew) nextItem.history = [createInventoryCreationLog(nextItem)]
-    const nextItems = isNew ? [...items, nextItem] : items.map((current) => current.id === item.id ? nextItem : current)
-    setItems(nextItems)
-    persistInventory(nextItems)
-    setModalItem(undefined)
-
+      setItems(nextItems || (await loadOverviewInventory()).items)
+    } catch (failure) { setError(failure.message) }
+    finally { setSavingInventory(false) }
   }
 
   async function removeItem(item) {
@@ -670,19 +641,6 @@ function InventoryScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout,
     }
   }
 
-  async function confirmPurchaseRequest() {
-    if (!purchaseRequest || savingInventory) return
-    setSavingInventory(true)
-    try {
-      const { items } = await apiRequest(`/api/material-requests/${encodeURIComponent(purchaseRequest.id)}/approve`, { method: 'POST' })
-      onRequestStatuses(items)
-      persistPendingMaterialRequests(items)
-      setPurchaseRequest(null)
-      setError('')
-    } catch (failure) { setError(failure.message); setPurchaseRequest(null) }
-    finally { setSavingInventory(false) }
-  }
-
   return (
     <div className="dashboard-shell inventory-shell">
       <Sidebar collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} />
@@ -691,28 +649,15 @@ function InventoryScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout,
         <div className="inventory-header"><div><span className="inventory-kicker">Controle de materiais</span><h1>Estoque</h1><p>Gerencie os materiais disponíveis para os serviços e propostas.</p></div><button className="inventory-add-button" type="button" onClick={() => setModalItem(null)}><Icon name="plus" />Adicionar material</button></div>
         <div className="inventory-metrics"><div><span className="inventory-metric-icon">▰</span><div><small>Materiais cadastrados</small><strong>{items.length}</strong></div></div><div><span className="inventory-metric-icon inventory-metric-icon--green">▣</span><div><small>Quantidade total</small><strong>{totalWeight.toLocaleString('pt-BR')} kg</strong></div></div><div><span className="inventory-metric-icon inventory-metric-icon--orange">!</span><div><small>Estoque baixo</small><strong>{lowStock}</strong></div></div></div>
         <section className="inventory-card"><div className="inventory-toolbar"><h2>Materiais em estoque</h2><label className="inventory-search"><Icon name="search" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar material ou especificação..." /></label></div><div className="inventory-table-scroll"><div className="inventory-table"><div className="inventory-row inventory-row--header"><span>Material</span><span>Especificação</span><span>Disponível</span><span>Estoque mínimo</span><span>Valor por kg</span><span>Status</span><span>Ações</span></div>{filteredItems.map((item) => <div className="inventory-row" key={item.id}><div className="inventory-material-name"><MaterialVisual {...item} /><strong>{item.name}</strong></div><span>{item.detail}</span><strong>{Number(item.quantity).toLocaleString('pt-BR')} kg</strong><span>{Number(item.minimum).toLocaleString('pt-BR')} kg</span><span>{Number(item.unitPrice).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span><span className={`inventory-status inventory-status--${Number(item.quantity) <= Number(item.minimum) ? 'low' : 'available'}`}>{Number(item.quantity) <= Number(item.minimum) ? 'Estoque baixo' : 'Disponível'}</span><div className="inventory-row-actions"><button className="inventory-info" type="button" onClick={() => openHistory(item)} aria-label={`Ver histórico de ${item.name}`}><Icon name="info" /></button><button type="button" onClick={() => setModalItem(item)} aria-label={`Editar ${item.name}`}><Icon name="edit" /></button><button className="inventory-delete" type="button" onClick={() => removeItem(item)} aria-label={`Remover ${item.name}`}><Icon name="trash" /></button></div></div>)}</div></div>{filteredItems.length === 0 && <div className="inventory-empty">Nenhum material encontrado.</div>}</section>
-        <section className="pending-material-card">
-          <div className="pending-material-heading"><div><span className="inventory-kicker">Pré-cadastro</span><h2>Produtos solicitados pendentes</h2><p>Materiais usados em ofertas que ainda não foram cadastrados no estoque.</p></div><strong>{pendingRequests.length} {pendingRequests.length === 1 ? 'pendência' : 'pendências'}</strong></div>
-          {pendingRequests.length > 0 ? <div className="pending-material-list">
-            <div className="pending-material-row pending-material-row--header"><span>Material</span><span>Especificação</span><span>Quantidade</span><span>OS / Oferta relacionada</span><span>Status</span><span>Ação</span></div>
-            {pendingRequests.map((request) => <div className="pending-material-row" key={request.id}>
-              <div><strong>{request.name}</strong><small>{displayDate(request.requestedAt)}</small></div><span>{request.detail || '—'}</span><strong>{Number(request.quantity).toLocaleString('pt-BR')} kg</strong>
-              <button className="pending-material-os material-order-link" type="button" onClick={() => request.orderCode ? onSelectOrder(request.orderCode) : onSelectOffer(request.offerId)}>{request.os}</button>
-              <span className={`pending-material-status pending-material-status--${request.status}`}>{request.status === 'purchase-requested' ? 'Compra solicitada' : 'Pendente'}</span>
-              {request.status === 'purchase-requested' ? <span className="pending-material-done">Em andamento</span> : <button className="purchase-request-button" type="button" onClick={() => setPurchaseRequest(request)}>Abrir solicitação de compra</button>}
-            </div>)}
-          </div> : <div className="pending-material-empty">Nenhum produto solicitado pendente.</div>}
-        </section>
         {error && modalItem === undefined && <p role="alert" className="workflow-error">{error}</p>}
       </main>
       {modalItem !== undefined && <InventoryModal item={modalItem} inventoryItems={items} saving={savingInventory || !source} error={error} onClose={() => { if (!savingInventory) setModalItem(undefined) }} onSave={saveItem} />}
-      {historyItem && <InventoryHistoryModal item={historyItem} onClose={() => setHistoryItem(null)} />}
-      {purchaseRequest && <div className="modal-backdrop purchase-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setPurchaseRequest(null) }}><section className="purchase-modal" role="dialog" aria-modal="true" aria-labelledby="purchase-modal-title" onMouseDown={(event) => event.stopPropagation()}><button className="purchase-modal-close" type="button" onClick={() => setPurchaseRequest(null)} aria-label="Fechar">×</button><span className="inventory-kicker">Solicitação de compra</span><h2 id="purchase-modal-title">Abrir compra de material</h2><p>Confirme a solicitação para que o setor responsável possa providenciar o material.</p><div className="purchase-modal-summary"><strong>{purchaseRequest.name}</strong><span>{purchaseRequest.detail || 'Especificação não informada'}</span><span>{Number(purchaseRequest.quantity).toLocaleString('pt-BR')} kg · {purchaseRequest.os}</span></div><div className="inventory-modal-actions"><button className="offer-modal-cancel" type="button" onClick={() => setPurchaseRequest(null)}>Cancelar</button><button className="purchase-request-button" type="button" onClick={confirmPurchaseRequest}>Confirmar solicitação</button></div></section></div>}
+      {historyItem && <InventoryHistoryModal item={historyItem} onClose={() => setHistoryItem(null)} onSelectOrder={(code) => { setHistoryItem(null); onSelectOrder(code) }} />}
     </div>
   )
 }
 
-function InventoryHistoryModal({ item, onClose }) {
+function InventoryHistoryModal({ item, onClose, onSelectOrder }) {
   useMobileModal(true, '.inventory-history-modal', onClose)
   const history = [...(item.history || [])].sort((left, right) => new Date(right.date) - new Date(left.date))
   const formatDate = (value) => {
@@ -721,18 +666,19 @@ function InventoryHistoryModal({ item, onClose }) {
   }
   const movementLabel = { creation: 'Criação do material', entry: 'Entrada de material', exit: 'Saída de material' }
 
-  return <div className="modal-backdrop inventory-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><section className="inventory-history-modal" role="dialog" aria-modal="true" aria-labelledby="inventory-history-title" onMouseDown={(event) => event.stopPropagation()}><button className="inventory-modal-close" type="button" onClick={onClose} aria-label="Fechar">×</button><span className="inventory-kicker">Rastreabilidade do estoque</span><h2 id="inventory-history-title">Histórico do material</h2><div className="inventory-history-summary"><div><small>Material</small><strong>{item.name}</strong><span>{item.detail || 'Sem especificação'}</span></div><div><small>Saldo atual</small><strong>{Number(item.quantity).toLocaleString('pt-BR')} kg</strong></div></div><div className="inventory-history-heading"><h3>Movimentações registradas</h3><span>{history.length} {history.length === 1 ? 'registro' : 'registros'}</span></div><div className="inventory-history-table"><div className="inventory-history-row inventory-history-row--header"><span>Data</span><span>Movimentação</span><span>Quantidade</span><span>Valor por kg</span><span>Saldo após movimento</span><span>Destino / OS</span></div>{history.map((entry) => <div className="inventory-history-row" key={entry.id}><span>{formatDate(entry.date)}</span><strong className={`inventory-history-type inventory-history-type--${entry.type}`}>{movementLabel[entry.type] || 'Movimentação'}</strong><span className={entry.type === 'exit' ? 'inventory-history-quantity--exit' : 'inventory-history-quantity--entry'}>{entry.type === 'exit' ? '−' : '+'}{Number(entry.quantity || 0).toLocaleString('pt-BR')} kg</span><strong className="inventory-history-price">{Number(entry.unitPrice || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/kg</strong><span>{Number(entry.balance || 0).toLocaleString('pt-BR')} kg</span><span>{entry.destination || '—'}{entry.order && entry.order !== '—' ? <small>{entry.order}</small> : null}</span></div>)}</div><p className="inventory-history-note">O valor exibido é o preço unitário praticado em cada movimentação. O saldo atual usa o preço médio ponderado.</p></section></div>
+  return <div className="modal-backdrop inventory-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><section className="inventory-history-modal" role="dialog" aria-modal="true" aria-labelledby="inventory-history-title" onMouseDown={(event) => event.stopPropagation()}><button className="inventory-modal-close" type="button" onClick={onClose} aria-label="Fechar">×</button><span className="inventory-kicker">Rastreabilidade do estoque</span><h2 id="inventory-history-title">Histórico do material</h2><div className="inventory-history-summary"><div><small>Material</small><strong>{item.name}</strong><span>{item.detail || 'Sem especificação'}</span></div><div><small>Saldo atual</small><strong>{Number(item.quantity).toLocaleString('pt-BR')} kg</strong></div></div><div className="inventory-history-heading"><h3>Movimentações registradas</h3><span>{history.length} {history.length === 1 ? 'registro' : 'registros'}</span></div><div className="inventory-history-table"><div className="inventory-history-row inventory-history-row--header"><span>Data</span><span>Movimentação</span><span>Quantidade</span><span>Valor por kg</span><span>Saldo após movimento</span><span>Destino / OS</span></div>{history.map((entry) => <div className="inventory-history-row" key={entry.id}><span>{formatDate(entry.date)}</span><strong className={`inventory-history-type inventory-history-type--${entry.type}`}>{movementLabel[entry.type] || 'Movimentação'}</strong><span className={entry.type === 'exit' ? 'inventory-history-quantity--exit' : 'inventory-history-quantity--entry'}>{entry.type === 'exit' ? '−' : '+'}{Number(entry.quantity || 0).toLocaleString('pt-BR')} kg</span><strong className="inventory-history-price">{Number(entry.unitPrice || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/kg</strong><span>{Number(entry.balance || 0).toLocaleString('pt-BR')} kg</span><span>{entry.destination || '—'}{entry.order && entry.order !== '—' ? <button className="inventory-history-order-link" type="button" onClick={() => onSelectOrder(entry.order)}>{entry.order}</button> : null}</span></div>)}</div><p className="inventory-history-note">O valor exibido é o preço unitário praticado em cada movimentação. O saldo atual usa o preço médio ponderado.</p></section></div>
 }
 
-function InventoryModal({ item, inventoryItems = [], saving = false, error = '', onClose, onSave }) {
+function InventoryModal({ item, inventoryItems = [], initialExistingId = null, saving = false, error = '', onClose, onSave }) {
+  const isEditing = Boolean(item?.id)
   const [processingPhoto, setProcessingPhoto] = useState(false)
   const busy = saving || processingPhoto
   useMobileModal(true, '.inventory-modal', () => { if (!busy) onClose() })
   const [form, setForm] = useState(item || { name: '', detail: '', quantity: '', minimum: '', unitPrice: '' })
   const [nameSuggestionsOpen, setNameSuggestionsOpen] = useState(false)
-  const [selectedExistingId, setSelectedExistingId] = useState(null)
+  const [selectedExistingId, setSelectedExistingId] = useState(initialExistingId)
   const update = (field, value) => setForm((current) => ({ ...current, [field]: value }))
-  const isStockEntry = !item && selectedExistingId !== null
+  const isStockEntry = !isEditing && selectedExistingId !== null
   const selectedExistingMaterial = inventoryItems.find((material) => material.id === selectedExistingId)
   const entryQuantity = Number(form.quantity) || 0
   const entryUnitPrice = Number(form.unitPrice) || 0
@@ -761,21 +707,21 @@ function InventoryModal({ item, inventoryItems = [], saving = false, error = '',
       onSave({ ...form, id: selectedExistingId, stockEntryQuantity: entryQuantity, minimum: 0, unitPrice: Number(form.unitPrice) || 0 })
       return
     }
-    onSave({ ...form, quantity: item ? Number(item.quantity) || 0 : Number(form.quantity) || 0, minimum: Number(form.minimum) || 0, unitPrice: Number(form.unitPrice) || 0 })
+    onSave({ ...form, quantity: isEditing ? Number(item.quantity) || 0 : Number(form.quantity) || 0, minimum: Number(form.minimum) || 0, unitPrice: Number(form.unitPrice) || 0 })
   }
 
   return <div className="modal-backdrop inventory-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose() }}>
     <section className="inventory-modal" role="dialog" aria-modal="true" aria-labelledby="inventory-modal-title" aria-busy={busy} onMouseDown={(event) => event.stopPropagation()}>
       <button className="inventory-modal-close" type="button" onClick={onClose} disabled={busy} aria-label="Fechar">×</button>
-      <span className="inventory-kicker">Estoque</span><h2 id="inventory-modal-title">{item ? 'Editar material' : 'Adicionar material'}</h2>
+      <span className="inventory-kicker">Estoque</span><h2 id="inventory-modal-title">{isEditing ? 'Editar material' : 'Adicionar material'}</h2>
       {error && <p role="alert" className="workflow-error">{error}</p>}
       <form onSubmit={submit}>
         {!isStockEntry && <MaterialAppearance value={form} disabled={saving} processing={processingPhoto} onProcessing={setProcessingPhoto} onChange={(appearance) => setForm((current) => ({ ...current, ...appearance }))} />}
         <label>Nome do material *<div className="material-autocomplete"><div className="material-autocomplete-input"><input value={form.name} onFocus={() => setNameSuggestionsOpen(true)} onBlur={() => setTimeout(() => setNameSuggestionsOpen(false), 120)} onChange={(event) => { update('name', event.target.value); setSelectedExistingId(null); setNameSuggestionsOpen(true) }} placeholder="Digite para buscar no estoque" required /><span>⌄</span></div>{nameSuggestionsOpen && <div className="material-suggestions">{matchingMaterials.length > 0 ? matchingMaterials.map((material) => <button type="button" key={material.id} onMouseDown={(event) => event.preventDefault()} onClick={() => selectExistingMaterial(material)}><strong>{material.name}</strong><small>{material.detail}</small></button>) : <div className="material-suggestion-empty"><strong>Novo material</strong><span>Preencha os dados para cadastrar um novo material.</span></div>}</div>}</div></label>
         <label>Especificação<input value={form.detail} onChange={(event) => update('detail', event.target.value)} placeholder="Ex.: Chapa Alumínio 6061" /></label>
-        {isStockEntry ? <label className="inventory-entry-field">Quantidade de entrada (kg) *<input type="number" min="0.001" step="0.001" value={form.quantity} onChange={(event) => update('quantity', event.target.value)} placeholder="0,00" required /><small>Saldo atual: {currentQuantity.toLocaleString('pt-BR')} kg. Preço médio após a entrada: {projectedUnitPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/kg.</small></label> : <div className="inventory-form-grid"><label className={item ? 'inventory-readonly-field' : ''}>{item ? 'Quantidade disponível (kg) — somente leitura' : 'Quantidade disponível (kg) *'}<input type="number" min="0" step="0.001" value={form.quantity} onChange={(event) => update('quantity', event.target.value)} readOnly={Boolean(item)} aria-readonly={Boolean(item)} required /><small>{item ? 'Altere o saldo usando uma entrada ou saída de estoque.' : 'Informe o saldo inicial do material.'}</small></label><label>Estoque mínimo (kg)<input type="number" min="0" step="0.001" value={form.minimum} onChange={(event) => update('minimum', event.target.value)} /></label></div>}
+        {isStockEntry ? <label className="inventory-entry-field">Quantidade de entrada (kg) *<input type="number" min="0.001" step="0.001" value={form.quantity} onChange={(event) => update('quantity', event.target.value)} placeholder="0,00" required /><small>Saldo atual: {currentQuantity.toLocaleString('pt-BR')} kg. Preço médio após a entrada: {projectedUnitPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/kg.</small></label> : <div className="inventory-form-grid"><label className={isEditing ? 'inventory-readonly-field' : ''}>{isEditing ? 'Quantidade disponível (kg) — somente leitura' : 'Quantidade disponível (kg) *'}<input type="number" min="0" step="0.001" value={form.quantity} onChange={(event) => update('quantity', event.target.value)} readOnly={isEditing} aria-readonly={isEditing} required /><small>{isEditing ? 'Altere o saldo usando uma entrada ou saída de estoque.' : 'Informe o saldo inicial do material.'}</small></label><label>Estoque mínimo (kg)<input type="number" min="0" step="0.001" value={form.minimum} onChange={(event) => update('minimum', event.target.value)} /></label></div>}
         <label>Valor por kg<input type="number" min="0" step="0.01" value={form.unitPrice} onChange={(event) => update('unitPrice', event.target.value)} /></label>
-        <div className="inventory-modal-actions"><button className="offer-modal-cancel" type="button" onClick={onClose} disabled={busy}>Cancelar</button><button className="inventory-add-button" type="submit" disabled={busy}>{processingPhoto ? 'Preparando foto...' : saving ? 'Salvando...' : isStockEntry ? 'Registrar entrada' : item ? 'Salvar alterações' : 'Adicionar material'}</button></div>
+        <div className="inventory-modal-actions"><button className="offer-modal-cancel" type="button" onClick={onClose} disabled={busy}>Cancelar</button><button className="inventory-add-button" type="submit" disabled={busy}>{processingPhoto ? 'Preparando foto...' : saving ? 'Salvando...' : isStockEntry ? 'Registrar entrada' : isEditing ? 'Salvar alterações' : 'Adicionar material'}</button></div>
       </form>
     </section>
   </div>
@@ -1077,6 +1023,7 @@ const offerFilters = [
   { key: 'review', label: 'Em análise' },
   { key: 'proposed', label: 'Propostas' },
   { key: 'accepted', label: 'Aceitas' },
+  { key: 'rejected', label: 'Recusadas' },
 ]
 
 function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, offers, onRefresh, onSelectOffer, onSelectOrder, workflowError }) {
@@ -1084,6 +1031,7 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
   const [search, setSearch] = useState('')
   const [date, setDate] = useState('')
   const [manualOpen, setManualOpen] = useState(false)
+  const [rejectingOffer, setRejectingOffer] = useState(null)
   useMobileModal(manualOpen, '.offer-manual-modal', () => setManualOpen(false))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -1143,6 +1091,11 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
     }
   }
 
+  async function rejectOffer(offer) {
+    await apiRequest(`/api/offers/${encodeURIComponent(offer.id)}/reject`, jsonOptions('POST', {}))
+    await onRefresh()
+  }
+
   return (
     <div className="dashboard-shell offers-shell">
       <Sidebar collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} />
@@ -1164,17 +1117,18 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
             {filteredOffers.map((offer) => <div className="offers-table-row" key={offer.id}>
               <div className="offer-piece"><strong>{offer.service}</strong><span>{offer.code}</span></div>
               <span data-label="Cliente">{offer.company}</span><span data-label="Etiqueta">{offer.labelNumber}</span><span data-label="Quantidade">{offer.quantity} un</span><span data-label="Solicitação">{displayDate(offer.requestedAt)}</span><span data-label="Prazo">{displayDate(offer.deadline)}</span>
-              <div className={`offer-table-status offer-table-status--${offer.status}`}><strong>{offer.status === 'review' ? 'Em análise' : offer.status === 'proposed' ? 'Proposta gerada' : 'Aceita'}</strong>{offer.orderCode && <span>{offer.orderCode}</span>}</div>
+              <div className={`offer-table-status offer-table-status--${offer.status}`}><strong>{offer.status === 'review' ? 'Em análise' : offer.status === 'proposed' ? 'Proposta gerada' : offer.status === 'rejected' ? 'Recusada' : 'Aceita'}</strong>{offer.orderCode && <span>{offer.orderCode}</span>}</div>
               <span data-label="Origem">{offer.origin}</span>
               <div className="offer-table-actions">
-                {offer.status === 'accepted'
+                {offer.status === 'rejected' ? <span>Recusada</span> : offer.status === 'accepted'
                   ? <button className="offer-review-button" type="button" onClick={() => onSelectOrder(offer.orderCode)}>Ver OS</button>
-                  : <><button className="offer-review-button" type="button" onClick={() => onSelectOffer(offer.id)}>{offer.status === 'review' ? 'Em análise' : 'Ver proposta'}</button>{offer.proposal && <button className="offer-accept-button" type="button" onClick={() => acceptOffer(offer)}>✓ Aceitar Oferta</button>}</>}
+                  : <><button className="offer-review-button" type="button" onClick={() => onSelectOffer(offer.id)}>{offer.status === 'review' ? 'Em análise' : 'Ver proposta'}</button>{offer.status === 'review' && offer.origin === 'Inserida Manualmente' && !offer.orderCode && <button className="offer-reject-button" type="button" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setRejectingOffer(offer) }}><X size={15} aria-hidden="true" />Recusar</button>}{offer.proposal && <button className="offer-accept-button" type="button" onClick={() => acceptOffer(offer)}>✓ Aceitar Oferta</button>}</>}
               </div>
             </div>)}
           </div>{filteredOffers.length === 0 && <div className="offers-empty">Nenhuma oferta cadastrada para os filtros informados.</div>}</div>
         </section>
       </main>
+      {rejectingOffer && <RejectOfferModal offer={rejectingOffer} onConfirm={rejectOffer} onClose={() => setRejectingOffer(null)} />}
       {manualOpen && <div className="modal-backdrop offer-modal-layer" onMouseDown={(event) => { if (event.target === event.currentTarget) setManualOpen(false) }}>
         <section className="offer-manual-modal" role="dialog" aria-modal="true" aria-labelledby="manual-offer-title" onMouseDown={(event) => event.stopPropagation()}>
           <div className="offer-modal-header"><div><span className="offers-kicker">Nova solicitação</span><h2 id="manual-offer-title">Inserir oferta manualmente</h2><p>Preencha os dados da solicitação de serviço.</p></div><button className="offer-modal-close" type="button" onClick={() => setManualOpen(false)} aria-label="Fechar formulário">×</button></div>
@@ -1194,6 +1148,8 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
   )
 }
 function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, offer, onRefresh, onSelectOrder }) {
+  const [laborServices, setLaborServices] = useState([])
+  const [laborCatalogError, setLaborCatalogError] = useState('')
   const [inventory, setInventory] = useState(readInventory)
   const [machines, setMachines] = useState(readMachines)
   const [materials, setMaterials] = useState(offer?.resources?.materials || [])
@@ -1237,6 +1193,7 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
   useEffect(() => {
     let active = true
     apiRequest('/api/machines').then((data) => { if (active) setMachines(data.items) }).catch(() => {})
+    apiRequest('/api/labor-services').then((data) => { if (active) { setLaborServices(data.items); setLaborCatalogError('') } }).catch((error) => { if (active) setLaborCatalogError(error.message) })
     loadOverviewInventory().then((data) => {
       if (active && Array.isArray(data.items)) setInventory(data.items)
     }).catch(() => {})
@@ -1253,12 +1210,14 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
   }
   const formatMoney = (value) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
   const materialsTotal = materials.reduce((total, material) => total + material.quantity * material.unitPrice, 0)
+  const checkedMaterials = materialsStock(materials, inventory)
   const laborTotal = laborEntries.reduce((total, entry) => total + entry.hours * entry.hourlyRate, 0)
 
   async function saveResources(changes = {}) {
     if (!offer || offer.orderCode) return false
     const offerId = offer.id
     const draft = { ...resourceDraft.current, ...changes }
+    draft.materials = materialsStock(draft.materials, inventory)
     resourceDraft.current = draft
     pendingSaves.current += 1
     setSaving(true)
@@ -1322,7 +1281,7 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
     const unitPrice = toNumber(materialForm.unitPrice)
     if (!materialForm.name.trim() || quantity <= 0) return
     const material = { ...materialForm, name: materialForm.name.trim(), id: crypto.randomUUID(), quantity, unitPrice, icon: '▰', requestedAt: new Date().toISOString() }
-    if (!await saveResources({ materials: [...materials, { ...material, ...materialStock(material, inventory) }] })) return
+    if (!await saveResources({ materials: [...materials, material] })) return
     setMaterialForm({ name: '', detail: '', quantity: '', unitPrice: '' })
     setMaterialFormOpen(false)
   }
@@ -1338,6 +1297,11 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
   function selectMachine(id) {
     const machine = machines.find((item) => String(item.id) === id)
     setLaborForm((current) => ({ ...current, machineId: machine?.id ?? '', resource: machine?.name || '', hourlyRate: machine?.hourlyRate ?? '' }))
+  }
+
+  function selectLaborService(id) {
+    const service = laborServices.find((item) => String(item.id) === id)
+    setLaborForm((current) => ({ ...current, laborServiceId: service?.id ?? '', resource: service?.name || '', hourlyRate: service?.hourlyRate ?? '' }))
   }
 
   function toggleStage(stage) {
@@ -1409,7 +1373,7 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
       <Sidebar collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} />
       <main className="offer-details-main">
         <WorkspaceTabs tabs={tabs} activeNav={activeNav} onNavigate={onNavigate} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} />
-        <div className="offer-details-header"><button className="offer-back-button" type="button" onClick={() => onNavigate('Ofertas e serviços')} aria-label="Voltar para ofertas">←</button><h1>Detalhes da oferta {offer.code}</h1></div>
+        <div className="offer-details-header"><button className="offer-back-button" type="button" onClick={() => onNavigate('Ofertas e serviços')} aria-label="Voltar para ofertas"><ArrowLeft size={24} aria-hidden="true" /></button><h1>Detalhes da oferta {offer.code}</h1></div>
         <div className="offer-details-grid">
           <section className="offer-information-card"><span className="offer-details-section-title">Informações do serviço</span><h2>{offer.service}</h2><p className="offer-details-description">{offer.description}</p><div className="offer-detail-facts"><div><span>▥</span><small>Cliente solicitante</small><strong>{offer.company}</strong><em>CNPJ: {offer.cnpj}</em></div><div><span>▣</span><small>Data da solicitação</small><strong>{displayDate(offer.requestedAt)}</strong></div><div><span>◇</span><small>Quantidade solicitada</small><strong>{offer.quantity} unidades</strong></div><div><span>◷</span><small>Prazo solicitado pelo cliente</small><strong>{displayDate(offer.deadline)}</strong></div></div><div className="offer-detail-text"><h3>Número da etiqueta</h3><p>{offer.labelNumber}</p></div><div className="offer-detail-text"><h3>Anexos da solicitação</h3>{offer.attachments?.length ? <ul>{offer.attachments.map((attachment) => <li key={attachment.id}><a href={attachmentUrl(offer.id, attachment.id)}>{attachment.name}</a></li>)}</ul> : <p>Nenhum anexo adicionado.</p>}</div>{offer.proposal && <div className="offer-detail-text"><h3>Proposta gerada</h3><p><a href={`/api/offers/${offer.id}/proposal.pdf`}>Baixar PDF da proposta</a></p></div>}</section>
           <section className="offer-materials-card offer-resources-card">
@@ -1426,11 +1390,12 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
               <label>Valor unitário<input type="number" min="0" step="0.01" value={materialForm.unitPrice} onChange={(event) => updateMaterial('unitPrice', event.target.value)} placeholder="0,00" /></label>
               <div className="offer-inline-actions"><button className="offer-modal-cancel" type="button" onClick={() => setMaterialFormOpen(false)}>Cancelar</button><button className="offer-add-resource-button" type="submit" disabled={saving}>Adicionar material</button></div>
             </form>}
-            {materials.length > 0 ? <><div className="offer-materials-head"><span>Material</span><span>Especificação</span><span>Qtd. necessária (kg)</span><span>Estoque</span><span>Valor unitário</span><span>Valor total</span><span>Ações</span></div><div className="offer-materials-list">{materials.map((material) => <div className="offer-material-row offer-material-row--managed" key={material.id}><div className="material-visual">{material.icon}</div><div className="material-name"><strong>{material.name}</strong><span>{material.detail || '—'}</span></div><span>{material.quantity.toLocaleString('pt-BR')} kg</span><span className={`material-stock-status material-stock-status--${material.stockStatus}`}>{material.stockStatus === 'available' ? `Disponível: ${material.stockAvailable.toLocaleString('pt-BR')} kg` : material.stockStatus === 'partial' ? `Parcial: ${material.stockAvailable.toLocaleString('pt-BR')} kg` : material.stockStatus === 'unknown' ? 'Não verificado' : 'Sem estoque'}</span><span>{formatMoney(material.unitPrice)}</span><strong>{formatMoney(material.quantity * material.unitPrice)}</strong><button className="offer-resource-remove" type="button" disabled={saving} onClick={() => removeMaterial(material.id)} aria-label={`Remover ${material.name}`}>×</button></div>)}</div></> : <div className="offer-empty-state"><Icon name="plus" /><strong>Nenhum material adicionado</strong><span>Use o botão acima para buscar materiais cadastrados no estoque.</span></div>}
+            {materials.length > 0 ? <><div className="offer-materials-head"><span>Material</span><span>Especificação</span><span>Qtd. necessária (kg)</span><span>Estoque</span><span>Valor unitário</span><span>Valor total</span><span>Ações</span></div><div className="offer-materials-list">{checkedMaterials.map((material) => <div className="offer-material-row offer-material-row--managed" key={material.id}><div className="material-visual">{material.icon}</div><div className="material-name"><strong>{material.name}</strong><span>{material.detail || '—'}</span></div><span>{material.quantity.toLocaleString('pt-BR')} kg</span><span className={`material-stock-status material-stock-status--${material.groupStockStatus}`}>{material.groupStockStatus === 'unknown' ? 'Não verificado' : material.groupPurchaseQuantity > 0 ? `Falta: ${material.groupPurchaseQuantity.toLocaleString('pt-BR')} kg` : material.stockStatus === 'available' ? `Disponível: ${material.stockAvailable.toLocaleString('pt-BR')} kg` : material.stockStatus === 'partial' ? `Parcial: ${material.stockAvailable.toLocaleString('pt-BR')} kg` : material.stockStatus === 'unknown' ? 'Não verificado' : 'Sem estoque'}</span><span>{formatMoney(material.unitPrice)}</span><strong>{formatMoney(material.quantity * material.unitPrice)}</strong><button className="offer-resource-remove" type="button" disabled={saving} onClick={() => removeMaterial(material.id)} aria-label={`Remover ${material.name}`}>×</button></div>)}</div></> : <div className="offer-empty-state"><Icon name="plus" /><strong>Nenhum material adicionado</strong><span>Use o botão acima para buscar materiais cadastrados no estoque.</span></div>}
             <div className="offer-resource-subsection"><div className="offer-resource-heading"><div><span className="offer-details-section-title">Mão de obra</span><p>Adicione horas de máquina ou de profissionais.</p></div><button className="offer-add-resource-button" type="button" onClick={() => setLaborFormOpen((current) => !current)}><Icon name="plus" />Adicionar mão de obra</button></div>
               {laborFormOpen && <form className="offer-inline-form offer-labor-form" onSubmit={addLabor}>
-                <label>Tipo<select value={laborForm.type} onChange={(event) => selectLaborType(event.target.value)}><option value="machine">Hora máquina</option><option value="person">Hora homem</option></select></label>
-                <label>{laborForm.type === 'machine' ? 'Máquina' : 'Serviço do profissional'}{laborForm.type === 'machine' ? <select value={laborForm.machineId || ''} onChange={(event) => selectMachine(event.target.value)} required><option value="">Selecionar máquina</option>{machines.map((machine) => <option key={machine.id} value={machine.id}>{machine.name}{machine.hourlyRate != null ? ` · ${formatMoney(machine.hourlyRate)}/h` : ''}</option>)}</select> : <input value={laborForm.resource} onChange={(event) => setLaborForm((current) => ({ ...current, resource: event.target.value }))} required />}</label>
+                <label>Tipo<select aria-label="Tipo" value={laborForm.type} onChange={(event) => selectLaborType(event.target.value)}><option value="machine">Hora máquina</option><option value="person">Hora homem</option></select></label>
+                <label>{laborForm.type === 'machine' ? 'Máquina' : 'Serviço do profissional'}{laborForm.type === 'machine' ? <select aria-label="Máquina" value={laborForm.machineId || ''} onChange={(event) => selectMachine(event.target.value)} required><option value="">Selecionar máquina</option>{machines.map((machine) => <option key={machine.id} value={machine.id}>{machine.name}{machine.hourlyRate != null ? ` · ${formatMoney(machine.hourlyRate)}/h` : ''}</option>)}</select> : <select aria-label="Serviço do profissional" value={laborForm.laborServiceId || ''} onChange={(event) => selectLaborService(event.target.value)} required><option value="">Selecionar serviço</option>{laborServices.map((service) => <option key={service.id} value={service.id}>{service.name} · {formatMoney(service.hourlyRate)}/h</option>)}</select>}</label>
+                {laborForm.type === 'person' && laborCatalogError && <p className="admin-tool-error" role="alert">{laborCatalogError}</p>}
                 <label>Tempo (horas)<input type="number" min="0.01" step="0.01" value={laborForm.hours} onChange={(event) => setLaborForm((current) => ({ ...current, hours: event.target.value }))} placeholder="0,00" required /></label>
                 <label>Valor da hora<input type="number" min="0" step="0.01" value={laborForm.hourlyRate} onChange={(event) => setLaborForm((current) => ({ ...current, hourlyRate: event.target.value }))} placeholder="0,00" required /></label>
                 <div className="offer-inline-actions"><button className="offer-modal-cancel" type="button" onClick={() => setLaborFormOpen(false)}>Cancelar</button><button className="offer-add-resource-button" type="submit" disabled={saving}>Adicionar mão de obra</button></div>
@@ -1544,7 +1509,7 @@ function ProposalBuilder({ collapsed, onToggle, activeNav, onNavigate, onLogout,
       <Sidebar collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} />
       <main className="proposal-main">
         <WorkspaceTabs tabs={tabs} activeNav={activeNav} onNavigate={onNavigate} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} />
-        <div className="proposal-header"><div><button className="proposal-back-button" type="button" onClick={() => onNavigate('Detalhes da oferta')} aria-label="Voltar para detalhes">←</button><div><h1>Fazer proposta</h1><p>Escolha uma das quatro opções e ajuste os valores para esta solicitação.</p></div></div></div>
+        <div className="proposal-header"><div><button className="proposal-back-button" type="button" onClick={() => onNavigate('Detalhes da oferta')} aria-label="Voltar para detalhes"><ArrowLeft size={24} aria-hidden="true" /></button><div><h1>Fazer proposta</h1><p>Escolha uma das quatro opções e ajuste os valores para esta solicitação.</p></div></div></div>
         <section className="proposal-service-summary"><div className="proposal-service-image">▰</div><div className="proposal-service-client"><h2>{offer.service}</h2><span>Cliente solicitante</span><strong>{offer.company}</strong><small>CNPJ: {offer.cnpj}</small><small>Etiqueta: {offer.labelNumber}</small></div><div className="proposal-service-fact"><span>▣</span><div><small>Prazo solicitado</small><strong>{displayDate(offer.deadline)}</strong></div><span>◇</span><div><small>Quantidade</small><strong>{offer.quantity} unidades</strong></div></div><div className="proposal-service-summary-copy"><strong>Resumo do serviço</strong><p>{offer.description}</p></div><div className="proposal-material-summary"><span>Materiais informados</span><strong>{formatMoney(materialCost)}</strong><button type="button" onClick={() => onNavigate('Detalhes da oferta')}>Ver detalhamento <span>›</span></button></div></section>
         <h2 className="proposal-section-heading">Escolha uma das propostas abaixo ou personalize os valores</h2>
         <div className="proposal-card-grid">{visibleProposals.map((proposal) => <article className={`proposal-card proposal-card--${proposal.tone} ${selectedKey === proposal.key ? 'proposal-card--selected' : ''}`} key={proposal.key} onClick={() => { setSelectedKey(proposal.key); if (proposal.key !== selectedKey) setGenerated(false) }}><div className="proposal-card-heading"><div><span className="proposal-card-label">PROPOSTA {proposal.key}</span><div className="proposal-card-intro"><span className="proposal-card-icon">{proposal.icon}</span><div><strong>{proposal.title}</strong><p>{proposal.description}</p></div></div></div><span className="proposal-card-tag">{proposal.tag}</span></div><div className="proposal-card-content"><div className="proposal-card-column"><div><span>◷</span><label>Prazo de entrega</label>{renderEditable(proposal, 'deadline', proposal.deadline)}</div><div><span>＄</span><label>Valor do serviço</label>{renderEditable(proposal, 'serviceValue', formatMoney(Number(proposal.serviceValue)), 'number')}</div><div><span>◇</span><label>Materiais</label>{renderEditable(proposal, 'materials', formatMoney(Number(proposal.materials)), 'number')}</div><div><span>♧</span><label>Mão de obra</label>{renderEditable(proposal, 'labor', formatMoney(Number(proposal.labor)), 'number')}</div></div><div className="proposal-card-column"><div><span>⚙</span><label>Tempo de máquina</label>{renderEditable(proposal, 'machine', proposal.machine)}</div><div><span>◷</span><label>Tempo de serviço</label>{renderEditable(proposal, 'serviceTime', proposal.serviceTime)}</div><div><span>▥</span><label>% de lucro bruto</label>{renderEditable(proposal, 'margin', `${Number(proposal.margin).toFixed(1).replace('.', ',')}%`, 'number')}</div><div><span>◇</span><label>Desconto</label>{renderEditable(proposal, 'discount', `${Number(proposal.discount).toFixed(1).replace('.', ',')}%`, 'number')}</div></div></div><div className="proposal-profit"><strong>Lucro bruto esperado</strong><b>{formatMoney(proposal.profit)}</b></div></article>)}</div>
@@ -1557,12 +1522,72 @@ function ProposalBuilder({ collapsed, onToggle, activeNav, onNavigate, onLogout,
   )
 }
 
-function OrdersScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, offers, orders, selectedOrderCode, onSelectOffer, onSelectOrder, onRefresh, requestStatuses }) {
+const loadMaterialRequestHistory = (id, signal) => apiRequest(`/api/material-requests/${encodeURIComponent(id)}/history`, { signal })
+
+function OrdersScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, offers, orders, selectedOrderCode, onSelectOffer, onSelectOrder, onRefresh, materialRequestTarget, onRequestLocated }) {
   const selectedOrder = orders.find((order) => order.code === selectedOrderCode)
-  const requests = purchaseMaterialRequests(offers, orders, requestStatuses)
+  const [manualRequests, setManualRequests] = useState([])
+  const [requestCodes, setRequestCodes] = useState({})
+  const [requestListError, setRequestListError] = useState('')
+  const [manualInventory, setManualInventory] = useState(null)
+  const [openingRequest, setOpeningRequest] = useState(false)
+  const [historyRequest, setHistoryRequest] = useState(null)
+  const requests = useMemo(() => [...manualRequests.map((item) => ({ ...item, quantity: item.purchaseQuantity, requiredQuantity: Number(item.quantity), receipt: item.requestReceipt, rejection: item.requestRejection })), ...purchaseMaterialRequests(offers, orders).map((item) => ({ ...item, code: requestCodes[item.id] || null }))], [offers, orders, manualRequests, requestCodes])
+  async function refreshMaterialRequests() {
+    try { const data = await apiRequest('/api/material-requests'); setManualRequests(data.manualRequests || []); setRequestCodes(data.codes || {}); setRequestListError('') }
+    catch (error) { setRequestListError(error.message); throw error }
+  }
+  useEffect(() => {
+    const controller = new AbortController()
+    const refresh = async () => {
+      try { const data = await apiRequest('/api/material-requests', { signal: controller.signal }); if (!controller.signal.aborted) { setManualRequests(data.manualRequests || []); setRequestCodes(data.codes || {}); setRequestListError('') } }
+      catch (error) { if (!controller.signal.aborted) setRequestListError(error.message) }
+    }
+    refresh()
+    const timer = window.setInterval(refresh, 10000)
+    return () => { controller.abort(); window.clearInterval(timer) }
+  }, [])
+  async function openManualRequest() {
+    if (openingRequest) return
+    setOpeningRequest(true)
+    setRequestListError('')
+    try { setManualInventory((await loadOverviewInventory()).items) }
+    catch (error) { setRequestListError(error.message) }
+    finally { setOpeningRequest(false) }
+  }
+  async function saveManualRequest(body) {
+    const data = await apiRequest('/api/material-requests', jsonOptions('POST', body))
+    setManualRequests((current) => [data.item, ...current])
+  }
+  const requestRows = useRef(new Map())
+  const [highlightedRequests, setHighlightedRequests] = useState([])
+  useLayoutEffect(() => {
+    if (!materialRequestTarget || selectedOrder) return undefined
+    const matches = requests.filter((request) => request.orderCode === materialRequestTarget.orderCode)
+    const frame = window.requestAnimationFrame(() => {
+      const firstRow = requestRows.current.get(matches[0]?.id)
+      if (firstRow) {
+        firstRow.scrollIntoView({ block: 'center', behavior: 'instant' })
+        firstRow.querySelector('button')?.focus({ preventScroll: true })
+        setHighlightedRequests(matches.map((request) => request.id))
+      }
+      onRequestLocated(null)
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [materialRequestTarget, requests, selectedOrder, onRequestLocated])
+  useEffect(() => {
+    if (!highlightedRequests.length) return undefined
+    const timer = window.setTimeout(() => setHighlightedRequests([]), 2400)
+    return () => window.clearTimeout(timer)
+  }, [highlightedRequests])
   const [stageNamesInput, setStageNamesInput] = useState('')
   const [operationError, setOperationError] = useState('')
   const [now, setNow] = useState(Date.now())
+  const [materialEntry, setMaterialEntry] = useState(null)
+  const [materialEntryError, setMaterialEntryError] = useState('')
+  const [openingMaterialId, setOpeningMaterialId] = useState(null)
+  const [savingMaterial, setSavingMaterial] = useState(false)
+  const [rejectingRequest, setRejectingRequest] = useState(null)
   useEffect(() => {
     setStageNamesInput('')
     setOperationError('')
@@ -1572,14 +1597,56 @@ function OrdersScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout, ta
     return () => window.clearInterval(timer)
   }, [])
   useEffect(() => {
-    if (!selectedOrderCode) return undefined
     const polling = window.setInterval(() => onRefresh().catch(() => {}), 10000)
     return () => window.clearInterval(polling)
   }, [selectedOrderCode])
   const operation = selectedOrder?.operation
-  const activeMs = operation ? Number(operation.accumulatedMs || 0) + (operation.activeSession ? Math.max(0, now - Date.parse(operation.activeSession.startedAt)) : 0) : 0
+  const activeMs = operation ? operationElapsed(operation, now) : 0
   const seconds = Math.floor(activeMs / 1000)
   const activeTime = [Math.floor(seconds / 3600), Math.floor((seconds % 3600) / 60), seconds % 60].map((part) => String(part).padStart(2, '0')).join(':')
+
+  async function openMaterialEntry(request) {
+    if (openingMaterialId || savingMaterial) return
+    setOpeningMaterialId(request.id)
+    setMaterialEntryError('')
+    try {
+      const inventory = await loadOverviewInventory()
+      const existing = findInventoryMaterial(request, inventory.items)
+      setMaterialEntry({ ...inventory, requestId: request.id, receiptId: crypto.randomUUID(), existingId: existing?.id ?? null, form: { name: existing?.name || request.name || '', detail: request.detail || existing?.detail || '', quantity: request.quantity, minimum: existing?.minimum ?? '', unitPrice: request.unitPrice ?? existing?.unitPrice ?? '' } })
+    } catch (error) { setMaterialEntryError(error.message) }
+    finally { setOpeningMaterialId(null) }
+  }
+
+  async function saveMaterialEntry(item) {
+    if (savingMaterial || !materialEntry) return
+    setSavingMaterial(true)
+    setMaterialEntryError('')
+    try {
+      const nextItems = materialEntry.localReceipt ? null : await saveInventoryMaterial(item, materialEntry.items, materialEntry.source, materialEntry.requestId, materialEntry.receiptId)
+      if (materialEntry.source !== 'server') {
+        const receipt = materialEntry.localReceipt || { materialId: item.id || Math.max(...nextItems.map((entry) => entry.id)), quantity: Number(item.stockEntryQuantity || item.quantity) }
+        setMaterialEntry((current) => ({ ...current, localReceipt: receipt }))
+        const received = await apiRequest(`/api/material-requests/${encodeURIComponent(materialEntry.requestId)}/receive-local`, jsonOptions('POST', { ...receipt, receiptId: materialEntry.receiptId }))
+        if (received.item.allocatedQuantity > 0) {
+          const exitId = `order-receipt-${materialEntry.receiptId}`
+          persistInventory(readInventory().map((entry) => {
+            if (entry.id !== receipt.materialId || entry.history?.some((movement) => movement.id === exitId)) return entry
+            const balance = Number((entry.quantity - received.item.allocatedQuantity).toFixed(3))
+            return { ...entry, quantity: balance, history: [...(entry.history || []), { id: exitId, type: 'exit', date: new Date().toISOString(), quantity: received.item.allocatedQuantity, balance, unitPrice: entry.unitPrice, destination: 'Utilizado na ordem de serviço', order: received.item.orderCode }] }
+          }))
+        }
+      }
+      setMaterialEntry(null)
+      await onRefresh()
+      await refreshMaterialRequests()
+    } catch (error) { setMaterialEntryError(error.message) }
+    finally { setSavingMaterial(false) }
+  }
+
+  async function rejectMaterialRequest(request) {
+    await apiRequest(`/api/material-requests/${encodeURIComponent(request.id)}/reject`, { method: 'POST' })
+    try { await onRefresh(); await refreshMaterialRequests() } catch (error) { setMaterialEntryError(error.message) }
+  }
 
   async function configureStages() {
     const stages = stageNamesInput.split(',').map((name) => name.trim()).filter(Boolean)
@@ -1590,8 +1657,8 @@ function OrdersScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout, ta
     } catch (error) { setOperationError(error.message) }
   }
 
-  async function interruptSession(reason) {
-    await apiRequest(`/api/operations/orders/${encodeURIComponent(selectedOrderCode)}/interrupt`, jsonOptions('POST', { reason }))
+  async function interruptSession(reason, sessionId) {
+    await apiRequest(`/api/operations/orders/${encodeURIComponent(selectedOrderCode)}/interrupt`, jsonOptions('POST', { reason, sessionId }))
     setOperationError('')
     try { await onRefresh() } catch (error) { setOperationError(error.message) }
   }
@@ -1612,13 +1679,20 @@ function OrdersScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout, ta
   return <div className={`dashboard-shell orders-shell${selectedOrder ? ' orders-shell--detail' : ''}`}>
     <Sidebar collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} />
     <main className="orders-main"><WorkspaceTabs tabs={tabs} activeNav={activeNav} onNavigate={onNavigate} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} />
-      <div className="orders-header"><h1>{selectedOrder ? 'Ordem de serviço' : 'Pedidos de material'}</h1></div>
-      {selectedOrder ? <OrderDetails key={selectedOrder.code} order={selectedOrder} activeTime={activeTime} stageNamesInput={stageNamesInput} onChangeStages={setStageNamesInput} onConfigureStages={configureStages} onInterrupt={interruptSession} onEdit={editOrder} onReopen={reopenOrder} onUpload={uploadOrderAttachment} operationError={operationError} onBack={() => onSelectOrder(null)} Icon={Icon} /> : <div className="material-orders-table"><table><thead><tr><th>Material solicitado</th><th>Especificação</th><th>Quantidade a pedir</th><th>Quantidade necessária</th><th>OS / Oferta relacionada</th><th>Data</th></tr></thead><tbody>{requests.map((request) => <tr key={request.id}><td data-label="Material solicitado"><button className="material-order-link" type="button" onClick={() => request.orderCode ? onSelectOrder(request.orderCode) : onSelectOffer(request.offerId)}><strong>{request.name}</strong></button></td><td data-label="Especificação">{request.detail || '—'}</td><td data-label="Quantidade a pedir"><strong>{Number(request.quantity).toLocaleString('pt-BR')} kg</strong></td><td data-label="Quantidade necessária">{request.requiredQuantity.toLocaleString('pt-BR')} kg</td><td data-label="OS / Oferta relacionada"><button className="material-order-link" type="button" onClick={() => request.orderCode ? onSelectOrder(request.orderCode) : onSelectOffer(request.offerId)}>{request.orderCode || request.offerCode}<Icon name="eye" /></button>{!request.orderCode && <small>Aguardando OS</small>}</td><td data-label="Data">{displayDate(request.requestedAt)}</td></tr>)}</tbody></table>{!requests.length && <p className="material-orders-empty">Nenhum pedido de material.</p>}</div>}
+      <div className="orders-header"><h1>{selectedOrder ? 'Ordem de serviço' : 'Pedidos de material'}</h1>{!selectedOrder && <button className="os-button os-button--primary material-request-create" type="button" disabled={openingRequest} onClick={openManualRequest}><Icon name="plus" />{openingRequest ? 'Carregando...' : 'Solicitar material'}</button>}</div>
+{selectedOrder ? <OrderDetails key={selectedOrder.code} order={selectedOrder} activeTime={activeTime} stageNamesInput={stageNamesInput} onChangeStages={setStageNamesInput} onConfigureStages={configureStages} onInterrupt={interruptSession} onEdit={editOrder} onReopen={reopenOrder} onUpload={uploadOrderAttachment} operationError={operationError} onBack={() => onSelectOrder(null)} Icon={Icon} /> : <div className="material-orders-table"><table><thead><tr><th className="material-orders-code">Código</th><th>Material solicitado</th><th>Especificação</th><th className="material-orders-quantity">Quantidade a pedir</th><th className="material-orders-quantity">Quantidade necessária</th><th className="material-orders-order">OS / Oferta relacionada</th><th className="material-orders-date">Data</th><th className="material-orders-actions">Ações</th><th className="material-orders-history">Histórico</th></tr></thead><tbody>{requests.map((request) => <tr key={request.id} ref={(node) => { if (node) requestRows.current.set(request.id, node); else requestRows.current.delete(request.id) }} className={highlightedRequests.includes(request.id) ? 'material-request--highlighted' : undefined}><td data-label="Código" className="material-orders-code"><strong>{request.code || '—'}</strong></td><td data-label="Material solicitado"><button className="material-order-link" type="button" onClick={() => onNavigate('Estoque')}><strong>{request.name}</strong></button></td><td data-label="Especificação">{request.detail || '—'}</td><td data-label="Quantidade a pedir"><strong>{Number(request.quantity).toLocaleString('pt-BR')} kg</strong></td><td data-label="Quantidade necessária">{request.requiredQuantity.toLocaleString('pt-BR')} kg</td><td data-label="OS / Oferta relacionada">{request.manual ? <span>Sem OS vinculada<small>Pedido manual</small></span> : <><button className="material-order-link" type="button" onClick={() => request.orderCode ? onSelectOrder(request.orderCode) : onSelectOffer(request.offerId)}>{request.orderCode || request.offerCode}<Icon name="eye" /></button>{!request.orderCode && <small>Aguardando OS</small>}</>}</td><td data-label="Data">{displayDate(request.requestedAt)}</td><td data-label="Ações" className="material-orders-actions">{request.rejection ? <span className="material-order-refused" role="status"><CircleX size={16} aria-hidden="true" />Pedido recusado</span> : request.receipt && request.quantity <= 0 ? <span className="material-order-received" role="status"><CircleCheck size={16} aria-hidden="true" />Material solicitado adicionado</span> : <div className="material-orders-action-group"><button className="material-order-action material-order-action--add" type="button" disabled={Boolean(openingMaterialId) || savingMaterial} onClick={() => openMaterialEntry(request)}><Icon name="plus" />{openingMaterialId === request.id ? 'Carregando...' : 'Adicionar material'}</button><button className="material-order-action material-order-action--reject" type="button" disabled={Boolean(openingMaterialId) || savingMaterial} onClick={() => setRejectingRequest(request)}><X size={15} aria-hidden="true" />Recusar pedido</button></div>}</td><td data-label="Histórico" className="material-orders-history"><button className="os-icon-button material-request-history-button" type="button" title="Histórico do pedido" aria-label={`Ver histórico do pedido de ${request.name}`} onClick={() => setHistoryRequest(request)}><Info size={17} aria-hidden="true" /></button></td></tr>)}</tbody></table>{!requests.length && <p className="material-orders-empty">Nenhum pedido de material.</p>}</div>}
+      {materialEntryError && !materialEntry && <p role="alert" className="workflow-error">{materialEntryError}</p>}
+      {requestListError && <p role="alert" className="workflow-error">{requestListError}</p>}
     </main>
+    {materialEntry && <InventoryModal item={materialEntry.form} inventoryItems={materialEntry.items} initialExistingId={materialEntry.existingId} saving={savingMaterial} error={materialEntryError} onClose={() => { if (!savingMaterial) setMaterialEntry(null) }} onSave={saveMaterialEntry} />}
+    {manualInventory && <MaterialRequestModal inventory={manualInventory} onSave={saveManualRequest} onClose={() => setManualInventory(null)} />}
+    {historyRequest && <MaterialRequestHistoryModal request={historyRequest} loadHistory={loadMaterialRequestHistory} onClose={() => setHistoryRequest(null)} />}
+    {rejectingRequest && <RejectMaterialRequestModal request={rejectingRequest} onConfirm={rejectMaterialRequest} onClose={() => setRejectingRequest(null)} />}
   </div>
 }
 
 function AdminServicesView({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, orders, onSelectOrder, onRefresh, workflowError }) {
+  const completedView = activeNav === 'Serviços concluídos'
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
   const [now, setNow] = useState(Date.now())
@@ -1627,6 +1701,9 @@ function AdminServicesView({ collapsed, onToggle, activeNav, onNavigate, onLogou
   const displayRef = useRef(null)
   const [displayMode, setDisplayMode] = useState(false)
   const [displayError, setDisplayError] = useState('')
+  const [pendingInspectionCode, setPendingInspectionCode] = useState(null)
+  const inspectedOrder = orders.find((order) => order.code === pendingInspectionCode)
+  const inspectedMaterials = pendingOrderMaterials(inspectedOrder)
   useEffect(() => {
     const panel = displayRef.current
     const sync = () => setDisplayMode(document.fullscreenElement === panel)
@@ -1649,12 +1726,12 @@ function AdminServicesView({ collapsed, onToggle, activeNav, onNavigate, onLogou
     const seconds = Math.floor(Math.max(0, milliseconds) / 1000)
     return [Math.floor(seconds / 3600), Math.floor((seconds % 3600) / 60), seconds % 60].map((value) => String(value).padStart(2, '0')).join(':')
   }
-  const totalTime = (operation) => Number(operation.accumulatedMs || 0) + (operation.activeSession ? Math.max(0, now - Date.parse(operation.activeSession.startedAt)) : 0)
+  const totalTime = (operation) => operationElapsed(operation, now)
   const deadlineState = (order) => {
     const completedAt = Date.parse(order.operation.completedAt)
     return serviceDeadline(order, order.operation.status === 'completed' && Number.isFinite(completedAt) ? completedAt : now)
   }
-  const panelOrders = orders.filter((order) => order.operation.status !== 'completed' || !order.operation.completionAcknowledgedAt)
+  const panelOrders = servicePanelOrders(orders, completedView)
   const matchesFilter = (order, key) => key === 'all' || (key === 'completed' ? order.operation.status === 'completed' : deadlineState(order).key === key)
   const visible = panelOrders.filter((order) => {
     const query = search.trim().toLocaleLowerCase()
@@ -1673,22 +1750,25 @@ function AdminServicesView({ collapsed, onToggle, activeNav, onNavigate, onLogou
       setAcknowledgingCode(null)
     }
   }
-  return <div className="dashboard-shell admin-os-shell">
+  return <div className={`dashboard-shell admin-os-shell${completedView ? ' admin-os-shell--completed' : ''}`}>
     <Sidebar collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} />
     <main className="dashboard-main admin-os-main" ref={displayRef}>
       <WorkspaceTabs tabs={tabs} activeNav={activeNav} onNavigate={onNavigate} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} />
-      <div className="dashboard-header"><div><h1>Painel de serviços em andamento</h1><p></p></div><label className="global-search"><Icon name="search" /><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por serviço, cliente ou OS..." aria-label="Buscar serviços" /></label></div>
+      <div className="dashboard-header"><div><h1>{completedView ? 'Serviços concluídos' : 'Painel de serviços em andamento'}</h1><p></p></div><label className="global-search"><Icon name="search" /><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por serviço, cliente ou OS..." aria-label="Buscar serviços" /></label></div>
       {workflowError && <p className="workflow-error" role="alert">{workflowError}</p>}
       {acknowledgeError && <p className="workflow-error" role="alert">{acknowledgeError}</p>}
-      <div className="admin-os-filters deadline-filters">{[['all', 'Todos'], ...deadlineCategories, ['completed', 'Concluídos']].map(([key, label]) => <button className={filter === key ? 'selected' : ''} type="button" key={key} onClick={() => setFilter(key)}><span className={`admin-os-filter-icon admin-os-filter-icon--${key}`} aria-hidden="true">{key === 'all' ? '◉' : ['at-deadline', 'late'].includes(key) ? '!' : key === 'completed' ? '✓' : '●'}</span>{label}<strong>{panelOrders.filter((order) => matchesFilter(order, key)).length}</strong></button>)}</div>
-      <div className="admin-os-filters">{[['open', 'Abertas'], ['waiting', 'Aguardando'], ['running', 'Em execução'], ['paused', 'Pausadas'], ['finalizing', 'Finalizando'], ['completed', 'Concluídas']].map(([key, label]) => <button className={filter === key ? 'selected' : ''} type="button" key={key} onClick={() => setFilter(key)}>{label}<strong>{orders.filter((order) => key === 'open' ? order.operation.status !== 'completed' : order.operation.status === key).length}</strong></button>)}</div>
-      <div className="admin-os-table-wrap"><table className="admin-os-table"><thead><tr><th>OS / Serviço</th><th>Cliente</th><th>Operador</th><th>Etapa atual</th><th>Peças concluídas</th><th>Progresso</th><th>Tempo ativo</th><th>Tempo restante</th><th>Status</th><th></th></tr></thead><tbody>{visible.map((order) => {
+      {!completedView && <div className="admin-os-filters deadline-filters">{[['all', 'Todos'], ...deadlineCategories, ['completed', 'Concluídos']].map(([key, label]) => <button className={filter === key ? 'selected' : ''} type="button" key={key} onClick={() => setFilter(key)}><span className={`admin-os-filter-icon admin-os-filter-icon--${key}`} aria-hidden="true">{key === 'all' ? '◉' : ['at-deadline', 'late'].includes(key) ? '!' : key === 'completed' ? '✓' : '●'}</span>{label}<strong>{panelOrders.filter((order) => matchesFilter(order, key)).length}</strong></button>)}</div>}
+      {!completedView && <div className="admin-os-filters">{[['open', 'Abertas'], ['waiting', 'Aguardando'], ['running', 'Em execução'], ['paused', 'Pausadas'], ['finalizing', 'Finalizando'], ['completed', 'Concluídas']].map(([key, label]) => <button className={filter === key ? 'selected' : ''} type="button" key={key} onClick={() => setFilter(key)}>{label}<strong>{orders.filter((order) => key === 'open' ? order.operation.status !== 'completed' : order.operation.status === key).length}</strong></button>)}</div>}
+      <div className="admin-os-table-wrap"><table className="admin-os-table"><thead><tr><th>OS / Serviço</th><th>Cliente</th><th>Operador</th><th>Etapa atual</th><th>Peças concluídas</th><th>Progresso</th><th>Tempo ativo</th><th>{completedView ? 'Conclusão' : 'Tempo restante'}</th><th>Status</th><th></th></tr></thead><tbody>{visible.map((order) => {
         const operation = order.operation
         const due = operation.status === 'completed' ? { key: 'completed', label: 'Concluído', remaining: '—' } : deadlineState(order)
         const pieceProgress = currentPieceProgress(operation, order.quantity)
         const completedPieces = pieceProgress.completedPieces
         const current = pieceProgress.stages.find((stage) => !stage.filled)
-        return <tr key={order.code}><td><strong>{order.service}</strong><small>{order.code} · Etiqueta {order.labelNumber}</small></td><td data-label="Cliente">{order.company}</td><td data-label="Operador">{operation.activeSession?.employeeName || '—'}</td><td data-label="Etapa atual">{current ? stageGroupLabel(current) || 'Não definida' : operation.stages.length ? 'Etapas concluídas' : 'Não definida'}</td><td data-label="Peças concluídas">{completedPieces}/{order.quantity}</td>
+        const completionAt = [operation.completedAt, operation.completionAcknowledgedAt, order.createdAt].find((value) => Number.isFinite(Date.parse(value)))
+        const pendingMaterials = pendingOrderMaterials(order)
+        const hasPendingMaterial = !completedView && pendingMaterials.length > 0
+        return <tr key={order.code} className={hasPendingMaterial ? 'admin-os-row--material-pending' : undefined}><td><strong>{order.service}</strong><small>{order.code} · Etiqueta {order.labelNumber}</small>{hasPendingMaterial && <button type="button" className="admin-os-material-alert" title={pendingMaterials.map((material) => `${material.name}: ${material.quantity.toLocaleString('pt-BR')} kg pendentes`).join('; ')} onClick={() => setPendingInspectionCode(order.code)}><TriangleAlert size={16} aria-hidden="true" />Material pendente</button>}</td><td data-label="Cliente">{order.company}</td><td data-label="Operador">{activeEmployeeNames(operation) || '—'}</td><td data-label="Etapa atual">{current ? stageGroupLabel(current) || 'Não definida' : operation.stages.length ? 'Etapas concluídas' : 'Não definida'}</td><td data-label="Peças concluídas">{completedPieces}/{order.quantity}</td>
           <td data-label="Progresso">{operation.stages.length ? <div className={`admin-os-stage-track admin-os-stage-track--${due.key}${operation.stages.length > 8 ? ' admin-os-stage-track--many' : ''}`} style={{ '--stage-count': operation.stages.length, '--stage-columns': pieceProgress.stages.map((stage, index) => `${String(index + 1).length + stage.name.length + 3}fr`).join(' ') }} role="group" aria-label={`Progresso da peça ${pieceProgress.pieceNumber} de ${order.quantity}. Progresso total: ${operation.progress}%. ${due.label}`}>
             {pieceProgress.stages.map((stage, index) => {
               const done = stage.filled && stage.count >= Number(order.quantity)
@@ -1700,24 +1780,25 @@ function AdminServicesView({ collapsed, onToggle, activeNav, onNavigate, onLogou
               </span>
             })}
           </div> : <span className="admin-os-stage-empty">Etapas não definidas</span>}</td>
-          <td data-label="Tempo ativo">{duration(totalTime(operation))}</td><td data-label="Tempo restante" className={`admin-os-remaining admin-os-remaining--${due.key}`}>{due.remaining}</td><td data-label="Status">{operation.status === 'completed' ? <button className="admin-os-status admin-os-status--completed" type="button" aria-label="Concluído" title="Confirmar leitura da conclusão e retirar do painel" disabled={Boolean(acknowledgingCode)} aria-busy={acknowledgingCode === order.code} onClick={() => acknowledgeCompletion(order.code)}>Concluído</button> : <span className={`admin-os-status admin-os-status--deadline-${due.key}`}>{due.label}</span>}</td><td><button type="button" onClick={() => onSelectOrder(order.code)}>Ver OS</button></td></tr>
-      })}</tbody></table>{!visible.length && <p className="admin-os-empty">Nenhuma OS real encontrada para este filtro.</p>}</div>
-      <div className="admin-os-summary"><div><strong>{orders.filter((order) => order.operation.status !== 'completed').length}</strong><span>OS abertas</span></div><div><strong>{orders.filter((order) => order.operation.status === 'running' || order.operation.status === 'finalizing').length}</strong><span>Em execução</span></div><div><strong>{duration(orders.reduce((total, order) => total + totalTime(order.operation), 0))}</strong><span>Tempo ativo somado</span></div><div><strong>{orders.filter((order) => order.operation.status === 'completed').length}</strong><span>Concluídas</span></div></div>
+          <td data-label="Tempo ativo">{duration(totalTime(operation))}</td><td data-label={completedView ? 'Conclusão' : 'Tempo restante'} className={`admin-os-remaining admin-os-remaining--${due.key}`}>{completedView ? completionAt ? new Date(completionAt).toLocaleString('pt-BR', { timeZone: 'America/Bahia', dateStyle: 'short', timeStyle: 'short' }) : '—' : due.remaining}</td><td data-label="Status">{completedView ? <span className="admin-os-status admin-os-status--completed">Concluído</span> : operation.status === 'completed' ? <button className="admin-os-status admin-os-status--completed" type="button" aria-label="Concluído" title="Confirmar leitura da conclusão e retirar do painel" disabled={Boolean(acknowledgingCode)} aria-busy={acknowledgingCode === order.code} onClick={() => acknowledgeCompletion(order.code)}>Concluído</button> : <span className={`admin-os-status admin-os-status--deadline-${due.key}`}>{due.label}</span>}</td><td><button type="button" onClick={() => onSelectOrder(order.code)}>Ver OS</button></td></tr>
+      })}</tbody></table>{!visible.length && <p className="admin-os-empty">{completedView ? 'Nenhum serviço concluído encontrado.' : 'Nenhuma OS real encontrada para este filtro.'}</p>}</div>
+      {completedView ? <div className="admin-os-summary admin-os-summary--completed"><div><strong>{panelOrders.length}</strong><span>Serviços concluídos</span></div><div><strong>{panelOrders.reduce((total, order) => total + currentPieceProgress(order.operation, order.quantity).completedPieces, 0)}</strong><span>Peças concluídas</span></div><div><strong>{duration(panelOrders.reduce((total, order) => total + totalTime(order.operation), 0))}</strong><span>Tempo ativo somado</span></div></div> : <div className="admin-os-summary"><div><strong>{orders.filter((order) => order.operation.status !== 'completed').length}</strong><span>OS abertas</span></div><div><strong>{orders.filter((order) => order.operation.status === 'running' || order.operation.status === 'finalizing').length}</strong><span>Em execução</span></div><div><strong>{duration(orders.reduce((total, order) => total + totalTime(order.operation), 0))}</strong><span>Tempo ativo somado</span></div><div><strong>{orders.filter((order) => order.operation.status === 'completed').length}</strong><span>Concluídas</span></div></div>}
       {displayError && <p className="workflow-error" role="alert">{displayError}</p>}
       <footer className="admin-os-display-controls">{displayMode && <time>{new Date(now).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })}</time>}<button type="button" onClick={toggleDisplayMode}>{displayMode ? <Minimize2 size={18} /> : <Monitor size={18} />}{displayMode ? 'Sair do modo de exibição' : 'Modo de exibição'}</button></footer>
+      {inspectedOrder && inspectedMaterials.length > 0 && <PendingMaterialsModal orderCode={inspectedOrder.code} materials={inspectedMaterials} onClose={() => setPendingInspectionCode(null)} onOpenRequest={() => { setPendingInspectionCode(null); onNavigate('Pedidos', { orderCode: inspectedOrder.code }) }} />}
     </main>
   </div>
 }
 
-function Dashboard({ user, onUpdateUser, collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, offers, orders, selectedOfferId, selectedOrderCode, onRefresh, onSelectOffer, onSelectOrder, onOpenPayables, payableFilters, workflowError, workflowLoading }) {
-  const [requestStatuses, setRequestStatuses] = useMaterialRequestStatuses()
+function Dashboard({ user, onUpdateUser, collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, offers, orders, selectedOfferId, selectedOrderCode, onRefresh, onSelectOffer, onSelectOrder, onOpenPayables, payableFilters, workflowError, workflowLoading, materialRequestTarget, onRequestLocated }) {
   const toolProps = { Sidebar, WorkspaceTabs, navigationProps: { collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs } }
   if (['Contas a Pagar', 'Business Intelligence', 'Classificações', 'Fornecedores'].includes(activeNav)) return <PayablesScreen {...toolProps} accountFilters={payableFilters} mode={{ 'Contas a Pagar': 'accounts', 'Business Intelligence': 'bi', 'Classificações': 'classifications', 'Fornecedores': 'suppliers' }[activeNav]} />
   if (activeNav === 'Relatórios') return <ReportsScreen {...toolProps} />
+  if (activeNav === 'Serviços') return <LaborServicesScreen {...toolProps} />
   if (activeNav === 'Configurações') return <AccountSettings {...toolProps} user={user} onUpdateUser={onUpdateUser} />
-  if (activeNav === 'Dashboard') return <AdminHome user={user} orders={orders} offers={offers} workflowError={workflowError} workflowLoading={workflowLoading} onRefresh={onRefresh} onNavigate={onNavigate} onSelectOrder={onSelectOrder} onOpenPayables={onOpenPayables} loadPayables={loadOverviewPayables} loadInventory={loadOverviewInventory} readInventory={readInventory} readPendingMaterialRequests={() => requestStatuses} Sidebar={Sidebar} WorkspaceTabs={WorkspaceTabs} navigationProps={{ collapsed, onToggle, activeNav, onLogout, tabs, onCloseTab, onReorderTabs }} />
+  if (activeNav === 'Dashboard') return <AdminHome user={user} orders={orders} offers={offers} workflowError={workflowError} workflowLoading={workflowLoading} onRefresh={onRefresh} onNavigate={onNavigate} onSelectOrder={onSelectOrder} onOpenPayables={onOpenPayables} loadPayables={loadOverviewPayables} loadInventory={loadOverviewInventory} readInventory={readInventory} Sidebar={Sidebar} WorkspaceTabs={WorkspaceTabs} navigationProps={{ collapsed, onToggle, activeNav, onLogout, tabs, onCloseTab, onReorderTabs }} />
   if (activeNav === 'Máquinas') return <Machines collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} />
-  if (activeNav === 'Estoque') return <InventoryScreen collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} offers={offers} orders={orders} onSelectOffer={onSelectOffer} onSelectOrder={onSelectOrder} requestStatuses={requestStatuses} onRequestStatuses={setRequestStatuses} />
+  if (activeNav === 'Estoque') return <InventoryScreen collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} onSelectOrder={onSelectOrder} />
   if (activeNav === 'Calculadora de pesos e medidas') return <Calculator collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} />
   if (activeNav === 'Funcionários') return <RegistrationScreen key="employee" kind="employee" collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} />
   if (activeNav === 'Administradores') return <RegistrationScreen key="admin" kind="admin" collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} />
@@ -1725,13 +1806,14 @@ function Dashboard({ user, onUpdateUser, collapsed, onToggle, activeNav, onNavig
   if (activeNav === 'Ofertas e serviços') return <Offers collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} offers={offers} onRefresh={onRefresh} onSelectOffer={onSelectOffer} onSelectOrder={onSelectOrder} workflowError={workflowError} />
   if (activeNav === 'Detalhes da oferta') return <OfferDetailsV2 collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} offer={offers.find((item) => item.id === selectedOfferId)} onRefresh={onRefresh} onSelectOrder={onSelectOrder} />
   if (activeNav === 'Fazer proposta') return <ProposalBuilder collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} offer={offers.find((item) => item.id === selectedOfferId)} onRefresh={onRefresh} onSelectOrder={onSelectOrder} />
-  if (activeNav === 'Pedidos') return <OrdersScreen collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} offers={offers} orders={orders} selectedOrderCode={selectedOrderCode} onSelectOffer={onSelectOffer} onSelectOrder={onSelectOrder} onRefresh={onRefresh} requestStatuses={requestStatuses} />
-  return <AdminServicesView collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} orders={orders} onSelectOrder={onSelectOrder} onRefresh={onRefresh} workflowError={workflowError} />
+  if (activeNav === 'Pedidos') return <OrdersScreen collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} offers={offers} orders={orders} selectedOrderCode={selectedOrderCode} onSelectOffer={onSelectOffer} onSelectOrder={onSelectOrder} onRefresh={onRefresh} materialRequestTarget={materialRequestTarget} onRequestLocated={onRequestLocated} />
+  return <AdminServicesView key={activeNav} collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} orders={orders} onSelectOrder={onSelectOrder} onRefresh={onRefresh} workflowError={workflowError} />
 }
 function App() {
   const [cpf, setCpf] = useState('')
   const [operatorUsername, setOperatorUsername] = useState('')
   const [loginMode, setLoginMode] = useState('admin')
+  const [testLoginEnabled, setTestLoginEnabled] = useState(null)
   const [operatorToken, setOperatorToken] = useState(() => window.sessionStorage.getItem('gmac-operator-token'))
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -1750,9 +1832,28 @@ function App() {
   const [payableFilters, setPayableFilters] = useState(null)
   const [selectedOfferId, setSelectedOfferId] = useState(null)
   const [selectedOrderCode, setSelectedOrderCode] = useState(null)
+  const [materialRequestTarget, setMaterialRequestTarget] = useState(null)
   const [workflowError, setWorkflowError] = useState('')
   const [workflowLoading, setWorkflowLoading] = useState(true)
   const appearance = useAccountTheme(isDashboard ? adminUser : null, restoringSession)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    let retryTimer
+    async function loadLoginConfig() {
+      try {
+        const response = await fetch('/api/auth/config', { signal: controller.signal, cache: 'no-store' })
+        if (!response.ok) throw new Error('Configuração de acesso indisponível.')
+        const data = await response.json()
+        if (typeof data.testLoginEnabled !== 'boolean') throw new Error('Configuração de acesso inválida.')
+        if (!controller.signal.aborted) setTestLoginEnabled(data.testLoginEnabled)
+      } catch {
+        if (!controller.signal.aborted) retryTimer = window.setTimeout(loadLoginConfig, 2000)
+      }
+    }
+    loadLoginConfig()
+    return () => { controller.abort(); window.clearTimeout(retryTimer) }
+  }, [])
 
   useLayoutEffect(() => {
     if (isDashboard && window.matchMedia('(max-width: 760px)').matches) window.scrollTo({ top: 0, behavior: 'auto' })
@@ -1815,7 +1916,7 @@ function App() {
   }, [isDashboard, adminUser, activeNav, openTabs, sidebarCollapsed, selectedOfferId, selectedOrderCode])
 
   useEffect(() => {
-    if (!isDashboard || !['Serviços em andamento', 'Dashboard'].includes(activeNav)) return undefined
+    if (!isDashboard || !['Serviços em andamento', 'Serviços concluídos', 'Dashboard'].includes(activeNav)) return undefined
     const polling = window.setInterval(() => refreshWorkflow().catch(() => {}), 10000)
     return () => window.clearInterval(polling)
   }, [isDashboard, activeNav])
@@ -1830,7 +1931,8 @@ function App() {
     setSelectedOrderCode(code)
   }
 
-  function navigateTo(label) {
+  function navigateTo(label, requestTarget = null) {
+    setMaterialRequestTarget(label === 'Pedidos' ? requestTarget : null)
     if (label === 'Contas a Pagar') setPayableFilters(null)
     if (label === 'Pedidos') setSelectedOrderCode(null)
     setActiveNav(label)
@@ -1934,7 +2036,7 @@ function App() {
 
   if (operatorToken) return <OperatorDashboard token={operatorToken} onLogout={() => { window.sessionStorage.removeItem('gmac-operator-token'); setOperatorToken(null) }} />
   if (restoringSession) return <main className="session-restore"><img src="/images/gmac-logo-transparent.png" alt="GMAC Metalúrgica" />{restoreError ? <><p role="alert">{restoreError}</p><div><button type="button" className="admin-tool-button admin-tool-button--primary" onClick={() => setRestoreAttempt((value) => value + 1)}>Tentar novamente</button><button type="button" className="admin-tool-button" onClick={logoutAdmin}>Sair</button></div></> : <p role="status">Restaurando sessão...</p>}</main>
-  if (isDashboard) return <ThemeContext.Provider value={appearance}><AdminIdentityContext.Provider value={adminUser}><WorkspaceTabsContext.Provider value={closeAllTabs}><Dashboard user={adminUser} onUpdateUser={setAdminUser} collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((current) => !current)} activeNav={activeNav} onNavigate={navigateTo} onCloseTab={closeTab} onReorderTabs={reorderTabs} tabs={openTabs} onLogout={logoutAdmin} offers={offers} orders={orders} selectedOfferId={selectedOfferId} selectedOrderCode={selectedOrderCode} onRefresh={refreshWorkflow} onSelectOffer={selectOffer} onSelectOrder={selectOrder} onOpenPayables={openPayables} payableFilters={payableFilters} workflowError={workflowError} workflowLoading={workflowLoading} /></WorkspaceTabsContext.Provider></AdminIdentityContext.Provider></ThemeContext.Provider>
+  if (isDashboard) return <ThemeContext.Provider value={appearance}><AdminIdentityContext.Provider value={adminUser}><WorkspaceTabsContext.Provider value={closeAllTabs}><Dashboard user={adminUser} onUpdateUser={setAdminUser} collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((current) => !current)} activeNav={activeNav} onNavigate={navigateTo} onCloseTab={closeTab} onReorderTabs={reorderTabs} tabs={openTabs} onLogout={logoutAdmin} offers={offers} orders={orders} selectedOfferId={selectedOfferId} selectedOrderCode={selectedOrderCode} onRefresh={refreshWorkflow} onSelectOffer={selectOffer} onSelectOrder={selectOrder} onOpenPayables={openPayables} payableFilters={payableFilters} workflowError={workflowError} workflowLoading={workflowLoading} materialRequestTarget={materialRequestTarget} onRequestLocated={setMaterialRequestTarget} /></WorkspaceTabsContext.Provider></AdminIdentityContext.Provider></ThemeContext.Provider>
 
   return (
     <main className="login-page">
@@ -1946,14 +2048,14 @@ function App() {
         <div className="login-card">
           <div className="login-card__heading">
             <h1>Entrar no sistema</h1>
-            <p>{loginMode === 'admin' ? 'Informe seu CPF e senha para acessar.' : 'Use a conta compartilhada dos operadores.'}</p>
+            <p>{testLoginEnabled == null ? 'Verificando configuração de acesso...' : testLoginEnabled ? 'Ambiente de teste: acesso sem senha.' : loginMode === 'admin' ? 'Informe seu CPF e senha para acessar.' : 'Use a conta compartilhada dos operadores.'}</p>
           </div>
 
           <div className="login-role-switch"><button className={loginMode === 'admin' ? 'active' : ''} type="button" onClick={() => { setLoginMode('admin'); setMessage(''); setPassword('') }}>Administrador</button><button className={loginMode === 'operator' ? 'active' : ''} type="button" onClick={() => { setLoginMode('operator'); setMessage(''); setPassword('') }}>Operador</button></div>
 
           <div className="heading-rule" />
 
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} noValidate={testLoginEnabled !== false}>
             <label className="field-label" htmlFor={loginMode === 'admin' ? 'cpf' : 'operator-username'}>{loginMode === 'admin' ? 'CPF' : 'Usuário compartilhado'}</label>
             <div className="input-wrap">
               <UserIcon />
@@ -1967,8 +2069,8 @@ function App() {
                 onChange={(event) => setCpf(formatLogin(event.target.value))}
                 pattern="[0-9]{11}"
                 minLength={11}
-                required
-              /> : <input id="operator-username" name="operator-username" inputMode="numeric" autoComplete="username" value={operatorUsername} onChange={(event) => setOperatorUsername(formatLogin(event.target.value))} placeholder="00000000000" pattern="[0-9]{11}" minLength={11} required />}
+                required={testLoginEnabled === false}
+              /> : <input id="operator-username" name="operator-username" inputMode="numeric" autoComplete="username" value={operatorUsername} onChange={(event) => setOperatorUsername(formatLogin(event.target.value))} placeholder="00000000000" pattern="[0-9]{11}" minLength={11} required={testLoginEnabled === false} />}
             </div>
 
             <label className="field-label password-label" htmlFor="password">Senha</label>
@@ -1982,7 +2084,7 @@ function App() {
                 placeholder="Digite sua senha"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                required
+                required={testLoginEnabled === false}
               />
               <button
                 className="visibility-button"

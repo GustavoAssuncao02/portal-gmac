@@ -14,7 +14,7 @@ function Icon({ name }) {
   return <Component className="icon" aria-hidden="true" strokeWidth={1.7} />
 }
 
-export default function AdminHome({ user, orders, offers, workflowError, workflowLoading, onRefresh, onNavigate, onSelectOrder, onOpenPayables, loadPayables, loadInventory, readInventory, readPendingMaterialRequests, Sidebar, WorkspaceTabs, navigationProps }) {
+export default function AdminHome({ user, orders, offers, workflowError, workflowLoading, onRefresh, onNavigate, onSelectOrder, onOpenPayables, loadPayables, loadInventory, readInventory, Sidebar, WorkspaceTabs, navigationProps }) {
   const [inventory, setInventory] = useState(readInventory)
   const [inventoryLoading, setInventoryLoading] = useState(true)
   const [inventorySource, setInventorySource] = useState('')
@@ -65,7 +65,7 @@ export default function AdminHome({ user, orders, offers, workflowError, workflo
     const timer = window.setInterval(() => { setNow(Date.now()); load() }, 60000)
     return () => { controller.abort(); window.clearInterval(timer) }
   }, [retry, loadInventory])
-  const summary = adminOverview(orders, offers, inventory, readPendingMaterialRequests(), now)
+  const summary = adminOverview(orders, offers, inventory, now)
   const payableSummary = payableOverview(payables || [], now)
   const today = new Date(now).toLocaleDateString('pt-BR', { timeZone: 'America/Bahia', day: 'numeric', month: 'long', year: 'numeric' })
 
@@ -78,7 +78,6 @@ export default function AdminHome({ user, orders, offers, workflowError, workflo
     finally { setRefreshing(false) }
   }
   const pending = [
-    { icon: 'stock', label: 'Materiais aguardando aprovação', count: summary.pendingMaterials, action: () => onNavigate('Estoque'), tone: 'amber' },
     { icon: 'orders', label: 'Pedidos de material', count: summary.purchaseRequests, action: () => onNavigate('Pedidos'), tone: 'blue' },
     { icon: 'services', label: 'OS concluídas aguardando confirmação', count: summary.unacknowledged, action: () => onNavigate('Serviços em andamento'), tone: 'green' },
   ]

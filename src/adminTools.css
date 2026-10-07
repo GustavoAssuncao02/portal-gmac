@@ -47,6 +47,58 @@
 .account-password-input { display: flex; position: relative; }
 .account-password-input input { width: 100%; padding-right: 40px; }
 .account-password-input button { position: absolute; right: 4px; top: 4px; display: grid; width: 30px; height: 30px; place-items: center; padding: 0; border: 0; background: transparent; color: #567797; cursor: pointer; }
+.labor-services-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin-bottom: 24px; }
+.admin-tools-main .labor-services-search { flex-direction: row; align-items: center; gap: 10px; width: min(400px, 100%); padding: 0 12px; border: 1px solid #cddce9; border-radius: 5px; background: #fff; }
+.labor-services-search input { flex: 1; width: 100%; height: 42px; padding-left: 0; border: 0; background: transparent; }
+.labor-services-commands { display: flex; flex-wrap: wrap; gap: 10px; }
+.labor-services-list { overflow: hidden; border: 1px solid #dce5ef; border-radius: 8px; background: #fff; }
+.labor-services-list > header { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 20px; border-bottom: 1px solid #dce5ef; }
+.labor-services-list h2 { margin: 0; color: #22486b; font-size: 20px; }
+.labor-services-list > header span { color: #6a8095; font-size: 13px; }
+.labor-services-list table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 14px; }
+.labor-services-list th { padding: 14px 20px; background: #f1f6fb; color: #0c4c91; text-align: left; font-weight: normal; }
+.labor-services-list td { padding: 13px 20px; border-bottom: 1px solid #e5edf4; overflow-wrap: anywhere; }
+.labor-services-list th:first-child { width: 25%; }
+.labor-services-list th:last-child { width: 150px; }
+.labor-services-list tr:last-child td { border-bottom: 0; }
+.labor-services-list tr.selected td { background: #eaf3ff; }
+.labor-service-name { display: flex; gap: 10px; align-items: center; }
+.labor-service-name svg { flex-shrink: 0; color: #0c4c91; }
+.labor-service-actions { display: flex; gap: 6px; }
+.labor-service-actions button, .labor-service-dialog > header button { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid #cddce9; border-radius: 5px; background: #fff; color: #0c4c91; cursor: pointer; }
+.labor-service-actions button:hover { background: #f1f6fb; }
+.labor-services-commands .labor-service-danger, .labor-service-actions .labor-service-danger, .labor-service-dialog .labor-service-danger { border-color: #efb8bf; background: #fff4f5; color: #b22c3b; }
+.labor-service-dialog { width: min(600px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); margin: auto; padding: 0; overflow: auto; border: 1px solid #cddce9; border-radius: 8px; background: #fff; color: #24405d; }
+.labor-service-dialog::backdrop { background: #0b203875; }
+.labor-service-dialog > header { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 18px 22px; border-bottom: 1px solid #dce5ef; }
+.labor-service-dialog h2 { margin: 0; font-size: 20px; color: #0c4c91; }
+.labor-service-dialog form { padding: 22px; }
+.labor-service-dialog fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.labor-service-dialog p { line-height: 1.6; font-size: 14px; }
+.labor-service-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.labor-service-fields label { display: flex; flex-direction: column; gap: 7px; font-size: 13px; }
+.labor-service-fields label:first-child { grid-column: 1 / -1; }
+.labor-service-fields input { min-width: 0; height: 40px; border: 1px solid #cddce9; border-radius: 5px; padding: 8px 10px; background: #fff; color: #21496e; font: inherit; }
+.labor-service-dialog footer { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
+@media (max-width: 760px) {
+  .labor-services-commands { width: 100%; }
+  .labor-services-commands > button { flex: 1; min-height: 44px; }
+  .labor-services-commands > button:first-child { flex-basis: 100%; }
+  .labor-services-list > header { padding: 16px; }
+  .labor-services-list h2 { font-size: 18px; }
+  .labor-services-list thead { display: none; }
+  .labor-services-list tbody, .labor-services-list table { display: block; }
+  .labor-services-list tbody tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; padding: 18px 16px; border-bottom: 1px solid #dce5ef; }
+  .labor-services-list td { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 0; border: 0; font-size: 14px; }
+  .labor-services-list td::before { content: attr(data-label); color: #6a8095; font-size: 12px; }
+  .labor-services-list td:first-child, .labor-services-list td:last-child, .labor-services-list td[colspan] { grid-column: 1 / -1; }
+  .labor-services-list td:first-child::before, .labor-services-list td:last-child::before { display: none; }
+  .labor-services-list tr.selected { background: #eaf3ff; }
+  .labor-service-actions { justify-content: flex-end; gap: 10px; }
+  .labor-service-actions button { width: 44px; height: 44px; }
+  .labor-service-fields { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .labor-service-dialog footer button { min-height: 44px; }
+}
 @media (max-width: 1000px) { .reports-filter-fields { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .reports-filter-fields > label:first-child { grid-column: 1 / -1; } }
 @media (max-width: 760px) {
   .admin-tools-main { padding: 62px 12px 24px; }
@@ -56,7 +108,7 @@
   .admin-tools-shell .sidebar-toggle { top: 62px; right: 14px; }
   .admin-tools-shell .nav-item { justify-content: center; min-height: 42px; padding: 0; }
   .admin-tools-shell .nav-icon { width: 21px; margin: 0; }
-  .admin-tools-shell :is(.nav-item span, .account-copy, .account-chevron, .logout-button span:last-child) { display: none; }
+  .admin-tools-shell :is(.nav-item span, .account-copy, .logout-button span:last-child) { display: none; }
   .admin-tools-shell .sidebar-account, .admin-tools-shell .logout-button { justify-content: center; margin-left: 0; margin-right: 0; padding-left: 0; padding-right: 0; }
   .admin-tools-heading h1 { font-size: 24px; overflow-wrap: anywhere; }
   .reports-filter-fields, .account-settings-fields { grid-template-columns: minmax(0, 1fr); }

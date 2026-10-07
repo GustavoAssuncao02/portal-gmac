@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Plus, Trash2, Save, X, RotateCcw } from 'lucide-react'
 import ServiceStageEditor from './ServiceStageEditor.jsx'
 import { productionStages, stageLabel, serviceDetails, readStageLayout, orderedStageSelection } from '../server/serviceStages.js'
+import { activeSessions } from '../server/operationSessions.js'
 import './orderEditing.css'
 
 function useDialog(dialog) {
@@ -46,7 +47,7 @@ export function orderEditDraft(order) {
   const stages = source.operation.stages.map((stage) => productionStages.find(([, name]) => name === stage.name)?.[0] || stage.name)
   const resources = { materials: [], laborEntries: [], ...source.resources, ...serviceDetails(source.resources), stages, kind: source.resources?.kind || source.proposal?.kind || 'service' }
   resources.stageLayout = readStageLayout(resources)
-  return { order: { ...source, resources, proposal: { key: 'A', title: '', materials: 0, labor: 0, serviceValue: 0, margin: 0, discount: 0, ...source.proposal }, attachmentIds: (source.attachments || []).map((item) => item.id) }, stageCounts: Object.fromEntries(stages.map((code, index) => [code, source.operation.stageCounts[source.operation.stages[index].key] || 0])), expectedUpdatedAt: source.updatedAt || source.createdAt, expectedOperation: { status: source.operation.status, stages: source.operation.stages, stageCounts: source.operation.stageCounts, activeSessionId: source.operation.activeSession?.id || null } }
+  return { order: { ...source, resources, proposal: { key: 'A', title: '', materials: 0, labor: 0, serviceValue: 0, margin: 0, discount: 0, ...source.proposal }, attachmentIds: (source.attachments || []).map((item) => item.id) }, stageCounts: Object.fromEntries(stages.map((code, index) => [code, source.operation.stageCounts[source.operation.stages[index].key] || 0])), expectedUpdatedAt: source.updatedAt || source.createdAt, expectedOperation: { status: source.operation.status, stages: source.operation.stages, stageCounts: source.operation.stageCounts, activeSessionIds: activeSessions(source.operation).map((session) => session.id) } }
 }
 
 export default function OrderEditModal({ order, confirmCompleted, onSave, onUpload, onClose }) {

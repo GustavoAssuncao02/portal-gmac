@@ -30,6 +30,11 @@ for filename in sorted(directory.glob('*.pdf')):
         if index == 0 or index == len(document) - 1:
             page.get_pixmap(matrix=fitz.Matrix(1.4, 1.4)).save(directory / f'{filename.stem}-page-{index + 1}.png')
     results.append({'file': filename.name, 'pages': len(document), 'text_spans': pages})
+    if filename.stem.startswith('proposal-'):
+        text = ''.join(page.get_text() for page in document)
+        assert 'Condi' in text, f'{filename}: missing commercial conditions'
+        for hidden in ['Margem', 'Lucro', 'Valor/kg', 'Valor/hora', 'Materiais (R$)', 'Mão de obra (R$)', 'Total (R$)', '12,50', '250,00', '960,00', '80,00']:
+            assert hidden not in text, f'{filename}: internal cost or profit information in a customer document: {hidden}'
     if filename.stem == 'long-text':
         assert 'MARCADOR FINAL INTEGRAL' in ''.join(page.get_text() for page in document)
         assert 'REG-60' in ''.join(page.get_text() for page in document)

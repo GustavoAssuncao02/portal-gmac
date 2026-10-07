@@ -71,12 +71,19 @@ test('accounts and registries persist; protected reports export actual PDF/XLSX 
       const current = store.orders.find((row) => row.code === order.code)
       const start = new Date(Date.now() - 1200000).toISOString()
       current.createdAt = '2026-10-01T12:00:00-03:00'
-      current.operation.activeSession.startedAt = start
+      current.operation.activeSessions[0].startedAt = current.operation.activeSince = start
       current.operationEvents[0].at = start
     })
     const paused = (await fixture.request(`/operations/orders/${order.code}/pause`, 'POST', { sessionId: started.operation.activeSession.id, sessionToken: started.sessionToken, reason: 'Descanso' }, operatorHeaders)).data
     assert.equal(paused.event.machineId, machine.id)
     assert.equal(paused.operation.activeSession, null)
+    // Keep recorded work inside the fixed report period, regardless of today's date.
+    await fixture.mutateStore((store) => {
+      const current = store.orders.find((row) => row.code === order.code)
+      current.operation.startedAt = '2026-10-02T12:00:00-03:00'
+      current.operationEvents.find((event) => event.type === 'started').at = current.operation.startedAt
+      current.operationEvents.find((event) => event.type === 'paused').at = '2026-10-02T12:20:00-03:00'
+    })
     for (const kind of ['employees', 'clients', 'admins', 'employee-hours', 'machine-hours', 'orders']) {
       const body = { kind, start: '2026-10-01', end: '2026-10-03', ids: [] }
       const preview = await fixture.request('/reports/generate', 'POST', body, headers)

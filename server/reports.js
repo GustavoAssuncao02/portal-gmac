@@ -1,14 +1,16 @@
 import express from 'express'
 import { readStore } from './offers.js'
 import { machineRows } from './machines.js'
+import { laborServiceRows, laborServiceHistory } from './laborServices.js'
 import { stageLabel } from './serviceStages.js'
+import { activeEmployeeNames, activeSessions, operationElapsed } from './operationSessions.js'
 import { duration, hourReport, machineUtilization, ordersWithOperations, reportRange, workIntervals } from './reportData.js'
 import { exportPdf, exportWorkbook } from './documentExports.js'
 export { exportPdf, exportWorkbook } from './documentExports.js'
 
-const titles = { employees: 'Funcionários', clients: 'Clientes', admins: 'Administradores', 'employee-hours': 'Horas trabalhadas', 'machine-hours': 'Horas de máquinas', orders: 'Ordens de serviço' }
+const titles = { employees: 'Funcionários', clients: 'Clientes', admins: 'Administradores', 'employee-hours': 'Horas trabalhadas', 'machine-hours': 'Horas de máquinas', 'service-hours': 'Serviços', orders: 'Ordens de serviço' }
 const status = { waiting: 'Aguardando', running: 'Em execução', paused: 'Pausado', finalizing: 'Finalizando', completed: 'Concluído' }
-const operationLabel = { started: 'Trabalho iniciado', resumed: 'Trabalho retomado', paused: 'Trabalho pausado', completed: 'Serviço concluído', admin_interrupted: 'Interrompido pelo administrador', machine_changed: 'Máquina alterada', stage_progress: 'Produção registrada', completion_acknowledged: 'Conclusão confirmada', order_edited: 'OS editada', order_reopened: 'OS reaberta' }
+const operationLabel = { started: 'Trabalho iniciado', resumed: 'Trabalho retomado', paused: 'Trabalho pausado', completed: 'Serviço concluído', admin_interrupted: 'Interrompido pelo administrador', machine_changed: 'Máquina alterada', labor_service_changed: 'Serviço de hora homem alterado', resource_changed: 'Recurso alterado', session_ended: 'Sessão encerrada na conclusão', stage_progress: 'Produção registrada', completion_acknowledged: 'Conclusão confirmada', order_edited: 'OS editada', order_reopened: 'OS reaberta' }
 const date = (value) => value ? new Date(value).toLocaleDateString('pt-BR', { timeZone: /^\d{4}-\d{2}-\d{2}$/.test(value) ? 'UTC' : 'America/Bahia' }) : ''
 const moment = (value) => value ? new Date(value).toLocaleString('pt-BR', { timeZone: 'America/Bahia' }) : ''
 const section = (name, columns, rows) => ({ name, columns, rows })
@@ -28,7 +30,7 @@ export default function createReportsRouter(pool, accounts, requireAdmin) {
     const kind = input.kind
     if (!titles[kind]) throw Object.assign(new Error('Relatório inválido.'), { status: 400 })
     let range
-    if (['employee-hours', 'machine-hours', 'orders'].includes(kind)) {
+    if (['employee-hours', 'machine-hours', 'service-hours', 'orders'].includes(kind)) {
       try { range = reportRange(input.start, input.end) } catch (error) { error.status = 400; throw error }
     }
     if (input.ids !== undefined && (!Array.isArray(input.ids) || input.ids.length > 1000 || input.ids.some((id) => !['string', 'number'].includes(typeof id)))) throw Object.assign(new Error('Seleção inválida.'), { status: 400 })
@@ -38,21 +40,28 @@ export default function createReportsRouter(pool, accounts, requireAdmin) {
       const rows = kind === 'employees' ? await employees() : await accounts[kind]()
       report.summary.push(['Registros', rows.length])
       report.sections.push(kind === 'clients'
-        ? section(titles[kind], ['ID', 'Nome / Razão social', 'Tipo de documento', 'Documento', 'E-mail', 'Cadastro em'], rows.map((row) => [String(row.id), row.name, row.documentType.toUpperCase(), row.document, row.email, moment(row.createdAt)]))
+        ? section(titles[kind], ['ID', 'Nome / Razão social', 'Tipo de documento', 'CPF/CNPJ', 'E-mail', 'Cadastro em'], rows.map((row) => [String(row.id), row.name, row.documentType.toUpperCase(), row.document, row.email, moment(row.createdAt)]))
         : section(titles[kind], ['ID', 'Nome', 'Identificação', 'CPF', 'E-mail', 'Nascimento', 'Cadastro em'], rows.map((row) => [String(row.id), row.name, row.identification || '', row.cpf, row.email || '', date(row.birthDate), moment(row.createdAt)])))
       return report
     }
     const orders = await ordersWithEvents()
     if (kind.endsWith('-hours')) {
       const machine = kind === 'machine-hours'
-      const rows = machine ? await machineRows() : await employees()
-      const result = hourReport(workIntervals(orders, Date.parse(report.generatedAt)), rows, machine ? 'machineId' : 'employeeId', range, input.ids || [])
-      report.summary.push(['Horas totais', duration(result.totalMs)], [machine ? 'Máquinas' : 'Funcionários', result.totals.length])
-      report.notes.push('Tempo real de sessões, sem pausas. Sessões que atravessam a meia-noite são divididas por dia (Bahia). Intervalos simultâneos da mesma pessoa ou máquina são contados uma única vez.')
+      const service = kind === 'service-hours'
+      const rows = machine ? await machineRows() : service ? await laborServiceRows() : await employees()
+      const result = hourReport(workIntervals(orders, Date.parse(report.generatedAt)), rows, machine ? 'machineId' : service ? 'laborServiceId' : 'employeeId', range, input.ids || [], service ? { parallelField: 'employeeId' } : {})
+      report.summary.push(['Horas totais', duration(result.totalMs)], [machine ? 'Máquinas' : service ? 'Serviços' : 'Funcionários', result.totals.length])
+      report.notes.push(service ? 'Horas reais de serviço, sem pausas, por dia (Bahia). Trabalhos simultâneos de funcionários diferentes são somados; intervalos da mesma pessoa no mesmo serviço são contados uma única vez.' : 'Tempo real de sessões, sem pausas. Sessões que atravessam a meia-noite são divididas por dia (Bahia). Intervalos simultâneos da mesma pessoa ou máquina são contados uma única vez.')
       if (machine && result.unidentifiedMs) report.notes.push(`Sessões antigas ou manuais sem máquina identificada: ${duration(result.unidentifiedMs)}. Este tempo não foi atribuído a nenhuma máquina.`)
-      const label = machine ? 'Máquina' : 'Funcionário'
+      const label = machine ? 'Máquina' : service ? 'Serviço' : 'Funcionário'
       report.sections.push(section('Totais por cadastro', [label, 'Horas totais', 'Horas (decimal)'], result.totals.map((row) => [row.name, duration(row.ms), row.ms / 3600000])))
       report.sections.push(section('Detalhamento diário', ['Data', label, 'Horas trabalhadas', 'Horas (decimal)', 'OS vinculadas'], result.details.map((row) => [date(row.date), row.name, duration(row.ms), row.ms / 3600000, row.orders])))
+      if (service) {
+        const selectedIds = new Set(result.totals.map((row) => row.id))
+        report.sections.push(section('Cadastro dos serviços', ['ID', 'Serviço', 'Tipo', 'Setor', 'Valor/hora (R$)', 'Cadastro em'], rows.filter((row) => selectedIds.has(String(row.id))).map((row) => [row.id, row.name, row.type, row.sector, row.hourlyRate, moment(row.createdAt)])))
+        report.sections.push(section('Utilizações por funcionário', ['Serviço', 'Funcionário', 'OS', 'Projeto', 'Início', 'Encerramento', 'Tempo no período', 'Horas (decimal)'], result.totals.flatMap((row) => laborServiceHistory(row.id, orders, range, Date.parse(report.generatedAt)).map((use) => [row.name, use.employeeName, use.orderCode, use.service, moment(use.startedAt), use.endedAt ? moment(use.endedAt) : 'Em andamento', duration(use.durationMs), use.durationMs / 3600000]))))
+        if (result.unidentifiedMs) report.notes.push(`Sessões antigas ou sem serviço identificado: ${duration(result.unidentifiedMs)}. Elas não foram atribuídas automaticamente a nenhum serviço.`)
+      }
       if (machine && input.idleHours) {
         const utilization = machineUtilization(result, range, Date.parse(report.generatedAt))
         const percent = (value) => `${value.toLocaleString('pt-BR', { maximumFractionDigits: 2, minimumFractionDigits: 2 })}%`
@@ -68,8 +77,7 @@ export default function createReportsRouter(pool, accounts, requireAdmin) {
     report.notes.push('Período baseado na data de criação da OS. Os dados operacionais refletem o momento da emissão.')
     report.sections.push(section('Ordens de serviço', ['OS', 'Oferta', 'Serviço', 'Cliente', 'CNPJ', 'Etiqueta', 'Quantidade', 'Solicitação', 'Criação da OS', 'Prazo solicitado', 'Prazo acordado', 'Status', 'Descrição', 'Tipo', 'Fabricado a partir de', 'Têmpera', 'Cor/Tipo', 'Detalhes do serviço', 'Tempo real ativo', 'Operador atual', 'Máquina atual', 'Concluído em', 'Conclusão confirmada em', 'Última pausa', 'Proposta', 'Valor do serviço', 'Materiais (R$)', 'Mão de obra (R$)', 'Desconto (%)', 'Margem (%)', 'Lucro estimado (R$)', 'Horas de máquina previstas', 'Horas de serviço previstas'], selected.map((order) => {
       const r = order.resources || {}, p = order.proposal || {}, o = order.operation || {}
-      const activeMs = o.activeSession ? Math.max(0, Date.parse(report.generatedAt) - Date.parse(o.activeSession.startedAt)) : 0
-      return [order.code, order.offerId, order.service, order.company, order.cnpj, order.labelNumber, order.quantity, moment(order.requestedAt), moment(order.createdAt), date(order.deadline), date(p.deadline), status[o.status] || order.status, order.description, (r.kind || p.kind) === 'product' ? 'Produto' : 'Serviço', r.manufacturedFrom === 'sample' ? 'Amostra' : r.manufacturedFrom === 'drawing' ? 'Desenho' : '', r.tempering === true ? 'Sim' : r.tempering === false ? 'Não' : '', r.paintColor || '', r.serviceDescription || '', duration((Number(o.accumulatedMs) || 0) + activeMs), o.activeSession?.employeeName || '', o.activeSession?.machineName || '', moment(o.completedAt), moment(o.completionAcknowledgedAt), o.lastPauseReason || '', p.title || p.key, p.serviceValue, p.materials, p.labor, p.discount, p.margin, p.profit, p.machine, p.serviceTime]
+      return [order.code, order.offerId, order.service, order.company, order.cnpj, order.labelNumber, order.quantity, moment(order.requestedAt), moment(order.createdAt), date(order.deadline), date(p.deadline), status[o.status] || order.status, order.description, (r.kind || p.kind) === 'product' ? 'Produto' : 'Serviço', r.manufacturedFrom === 'sample' ? 'Amostra' : r.manufacturedFrom === 'drawing' ? 'Desenho' : '', r.tempering === true ? 'Sim' : r.tempering === false ? 'Não' : '', r.paintColor || '', r.serviceDescription || '', duration(operationElapsed(o, Date.parse(report.generatedAt))), activeEmployeeNames(o), [...new Set(activeSessions(o).map((session) => session.machineName).filter(Boolean))].join(', '), moment(o.completedAt), moment(o.completionAcknowledgedAt), o.lastPauseReason || '', p.title || p.key, p.serviceValue, p.materials, p.labor, p.discount, p.margin, p.profit, p.machine, p.serviceTime]
     })))
     report.sections.push(section('Materiais', ['OS', 'Material', 'Especificação', 'Quantidade (kg)', 'Valor/kg', 'Estoque', 'Disponível (kg)', 'Compra necessária (kg)'], selected.flatMap((order) => (order.resources?.materials || []).map((row) => [order.code, row.name, row.detail, row.quantity, row.unitPrice, row.stockStatus, row.stockAvailable, row.purchaseQuantity]))))
     report.sections.push(section('Mão de obra prevista', ['OS', 'Tipo', 'Recurso', 'Horas previstas', 'Valor/hora'], selected.flatMap((order) => (order.resources?.laborEntries || []).map((row) => [order.code, row.type === 'machine' ? 'Máquina' : 'Profissional', row.resource, row.hours, row.hourlyRate]))))
@@ -79,7 +87,7 @@ export default function createReportsRouter(pool, accounts, requireAdmin) {
     return report
   }
   router.get('/reports/catalog', async (_request, response, next) => {
-    try { response.json({ employees: await employees(), machines: await machineRows() }) } catch (error) { next(error) }
+    try { response.json({ employees: await employees(), machines: await machineRows(), services: await laborServiceRows() }) } catch (error) { next(error) }
   })
   router.post('/reports/generate', async (request, response, next) => {
     try { response.json(await build(request.body)) } catch (error) { next(error) }

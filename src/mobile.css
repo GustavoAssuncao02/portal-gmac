@@ -317,6 +317,9 @@
   .material-orders-table { border-radius: 6px; }
   .material-orders-table td { font-size: 14px; padding: 8px 16px; }
   .material-orders-table td::before { font-size: 12px; }
+  .material-orders-table .material-orders-actions { grid-column: 1 / -1; }
+  .material-orders-action-group { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .material-order-action { width: 100%; min-height: 44px; font-size: 13px; white-space: normal; }
   .material-order-link { min-height: 44px; text-align: left; }
   .os-detail-heading { gap: 14px; }
   .os-history-trigger { width: 100%; justify-content: center; }
@@ -410,7 +413,8 @@
   .inventory-history-summary { grid-template-columns: minmax(0, 1fr); }
   .inventory-history-table { min-width: 0; overflow: visible; }
   .inventory-history-row--header { display: none; }
-  .inventory-history-row:not(.inventory-history-row--header) { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 16px 0; font-size: 14px; }
+  .inventory-history-row:not(.inventory-history-row--header) { min-width: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 16px 0; font-size: 14px; }
+  .inventory-history-order-link { min-height: 44px; }
   .inventory-history-row > * { min-width: 0; overflow-wrap: anywhere; }
   .inventory-history-row > :nth-child(1), .inventory-history-row > :nth-child(6) { grid-column: 1 / -1; }
   .proposal-layout-options { grid-template-columns: minmax(0, 1fr); }

@@ -6,7 +6,7 @@
   "scripts": {
     "theme:build": "node scripts/build-dark-theme.mjs",
     "prebuild": "npm run theme:build",
-    "dev": "concurrently \"vite\" \"node server/index.js\"",
+    "dev": "concurrently --kill-others --names FRONTEND,BACKEND --prefix-colors cyan,green \"vite\" \"node server/index.js\"",
     "build": "vite build",
     "start": "node server/index.js",
     "db:setup": "node scripts/setup-local-database.mjs",

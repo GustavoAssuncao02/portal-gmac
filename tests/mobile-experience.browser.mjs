@@ -7,21 +7,25 @@ import { stageLabel } from '../server/serviceStages.js'
 
 const before = process.argv.includes('--before')
 const dark = process.argv.includes('--dark')
+const fontFamily = process.argv.includes('--verdana') ? 'verdana' : 'default'
+const fontSize = process.argv.includes('--large-font') ? 'large' : process.argv.includes('--small-font') ? 'small' : 'default'
 const engine = process.argv.includes('--chromium') ? chromium : webkit
 const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Gustavo' }
 const fixture = await createWorkflowFixture({ accountsEnv: env })
 const browser = await engine.launch()
-const directory = `test-results/mobile-${dark ? 'dark-' : ''}${before ? 'before' : engine.name()}`
+const directory = `test-results/mobile-${dark ? 'dark-' : ''}${fontFamily !== 'default' ? `${fontFamily}-` : ''}${fontSize !== 'default' ? `${fontSize}-font-` : ''}${before ? 'before' : engine.name()}`
 await mkdir(directory, { recursive: true })
 const results = []
 const errors = []
-const screens = ['Início', 'Máquinas', 'Estoque', 'Calculadora de pesos e medidas', 'Fornecedores', 'Administradores', 'Funcionários', 'Clientes', 'Serviços em andamento', 'Ofertas e serviços', 'Pedidos', 'Contas a Pagar', 'Business Intelligence', 'Classificações', 'Relatórios', 'Configurações']
+const screens = ['Início', 'Máquinas', 'Estoque', 'Calculadora de pesos e medidas', 'Fornecedores', 'Administradores', 'Funcionários', 'Clientes', 'Serviços em andamento', 'Ofertas e serviços', 'Pedidos de material', 'Contas a Pagar', 'Business Intelligence', 'Classificações', 'Relatórios', 'Configurações']
 const slug = (value) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/gi, '-').toLowerCase()
 
 try {
   const token = (await fixture.request('/auth/login', 'POST', { cpf: env.DEMO_ADMIN_CPF, password: env.DEMO_ADMIN_PASSWORD })).data.token
   const headers = { Authorization: `Bearer ${token}` }
   if (dark) assert.equal((await fixture.request('/account/appearance', 'PATCH', { theme: 'dark' }, headers)).status, 200)
+  if (fontSize !== 'default') assert.equal((await fixture.request('/account/appearance', 'PATCH', { fontSize }, headers)).status, 200)
+  if (fontFamily !== 'default') assert.equal((await fixture.request('/account/appearance', 'PATCH', { fontFamily }, headers)).status, 200)
   const request = async (path, body) => {
     const response = await fixture.request(path, 'POST', body, headers)
     assert.ok(response.status < 300, `${path}: ${JSON.stringify(response.data)}`)
@@ -62,6 +66,8 @@ try {
     await page.getByRole('button', { name: 'Entrar', exact: true }).click()
     await page.locator('.admin-home-main').waitFor()
     if (dark) await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark')
+    await page.waitForFunction((value) => document.documentElement.dataset.fontSize === value, fontSize)
+    await page.waitForFunction((value) => document.documentElement.dataset.fontFamily === value, fontFamily)
     const width = devices[deviceName].viewport.width
     if (!before) {
       await page.getByRole('button', { name: 'Abrir menu de navegação', exact: true }).click()
@@ -91,6 +97,10 @@ try {
       if (!before) assert.ok(metrics.scrollWidth <= metrics.width, `${deviceName} ${name}: page overflow ${metrics.scrollWidth}`)
       if (!before) {
         assert.equal(metrics.width, devices[deviceName].viewport.width, `${name}: Safari must not expand its layout viewport`)
+        if (fontSize !== 'default') {
+          const smallFields = await page.locator('input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]), select, textarea').evaluateAll((fields) => fields.filter((field) => field.getBoundingClientRect().width && parseFloat(getComputedStyle(field).fontSize) < 16).map((field) => field.className))
+          assert.deepEqual(smallFields, [], `${name}: mobile fields must not trigger automatic Safari zoom`)
+        }
         const rowOverflow = await page.locator('.pending-material-row:not(.pending-material-row--header), .machine-row:not(.machine-row--header), .inventory-row:not(.inventory-row--header), .registration-list-row:not(.registration-list-row--header), .offers-table-row:not(.offers-table-header), .admin-os-table tbody tr, .payable-table tbody tr').evaluateAll((rows) => rows.filter((row) => row.scrollWidth > row.clientWidth + 1).map((row) => row.className))
         assert.deepEqual(rowOverflow, [], `${name}: a record must not be clipped`)
       }

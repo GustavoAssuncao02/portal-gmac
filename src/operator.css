@@ -128,6 +128,23 @@
 .operator-info { display: grid; gap: 7px; padding: 12px; border-radius: 6px; background: #f3f7fb; font-size: 11px; }
 .operator-dialog a { color: #15548e; }
 
+.pending-material-dialog { width: min(480px, calc(100vw - 24px)); max-height: calc(100dvh - 32px); overflow: auto; margin: auto; padding: 22px; border: 1px solid #dce5ef; border-radius: 8px; background: #fff; color: #24466a; }
+.pending-material-dialog::backdrop { background: #10243c8c; }
+.pending-material-dialog header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.pending-material-dialog h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 20px; color: #965900; }
+.pending-material-dialog header p { margin: 8px 0 0; font-size: 13px; }
+.pending-material-close { display: grid; place-items: center; width: 36px; height: 36px; flex-shrink: 0; border: 1px solid #dce5ef; border-radius: 5px; background: #fff; color: #24466a; cursor: pointer; }
+.pending-material-quantities { margin: 20px 0 0; }
+.pending-material-quantities > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; padding: 12px 0; border-bottom: 1px solid #e2e9f0; }
+.pending-material-quantities dt { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.pending-material-quantities small { display: block; margin-top: 5px; font-size: 12px; font-weight: 400; color: #63778c; }
+.pending-material-quantities dd { margin: 0; font-size: 15px; font-weight: 700; white-space: nowrap; }
+.pending-material-total { display: flex; justify-content: space-between; gap: 12px; margin: 0; padding: 14px 0; color: #965900; font-size: 14px; }
+.pending-material-question { margin: 8px 0 20px; font-size: 15px; line-height: 1.5; font-weight: 600; }
+.pending-material-dialog footer { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+.pending-material-dialog footer button { min-height: 44px; padding: 10px 14px; border-radius: 5px; font: inherit; font-size: 14px; cursor: pointer; }
+.pending-material-dialog button:disabled { opacity: .6; cursor: wait; }
+
 .operator-project-info { width: 100%; max-width: 1180px; margin: 0 auto; }
 .operator-info-header { padding: 4px 0 20px; }
 .operator-info-back { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 16px; padding: 6px 0; border: 0; background: transparent; color: #15508f; font-size: 12px; cursor: pointer; }
@@ -186,4 +203,44 @@
   .operator-projects--collapsed .operator-projects-toggle { width: auto; min-width: 44px; padding: 0 10px; gap: 8px; }
   .operator-projects--collapsed .operator-projects-toggle > span { display: inline; font-size: 12px; font-weight: 700; }
   .operator-projects-count { margin-top: 0; }
+}
+.operator-workers { margin-top: 14px; border-top: 1px solid #e7edf3; padding-top: 12px; }
+.operator-workers-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.operator-workers-heading h3 { margin: 0; color: #203b5c; font-size: 14px; }
+.operator-workers-heading span { color: #678098; font-size: 12px; white-space: nowrap; }
+.operator-workers-empty { margin: 0; padding: 12px; border: 1px dashed #cfdae5; border-radius: 6px; color: #60758b; font-size: 12px; }
+.operator-worker-list { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+.operator-worker { min-width: 0; border: 1px solid #e0e7ef; border-radius: 6px; background: #fff; }
+.operator-worker--open { border-color: #1a5ca9; box-shadow: 0 0 0 1px #1a5ca9; }
+.operator-worker-toggle { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 52px; padding: 8px 12px; border: 0; border-radius: 6px; background: transparent; color: #24466a; text-align: left; cursor: pointer; }
+.operator-worker-toggle:hover { background: #f4f8fc; }
+.operator-worker-toggle:focus-visible { outline: 2px solid #15508f; outline-offset: 2px; }
+.operator-worker-toggle > svg { flex-shrink: 0; color: #55708d; }
+.operator-worker--open .operator-worker-toggle > svg { transform: rotate(180deg); }
+.operator-worker-name, .operator-worker-time { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
+.operator-worker-name { flex: 1; }
+.operator-worker-name strong { color: #16345d; font-size: 13px; overflow-wrap: anywhere; }
+.operator-worker-name small, .operator-worker-time small { color: #718397; font-size: 11px; overflow-wrap: anywhere; }
+.operator-worker-time { align-items: flex-end; text-align: right; }
+.operator-worker-time strong { color: #193858; font-size: 13px; font-variant-numeric: tabular-nums; }
+.operator-worker-actions { display: flex; flex-wrap: wrap; gap: 7px; padding: 4px 12px 12px; }
+.operator-worker-actions button { min-height: 38px; padding: 8px 11px; border-radius: 5px; font-size: 12px; font-weight: 700; cursor: pointer; }
+.operator-worker-actions button:disabled { opacity: .5; cursor: not-allowed; }
+.operator-worker-actions .operator-session-note { flex: 0 0 100%; margin: 0; }
+.operator-dialog fieldset { min-width: 0; margin: 15px 0; padding: 0; border: 0; }
+.operator-dialog legend { margin-bottom: 8px; padding: 0; color: #2c4662; font-size: 12px; font-weight: 700; }
+.operator-resource-type { display: flex; flex-wrap: wrap; gap: 8px; }
+.operator-resource-type legend { flex: 0 0 100%; }
+.operator-dialog .operator-resource-type label { flex: 1 1 140px; flex-direction: row; align-items: center; gap: 8px; min-height: 42px; margin: 0; padding: 8px 10px; border: 1px solid #cbd8e5; border-radius: 6px; font-weight: 600; cursor: pointer; }
+.operator-dialog .operator-resource-type label:has(input:checked) { border-color: #15508f; background: #eef5fd; color: #15508f; }
+.operator-completed-by { display: grid; gap: 7px; }
+.operator-dialog .operator-completed-by label { flex-direction: row; align-items: center; gap: 10px; margin: 0; padding: 9px 10px; border: 1px solid #cbd8e5; border-radius: 6px; cursor: pointer; }
+.operator-dialog .operator-completed-by label:has(input:checked) { border-color: #15508f; background: #eef5fd; }
+.operator-completed-by label > span { display: flex; min-width: 0; flex-direction: column; gap: 3px; overflow-wrap: anywhere; }
+.operator-completed-by small { color: #718397; font-size: 11px; font-weight: 400; }
+.operator-dialog input[type="radio"] { flex-shrink: 0; width: 16px; height: 16px; margin: 0; accent-color: #15508f; }
+@media (max-width: 540px) {
+  .operator-worker-toggle { flex-wrap: wrap; }
+  .operator-worker-time { align-items: flex-start; text-align: left; }
+  .operator-worker-actions button { flex: 1 1 100%; min-height: 44px; }
 }

@@ -79,15 +79,15 @@ function payment(body, valueCents, bulk = false) {
 function view(row, store) {
   return { ...row, supplierName: (store.suppliers || []).find((item) => String(item.id) === String(row.supplierId))?.name || row.supplierName, classificationName: store.classifications.find((item) => item.id === row.classificationId)?.name || row.classificationName, status: payableStatus(row), daysUntil: daysUntil(row.dueDate) }
 }
-function activeNotifications(store, userId) {
+export function activeNotifications(store, userId) {
   const { payableReminderDays } = notificationSettings(store, userId)
   if (payableReminderDays === 'never') return []
-  return store.payableNotifications.filter((notice) => {
-    const row = store.payables.find((item) => item.id === notice.accountId)
+  return (store.payableNotifications || []).filter((notice) => {
+    const row = (store.payables || []).find((item) => item.id === notice.accountId)
     return row && !row.payment && !row.inactive && notice.dueDate === row.dueDate && [0, payableReminderDays].includes(notice.days)
   })
 }
-function notificationItems(store, userId) {
+export function notificationItems(store, userId) {
   return activeNotifications(store, userId).map(({ readBy, ...notice }) => ({ ...notice, readAt: readBy?.find((entry) => String(entry.userId) === String(userId))?.at || null, account: view(find(store, notice.accountId), store) })).reverse()
 }
 function report(rows, store, individual = false, filters = {}) {
@@ -99,7 +99,7 @@ function report(rows, store, individual = false, filters = {}) {
     sections.push({ name: 'Anexos e comprovantes', columns: ['Conta', 'Arquivo', 'Tipo', 'Tamanho (bytes)'], rows: rows.flatMap((r) => [...(r.attachments || []), ...(r.payment?.receipts || [])].map((f) => [r.id, f.name, f.contentType, f.size])) })
   }
   const notes = individual ? [] : [`Situação: ${{ all: 'Todas', inactive: 'Desativadas', ...statusLabel }[filters.status] || 'Pendentes e vencidas'}`, ...(filters.search ? [`Busca: ${filters.search}`] : []), ...(filters.supplierId ? [`Fornecedor: ${store.suppliers?.find((row) => row.id === filters.supplierId)?.name || filters.supplierId}`] : []), ...(filters.classificationId ? [`Classificação: ${store.classifications.find((row) => row.id === filters.classificationId)?.name || filters.classificationId}`] : [])]
-  return { title: individual ? `Conta ${rows[0]?.id || ''}` : 'Contas a pagar', generatedAt: new Date().toISOString(), start: filters.start, end: filters.end, summary: [['Contas', rows.length], ['Valor original', money(rows.reduce((sum, r) => sum + r.valueCents, 0))]], notes, sections }
+  return { title: individual ? `Conta ${rows[0]?.id || ''}` : 'Contas a pagar', eyebrow: 'Financeiro', generatedAt: new Date().toISOString(), start: filters.start, end: filters.end, summary: [['Contas', rows.length], ['Valor original', money(rows.reduce((sum, r) => sum + r.valueCents, 0))]], notes, sections }
 }
 
 export default function createPayablesRouter(accounts, requireAdmin) {

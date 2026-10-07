@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
+import { pendingOrderMaterials } from '../server/pendingMaterials.js'
 
 function assertOperationalData(value) {
   for (const [key, child] of Object.entries(value || {})) {
@@ -10,7 +11,18 @@ function assertOperationalData(value) {
 }
 
 test('operator project data includes technical details and files but excludes financial data', async (t) => {
-  const fixture = await createWorkflowFixture()
+  const inventoryPool = { async getConnection() {
+    return {
+      async beginTransaction() {}, async commit() {}, async rollback() {}, release() {},
+      async execute(sql) {
+        if (sql.startsWith('SELECT id FROM inventory_movements')) return [[]]
+        if (sql.startsWith('SELECT id, name')) return [[{ id: 1, name: 'Aluminio', quantity: 8, unitPrice: 999 }]]
+        assert.ok(sql.startsWith('UPDATE inventory_materials') || sql.startsWith('INSERT INTO inventory_movements'))
+        return [{}]
+      },
+    }
+  } }
+  const fixture = await createWorkflowFixture({ inventoryPool })
   t.after(() => fixture.close())
   const offer = (await fixture.request('/offers', 'POST', offerDraft)).data.item
   const resources = { materials: [{ id: 'material', name: 'Aluminio', detail: 'Chapa 10 mm', quantity: 12.5, unitPrice: 999, stockAvailable: 8, stockStatus: 'partial', purchaseQuantity: 4.5 }], laborEntries: [{ id: 'machine', type: 'machine', resource: 'Torno CNC', hours: 2, hourlyRate: 777 }], kind: 'product', stages: ['cutting', 'assembly'] }
@@ -18,7 +30,9 @@ test('operator project data includes technical details and files but excludes fi
   const upload = await fetch(`${fixture.url}/api/offers/${offer.id}/attachments?name=desenho-tecnico.txt&type=text/plain`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: Buffer.from('Especificacao tecnica da peca') })
   assert.equal(upload.status, 201)
   await fixture.request(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', title: 'Teste', deadline: offerDraft.deadline, serviceValue: 98765, materials: 12487.5, labor: 1554, margin: 25, discount: 10, profit: 12345, machine: '2 horas', serviceTime: '2 horas' } })
-  const order = (await fixture.request(`/offers/${offer.id}/accept`, 'POST')).data.item
+  const accepted = await fixture.request(`/offers/${offer.id}/accept`, 'POST')
+  assert.equal(accepted.status, 201)
+  const order = accepted.data.item
   assert.equal((await fixture.request('/operations/operator/orders')).status, 401)
   const headers = { Authorization: `Bearer ${fixture.operatorToken}` }
   const result = await fixture.request('/operations/operator/orders', 'GET', undefined, headers)
@@ -40,7 +54,7 @@ test('operator project data includes technical details and files but excludes fi
   assert.equal(adminOrder.proposal.serviceValue, 98765)
   assert.equal(adminOrder.resources.materials[0].unitPrice, 999)
   const employee = (await fixture.request('/employees', 'POST', { name: 'Operador teste', birthDate: '1990-01-01', cpf: '12345678901', email: 'teste@example.com', identification: '001' })).data.item
-  const started = await fixture.request(`/operations/orders/${order.code}/start`, 'POST', { employeeId: employee.id }, headers)
+  const started = await fixture.request(`/operations/orders/${order.code}/start`, 'POST', { employeeId: employee.id, pendingMaterialsConfirmation: pendingOrderMaterials(item).map((material) => [material.key, material.quantity]) }, headers)
   assert.equal(started.status, 200)
   assertOperationalData(started.data.order)
   assert.ok(started.data.sessionToken)

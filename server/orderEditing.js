@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { productionStages, stageLabel, readStageLayout, validStageLayout, serviceDetails } from './serviceStages.js'
+import { activeSessions } from './operationSessions.js'
 
 const fail = (status, message) => { const error = new Error(message); error.status = status; throw error }
 const text = (value, limit = 160) => {
@@ -17,7 +18,7 @@ const date = (value, label) => {
 }
 
 export function operationVersion(state) {
-  return { status: state.status, stages: state.stages, stageCounts: state.stageCounts, activeSessionId: state.activeSession?.id || null }
+  return { status: state.status, stages: state.stages, stageCounts: state.stageCounts, activeSessionIds: activeSessions(state).map((session) => session.id) }
 }
 
 export function editOrder(order, state, body) {
@@ -51,7 +52,7 @@ export function editOrder(order, state, body) {
       if (labor) {
         const resource = text(item.resource)
         if (!resource || !['machine', 'person'].includes(item.type)) fail(400, 'Informe o recurso e o tipo da mão de obra.')
-        return { ...previous, id, resource, type: item.type, machineId: item.type === 'machine' && previous?.resource === resource ? previous.machineId ?? null : null, hours: numeric(item.hours, 'Horas previstas'), hourlyRate: numeric(item.hourlyRate, 'Valor por hora') }
+        return { ...previous, id, resource, type: item.type, machineId: item.type === 'machine' && previous?.resource === resource ? previous.machineId ?? null : null, laborServiceId: item.type === 'person' && previous?.resource === resource ? previous.laborServiceId ?? null : null, hours: numeric(item.hours, 'Horas previstas'), hourlyRate: numeric(item.hourlyRate, 'Valor por hora') }
       }
       const name = text(item.name)
       if (!name) fail(400, 'Informe o nome do material.')
@@ -78,14 +79,14 @@ export function editOrder(order, state, body) {
   const counts = Object.fromEntries(stages.map((stage, index) => [stage.key, numeric(body.stageCounts?.[resources.stages[index]], `Peças de ${stage.name}`, { integer: true, max: fields.quantity })]))
   if (resources.strictProcess && stages.some((stage, index) => index > 0 && counts[stage.key] > counts[stages[index - 1].key])) fail(400, 'No processo sequencial, uma etapa não pode ter mais peças que a etapa anterior. Ajuste as quantidades ou desmarque Processo Injessado.')
   const productionChanged = fields.quantity !== Number(order.quantity) || resources.strictProcess !== serviceDetails(order.resources).strictProcess || JSON.stringify(stages) !== JSON.stringify(state.stages) || JSON.stringify(counts) !== JSON.stringify(state.stageCounts)
-  if (state.activeSession && productionChanged) fail(409, 'Encerre a sessão ativa antes de alterar etapas, processo ou quantidades produzidas.')
+  if (activeSessions(state).length && productionChanged) fail(409, 'Encerre as sessões ativas antes de alterar etapas, processo ou quantidades produzidas.')
   const before = { ...Object.fromEntries(Object.keys(fields).map((key) => [key, structuredClone(order[key] ?? null)])), stages: structuredClone(state.stages), stageCounts: structuredClone(state.stageCounts) }
   Object.assign(order, fields, { updatedAt: new Date().toISOString() })
   state.stages = stages
   state.stageCounts = counts
   if (state.status !== 'completed') {
     const allDone = stages.every((stage) => counts[stage.key] === fields.quantity)
-    state.status = state.activeSession ? allDone ? 'finalizing' : 'running' : state.startedAt ? 'paused' : 'waiting'
+    state.status = activeSessions(state).length ? allDone ? 'finalizing' : 'running' : state.startedAt ? 'paused' : 'waiting'
   }
   const after = { ...fields, stages: structuredClone(stages), stageCounts: structuredClone(counts) }
   const changed = Object.keys(after).filter((key) => JSON.stringify(before[key]) !== JSON.stringify(after[key]))

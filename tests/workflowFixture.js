@@ -1,35 +1,43 @@
 import express from 'express'
-import { copyFile, mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { copyFile, cp, mkdir, mkdtemp, rm } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
-export async function createWorkflowFixture({ pool, accountsEnv } = {}) {
+export async function createWorkflowFixture({ pool, inventoryPool = pool, accountsEnv, notificationInventory } = {}) {
   const results = path.join(root, 'test-results')
   await mkdir(results, { recursive: true })
   const directory = await mkdtemp(path.join(results, 'workflow-'))
-  for (const name of ['offers.js', 'operations.js', 'orderEditing.js', 'operatorAuth.js', 'employeeActivity.js', 'serviceStages.js', 'machines.js', 'accounts.js', 'reports.js', 'reportData.js', 'documentExports.js', 'payables.js', 'payableRules.js', 'materialRequests.js']) {
+  for (const name of ['offers.js', 'orderMaterials.js', 'pendingMaterials.js', 'operations.js', 'orderEditing.js', 'operatorAuth.js', 'employeeActivity.js', 'serviceStages.js', 'machines.js', 'laborServices.js', 'accounts.js', 'reports.js', 'reportData.js', 'documentExports.js', 'payables.js', 'payableRules.js', 'materialRequests.js', 'notificationRules.js', 'notificationEvents.js', 'operationSessions.js', 'materialRequestCodes.js', 'notifications.js']) {
     await copyFile(path.join(root, 'server', name), path.join(directory, name))
   }
-  const { default: offersRouter, mutateStore } = await import(pathToFileURL(path.join(directory, 'offers.js')))
+  // PDFs use the bundled logo and fonts.
+  await cp(path.join(root, 'server', 'assets'), path.join(directory, 'assets'), { recursive: true })
+  const { default: createOffersRouter, mutateStore } = await import(pathToFileURL(path.join(directory, 'offers.js')))
   const { default: operationsRouter } = await import(pathToFileURL(path.join(directory, 'operations.js')))
   const { issueOperatorToken } = await import(pathToFileURL(path.join(directory, 'operatorAuth.js')))
   const { createAccountService, createAccountsRouter, issueAdminToken, requireAdmin } = await import(pathToFileURL(path.join(directory, 'accounts.js')))
   const { default: machinesRouter } = await import(pathToFileURL(path.join(directory, 'machines.js')))
+  const { default: laborServicesRouter, ensureLaborServices } = await import(pathToFileURL(path.join(directory, 'laborServices.js')))
+  await ensureLaborServices()
   const { default: reportsRouter } = await import(pathToFileURL(path.join(directory, 'reports.js')))
   const { default: payablesRouter } = await import(pathToFileURL(path.join(directory, 'payables.js')))
-  const { default: materialRequestsRouter } = await import(pathToFileURL(path.join(directory, 'materialRequests.js')))
+  const { default: materialRequestsRouter, saveRequestedMaterial } = await import(pathToFileURL(path.join(directory, 'materialRequests.js')))
+  const { default: notificationsRouter } = await import(pathToFileURL(path.join(directory, 'notifications.js')))
   const accounts = createAccountService(pool, accountsEnv || {})
   const app = express()
   app.use(express.json())
-  app.use('/api', offersRouter)
+  app.use('/api', createOffersRouter(inventoryPool, requireAdmin))
   app.use('/api', operationsRouter(pool))
   app.use('/api', createAccountsRouter(accounts))
   app.use('/api', machinesRouter(requireAdmin, pool))
+  app.use('/api', laborServicesRouter(requireAdmin, pool))
   app.use('/api', reportsRouter(pool, accounts, requireAdmin))
-  app.use('/api', payablesRouter(accounts, requireAdmin))
-  app.use('/api', materialRequestsRouter(requireAdmin))
+  const payables = payablesRouter(accounts, requireAdmin)
+  app.use('/api', payables)
+  app.use('/api', notificationsRouter({ requireAdmin, payables, loadInventory: notificationInventory }))
+  app.use('/api', materialRequestsRouter(requireAdmin, inventoryPool, accounts))
   app.get('/api/inventory', (_request, response) => response.status(503).json({ message: 'O banco de dados ainda não está configurado.' }))
   app.post('/api/auth/login', async (request, response, next) => {
     if (!accountsEnv) return response.status(503).json({ message: 'O banco de dados ainda não está configurado.' })
@@ -49,6 +57,7 @@ export async function createWorkflowFixture({ pool, accountsEnv } = {}) {
     adminToken: issueAdminToken({ id: 0 }),
     operatorToken: issueOperatorToken(),
     mutateStore,
+    saveRequestedMaterial,
     async request(route, method = 'GET', body, headers = {}) {
       const response = await fetch(`${url}/api${route}`, { method, headers: { 'Content-Type': 'application/json', ...headers }, body: body === undefined ? undefined : JSON.stringify(body) })
       return { status: response.status, data: await response.json() }

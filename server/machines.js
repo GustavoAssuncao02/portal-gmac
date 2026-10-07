@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { readStore, mutateStore } from './offers.js'
 import { hourReport, localDate, ordersWithOperations, reportRange, workIntervals } from './reportData.js'
 import { activityDateRange } from './employeeActivity.js'
+import { activeSessions } from './operationSessions.js'
 
 export async function machineRows() { return (await readStore()).machines || [] }
 const normalize = (item) => ({ id: item.id || randomUUID(), name: String(item.name || '').trim().slice(0, 160), type: String(item.type || '').slice(0, 100), sector: String(item.sector || '').slice(0, 100), hourlyRate: Math.max(0, Number(item.hourlyRate) || 0), status: 'idle', operator: '\u2014', started: '\u2014', usage: '0h 00min' })
@@ -11,7 +12,7 @@ export function machineAvailability(machines, orders, now = Date.now()) {
   const today = localDate(now)
   const totals = hourReport(workIntervals(orders, now), machines, 'machineId', reportRange(today, today)).totals
   const usage = new Map(totals.map((row) => [row.id, row.ms]))
-  const active = orders.map((order) => order.operation?.activeSession).filter((session) => session?.machineId != null)
+  const active = orders.flatMap((order) => activeSessions(order.operation)).filter((session) => session?.machineId != null)
   return machines.map((machine) => {
     const sessions = active.filter((session) => String(session.machineId) === String(machine.id))
     const starts = sessions.map((session) => Date.parse(session.machineStartedAt || session.startedAt)).filter(Number.isFinite)
@@ -101,7 +102,7 @@ export default function createMachinesRouter(requireAdmin, pool) {
         const rows = store.machines || []
         const index = rows.findIndex((item) => String(item.id) === request.params.id)
         if (index < 0) return false
-        if (store.orders.some((order) => String(order.operation?.activeSession?.machineId) === request.params.id)) return 'active'
+        if (store.orders.some((order) => activeSessions(order.operation).some((session) => String(session.machineId) === request.params.id))) return 'active'
         rows.splice(index, 1)
         return true
       })

@@ -297,6 +297,28 @@
 :root[data-theme="dark"] .operator-dialog a {
     color: #e1ebf6
 }
+:root[data-theme="dark"] .pending-material-dialog {
+    border: 1px solid #36516f;
+    background: #162b43;
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .pending-material-dialog h2 {
+    color: #ecc389
+}
+:root[data-theme="dark"] .pending-material-close {
+    border: 1px solid #36516f;
+    background: #162b43;
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .pending-material-quantities > div {
+    border-bottom: 1px solid #36516f
+}
+:root[data-theme="dark"] .pending-material-quantities small {
+    color: #b7c2cc
+}
+:root[data-theme="dark"] .pending-material-total {
+    color: #ecc389
+}
 :root[data-theme="dark"] .operator-info-back {
     color: #e1ebf6
 }
@@ -372,6 +394,72 @@
     :root[data-theme="dark"] .operator-time-banner > div:last-child {
         border-top: 1px solid #36516f
     }
+}
+:root[data-theme="dark"] .operator-workers {
+    border-top: 1px solid #36516f
+}
+:root[data-theme="dark"] .operator-workers-heading h3 {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .operator-workers-heading span {
+    color: #b6c2ce
+}
+:root[data-theme="dark"] .operator-workers-empty {
+    border: 1px dashed #36516f;
+    color: #b7c2cd
+}
+:root[data-theme="dark"] .operator-worker {
+    border: 1px solid #36516f;
+    background: #162b43
+}
+:root[data-theme="dark"] .operator-worker--open {
+    border-color: #4776ae;
+    box-shadow: 0 0 0 1px #06111d
+}
+:root[data-theme="dark"] .operator-worker-toggle {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .operator-worker-toggle:hover {
+    background: #203c59
+}
+:root[data-theme="dark"] .operator-worker-toggle:focus-visible {
+    outline: 2px solid #4779ae
+}
+:root[data-theme="dark"] .operator-worker-toggle > svg {
+    color: #b3c1d1
+}
+:root[data-theme="dark"] .operator-worker-name strong {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .operator-worker-name small, :root[data-theme="dark"] .operator-worker-time small {
+    color: #c1cfde
+}
+:root[data-theme="dark"] .operator-worker-time strong {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .operator-dialog legend {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .operator-dialog .operator-resource-type label {
+    border: 1px solid #36516f
+}
+:root[data-theme="dark"] .operator-dialog .operator-resource-type label:has(input:checked) {
+    border-color: #4779ae;
+    background: #203c59;
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .operator-dialog .operator-completed-by label {
+    border: 1px solid #36516f
+}
+:root[data-theme="dark"] .operator-dialog .operator-completed-by label:has(input:checked) {
+    border-color: #4779ae;
+    background: #203c59
+}
+:root[data-theme="dark"] .operator-completed-by small {
+    color: #c1cfde
+}
+:root[data-theme="dark"] .operator-dialog input[type="radio"] {
+    accent-color: #80b7f0
 }
 :root[data-theme="dark"] .employee-activity-modal {
     border: 1px solid #36516f;
@@ -643,6 +731,14 @@
     border: 1px solid #36516f;
     background: #162b43;
     color: #e1ebf6
+}
+:root[data-theme="dark"] .os-interrupt-session {
+    border: 1px solid #36516f;
+    color: #e1ebf6;
+    background: #162b43
+}
+:root[data-theme="dark"] .os-interrupt-session:focus-visible {
+    outline: 2px solid #477dae
 }
 :root[data-theme="dark"] .os-interrupt-form label span {
     color: #b6c3cd
@@ -1105,6 +1201,80 @@
 :root[data-theme="dark"] .account-password-input button {
     color: #b1c2d3
 }
+:root[data-theme="dark"] .admin-tools-main .labor-services-search {
+    border: 1px solid #36516f;
+    background: #162b43
+}
+:root[data-theme="dark"] .labor-services-list {
+    border: 1px solid #36516f;
+    background: #162b43
+}
+:root[data-theme="dark"] .labor-services-list > header {
+    border-bottom: 1px solid #36516f
+}
+:root[data-theme="dark"] .labor-services-list h2 {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .labor-services-list > header span {
+    color: #b7c2cc
+}
+:root[data-theme="dark"] .labor-services-list th {
+    background: #203c59;
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .labor-services-list td {
+    border-bottom: 1px solid #36516f
+}
+:root[data-theme="dark"] .labor-services-list tr.selected td {
+    background: #203c59
+}
+:root[data-theme="dark"] .labor-service-name svg {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .labor-service-actions button, :root[data-theme="dark"] .labor-service-dialog > header button {
+    border: 1px solid #36516f;
+    background: #162b43;
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .labor-service-actions button:hover {
+    background: #203c59
+}
+:root[data-theme="dark"] .labor-services-commands .labor-service-danger, :root[data-theme="dark"] .labor-service-actions .labor-service-danger, :root[data-theme="dark"] .labor-service-dialog .labor-service-danger {
+    border-color: #36516f;
+    background: #3c2023;
+    color: #e4919a
+}
+:root[data-theme="dark"] .labor-service-dialog {
+    border: 1px solid #36516f;
+    background: #162b43;
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .labor-service-dialog > header {
+    border-bottom: 1px solid #36516f
+}
+:root[data-theme="dark"] .labor-service-dialog h2 {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .labor-service-fields input {
+    border: 1px solid #36516f;
+    background: #162b43;
+    color: #e1ebf6
+}
+@media (max-width: 760px) {
+    :root[data-theme="dark"] .labor-services-list tbody tr {
+        border-bottom: 1px solid #36516f
+    }
+}
+@media (max-width: 760px) {
+    :root[data-theme="dark"] .labor-services-list td::before {
+        color: #b7c2cc
+    }
+}
+@media (max-width: 760px) {
+    :root[data-theme="dark"] .labor-services-list tr.selected {
+        background: #203c59
+    }
+}
 :root[data-theme="dark"] .admin-tools-main .payable-search {
     background: #162b43;
     border: 1px solid #36516f
@@ -1179,6 +1349,15 @@
 }
 :root[data-theme="dark"] .payable-danger {
     color: #e1939e
+}
+:root[data-theme="dark"] .payable-icon--inactive {
+    border-color: #36516f;
+    background: #3c2024;
+    color: #e1939e
+}
+:root[data-theme="dark"] .payable-icon--inactive:hover {
+    border-color: #36516f;
+    background: #3c2025
 }
 :root[data-theme="dark"] .payable-link {
     color: #e1ebf6
@@ -1488,9 +1667,6 @@
 }
 :root[data-theme="dark"] .account-copy span {
     color: #b4c1d0
-}
-:root[data-theme="dark"] .account-chevron {
-    color: #e1ebf6
 }
 :root[data-theme="dark"] .logout-button {
     color: #e1ebf6
@@ -2181,6 +2357,12 @@
 }
 :root[data-theme="dark"] .inventory-history-note {
     color: #b4c1cf
+}
+:root[data-theme="dark"] .inventory-history-order-link {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .inventory-history-order-link:focus-visible {
+    outline: 2px solid #4778ae
 }
 :root[data-theme="dark"] .inventory-modal {
     border: 1px solid #36516f;
@@ -3269,6 +3451,11 @@
     border: 2px solid #36516f;
     color: #ec898f
 }
+:root[data-theme="dark"] .offer-reject-modal .os-edit-actions .offer-reject-button {
+    border-color: #36516f;
+    color: #ec898f;
+    background: #3c2022
+}
 :root[data-theme="dark"] .offer-review-button {
     border: 2px solid #ae8e47;
     color: #ecc989
@@ -3423,6 +3610,57 @@
 :root[data-theme="dark"] .orders-header h1 {
     color: #e1ebf6
 }
+:root[data-theme="dark"] .material-request-create, :root[data-theme="dark"] .material-request-modal .os-button--primary {
+    border-color: #4776ae;
+    background: #194f8f;
+    color: #f2f6fc
+}
+:root[data-theme="dark"] .material-request-create:hover, :root[data-theme="dark"] .material-request-modal .os-button--primary:hover {
+    border-color: #4777ae;
+    background: #143f70
+}
+:root[data-theme="dark"] .material-order-refused {
+    color: #e88d96
+}
+:root[data-theme="dark"] .material-orders-code strong {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .material-request-field {
+    color: #a9c2da
+}
+:root[data-theme="dark"] .material-request-field :is(input, select) {
+    border: 1px solid #36516f;
+    background: #162b43;
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .material-request-modes legend {
+    color: #a9c2da
+}
+:root[data-theme="dark"] .material-request-modes label {
+    color: #a9c2da
+}
+:root[data-theme="dark"] .material-request-modes input {
+    accent-color: #80b7f0
+}
+:root[data-theme="dark"] .material-request-event {
+    border-bottom: 1px solid #36516f;
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .material-request-event-heading time {
+    color: #b4c1cf
+}
+:root[data-theme="dark"] .material-request-event-user {
+    color: #a9c2da
+}
+:root[data-theme="dark"] .material-request-event small {
+    color: #b4c1cf
+}
+:root[data-theme="dark"] .material-request-event--received > svg {
+    color: #89ebb9
+}
+:root[data-theme="dark"] .material-request-event--rejected > svg {
+    color: #e88d96
+}
 :root[data-theme="dark"] .offer-process-settings legend {
     color: #e1ebf6
 }
@@ -3480,6 +3718,30 @@
 }
 :root[data-theme="dark"] .material-orders-table td small {
     color: #b4c1cf
+}
+:root[data-theme="dark"] .material-order-received {
+    color: #89ebb9
+}
+:root[data-theme="dark"] .account-notification-options input[type="checkbox"] {
+    accent-color: #80b7f0
+}
+:root[data-theme="dark"] .material-order-action {
+    border: 1px solid #36516f;
+    background: #203c59;
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .material-order-action--add:hover {
+    background: #203c59;
+    border-color: #36516f
+}
+:root[data-theme="dark"] .material-order-action--reject {
+    border-color: #36516f;
+    background: #3c2020;
+    color: #e88d96
+}
+:root[data-theme="dark"] .material-order-action--reject:hover {
+    background: #3c2020;
+    border-color: #36516f
 }
 :root[data-theme="dark"] .material-order-link {
     color: #e1ebf6
@@ -3619,6 +3881,17 @@
 :root[data-theme="dark"] .admin-os-table td:first-child small {
     color: #b5c2cf
 }
+:root[data-theme="dark"] .admin-os-table .admin-os-row--material-pending, :root[data-theme="dark"] .admin-os-table .admin-os-row--material-pending > td {
+    background: #3c3320
+}
+:root[data-theme="dark"] .admin-os-material-alert {
+    background: #3c3320;
+    color: #ecc389
+}
+:root[data-theme="dark"] .admin-os-material-alert:hover {
+    border-color: #ae8747;
+    background: #3c3320
+}
 :root[data-theme="dark"] .admin-os-table td button {
     border: 1px solid #4778ae;
     background: #162b43;
@@ -3705,6 +3978,11 @@
 }
 :root[data-theme="dark"] .admin-os-summary span {
     color: #b7c2cc
+}
+@media (min-width: 1800px) {
+    :root[data-theme="dark"] .admin-os-stage-label, :root[data-theme="dark"] .admin-os-main:fullscreen .admin-os-stage-label {
+        color: #e1ebf6
+    }
 }
 @media (min-width: 761px) and (max-width: 1150px) {
     :root[data-theme="dark"] .admin-os-table tbody tr {
@@ -3809,6 +4087,11 @@
 }
 :root[data-theme="dark"] .calculator-contact-prompt {
     color: #c1cfde
+}
+@media (min-width: 2200px) {
+    :root[data-theme="dark"] .proposal-card-column + .proposal-card-column {
+        border-top: 1px solid #36516f
+    }
 }
 @media screen and (max-width: 760px) {
     :root[data-theme="dark"] .dashboard-shell :is(input[type=checkbox], input[type=radio]) {

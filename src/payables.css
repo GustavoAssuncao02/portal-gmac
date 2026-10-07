@@ -29,6 +29,7 @@
 .payable-pagination > span:first-child { margin-right:auto; }.admin-tools-main .payable-pagination label { flex-direction:row; align-items:center; }
 .payable-icon { display:inline-grid; place-items:center; width:34px; height:34px; flex-shrink:0; padding:0; border:1px solid #d3dfeb; border-radius:5px; background:white; color:#0c4c91; cursor:pointer; }
 .payable-icon:hover { background:#edf4fb; }.payable-icon:disabled { opacity:.4; cursor:not-allowed; }.payable-danger { color:#bd3548; }
+.payable-icon--inactive { border-color:#efc4ca; background:#fff7f8; color:#bd3548; }.payable-icon--inactive:hover { border-color:#e3a3ad; background:#fcecef; }
 .payable-registry-actions { display:flex; gap:8px; }
 .payable-link { border:0; padding:0; background:none; color:#0c4c91; font:inherit; font-size:12px; text-decoration:underline; cursor:pointer; width:fit-content; }
 .payable-bulk-actions { display:flex; flex-wrap:wrap; align-items:center; gap:12px; padding:14px; margin-bottom:12px; border-left:3px solid #0c4c91; background:#edf5fc; font-size:12px; }

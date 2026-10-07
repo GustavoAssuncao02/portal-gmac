@@ -1,7 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import postcss from 'postcss'
 
-const files = ['operator.css', 'employeeActivity.css', 'orderEditing.css', 'orderDetails.css', 'adminHome.css', 'notifications.css', 'adminTools.css', 'payables.css', 'machineHistory.css', 'styles.css', 'mobile.css']
+const files = ['operator.css', 'employeeActivity.css', 'orderEditing.css', 'orderDetails.css', 'adminHome.css', 'notifications.css', 'adminTools.css', 'payables.css', 'machineHistory.css', 'styles.css', 'desktop.css', 'mobile.css']
 const allowed = /^(color|background.*|border.*|outline.*|box-shadow|text-shadow|fill|stroke|accent-color|caret-color|text-decoration-color)$/
 const bytes = (hex) => {
   const value = hex.slice(1)
@@ -66,3 +66,41 @@ for (const file of files) {
 }
 await writeFile(new URL('../src/darkTheme.generated.css', import.meta.url), `${output.toString()}\n`, 'utf8')
 console.log(`Dark palette generated from ${files.length} stylesheets.`)
+
+// Fixed pixel sizes need explicit overrides; inherited sizes keep their existing ratios.
+const typography = postcss.root()
+typography.append(postcss.comment({ text: 'Generated from the existing typography. Default font sizes are untouched. Run npm run theme:build after CSS changes.' }))
+typography.append(postcss.parse(':root[data-font-size="small"] { --account-font-scale: .9; }\n:root[data-font-size="large"] { --account-font-scale: 1.15; }\n:root:is([data-font-size="small"], [data-font-size="large"]) { font-size: calc(16px * var(--account-font-scale)); }'))
+const fontScope = ':root:is([data-font-size="small"], [data-font-size="large"])'
+for (const file of [...files, 'theme.css']) {
+  const source = postcss.parse(await readFile(new URL(`../src/${file}`, import.meta.url), 'utf8'))
+  source.walkRules((rule) => {
+    if (rule.parent.type === 'atrule' && /keyframes$/i.test(rule.parent.name)) return
+    const declarations = []
+    for (const node of rule.nodes) {
+      if (node.type !== 'decl') continue
+      if (node.prop === 'font-size' || node.prop === 'line-height') {
+        if (/^[\d.]+px$/.test(node.value)) declarations.push({ prop: node.prop, value: `calc(${node.value} * var(--account-font-scale))`, important: node.important })
+        else if (node.prop === 'font-size') declarations.push(node.clone())
+      } else if (node.prop === 'font') {
+        const size = postcss.list.space(node.value).find((value) => /^[\d.]+px$/.test(value))
+        if (size || node.value === 'inherit') declarations.push({ prop: 'font-size', value: size ? `calc(${size} * var(--account-font-scale))` : 'inherit', important: node.important })
+        else throw new Error(`Unsupported font shorthand in ${file}: ${node.value}`)
+      }
+    }
+    if (!declarations.length) return
+    const scoped = postcss.rule({ selector: rule.selectors.map((selector) => /^(:root|html)(?=\s|[.#:[>+~]|$)/.test(selector) ? selector.replace(/^(:root|html)/, fontScope) : `${fontScope} ${selector}`).join(', ') })
+    for (const declaration of declarations) scoped.append(declaration)
+    let child = scoped
+    for (let ancestor = rule.parent; ancestor.type !== 'root'; ancestor = ancestor.parent) {
+      if (ancestor.type !== 'atrule') continue
+      const wrapper = postcss.atRule({ name: ancestor.name, params: ancestor.params })
+      wrapper.append(child); child = wrapper
+    }
+    typography.append(child)
+  })
+}
+// Safari zooms focused fields below 16px; the compact option must not trigger that zoom.
+typography.append(postcss.parse('@media (max-width: 760px) { :root[data-font-size="small"] :is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]), select, textarea) { font-size: 16px !important; } }'))
+await writeFile(new URL('../src/fontSize.generated.css', import.meta.url), `${typography.toString()}\n`, 'utf8')
+console.log('Small and large font overrides generated; default typography preserved.')

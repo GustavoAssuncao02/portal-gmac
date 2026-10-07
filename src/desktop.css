@@ -1,0 +1,126 @@
+/* Desktop layouts use the available width without scaling the whole interface. */
+@media (min-width: 1101px) {
+  .dashboard-shell > .sidebar {
+    position: sticky;
+    top: 0;
+    height: 100dvh;
+    min-height: 0;
+    align-self: flex-start;
+  }
+  .sidebar-logo { height: 100px; flex-shrink: 0; }
+  .sidebar-logo img { width: 112px; height: 86px; }
+  .sidebar-nav { min-height: 0; overflow-y: auto; overscroll-behavior: contain; gap: 2px; scrollbar-width: thin; }
+  .sidebar-nav > *, .sidebar-account, .sidebar > .logout-button { flex-shrink: 0; }
+  .sidebar .nav-item { min-height: 44px; padding: 8px 16px 8px 24px; font-size: 14px; }
+  .sidebar .sidebar-submenu .nav-item { padding-left: 34px; font-size: 13px; }
+  .sidebar.sidebar--collapsed .nav-item { padding: 8px 0; }
+  .sidebar-account { min-height: 60px; padding-top: 8px; padding-bottom: 8px; }
+  .sidebar > .logout-button { margin-bottom: 10px; min-height: 36px; }
+  .machine-table { min-width: 1080px; }
+  .machine-row { grid-template-columns: minmax(170px, 1.5fr) minmax(130px, 1.1fr) minmax(105px, .8fr) minmax(165px, 1fr) minmax(130px, 1fr) minmax(100px, .7fr) minmax(130px, .9fr) minmax(120px, .7fr); }
+  .machine-row > * { padding: 10px 12px; overflow-wrap: anywhere; }
+  .machine-name { gap: 10px; }
+  .inventory-card, .pending-material-card, .registration-list-card { max-width: none; }
+  .registration-layout { max-width: none; grid-template-columns: minmax(0, 1fr) 280px; }
+  .registration-card { min-width: 0; }
+  .proposal-material-summary button { min-height: 32px; align-items: center; line-height: 1.4; }
+  .proposal-material-summary button span { line-height: 1; }
+  .account-settings-layout { display: grid; grid-template-columns: minmax(350px, .85fr) minmax(0, 1.15fr); align-items: start; gap: 28px 40px; }
+  .account-settings-layout > .account-appearance-settings { max-width: none; margin: 0; padding: 0 0 24px; }
+  .account-settings-layout > .account-settings-form { max-width: none; grid-column: 2; grid-row: 1 / span 2; }
+  .account-settings-layout > .account-notification-settings { grid-column: 1; grid-row: 2; margin: 0; padding: 0; border-top: 0; }
+  .account-notification-settings .account-settings-fields { grid-template-columns: minmax(0, 1fr); }
+  .admin-tools-main:has(.payable-classifications-table) { padding-left: 12px; padding-right: 12px; }
+  .payable-classifications-table { table-layout: fixed; }
+  .payable-classifications-table :is(th, td) { max-width: none; padding: 16px; }
+  .payable-classifications-table :is(th:first-child, td:first-child) { width: 50%; }
+  .payable-classifications-table :is(th:nth-child(2), td:nth-child(2)) { width: 20%; text-align: center; }
+  .payable-classifications-table :is(th:nth-child(3), td:nth-child(3)) { width: 15%; }
+  .payable-classifications-table :is(th:last-child, td:last-child) { width: 15%; text-align: right; }
+  .payable-classifications-table td:first-child { font-weight: 600; line-height: 1.5; }
+  .payable-classifications-table td:nth-child(2) { font-variant-numeric: tabular-nums; }
+  .payable-classifications-table .payable-registry-actions { justify-content: flex-end; }
+  .payable-classifications-table .payable-icon { width: 38px; height: 38px; }
+  .offers-board { border-radius: 8px; }
+  .offers-board-toolbar { grid-template-columns: minmax(240px, 1fr) 160px auto; gap: 16px; padding: 20px 12px; }
+  .offers-board .offers-search { width: 100%; height: 44px; padding: 0 12px; border-width: 1px; }
+  .offers-board .offers-search .icon { width: 20px; height: 20px; margin-right: 10px; }
+  .offers-board .offers-search input { min-width: 0; font-size: 14px; }
+  .offers-date { font-size: 13px; }
+  .offers-date input { width: 100%; height: 44px; border-width: 1px; font-size: 13px; }
+  .offers-board .offer-filters { gap: 8px; }
+  .offers-board .offer-filter { height: 44px; padding: 0 10px; gap: 7px; font-size: 13px; }
+  .offers-board .offer-filter strong { width: 24px; height: 24px; font-size: 12px; flex-shrink: 0; }
+  .offers-board .manual-offer-button { height: 44px; padding: 0 12px; font-size: 12px; }
+  .offers-table-wrap { padding: 0 8px 12px; }
+  .offers-table { width: 100%; min-width: 0; border-radius: 6px; }
+  .offers-table-row { grid-template-columns: minmax(0, 2fr) minmax(0, 1.7fr) minmax(125px, .65fr) minmax(120px, .6fr) minmax(112px, .8fr) minmax(112px, .8fr) minmax(125px, .9fr) minmax(135px, .8fr) minmax(210px, 1.1fr); min-height: 72px; font-size: 13px; }
+  .offers-table-row > *, .offers-table-header > * { padding: 12px 8px; overflow-wrap: anywhere; }
+  .offers-table-header { min-height: 52px; font-size: 13px; }
+  .offers-table-header > * { overflow-wrap: normal; }
+  .offers-table-row > :nth-child(8) { overflow-wrap: normal; }
+  .offer-piece strong { font-size: 14px; line-height: 1.35; }
+  .offer-piece span { font-size: 12px; }
+  .offer-table-status { margin: 8px 0; padding: 6px 8px; min-height: 40px; }
+  .offer-table-status strong { font-size: 13px; }
+  .offer-table-status span { font-size: 11px; }
+  .offer-table-actions { flex-wrap: wrap; gap: 6px; padding-right: 8px !important; }
+  .offer-table-actions button { max-width: 100%; height: auto; min-height: 36px; padding: 8px 10px; font-size: 12px; white-space: normal; overflow-wrap: anywhere; }
+}
+
+@media (min-width: 1800px) {
+  .offers-table-row { grid-template-columns: minmax(0, 2fr) minmax(0, 1.7fr) minmax(145px, .65fr) minmax(125px, .6fr) minmax(145px, .8fr) minmax(140px, .8fr) minmax(165px, .9fr) minmax(135px, .8fr) minmax(290px, 1.1fr); }
+  .offers-table-row > *, .offers-table-header > * { padding-left: 12px; padding-right: 12px; }
+  .offer-table-status { padding: 6px 8px; }
+  .offer-piece strong { font-size: 15px; }
+  .offer-table-status strong { font-size: 14px; }
+  .offer-table-actions { padding-right: 12px !important; }
+  .offer-table-actions button { font-size: 13px; }
+}
+
+@media (min-width: 1800px) {
+  .machines-main, .inventory-main, .registration-main, .calculator-main, .orders-main { padding-left: 24px; padding-right: 24px; }
+  .offers-table-row, .inventory-row, .registration-list-row, .pending-material-row { font-size: 14px; }
+  .offers-table-header, .inventory-row--header, .registration-list-row--header, .pending-material-row--header { font-size: 13px; }
+  .payable-table th, .reports-table-scroll th { font-size: 13px; }
+  .payable-table td, .reports-table-scroll td { font-size: 14px; }
+  .home-workspace { grid-template-columns: minmax(0, 2.4fr) minmax(340px, 1fr); }
+  .payable-bi-charts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .calculator-workspace { grid-template-columns: 260px minmax(0, 1fr) 320px; }
+  .format-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .operator-project-info { max-width: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 32px; align-items: start; }
+  .operator-info-header { grid-column: 1 / -1; }
+  .operator-info-section { min-width: 0; }
+}
+
+@media (min-width: 2200px) {
+  .registration-main { display: grid; grid-template-columns: minmax(520px, .8fr) minmax(0, 1.6fr); gap: 24px; align-content: start; align-items: start; }
+  .registration-header { grid-column: 1 / -1; }
+  .registration-layout { grid-column: 1; grid-template-columns: minmax(0, 1fr); margin: 0; }
+  .registration-list-card { grid-column: 2; grid-row: 2; margin: 0; min-width: 0; }
+  .registration-help { padding: 24px; }
+  .account-settings-layout { grid-template-columns: minmax(400px, 1fr) minmax(600px, 1.4fr) minmax(300px, .8fr); }
+  .account-settings-layout > .account-settings-form { grid-row: 1; }
+  .account-settings-layout > .account-notification-settings { grid-column: 3; grid-row: 1; }
+  .account-settings-layout > .account-appearance-settings { border-bottom: 0; }
+  .proposal-card-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; }
+  .proposal-card-content { grid-template-columns: minmax(0, 1fr); }
+  .proposal-card-column + .proposal-card-column { padding: 12px 0 0; border-left: 0; border-top: 1px solid #e5ebf1; }
+  .proposal-card-column > div { min-height: 38px; font-size: 13px; }
+  .proposal-card-column strong { font-size: 14px; }
+  .proposal-card-heading { flex-wrap: wrap; }
+  .operator-stage-groups { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+  .operator-stage-group + .operator-stage-group { padding-top: 0; border-top: 0; }
+  .operator-stages { flex-wrap: wrap; row-gap: 20px; overflow: visible; }
+}
+
+@media (min-width: 2500px) {
+  .inventory-main { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; align-content: start; align-items: start; }
+  .inventory-header, .inventory-metrics, .inventory-main > .workflow-error { grid-column: 1 / -1; }
+  .inventory-metrics { margin: 0; }
+  .inventory-card, .pending-material-card { min-width: 0; margin: 0; }
+}
+
+@media (min-width: 2800px) {
+  .format-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+}

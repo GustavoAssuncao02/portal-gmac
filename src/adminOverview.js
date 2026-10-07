@@ -1,5 +1,5 @@
 import { deliveryTimestamp, serviceDeadline } from './serviceDeadline.js'
-import { pendingInventoryRequests, purchaseMaterialRequests } from './offerResources.js'
+import { purchaseMaterialRequests } from './offerResources.js'
 import { DAY, filterPayables, todayBahia } from '../server/payableRules.js'
 
 export function payableOverview(rows, now = Date.now()) {
@@ -16,7 +16,7 @@ export function payableOverview(rows, now = Date.now()) {
   })
 }
 
-export function adminOverview(orders, offers, inventory, savedRequests = [], now = Date.now()) {
+export function adminOverview(orders, offers, inventory, now = Date.now()) {
   const openOrders = orders.filter((order) => order.operation?.status !== 'completed').map((order) => {
     const deadline = order.proposal?.deadline || order.deadline
     const timestamp = deliveryTimestamp(deadline)
@@ -32,8 +32,7 @@ export function adminOverview(orders, offers, inventory, savedRequests = [], now
     running: openOrders.filter((order) => ['running', 'finalizing'].includes(order.operation?.status)).length,
     late: openOrders.filter((order) => order.due.key === 'late').length,
     reviewing: offers.filter((offer) => offer.status === 'review' && !offer.orderCode).length,
-    pendingMaterials: pendingInventoryRequests(offers, orders, inventory, savedRequests).filter((request) => request.status === 'pending').length,
-    purchaseRequests: purchaseMaterialRequests(offers, orders, savedRequests).length,
+    purchaseRequests: purchaseMaterialRequests(offers, orders).filter((request) => request.quantity > 0 && !request.rejection).length,
     unacknowledged: orders.filter((order) => order.operation?.status === 'completed' && !order.operation.completionAcknowledgedAt).length,
   }
 }

@@ -86,6 +86,8 @@
 .os-interrupt-modal { width: min(520px, calc(100% - 24px)); }
 .os-interrupt-form { padding: 20px 24px 24px; }
 .os-interrupt-operator { margin: 0 0 20px; font-size: 13px; overflow-wrap: anywhere; }
+.os-interrupt-session { display: block; width: 100%; box-sizing: border-box; min-height: 38px; margin-bottom: 18px; padding: 8px 10px; border: 1px solid #c6d9ea; border-radius: 5px; color: #31516d; background: #fff; font: inherit; font-size: 14px; }
+.os-interrupt-session:focus-visible { outline: 2px solid #155691; outline-offset: 2px; }
 .os-interrupt-form label { display: block; margin-bottom: 8px; font-size: 13px; font-weight: 600; }
 .os-interrupt-form label span { color: #647d92; font-weight: 400; }
 .os-interrupt-form textarea { display: block; width: 100%; box-sizing: border-box; min-height: 112px; max-height: 35dvh; padding: 10px 12px; border: 1px solid #c6d9ea; border-radius: 5px; color: #31516d; background: #fff; font: inherit; font-size: 14px; line-height: 1.5; resize: vertical; }

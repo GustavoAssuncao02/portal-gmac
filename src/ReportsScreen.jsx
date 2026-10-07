@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { FileDown, Sheet, RefreshCw, Search } from 'lucide-react'
 import AdminWorkspace from './AdminWorkspace.jsx'
 
-const types = [['employees', 'Funcion\u00e1rios'], ['clients', 'Clientes'], ['admins', 'Administradores'], ['employee-hours', 'Horas trabalhadas'], ['machine-hours', 'Horas de m\u00e1quinas'], ['orders', 'Ordens de servi\u00e7o']]
+const types = [['employees', 'Funcion\u00e1rios'], ['clients', 'Clientes'], ['admins', 'Administradores'], ['employee-hours', 'Horas trabalhadas'], ['machine-hours', 'Horas de m\u00e1quinas'], ['service-hours', 'Servi\u00e7os'], ['orders', 'Ordens de servi\u00e7o']]
 const today = () => new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10)
 const headers = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${sessionStorage.getItem('gmac-admin-token') || ''}` })
 
@@ -10,7 +10,7 @@ export default function ReportsScreen(props) {
   const [kind, setKind] = useState('employees')
   const [start, setStart] = useState(() => `${today().slice(0, 8)}01`)
   const [end, setEnd] = useState(today)
-  const [catalog, setCatalog] = useState({ employees: [], machines: [] })
+  const [catalog, setCatalog] = useState({ employees: [], machines: [], services: [] })
   const [catalogLoading, setCatalogLoading] = useState(true)
   const [retry, setRetry] = useState(0)
   const [all, setAll] = useState(true)
@@ -24,8 +24,8 @@ export default function ReportsScreen(props) {
   const pending = useRef(null)
   const requiresDates = kind.endsWith('-hours') || kind === 'orders'
   const hasSelection = kind.endsWith('-hours')
-  const items = kind === 'machine-hours' ? catalog.machines : catalog.employees
-  const selectionLabel = kind === 'machine-hours' ? 'M\u00e1quinas' : 'Funcion\u00e1rios'
+  const items = kind === 'machine-hours' ? catalog.machines : kind === 'service-hours' ? catalog.services : catalog.employees
+  const selectionLabel = kind === 'machine-hours' ? 'M\u00e1quinas' : kind === 'service-hours' ? 'Servi\u00e7os' : 'Funcion\u00e1rios'
   useEffect(() => {
     const controller = new AbortController()
     setCatalogLoading(true)

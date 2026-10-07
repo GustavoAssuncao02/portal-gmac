@@ -6,3 +6,6 @@ dist
 server/data/
 test-results/
 *.log
+
+# Extratos bancarios contem dados financeiros e pessoais.
+*.ofx
