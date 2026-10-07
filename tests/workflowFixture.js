@@ -9,7 +9,7 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   const results = path.join(root, 'test-results')
   await mkdir(results, { recursive: true })
   const directory = await mkdtemp(path.join(results, 'workflow-'))
-  for (const name of ['offers.js', 'orderMaterials.js', 'pendingMaterials.js', 'operations.js', 'orderEditing.js', 'operatorAuth.js', 'employeeActivity.js', 'serviceStages.js', 'machines.js', 'laborServices.js', 'accounts.js', 'reports.js', 'reportData.js', 'documentExports.js', 'payables.js', 'payableRules.js', 'materialRequests.js', 'notificationRules.js', 'notificationEvents.js', 'operationSessions.js', 'materialRequestCodes.js', 'notifications.js']) {
+  for (const name of ['offers.js', 'orderMaterials.js', 'pendingMaterials.js', 'operations.js', 'orderEditing.js', 'operatorAuth.js', 'employeeActivity.js', 'serviceStages.js', 'machines.js', 'laborServices.js', 'accounts.js', 'reports.js', 'reportData.js', 'documentExports.js', 'payables.js', 'payableRules.js', 'receivables.js', 'bankStatements.js', 'ofx.js', 'materialRequests.js', 'notificationRules.js', 'notificationEvents.js', 'operationSessions.js', 'materialRequestCodes.js', 'notifications.js']) {
     await copyFile(path.join(root, 'server', name), path.join(directory, name))
   }
   // PDFs use the bundled logo and fonts.
@@ -23,6 +23,8 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   await ensureLaborServices()
   const { default: reportsRouter } = await import(pathToFileURL(path.join(directory, 'reports.js')))
   const { default: payablesRouter } = await import(pathToFileURL(path.join(directory, 'payables.js')))
+  const { default: receivablesRouter } = await import(pathToFileURL(path.join(directory, 'receivables.js')))
+  const { default: bankStatementsRouter } = await import(pathToFileURL(path.join(directory, 'bankStatements.js')))
   const { default: materialRequestsRouter, saveRequestedMaterial } = await import(pathToFileURL(path.join(directory, 'materialRequests.js')))
   const { default: notificationsRouter } = await import(pathToFileURL(path.join(directory, 'notifications.js')))
   const accounts = createAccountService(pool, accountsEnv || {})
@@ -36,6 +38,8 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   app.use('/api', reportsRouter(pool, accounts, requireAdmin))
   const payables = payablesRouter(accounts, requireAdmin)
   app.use('/api', payables)
+  app.use('/api', receivablesRouter(accounts, requireAdmin))
+  app.use('/api', bankStatementsRouter(accounts, requireAdmin))
   app.use('/api', notificationsRouter({ requireAdmin, payables, loadInventory: notificationInventory }))
   app.use('/api', materialRequestsRouter(requireAdmin, inventoryPool, accounts))
   app.get('/api/inventory', (_request, response) => response.status(503).json({ message: 'O banco de dados ainda não está configurado.' }))

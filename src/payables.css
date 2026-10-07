@@ -80,3 +80,43 @@
 .payable-modal--form .payable-files { padding-top:10px; }.payable-modal--form .payable-files h3 { margin-bottom:8px; font-size:13px; }.payable-modal--form .payable-drop { padding:8px 12px; gap:12px; }.payable-modal--form .payable-files ul:empty { display:none; }
 .payable-modal--form > footer { padding:10px 20px; }.payable-modal--form .admin-tool-button { min-height:32px; padding:6px 10px; font-size:12px; }
 @media(max-width:760px) { .payable-modal--form .payable-entry-form > fieldset { grid-template-columns:minmax(0,1fr); }.payable-modal--form .payable-modal-body { padding:14px; } }
+.receivable-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; margin-bottom:24px; }
+.receivable-origin { margin:0; padding:12px 14px; border-left:3px solid #7090ad; background:#f4f8fc; font-size:13px; line-height:1.5; }
+.receivable-reconciled { display:flex; align-items:center; gap:4px; margin-top:5px; color:#137b44; font-size:11px; }
+.receivable-order-facts { margin-bottom:18px; }
+:is(.receivable-table,.bank-transactions,.bank-days) :is(td:first-child,th:first-child) { width:auto; white-space:nowrap; }
+.bank-transactions tbody tr,.bank-days tbody tr { cursor:default; }
+.bank-account-bar { display:flex; flex-wrap:wrap; align-items:flex-end; gap:10px 24px; margin-bottom:18px; font-size:13px; color:#3f5d7a; }.bank-account-bar > strong { color:#173f6a; font-size:15px; }
+.bank-tolerance { display:flex; align-items:flex-end; gap:8px; margin-left:auto; }.admin-tools-main .bank-tolerance label { font-size:12px; }.bank-tolerance input { width:90px; }
+.bank-warnings { display:grid; gap:8px; margin:0 0 20px; padding:0; list-style:none; }
+.bank-warning { display:flex; align-items:flex-start; gap:10px; margin:0; padding:12px 14px; border-left:3px solid #7090ad; border-radius:4px; background:#f4f8fc; color:#2c4e70; font-size:13px; line-height:1.45; }.bank-warning svg { flex-shrink:0; margin-top:2px; }.bank-warning small { display:block; margin-top:3px; color:#5f7489; font-size:12px; }
+.bank-warning--warning { border-left-color:#c98a1b; background:#fff7e6; color:#6b4500; }.bank-warning--warning small { color:#7a5a1f; }
+.bank-import-result { margin-bottom:24px; padding:16px 18px; border:1px solid #cfe0d6; border-radius:6px; background:#f4fbf6; font-size:13px; }.bank-import-result header { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px; }.bank-import-result h2 { margin:0; color:#1d6341; font-size:16px; overflow-wrap:anywhere; }.bank-import-result p { margin:10px 0; line-height:1.5; }
+.bank-summary { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:12px; margin-bottom:26px; }
+.bank-columns { display:grid; grid-template-columns:minmax(0,1.2fr) minmax(0,1fr); gap:30px; margin-bottom:28px; }
+.bank-ok,.bank-diverges { display:inline-flex; align-items:center; gap:5px; font-weight:600; }.bank-ok { color:#137b44; }.bank-diverges { color:#b42c3c; }
+.bank-balances,.bank-imports,.bank-conflicts ul { display:grid; margin:0; padding:0; list-style:none; }
+.bank-balances li,.bank-imports li,.bank-conflicts li { display:flex; flex-wrap:wrap; justify-content:space-between; gap:4px 16px; padding:11px 0; border-bottom:1px solid #e2ebf3; font-size:13px; }.bank-balances strong { font-variant-numeric:tabular-nums; }.bank-balances small { flex-basis:100%; color:#71859a; font-size:11px; }
+.bank-imports li,.bank-conflicts li { flex-direction:column; }.bank-imports span,.bank-conflicts span { color:#5c7288; font-size:12px; }.bank-conflicts button { width:fit-content; }
+.bank-conflicts { margin-bottom:28px; padding:16px 18px; border:1px solid #f0d39a; border-radius:6px; background:#fffaf0; }
+.bank-section-title { margin:8px 0 16px; color:#284b6c; font-size:17px; }
+.admin-tools-main .bank-filter { display:flex; flex-direction:row; align-items:center; gap:8px; font-size:12px; }
+.bank-memo { display:block; color:#24405d; font-weight:600; }.bank-transactions small { display:block; margin-top:4px; color:#71859a; font-size:11px; }
+.bank-amount { white-space:nowrap; font-weight:600; font-variant-numeric:tabular-nums; }.bank-amount svg { margin-right:4px; vertical-align:-2px; }.bank-amount--in { color:#137b44; }.bank-amount--out { color:#b42c3c; }
+.bank-linked { display:flex; flex-direction:column; align-items:flex-start; gap:4px; }.bank-transactions .admin-tool-button { min-height:30px; padding:5px 9px; font-size:12px; }
+.bank-candidates { display:grid; gap:12px; margin:16px 0 0; padding:0; list-style:none; }.bank-candidates > li { display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; gap:12px 16px; padding:14px; border:1px solid #d9e4ef; border-radius:6px; }.bank-candidates > li > div { display:flex; flex-direction:column; gap:5px; min-width:0; font-size:13px; }.bank-candidates span { color:#5c7288; font-size:12px; overflow-wrap:anywhere; }.bank-candidates ul { margin:4px 0 0; padding-left:18px; color:#2c4e70; font-size:12px; line-height:1.5; }
+.bank-strength { padding:4px 8px; border-radius:4px; background:#edf1f5; color:#4a5f74; font-size:11px; font-weight:700; white-space:nowrap; }.bank-strength--1 { background:#e9f7ee; color:#137b44; }.bank-strength--2 { background:#eaf3fc; color:#0c4c91; }.bank-strength--4 { background:#fff3d9; color:#8a5a06; }
+.finance-trend { margin-top:32px; padding-top:26px; border-top:1px solid #dce6ef; --trend-receivable:#15803d; --trend-payable:#dc2626; --trend-surface:#ffffff; --trend-grid:#e3ebf3; --trend-axis:#6b84a0; --trend-ink:#31587f; --trend-crosshair:#8aa3bd; --trend-today:#c4d3e2; }
+.finance-trend-heading { display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:12px 24px; }.finance-trend-heading h2 { margin:0 0 6px; }.finance-trend-heading p { margin:0; }
+.finance-trend-controls { display:flex; flex-wrap:wrap; align-items:flex-end; gap:10px; }.admin-tools-main .finance-trend-controls label { font-size:12px; }
+.finance-trend-legend { display:flex; flex-wrap:wrap; gap:8px 22px; margin:16px 0 8px; padding:0; list-style:none; color:var(--trend-ink); font-size:13px; }.finance-trend-legend li { display:inline-flex; align-items:center; gap:8px; }
+.finance-trend-plot { position:relative; min-width:0; }.finance-trend-plot svg { display:block; max-width:100%; height:auto; overflow:visible; outline-offset:4px; touch-action:pan-y; }
+.finance-trend-grid { stroke:var(--trend-grid); stroke-width:1; shape-rendering:crispEdges; }.finance-trend-today { stroke:var(--trend-today); stroke-width:1; }.finance-trend-crosshair { stroke:var(--trend-crosshair); stroke-width:1; }
+.finance-trend-axis { fill:var(--trend-axis); font-size:11px; font-variant-numeric:tabular-nums; }.finance-trend-end { fill:var(--trend-ink); font-size:12px; font-weight:600; }
+.finance-trend-line { fill:none; stroke-width:2; stroke-linejoin:round; stroke-linecap:round; }.finance-trend-line--receivable { stroke:var(--trend-receivable); }.finance-trend-line--payable { stroke:var(--trend-payable); }
+.finance-trend-dot { stroke:var(--trend-surface); stroke-width:2; paint-order:stroke; }.finance-trend-dot--receivable { fill:var(--trend-receivable); }.finance-trend-dot--payable { fill:var(--trend-payable); }
+.finance-trend-tooltip { position:absolute; z-index:2; display:grid; gap:5px; min-width:180px; padding:10px 12px; border:1px solid #d3dfeb; border-radius:6px; background:#fff; color:#31587f; font-size:12px; box-shadow:0 6px 18px #12345820; pointer-events:none; }.finance-trend-tooltip span { display:flex; align-items:center; gap:6px; }.finance-trend-tooltip b { color:#173f6a; font-variant-numeric:tabular-nums; }
+.finance-trend-key { display:inline-block; width:12px; height:3px; border-radius:2px; }.finance-trend-key--receivable { background:var(--trend-receivable); }.finance-trend-key--payable { background:var(--trend-payable); }
+.finance-trend-table td { cursor:default; font-variant-numeric:tabular-nums; }
+@media(max-width:1100px) { .bank-summary { grid-template-columns:repeat(3,minmax(0,1fr)); }.bank-columns { grid-template-columns:minmax(0,1fr); } }
+@media(max-width:760px) { .receivable-summary,.bank-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }.bank-tolerance { margin-left:0; }.bank-candidates > li { grid-template-columns:minmax(0,1fr); }:is(.bank-transactions,.bank-days,.finance-trend-table) td:nth-child(2) { grid-column:1 / -1; grid-row:auto; text-align:left; }:is(.bank-transactions,.bank-days,.finance-trend-table) td:nth-child(2)::before { display:block; }.admin-tools-main .bank-filter { flex:1 1 100%; } }

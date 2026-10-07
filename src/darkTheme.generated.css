@@ -1499,6 +1499,113 @@
     background: #203c59;
     color: #e1ebf6
 }
+:root[data-theme="dark"] .receivable-origin {
+    border-left: 3px solid #36516f;
+    background: #203c59
+}
+:root[data-theme="dark"] .receivable-reconciled {
+    color: #89ecb7
+}
+:root[data-theme="dark"] .bank-account-bar {
+    color: #aec2d5
+}
+:root[data-theme="dark"] .bank-account-bar > strong {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .bank-warning {
+    border-left: 3px solid #36516f;
+    background: #203c59;
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .bank-warning small {
+    color: #b7c2cd
+}
+:root[data-theme="dark"] .bank-warning--warning {
+    border-left-color: #ae8947;
+    background: #3c3320;
+    color: #ecc989
+}
+:root[data-theme="dark"] .bank-warning--warning small {
+    color: #e3c691
+}
+:root[data-theme="dark"] .bank-import-result {
+    border: 1px solid #36516f;
+    background: #203c28
+}
+:root[data-theme="dark"] .bank-import-result h2 {
+    color: #94e0bb
+}
+:root[data-theme="dark"] .bank-ok {
+    color: #89ecb7
+}
+:root[data-theme="dark"] .bank-diverges {
+    color: #e4909a
+}
+:root[data-theme="dark"] .bank-balances li, :root[data-theme="dark"] .bank-imports li, :root[data-theme="dark"] .bank-conflicts li {
+    border-bottom: 1px solid #36516f
+}
+:root[data-theme="dark"] .bank-balances small {
+    color: #b7c2cc
+}
+:root[data-theme="dark"] .bank-imports span, :root[data-theme="dark"] .bank-conflicts span {
+    color: #b6c2ce
+}
+:root[data-theme="dark"] .bank-conflicts {
+    border: 1px solid #36516f;
+    background: #3c3220
+}
+:root[data-theme="dark"] .bank-section-title {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .bank-memo {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .bank-transactions small {
+    color: #b7c2cc
+}
+:root[data-theme="dark"] .bank-amount--in {
+    color: #89ecb7
+}
+:root[data-theme="dark"] .bank-amount--out {
+    color: #e4909a
+}
+:root[data-theme="dark"] .bank-candidates > li {
+    border: 1px solid #36516f
+}
+:root[data-theme="dark"] .bank-candidates span {
+    color: #b6c2ce
+}
+:root[data-theme="dark"] .bank-candidates ul {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .bank-strength {
+    background: #203c59;
+    color: #b4c2cf
+}
+:root[data-theme="dark"] .bank-strength--1 {
+    background: #203c2a;
+    color: #89ecb7
+}
+:root[data-theme="dark"] .bank-strength--2 {
+    background: #203c59;
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .bank-strength--4 {
+    background: #3c3320;
+    color: #ecc889
+}
+:root[data-theme="dark"] .finance-trend {
+    border-top: 1px solid #36516f
+}
+:root[data-theme="dark"] .finance-trend-tooltip {
+    border: 1px solid #36516f;
+    background: #162b43;
+    color: #a9c2da;
+    box-shadow: 0 6px 18px #06111d20
+}
+:root[data-theme="dark"] .finance-trend-tooltip b {
+    color: #e1ebf6
+}
 :root[data-theme="dark"] .machine-history-button {
     border: 1px solid #36516f;
     color: #a9c2da;

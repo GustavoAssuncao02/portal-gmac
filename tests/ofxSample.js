@@ -1,0 +1,16 @@
+// Synthetic OFX 1.02 statement: balance records mid-day, two equal debits, a non-balance 'SALDO' memo and a R$ 0,18 ledger gap.
+const header = 'OFXHEADER:100\nDATA:OFXSGML\nVERSION:102\nSECURITY:NONE\nENCODING:USASCII\nCHARSET:1252\nCOMPRESSION:NONE\nOLDFILEUID:NONE\nNEWFILEUID:NONE\n\n'
+const entry = ([type, date, amount, fitId, memo]) => `<STMTTRN>\n<TRNTYPE>${type}\n<DTPOSTED>${date}100000[-03:EST]\n<TRNAMT>${amount}\n<FITID>${fitId}\n<CHECKNUM>${fitId}\n<MEMO>${memo}\n</STMTTRN>\n`
+export function sampleOfx(rows, ledger = '859.18', account = '0001234567') {
+  return `${header}<OFX>\n<BANKMSGSRSV1>\n<STMTTRNRS>\n<STMTRS>\n<CURDEF>BRL\n<BANKACCTFROM>\n<BANKID>0341\n<ACCTID>${account}\n<ACCTTYPE>CHECKING\n</BANKACCTFROM>\n<BANKTRANLIST>\n<DTSTART>20261001100000[-03:EST]\n<DTEND>20261002100000[-03:EST]\n${rows.map(entry).join('')}</BANKTRANLIST>\n<LEDGERBAL>\n<BALAMT>${ledger}\n<DTASOF>20261002100000[-03:EST]\n</LEDGERBAL>\n</STMTRS>\n</STMTTRNRS>\n</BANKMSGSRSV1>\n</OFX>\n`
+}
+export const sampleRows = [
+  ['CREDIT', '20260930', '2000.00', 'T0', 'SALDO ANTERIOR'],
+  ['CREDIT', '20261001', '500.00', 'T1', 'RECEBIMENTOS CLIENTE TESTE LTDA 11.222.333/0001-81'],
+  ['DEBIT', '20261001', '-800.00', 'T2', 'PIX ENVIADO SODEXO 49.930.514/0001-35'],
+  ['DEBIT', '20261001', '-800.00', 'T3', 'BOLETO PAGO QUIRAVELLI I C P QUIM LTDA EPP 59.568.774/0001-66'],
+  ['CREDIT', '20261001', '850.00', 'T4', 'SALDO TOTAL DISPONÍVEL DIA'],
+  ['DEBIT', '20261001', '-50.00', 'T5', 'SISPAG SALARIOS'],
+  ['DEBIT', '20261002', '-1.00', 'T6', 'IOF'],
+  ['CREDIT', '20261002', '10.00', 'T7', 'SALDO EM CONTA REMUNERADA'],
+]

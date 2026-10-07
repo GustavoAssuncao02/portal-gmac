@@ -13,12 +13,15 @@ import ReportsScreen from './ReportsScreen.jsx'
 import LaborServicesScreen from './LaborServicesScreen.jsx'
 import AccountSettings from './AccountSettings.jsx'
 import PayablesScreen from './PayablesScreen.jsx'
+import ReceivablesScreen from './ReceivablesScreen.jsx'
+import BankStatementsScreen from './BankStatementsScreen.jsx'
+import ReceivableScheduleModal from './ReceivableScheduleModal.jsx'
 import ServiceStageEditor from './ServiceStageEditor.jsx'
 import MaterialAppearance, { MaterialVisual } from './MaterialAppearance.jsx'
 import MachineHistoryModal from './MachineHistoryModal.jsx'
 import { useMobileModal } from './useMobileModal.js'
 import { ThemeContext, useAccountTheme } from './accountTheme.js'
-import { Monitor, Minimize2, CreditCard, ChartColumn, Tags, Truck, WalletCards, ChevronLeft, ChevronRight, ChevronDown, UsersRound, Menu, X, Info, ArrowLeft, ListChecks, TriangleAlert, CircleCheck, CircleX } from 'lucide-react'
+import { Monitor, Minimize2, CreditCard, HandCoins, Landmark, ChartColumn, Tags, Truck, WalletCards, ChevronLeft, ChevronRight, ChevronDown, UsersRound, Menu, X, Info, ArrowLeft, ListChecks, TriangleAlert, CircleCheck, CircleX } from 'lucide-react'
 import { stageLabel, stageGroupLabel, serviceDetails, readStageLayout, orderedStageSelection } from '../server/serviceStages.js'
 import { findInventoryMaterial, materialsStock, normalizeSearch, purchaseMaterialRequests } from './offerResources.js'
 import { deadlineCategories, serviceDeadline } from './serviceDeadline.js'
@@ -128,6 +131,8 @@ const navigation = [
   ['Ofertas e serviços', 'offers'],
   ['Clientes', 'clients'],
   ['Contas a Pagar', 'payables'],
+  ['Contas a Receber', 'receivables'],
+  ['Conciliação bancária', 'bank'],
   ['Business Intelligence', 'bi'],
   ['Classificações', 'classifications'],
   ['Fornecedores', 'suppliers'],
@@ -137,7 +142,7 @@ const navigation = [
 
 const registrationNavigation = ['Fornecedores', 'Administradores', 'Funcionários', 'Clientes'].map((label) => navigation.find(([name]) => name === label))
 const isRegistrationPage = (label) => registrationNavigation.some(([name]) => name === label)
-const financialNavigation = ['Contas a Pagar', 'Business Intelligence', 'Classificações'].map((label) => navigation.find(([name]) => name === label))
+const financialNavigation = ['Contas a Pagar', 'Contas a Receber', 'Conciliação bancária', 'Business Intelligence', 'Classificações'].map((label) => navigation.find(([name]) => name === label))
 const isFinancialPage = (label) => financialNavigation.some(([name]) => name === label)
 
 const AdminIdentityContext = createContext(null)
@@ -211,7 +216,7 @@ function Sidebar({ collapsed, onToggle, activeNav, onNavigate, onLogout }) {
   }
   function navigationItem([label, icon]) {
     return <button className={`nav-item ${activeNav === label ? 'nav-item--active' : ''}`} key={label} type="button" title={pageLabel(label)} aria-label={pageLabel(label)} onClick={() => { setMobileOpen(false); onNavigate(label) }}>
-      {['payables', 'bi', 'classifications', 'suppliers', 'completed-services'].includes(icon) ? (() => { const NavIcon = { payables: CreditCard, bi: ChartColumn, classifications: Tags, suppliers: Truck, 'completed-services': ListChecks }[icon]; return <NavIcon className="icon nav-icon" size={20} /> })() : <Icon name={icon} className="nav-icon" />}
+      {['payables', 'receivables', 'bank', 'bi', 'classifications', 'suppliers', 'completed-services'].includes(icon) ? (() => { const NavIcon = { payables: CreditCard, receivables: HandCoins, bank: Landmark, bi: ChartColumn, classifications: Tags, suppliers: Truck, 'completed-services': ListChecks }[icon]; return <NavIcon className="icon nav-icon" size={20} /> })() : <Icon name={icon} className="nav-icon" />}
       <span>{pageLabel(label)}</span>
     </button>
   }
@@ -1696,8 +1701,7 @@ function AdminServicesView({ collapsed, onToggle, activeNav, onNavigate, onLogou
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
   const [now, setNow] = useState(Date.now())
-  const [acknowledgingCode, setAcknowledgingCode] = useState(null)
-  const [acknowledgeError, setAcknowledgeError] = useState('')
+  const [schedulingCode, setSchedulingCode] = useState(null)
   const displayRef = useRef(null)
   const [displayMode, setDisplayMode] = useState(false)
   const [displayError, setDisplayError] = useState('')
@@ -1738,17 +1742,8 @@ function AdminServicesView({ collapsed, onToggle, activeNav, onNavigate, onLogou
     return matchesFilter(order, filter) && (!query || [order.service, order.company, order.code, order.labelNumber].some((value) => String(value || '').toLocaleLowerCase().includes(query)))
   })
   async function acknowledgeCompletion(code) {
-    if (acknowledgingCode) return
-    setAcknowledgingCode(code)
-    setAcknowledgeError('')
-    try {
-      await apiRequest(`/api/operations/orders/${encodeURIComponent(code)}/acknowledge-completion`, jsonOptions('POST', {}))
-      await onRefresh()
-    } catch (error) {
-      setAcknowledgeError(error.message)
-    } finally {
-      setAcknowledgingCode(null)
-    }
+    await apiRequest(`/api/operations/orders/${encodeURIComponent(code)}/acknowledge-completion`, jsonOptions('POST', {}))
+    await onRefresh()
   }
   return <div className={`dashboard-shell admin-os-shell${completedView ? ' admin-os-shell--completed' : ''}`}>
     <Sidebar collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} />
@@ -1756,7 +1751,6 @@ function AdminServicesView({ collapsed, onToggle, activeNav, onNavigate, onLogou
       <WorkspaceTabs tabs={tabs} activeNav={activeNav} onNavigate={onNavigate} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} />
       <div className="dashboard-header"><div><h1>{completedView ? 'Serviços concluídos' : 'Painel de serviços em andamento'}</h1><p></p></div><label className="global-search"><Icon name="search" /><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por serviço, cliente ou OS..." aria-label="Buscar serviços" /></label></div>
       {workflowError && <p className="workflow-error" role="alert">{workflowError}</p>}
-      {acknowledgeError && <p className="workflow-error" role="alert">{acknowledgeError}</p>}
       {!completedView && <div className="admin-os-filters deadline-filters">{[['all', 'Todos'], ...deadlineCategories, ['completed', 'Concluídos']].map(([key, label]) => <button className={filter === key ? 'selected' : ''} type="button" key={key} onClick={() => setFilter(key)}><span className={`admin-os-filter-icon admin-os-filter-icon--${key}`} aria-hidden="true">{key === 'all' ? '◉' : ['at-deadline', 'late'].includes(key) ? '!' : key === 'completed' ? '✓' : '●'}</span>{label}<strong>{panelOrders.filter((order) => matchesFilter(order, key)).length}</strong></button>)}</div>}
       {!completedView && <div className="admin-os-filters">{[['open', 'Abertas'], ['waiting', 'Aguardando'], ['running', 'Em execução'], ['paused', 'Pausadas'], ['finalizing', 'Finalizando'], ['completed', 'Concluídas']].map(([key, label]) => <button className={filter === key ? 'selected' : ''} type="button" key={key} onClick={() => setFilter(key)}>{label}<strong>{orders.filter((order) => key === 'open' ? order.operation.status !== 'completed' : order.operation.status === key).length}</strong></button>)}</div>}
       <div className="admin-os-table-wrap"><table className="admin-os-table"><thead><tr><th>OS / Serviço</th><th>Cliente</th><th>Operador</th><th>Etapa atual</th><th>Peças concluídas</th><th>Progresso</th><th>Tempo ativo</th><th>{completedView ? 'Conclusão' : 'Tempo restante'}</th><th>Status</th><th></th></tr></thead><tbody>{visible.map((order) => {
@@ -1780,11 +1774,12 @@ function AdminServicesView({ collapsed, onToggle, activeNav, onNavigate, onLogou
               </span>
             })}
           </div> : <span className="admin-os-stage-empty">Etapas não definidas</span>}</td>
-          <td data-label="Tempo ativo">{duration(totalTime(operation))}</td><td data-label={completedView ? 'Conclusão' : 'Tempo restante'} className={`admin-os-remaining admin-os-remaining--${due.key}`}>{completedView ? completionAt ? new Date(completionAt).toLocaleString('pt-BR', { timeZone: 'America/Bahia', dateStyle: 'short', timeStyle: 'short' }) : '—' : due.remaining}</td><td data-label="Status">{completedView ? <span className="admin-os-status admin-os-status--completed">Concluído</span> : operation.status === 'completed' ? <button className="admin-os-status admin-os-status--completed" type="button" aria-label="Concluído" title="Confirmar leitura da conclusão e retirar do painel" disabled={Boolean(acknowledgingCode)} aria-busy={acknowledgingCode === order.code} onClick={() => acknowledgeCompletion(order.code)}>Concluído</button> : <span className={`admin-os-status admin-os-status--deadline-${due.key}`}>{due.label}</span>}</td><td><button type="button" onClick={() => onSelectOrder(order.code)}>Ver OS</button></td></tr>
+          <td data-label="Tempo ativo">{duration(totalTime(operation))}</td><td data-label={completedView ? 'Conclusão' : 'Tempo restante'} className={`admin-os-remaining admin-os-remaining--${due.key}`}>{completedView ? completionAt ? new Date(completionAt).toLocaleString('pt-BR', { timeZone: 'America/Bahia', dateStyle: 'short', timeStyle: 'short' }) : '—' : due.remaining}</td><td data-label="Status">{completedView ? <span className="admin-os-status admin-os-status--completed">Concluído</span> : operation.status === 'completed' ? <button className="admin-os-status admin-os-status--completed" type="button" aria-label="Concluído" title="Programar o recebimento e retirar do painel" aria-haspopup="dialog" onClick={() => setSchedulingCode(order.code)}>Concluído</button> : <span className={`admin-os-status admin-os-status--deadline-${due.key}`}>{due.label}</span>}</td><td><button type="button" onClick={() => onSelectOrder(order.code)}>Ver OS</button></td></tr>
       })}</tbody></table>{!visible.length && <p className="admin-os-empty">{completedView ? 'Nenhum serviço concluído encontrado.' : 'Nenhuma OS real encontrada para este filtro.'}</p>}</div>
       {completedView ? <div className="admin-os-summary admin-os-summary--completed"><div><strong>{panelOrders.length}</strong><span>Serviços concluídos</span></div><div><strong>{panelOrders.reduce((total, order) => total + currentPieceProgress(order.operation, order.quantity).completedPieces, 0)}</strong><span>Peças concluídas</span></div><div><strong>{duration(panelOrders.reduce((total, order) => total + totalTime(order.operation), 0))}</strong><span>Tempo ativo somado</span></div></div> : <div className="admin-os-summary"><div><strong>{orders.filter((order) => order.operation.status !== 'completed').length}</strong><span>OS abertas</span></div><div><strong>{orders.filter((order) => order.operation.status === 'running' || order.operation.status === 'finalizing').length}</strong><span>Em execução</span></div><div><strong>{duration(orders.reduce((total, order) => total + totalTime(order.operation), 0))}</strong><span>Tempo ativo somado</span></div><div><strong>{orders.filter((order) => order.operation.status === 'completed').length}</strong><span>Concluídas</span></div></div>}
       {displayError && <p className="workflow-error" role="alert">{displayError}</p>}
       <footer className="admin-os-display-controls">{displayMode && <time>{new Date(now).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })}</time>}<button type="button" onClick={toggleDisplayMode}>{displayMode ? <Minimize2 size={18} /> : <Monitor size={18} />}{displayMode ? 'Sair do modo de exibição' : 'Modo de exibição'}</button></footer>
+      {schedulingCode && <ReceivableScheduleModal key={schedulingCode} orderCode={schedulingCode} onClose={() => setSchedulingCode(null)} onAcknowledge={acknowledgeCompletion} />}
       {inspectedOrder && inspectedMaterials.length > 0 && <PendingMaterialsModal orderCode={inspectedOrder.code} materials={inspectedMaterials} onClose={() => setPendingInspectionCode(null)} onOpenRequest={() => { setPendingInspectionCode(null); onNavigate('Pedidos', { orderCode: inspectedOrder.code }) }} />}
     </main>
   </div>
@@ -1793,6 +1788,8 @@ function AdminServicesView({ collapsed, onToggle, activeNav, onNavigate, onLogou
 function Dashboard({ user, onUpdateUser, collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, offers, orders, selectedOfferId, selectedOrderCode, onRefresh, onSelectOffer, onSelectOrder, onOpenPayables, payableFilters, workflowError, workflowLoading, materialRequestTarget, onRequestLocated }) {
   const toolProps = { Sidebar, WorkspaceTabs, navigationProps: { collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs } }
   if (['Contas a Pagar', 'Business Intelligence', 'Classificações', 'Fornecedores'].includes(activeNav)) return <PayablesScreen {...toolProps} accountFilters={payableFilters} mode={{ 'Contas a Pagar': 'accounts', 'Business Intelligence': 'bi', 'Classificações': 'classifications', 'Fornecedores': 'suppliers' }[activeNav]} />
+  if (activeNav === 'Contas a Receber') return <ReceivablesScreen {...toolProps} />
+  if (activeNav === 'Conciliação bancária') return <BankStatementsScreen {...toolProps} />
   if (activeNav === 'Relatórios') return <ReportsScreen {...toolProps} />
   if (activeNav === 'Serviços') return <LaborServicesScreen {...toolProps} />
   if (activeNav === 'Configurações') return <AccountSettings {...toolProps} user={user} onUpdateUser={onUpdateUser} />

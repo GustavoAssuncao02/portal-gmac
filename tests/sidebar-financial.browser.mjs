@@ -11,7 +11,7 @@ const sidebar = page.locator('.sidebar')
 const group = sidebar.getByRole('button', { name: 'Gest\u00e3o Financeira', exact: true })
 const submenu = sidebar.locator('#sidebar-finance-menu')
 const registrations = sidebar.getByRole('button', { name: 'Cadastros', exact: true })
-const members = ['Contas a Pagar', 'Business Intelligence', 'Classifica\u00e7\u00f5es']
+const members = ['Contas a Pagar', 'Contas a Receber', 'Concilia\u00e7\u00e3o banc\u00e1ria', 'Business Intelligence', 'Classifica\u00e7\u00f5es']
 const navigate = (name) => sidebar.getByRole('button', { name, exact: true }).click()
 try {
   await page.goto(fixture.url)
@@ -73,7 +73,7 @@ try {
   await group.press(' ')
   assert.equal(await group.getAttribute('aria-expanded'), 'false')
   assert.deepEqual(errors, [])
-  console.log('Financial sidebar passed: three ordered entries, routes/tabs, independent groups, toggle persistence, active auto-open, home shortcuts, collapsed sidebar, keyboard and mobile.')
+  console.log('Financial sidebar passed: five ordered entries, routes/tabs, independent groups, toggle persistence, active auto-open, home shortcuts, collapsed sidebar, keyboard and mobile.')
 } catch (error) {
   await page.screenshot({ path: 'test-results/sidebar-financial-failure.png' })
   throw error

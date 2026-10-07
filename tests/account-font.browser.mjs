@@ -10,7 +10,7 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
 const errors = []
 page.on('pageerror', (error) => errors.push(error.message))
 await mkdir('test-results/font', { recursive: true })
-const screens = ['Início', 'Máquinas', 'Estoque', 'Calculadora de pesos e medidas', 'Fornecedores', 'Administradores', 'Funcionários', 'Clientes', 'Serviços em andamento', 'Ofertas e serviços', 'Pedidos de material', 'Contas a Pagar', 'Business Intelligence', 'Classificações', 'Relatórios', 'Configurações']
+const screens = ['Início', 'Máquinas', 'Estoque', 'Calculadora de pesos e medidas', 'Fornecedores', 'Administradores', 'Funcionários', 'Clientes', 'Serviços em andamento', 'Ofertas e serviços', 'Pedidos de material', 'Contas a Pagar', 'Contas a Receber', 'Conciliação bancária', 'Business Intelligence', 'Classificações', 'Relatórios', 'Configurações']
 const slug = (value) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/gi, '-').toLowerCase()
 const font = (selector) => page.locator(selector).first().evaluate((element) => parseFloat(getComputedStyle(element).fontSize))
 async function login(cpf = env.DEMO_ADMIN_CPF) {

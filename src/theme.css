@@ -41,6 +41,8 @@
 :root[data-theme="dark"] :is(.sidebar, .workspace-tabs, .operator-sidebar) { background-color: #112239; }
 :root[data-theme="dark"] :is(.sidebar-logo img, .operator-logo img) { background: #f3f7fc; border-radius: 6px; padding: 5px; }
 :root[data-theme="dark"] :is(input, select, textarea) { caret-color: #e7f2ff; }
+/* Trend series are validated per mode against the workspace surface; the generated palette would wash them out. */
+:root[data-theme="dark"] .finance-trend { --trend-receivable: #2aaf60; --trend-payable: #c83636; --trend-surface: #0d1c2e; --trend-grid: #1f344b; --trend-axis: #8ea5bd; --trend-ink: #d3e0ee; --trend-crosshair: #5b7a9a; --trend-today: #2b4560; }
 :root[data-theme="dark"] :is(input, select, textarea):focus-visible { outline-color: #80b7f0; }
 :root[data-theme="dark"] ::selection { background: #366b9d; color: #fff; }
 :root[data-theme="dark"] ::placeholder { color: #9eafc3; opacity: 1; }

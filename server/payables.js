@@ -7,6 +7,7 @@ import { readStore, mutateStore } from './offers.js'
 import { exportPdf, exportWorkbook } from './reports.js'
 import { cents, validDate, todayBahia, payableStatus, daysUntil, makeInstallments, shiftMonth, filterPayables } from './payableRules.js'
 import { notificationSettings } from './accounts.js'
+import { assertNotReconciled } from './bankStatements.js'
 
 const directory = path.join(path.dirname(fileURLToPath(import.meta.url)), 'data', 'payable-files')
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), { status }) }
@@ -176,7 +177,7 @@ export default function createPayablesRouter(accounts, requireAdmin) {
   }))
   router.put('/payables/:id', handle(async (req, res) => {
     const result = await mutateStore((store) => {
-      init(store); const row = find(store, req.params.id); editable(row)
+      init(store); const row = find(store, req.params.id); editable(row); assertNotReconciled(store, 'payable', row.id, 'editar')
       const common = fields(store, req.body, row)
       const attachments = claimFiles(store, req.body.fileIds || [], req.actor)
       const addAttachments = (target) => { target.attachments.push(...attachments); for (const file of attachments) event(store, req.actor, 'attachment_added', target.id, { details: { name: file.name } }) }
@@ -228,15 +229,16 @@ export default function createPayablesRouter(accounts, requireAdmin) {
         rows.forEach((row, i) => { row.payment = data[i]; row.lastStatus = 'paid'; event(store, req.actor, 'paid', row.id, { details: { ...data[i], bulk: true } }) })
       } else {
         if (rows.some((row) => !row.payment || row.inactive)) fail('Somente contas pagas e ativas podem ser desativadas.')
+        for (const row of rows) assertNotReconciled(store, 'payable', row.id, 'desativar')
         for (const row of rows) { row.inactive = true; event(store, req.actor, 'deactivated', row.id) }
       }
       return rows
     }); res.json({ items: result })
   }))
   router.post('/payables/:id/pay', handle(async (req, res) => { const item = await mutateStore((store) => { init(store); const row = find(store, req.params.id); editable(row); const data = payment(req.body, row.valueCents); data.receipts = claimFiles(store, req.body.fileIds || [], req.actor); row.payment = data; row.lastStatus = 'paid'; event(store, req.actor, 'paid', row.id, { details: row.payment }); for (const file of data.receipts) event(store, req.actor, 'attachment_added', row.id, { details: { name: file.name, receipt: true } }); return row }); res.json({ item }) }))
-  router.post('/payables/:id/reverse', handle(async (req, res) => { const item = await mutateStore((store) => { init(store); const row = find(store, req.params.id); if (!row.payment || row.inactive) fail('Reative a conta antes de estornar.', 409); const reason = clean(req.body.reason); if (reason.length < 10) fail('Informe um motivo com pelo menos 10 caracteres.'); event(store, req.actor, 'reversed', row.id, { reason, details: { payment: row.payment } }); row.payment = null; row.lastStatus = payableStatus(row); return row }); res.json({ item }) }))
-  router.post('/payables/:id/activation', handle(async (req, res) => { const item = await mutateStore((store) => { init(store); const row = find(store, req.params.id); if (!row.payment || typeof req.body.inactive !== 'boolean') fail('Somente contas pagas podem ser desativadas ou reativadas.'); if (row.inactive !== req.body.inactive) { row.inactive = req.body.inactive; event(store, req.actor, row.inactive ? 'deactivated' : 'reactivated', row.id) } return row }); res.json({ item }) }))
-  router.delete('/payables/:id', handle(async (req, res) => { await mutateStore((store) => { init(store); const row = find(store, req.params.id); if (row.payment || store.payableEvents.some((e) => e.accountId === row.id && ['paid', 'reversed'].includes(e.type)) || row.groupId || store.payables.some((r) => r.previousId === row.id)) fail('Conta com pagamento, parcelamento ou vínculo: preserve o histórico; desative quando paga.', 409); event(store, req.actor, 'deleted', row.id, { details: { account: row } }); store.payables = store.payables.filter((r) => r.id !== row.id) }); res.json({ ok: true }) }))
+  router.post('/payables/:id/reverse', handle(async (req, res) => { const item = await mutateStore((store) => { init(store); const row = find(store, req.params.id); if (!row.payment || row.inactive) fail('Reative a conta antes de estornar.', 409); assertNotReconciled(store, 'payable', row.id, 'estornar'); const reason = clean(req.body.reason); if (reason.length < 10) fail('Informe um motivo com pelo menos 10 caracteres.'); event(store, req.actor, 'reversed', row.id, { reason, details: { payment: row.payment } }); row.payment = null; row.lastStatus = payableStatus(row); return row }); res.json({ item }) }))
+  router.post('/payables/:id/activation', handle(async (req, res) => { const item = await mutateStore((store) => { init(store); const row = find(store, req.params.id); if (!row.payment || typeof req.body.inactive !== 'boolean') fail('Somente contas pagas podem ser desativadas ou reativadas.'); if (req.body.inactive) assertNotReconciled(store, 'payable', row.id, 'desativar'); if (row.inactive !== req.body.inactive) { row.inactive = req.body.inactive; event(store, req.actor, row.inactive ? 'deactivated' : 'reactivated', row.id) } return row }); res.json({ item }) }))
+  router.delete('/payables/:id', handle(async (req, res) => { await mutateStore((store) => { init(store); const row = find(store, req.params.id); if (row.payment || store.payableEvents.some((e) => e.accountId === row.id && ['paid', 'reversed'].includes(e.type)) || row.groupId || store.payables.some((r) => r.previousId === row.id)) fail('Conta com pagamento, parcelamento ou vínculo: preserve o histórico; desative quando paga.', 409); assertNotReconciled(store, 'payable', row.id, 'excluir'); event(store, req.actor, 'deleted', row.id, { details: { account: row } }); store.payables = store.payables.filter((r) => r.id !== row.id) }); res.json({ ok: true }) }))
   router.post('/payables/uploads', express.raw({ type: 'application/octet-stream', limit: '20mb' }), handle(async (req, res) => {
     if (!Buffer.isBuffer(req.body) || !req.body.length) fail('Selecione um arquivo, com até 20 MB.')
     const file = { id: randomUUID(), name: path.basename(clean(req.query.name, 200)), contentType: clean(req.query.type, 160) || 'application/octet-stream', size: req.body.length, userId: req.actor.id }

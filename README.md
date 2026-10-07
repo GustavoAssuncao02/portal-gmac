@@ -16,6 +16,16 @@ Validação isolada, sem alterar dados locais: `npm run test:payables`.
 
 Para popular a demonstração local solicitada de setembro a dezembro de 2026, com a API em execução e as credenciais administrativas locais configuradas, execute `node scripts/seed-payables.mjs`. O script cria 120 contas (30 por mês), 10 fornecedores fictícios e 10 classificações de teste. Registros são identificados por `DEMO-CP-2026`; executar novamente não duplica os lançamentos. As baixas nunca usam data futura. A execução não é automática na inicialização do sistema.
 
+## Contas a Receber e conciliação bancária
+
+**Contas a Receber** segue as regras de Contas a Pagar: IDs `REC-`, baixa com juros ou desconto, estorno com motivo, histórico e exportação em PDF/Excel. Ao clicar em **Concluído** num serviço finalizado, um modal programa o recebimento da OS. O valor sugerido é o valor da proposta com o desconto aplicado, e pode ser alterado; a conclusão sem programar continua disponível. Cada OS gera no máximo uma conta a receber.
+
+**Conciliação bancária** importa extratos OFX 1.x (SGML) e 2.x (XML). O conteúdo é lido como UTF-8 estrito e, só quando inválido, pela codificação declarada no cabeçalho; divergências de codificação ficam registradas no lote. Os registros `SALDO ANTERIOR` e `SALDO TOTAL DISPONÍVEL DIA` são guardados como posições de saldo, fora dos totais e da conciliação. A importação é idempotente por empresa (`COMPANY_SCOPE`, padrão `gmac`), banco, conta e FITID. Uma reimportação informa novas e existentes, e um FITID repetido com dados diferentes vira conflito para revisão, sem substituir nada. O fechamento diário agrupa todas as movimentações da data, e a diferença entre o saldo informado (LEDGERBAL) e o calculado aparece como ressalva, sem ajuste artificial.
+
+A conciliação sugere candidatos apenas com valor exato, ordenados por evidência: CPF/CNPJ e mesma data; CPF/CNPJ dentro da tolerância configurada; nome semelhante; mesma data. Candidatos empatados são sinalizados, e o vínculo sempre depende de confirmação manual. Um registro financeiro não participa de duas conciliações integrais, e contas conciliadas não podem ser editadas, estornadas, desativadas ou excluídas sem desfazer o vínculo. Os arquivos originais ficam em `server/data/bank-statements/`. Extratos `.ofx` são ignorados pelo Git.
+
+Validação isolada: `node --test tests/bank-statements.test.js` e `node tests/finance-receivables.browser.mjs` (após `npm run build`).
+
 ## Executar localmente
 
 ```bash

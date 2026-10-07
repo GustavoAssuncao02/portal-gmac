@@ -10,6 +10,8 @@ import createMachinesRouter from './machines.js'
 import createLaborServicesRouter, { ensureLaborServices } from './laborServices.js'
 import createReportsRouter from './reports.js'
 import createPayablesRouter from './payables.js'
+import createReceivablesRouter from './receivables.js'
+import createBankStatementsRouter from './bankStatements.js'
 import createInventoryImportRouter from './inventoryImport.js'
 import createMaterialRequestsRouter, { saveRequestedMaterial } from './materialRequests.js'
 import createNotificationsRouter from './notifications.js'
@@ -54,6 +56,8 @@ app.use('/api', createInventoryImportRouter(pool, requireAdmin))
 app.use('/api', createMaterialRequestsRouter(requireAdmin, pool, accounts))
 const payablesRouter = createPayablesRouter(accounts, requireAdmin)
 app.use('/api', payablesRouter)
+app.use('/api', createReceivablesRouter(accounts, requireAdmin))
+app.use('/api', createBankStatementsRouter(accounts, requireAdmin))
 const notificationsRouter = createNotificationsRouter({ requireAdmin, payables: payablesRouter, loadInventory: async () => {
   if (!pool) return null
   const [rows] = await pool.execute('SELECT id, name, quantity_kg AS quantity, minimum_kg AS minimum FROM inventory_materials')

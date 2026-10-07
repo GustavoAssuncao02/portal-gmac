@@ -11,7 +11,7 @@ const errors = []
 const contrasts = []
 page.on('pageerror', (error) => errors.push(error.message))
 await mkdir('test-results/theme', { recursive: true })
-const screens = ['Início', 'Máquinas', 'Estoque', 'Calculadora de pesos e medidas', 'Fornecedores', 'Administradores', 'Funcionários', 'Clientes', 'Serviços em andamento', 'Ofertas e serviços', 'Pedidos de material', 'Contas a Pagar', 'Business Intelligence', 'Classificações', 'Relatórios', 'Configurações']
+const screens = ['Início', 'Máquinas', 'Estoque', 'Calculadora de pesos e medidas', 'Fornecedores', 'Administradores', 'Funcionários', 'Clientes', 'Serviços em andamento', 'Ofertas e serviços', 'Pedidos de material', 'Contas a Pagar', 'Contas a Receber', 'Conciliação bancária', 'Business Intelligence', 'Classificações', 'Relatórios', 'Configurações']
 const slug = (text) => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/gi, '-').toLowerCase()
 async function login(cpf = '12345678901') {
   await page.getByLabel('CPF', { exact: true }).fill(cpf)
