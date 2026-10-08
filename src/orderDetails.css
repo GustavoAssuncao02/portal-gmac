@@ -144,3 +144,9 @@
   .os-proposal-summary { grid-template-columns: minmax(0, 1fr); }
   .os-history-trigger { width: 100%; }
 }
+
+.os-cost-list { list-style: none; margin: 18px 0 0; padding: 0; }
+.os-cost-list li { display: flex; justify-content: space-between; gap: 16px; padding: 12px 0; border-top: 1px solid #e3ebf3; font-size: 13px; }
+.os-cost-list li > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.os-cost-list li > div:last-child { flex-shrink: 0; align-items: flex-end; text-align: right; }
+.os-cost-list span { color: #6c8092; font-size: 12px; overflow-wrap: anywhere; }

@@ -800,6 +800,12 @@
         border-top: 1px solid #36516f
     }
 }
+:root[data-theme="dark"] .os-cost-list li {
+    border-top: 1px solid #36516f
+}
+:root[data-theme="dark"] .os-cost-list span {
+    color: #c1cfde
+}
 :root[data-theme="dark"] .dashboard-shell.admin-home-shell {
     background: #162b43
 }
@@ -1590,7 +1596,7 @@
     background: #203c59;
     color: #e1ebf6
 }
-:root[data-theme="dark"] .bank-strength--4 {
+:root[data-theme="dark"] .bank-strength--4, :root[data-theme="dark"] .bank-strength--5 {
     background: #3c3320;
     color: #ecc889
 }
@@ -1605,6 +1611,70 @@
 }
 :root[data-theme="dark"] .finance-trend-tooltip b {
     color: #e1ebf6
+}
+:root[data-theme="dark"] .money-input {
+    border: 1px solid #36516f;
+    background: #162b43
+}
+:root[data-theme="dark"] .money-input > span {
+    color: #c1cfde
+}
+:root[data-theme="dark"] .money-input:focus-within {
+    outline: 2px solid #4778ae
+}
+:root[data-theme="dark"] .money-input:has(input:disabled) {
+    background: #203c59
+}
+:root[data-theme="dark"] .payable-hint {
+    color: #c1cfde
+}
+:root[data-theme="dark"] .payable-status-filters .payable-quick-label {
+    color: #b7c2cd
+}
+:root[data-theme="dark"] .payable-status-filters small {
+    color: #b7c2cd
+}
+:root[data-theme="dark"] .payable-status-filters button[aria-pressed=true] small {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .payable-more-menu {
+    border: 1px solid #36516f;
+    background: #162b43;
+    box-shadow: 0 10px 30px #06111d26
+}
+:root[data-theme="dark"] .payable-more-menu button {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .payable-more-menu button:is(:hover,:focus-visible) {
+    background: #203c59
+}
+:root[data-theme="dark"] .payable-more-menu .payable-danger {
+    color: #e1939e
+}
+:root[data-theme="dark"] .payable-preview .payable-modal-body {
+    background: #203c59
+}
+:root[data-theme="dark"] .order-margins {
+    border-top: 1px solid #36516f
+}
+:root[data-theme="dark"] .order-margins-table td small {
+    color: #b7c2cc
+}
+:root[data-theme="dark"] .order-margin--ok {
+    color: #89ecb7
+}
+:root[data-theme="dark"] .order-margin--below {
+    color: #ecc689
+}
+:root[data-theme="dark"] .order-margin--negative {
+    color: #e4909a
+}
+:root[data-theme="dark"] .receivable-sum--off {
+    color: #e4909a
+}
+:root[data-theme="dark"] .payable-siblings button[aria-current] {
+    border-left: 3px solid #4778ae;
+    background: #203c59
 }
 :root[data-theme="dark"] .machine-history-button {
     border: 1px solid #36516f;
@@ -1634,12 +1704,6 @@
 }
 :root[data-theme="dark"] .login-page {
     background: #162b43
-}
-:root[data-theme="dark"] .brand-panel {
-    background: #123965 url('/images/gmac-left-panel.jpg') center center / cover no-repeat
-}
-:root[data-theme="dark"] .brand-panel__veil {
-    background: linear-gradient(90deg, #0c27460a, #0c274605)
 }
 :root[data-theme="dark"] .access-panel {
     background: #162b43

@@ -2,8 +2,9 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { Bell, X } from 'lucide-react'
 import './notifications.css'
 import { payableRequest, money, dateLabel } from './payablesApi.js'
+import { dueLabel } from '../server/payableRules.js'
 
-export default function NotificationsButton({ onOpenAccount, onOpenNotice }) {
+export default function NotificationsButton({ onOpenAccount, onOpenReceivable, onOpenNotice }) {
   const id = useId()
   const button = useRef(null)
   const panel = useRef(null)
@@ -60,8 +61,8 @@ export default function NotificationsButton({ onOpenAccount, onOpenNotice }) {
     <div ref={panel} id={id} popover="auto" className="notifications-popup" role="dialog" aria-labelledby={`${id}-title`}>
       <header><h2 id={`${id}-title`}>Notificações</h2><button className="notifications-close" type="button" title="Fechar notificações" aria-label="Fechar notificações" onClick={() => { panel.current.hidePopover(); button.current.focus({ preventScroll: true }) }}><X size={16} aria-hidden="true" /></button></header>
       {error && <p role="alert" className="notifications-error">{error}</p>}
-      {items.length ? <div className="notifications-payables">{items.map((item) => <button type="button" key={item.id} onClick={() => { panel.current.hidePopover(); if (item.type === 'payable') onOpenAccount?.(item.accountId); else onOpenNotice?.(item) }}>
-        {item.type === 'payable' ? <><strong>{item.accountId} · {item.account.daysUntil < 0 ? `Vencida há ${Math.abs(item.account.daysUntil)} dias` : item.account.daysUntil === 0 ? 'Vence hoje' : `Vence em ${item.account.daysUntil} dias`}</strong><span>{item.account.supplierName} · {money(item.account.valueCents)}</span><small>{dateLabel(item.dueDate)} · {item.account.description}</small></> : <><strong>{item.title}</strong><span>{item.description}</span>{item.type === 'low-stock' && <span>{Number(item.quantity).toLocaleString('pt-BR')} kg disponíveis · mínimo {Number(item.minimum).toLocaleString('pt-BR')} kg</span>}<small>{new Date(item.at).toLocaleString('pt-BR', { timeZone: 'America/Bahia', dateStyle: 'short', timeStyle: 'short' })}{item.orderCode && ` · ${item.orderCode}`}{item.employeeName && ` · ${item.employeeName}`}</small></>}
+      {items.length ? <div className="notifications-payables">{items.map((item) => <button type="button" key={item.id} onClick={() => { panel.current.hidePopover(); if (item.type === 'payable') onOpenAccount?.(item.accountId); else if (item.type === 'receivable') onOpenReceivable?.(item.accountId); else onOpenNotice?.(item) }}>
+        {item.type === 'payable' ? <><strong>{item.accountId} · {dueLabel(item.account.daysUntil)}</strong><span>{item.account.supplierName} · {money(item.account.valueCents)}</span><small>{dateLabel(item.dueDate)} · {item.account.description}</small></> : item.type === 'receivable' ? <><strong>A receber · {item.accountId} · {dueLabel(item.account.daysUntil)}</strong><span>{item.account.customerName} · {money(item.account.valueCents)}</span><small>{dateLabel(item.dueDate)}{item.account.description ? ` · ${item.account.description}` : ''}</small></> : <><strong>{item.title}</strong><span>{item.description}</span>{item.type === 'low-stock' && <span>{Number(item.quantity).toLocaleString('pt-BR')} kg disponíveis · mínimo {Number(item.minimum).toLocaleString('pt-BR')} kg</span>}<small>{new Date(item.at).toLocaleString('pt-BR', { timeZone: 'America/Bahia', dateStyle: 'short', timeStyle: 'short' })}{item.orderCode && ` · ${item.orderCode}`}{item.employeeName && ` · ${item.employeeName}`}</small></>}
       </button>)}</div> : <div className="notifications-empty"><Bell size={26} strokeWidth={1.5} aria-hidden="true" /><p>Nenhuma notificação no momento.</p></div>}
     </div>
   </div>

@@ -17,7 +17,7 @@ test('payable reminder preferences are authenticated, strict, persistent per adm
     const auth = { Authorization: `Bearer ${token}` }
     const request = (path, method, body) => fixture.request(path, method, body, auth)
     const before = (await request('/auth/session')).data.user
-    assert.deepEqual((await request(route)).data.settings, { payableReminderDays: 3, ...notificationDefaults })
+    assert.deepEqual((await request(route)).data.settings, { payableReminderDays: 3, receivableReminderDays: 3, ...notificationDefaults })
     for (const value of [null, undefined, 0, 1, 4, 6, 8, '5', false, {}, [], 'invalid']) {
       assert.equal((await request(route, 'PATCH', { payableReminderDays: value })).status, 400, JSON.stringify(value))
     }

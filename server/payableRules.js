@@ -24,14 +24,26 @@ export function makeInstallments(valueCents, dueDate, count) {
   return Array.from({ length: count }, (_, index) => ({ valueCents: base + (index < valueCents % count ? 1 : 0), dueDate: shiftMonth(dueDate, index) }))
 }
 export const daysUntil = (date, today = todayBahia()) => Math.round((Date.parse(date) - Date.parse(today)) / DAY)
+const days = (count) => `${count} ${count === 1 ? 'dia' : 'dias'}`
+export const dueLabel = (daysLeft) => daysLeft < 0 ? `Vencida há ${days(-daysLeft)}` : daysLeft === 0 ? 'Vence hoje' : `Vence em ${days(daysLeft)}`
+const plain = (value) => String(value ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+// Values are searchable as typed in Brazil (1.234,56), without thousands (1234,56) or with a dot (1234.56).
+const valueTexts = (cents) => { const whole = Math.trunc(cents / 100), fraction = String(cents % 100).padStart(2, '0'); return `${whole.toLocaleString('pt-BR')},${fraction} ${whole},${fraction} ${whole}.${fraction}` }
+export function matchesSearch(row, search) {
+  const query = plain(search).replace(/r\$\s*/g, '').trim()
+  if (!query) return true
+  if (plain([row.id, row.supplierName, row.description, row.documentNumber, row.supplierDocument, row.orderCode, valueTexts(row.valueCents)].join(' ')).includes(query)) return true
+  const digits = query.replace(/\D/g, '')
+  return /^[\d.\-/\s]+$/.test(query) && digits.length >= 4 && String(row.supplierDocument || '').includes(digits)
+}
 export const payableStatus = (account, today = todayBahia()) => account.payment ? 'paid' : account.dueDate < today ? 'overdue' : 'pending'
 export function filterPayables(rows, filters = {}, today = todayBahia(), useStatus = true) {
-  const search = String(filters.search || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
   return rows.filter((row) => {
     if (filters.supplierId && String(row.supplierId) !== String(filters.supplierId)) return false
     if (filters.classificationId && row.classificationId !== filters.classificationId) return false
+    if (filters.orderCode && row.orderCode !== filters.orderCode) return false
     if (filters.start && row.dueDate < filters.start || filters.end && row.dueDate > filters.end) return false
-    if (search && ![row.id, row.supplierName, row.description, row.documentNumber].join(' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(search)) return false
+    if (!matchesSearch(row, filters.search)) return false
     if (!useStatus || filters.status === 'all') return true
     if (filters.status === 'inactive') return row.inactive
     if (row.inactive) return false

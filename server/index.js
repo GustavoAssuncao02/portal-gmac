@@ -56,9 +56,10 @@ app.use('/api', createInventoryImportRouter(pool, requireAdmin))
 app.use('/api', createMaterialRequestsRouter(requireAdmin, pool, accounts))
 const payablesRouter = createPayablesRouter(accounts, requireAdmin)
 app.use('/api', payablesRouter)
-app.use('/api', createReceivablesRouter(accounts, requireAdmin))
+const receivablesRouter = createReceivablesRouter(accounts, requireAdmin)
+app.use('/api', receivablesRouter)
 app.use('/api', createBankStatementsRouter(accounts, requireAdmin))
-const notificationsRouter = createNotificationsRouter({ requireAdmin, payables: payablesRouter, loadInventory: async () => {
+const notificationsRouter = createNotificationsRouter({ requireAdmin, payables: payablesRouter, receivables: receivablesRouter, loadInventory: async () => {
   if (!pool) return null
   const [rows] = await pool.execute('SELECT id, name, quantity_kg AS quantity, minimum_kg AS minimum FROM inventory_materials')
   return rows
@@ -69,6 +70,7 @@ const recordInventoryNotification = (row, previousLow) => mutateStore((store) =>
 await refreshInventoryNotifications()
 setInterval(refreshInventoryNotifications, 10000).unref()
 setInterval(() => payablesRouter.sweep().catch((error) => console.error('Falha ao verificar vencimentos:', error.message)), 60000).unref()
+setInterval(() => receivablesRouter.sweep().catch((error) => console.error('Falha ao verificar recebimentos:', error.message)), 60000).unref()
 
 app.get('/api/health', async (_request, response) => {
   try {

@@ -338,10 +338,14 @@
   .payable-heading-actions .admin-tool-button { flex: 1; }
   .admin-tool-button { font-size: 14px; padding: 10px 12px; }
   .payable-icon { width: 44px; height: 44px; }
-  .payable-toolbar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .payable-toolbar { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .payable-toolbar .admin-tool-button { min-height: 44px; padding: 6px 4px; gap: 4px; font-size: 12px; line-height: 1.15; white-space: normal; justify-content: center; text-align: center; }
   .admin-tools-main .payable-search { grid-column: 1 / -1; min-width: 0; max-width: none; width: 100%; }
   .payable-status-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .payable-status-filters button { justify-content: space-between; }
+  .payable-quick-filters { flex-wrap: nowrap; gap: 6px; margin: 0 -16px; padding: 0 16px 14px; overflow-x: auto; scrollbar-width: none; }
+  .payable-quick-filters .payable-status-filters { display: flex; flex: 0 0 auto; gap: 6px; }
+  .payable-quick-filters .payable-status-filters button { flex: 0 0 auto; min-height: 44px; white-space: nowrap; }
   .payable-advanced { gap: 14px; }
   .payable-mobile-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0 0 16px; }
   .payable-mobile-controls > label:first-child { flex: 1; min-width: 0; }

@@ -16,6 +16,7 @@ import PayablesScreen from './PayablesScreen.jsx'
 import ReceivablesScreen from './ReceivablesScreen.jsx'
 import BankStatementsScreen from './BankStatementsScreen.jsx'
 import ReceivableScheduleModal from './ReceivableScheduleModal.jsx'
+import LoginBrandPanel from './LoginBrandPanel.jsx'
 import ServiceStageEditor from './ServiceStageEditor.jsx'
 import MaterialAppearance, { MaterialVisual } from './MaterialAppearance.jsx'
 import MachineHistoryModal from './MachineHistoryModal.jsx'
@@ -148,6 +149,9 @@ const isFinancialPage = (label) => financialNavigation.some(([name]) => name ===
 const AdminIdentityContext = createContext(null)
 const WorkspaceTabsContext = createContext(null)
 
+// Each screen mounts its own sidebar; keeping the scroll here stops the menu from jumping between pages.
+let sidebarScrollTop = 0
+
 function Sidebar({ collapsed, onToggle, activeNav, onNavigate, onLogout }) {
   const user = useContext(AdminIdentityContext)
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -183,15 +187,62 @@ function Sidebar({ collapsed, onToggle, activeNav, onNavigate, onLogout }) {
   }
   const [registrationsOpen, setRegistrationsOpen] = useState(() => isRegistrationPage(activeNav) || window.sessionStorage.getItem('gmac-cadastros-open') !== 'false')
   const [financialOpen, setFinancialOpen] = useState(() => isFinancialPage(activeNav) || window.sessionStorage.getItem('gmac-finance-open') !== 'false')
+  const navRef = useRef(null), revealGroup = useRef(null), anchorGroup = useRef(null), spacerRef = useRef(null)
+  const [navEdges, setNavEdges] = useState({ above: false, below: false })
+  // A spacer keeps a just-closed group under the pointer, shrinking as the list scrolls back up.
+  function fitSpacer() {
+    const nav = navRef.current, spacer = spacerRef.current
+    if (!nav || !spacer || !spacer.offsetHeight) return
+    const natural = nav.scrollHeight - spacer.offsetHeight
+    spacer.style.height = `${Math.max(0, nav.scrollTop + nav.clientHeight - natural)}px`
+  }
+  function updateNavEdges() {
+    const nav = navRef.current
+    if (!nav) return
+    const next = { above: nav.scrollTop > 2, below: nav.scrollTop + nav.clientHeight < nav.scrollHeight - 2 }
+    setNavEdges((current) => current.above === next.above && current.below === next.below ? current : next)
+  }
   useLayoutEffect(() => {
-    if (!window.matchMedia('(min-width: 1101px)').matches) return
-    const nav = menuRef.current?.querySelector('.sidebar-nav')
+    const nav = navRef.current
+    if (nav) nav.scrollTop = sidebarScrollTop
+  }, [])
+  // Only a page change brings the current item into view; opening or closing a group never moves the list away from the pointer.
+  useLayoutEffect(() => {
+    const nav = navRef.current
     const selected = nav?.querySelector('.nav-item--active')
-    if (!selected) return
-    const viewport = nav.getBoundingClientRect(), item = selected.getBoundingClientRect()
-    if (item.bottom > viewport.bottom) nav.scrollTop += item.bottom - viewport.bottom
-    else if (item.top < viewport.top) nav.scrollTop += item.top - viewport.top
-  }, [activeNav, collapsed, registrationsOpen, financialOpen])
+    if (selected && window.matchMedia('(min-width: 1101px)').matches) {
+      const viewport = nav.getBoundingClientRect(), item = selected.getBoundingClientRect()
+      if (item.bottom > viewport.bottom) nav.scrollTop += item.bottom - viewport.bottom + 8
+      else if (item.top < viewport.top) nav.scrollTop -= viewport.top - item.top + 8
+      sidebarScrollTop = nav.scrollTop
+    }
+    updateNavEdges()
+  }, [activeNav, collapsed])
+  useLayoutEffect(() => {
+    const nav = navRef.current, id = revealGroup.current, anchor = anchorGroup.current
+    revealGroup.current = null
+    anchorGroup.current = null
+    if (nav && anchor) {
+      const header = nav.querySelector(`[aria-controls="${anchor.id}"]`)
+      const target = nav.scrollTop + header.getBoundingClientRect().top - anchor.top
+      const natural = nav.scrollHeight - spacerRef.current.offsetHeight
+      spacerRef.current.style.height = `${Math.max(0, target + nav.clientHeight - natural)}px`
+      nav.scrollTop = target
+      sidebarScrollTop = nav.scrollTop
+    }
+    const group = id && nav?.querySelector(`#${id}`)
+    if (group) {
+      // Show as much of the opened group as fits while its header stays where it was clicked.
+      const viewport = nav.getBoundingClientRect(), header = group.previousElementSibling.getBoundingClientRect(), menu = group.getBoundingClientRect()
+      const shift = Math.min(menu.bottom - viewport.bottom + 8, header.top - viewport.top)
+      if (shift > 0) nav.scrollTo({ top: nav.scrollTop + shift, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+    }
+    updateNavEdges()
+  }, [registrationsOpen, financialOpen])
+  useEffect(() => {
+    window.addEventListener('resize', updateNavEdges)
+    return () => window.removeEventListener('resize', updateNavEdges)
+  }, [])
   useEffect(() => {
     if (isRegistrationPage(activeNav)) {
       setRegistrationsOpen(true)
@@ -206,11 +257,15 @@ function Sidebar({ collapsed, onToggle, activeNav, onNavigate, onLogout }) {
   }, [activeNav])
   function toggleRegistrations() {
     const next = !registrationsOpen
+    if (next) revealGroup.current = 'sidebar-cadastros-menu'
+    else anchorGroup.current = { id: 'sidebar-cadastros-menu', top: navRef.current?.querySelector('[aria-controls="sidebar-cadastros-menu"]')?.getBoundingClientRect().top ?? 0 }
     setRegistrationsOpen(next)
     window.sessionStorage.setItem('gmac-cadastros-open', String(next))
   }
   function toggleFinancial() {
     const next = !financialOpen
+    if (next) revealGroup.current = 'sidebar-finance-menu'
+    else anchorGroup.current = { id: 'sidebar-finance-menu', top: navRef.current?.querySelector('[aria-controls="sidebar-finance-menu"]')?.getBoundingClientRect().top ?? 0 }
     setFinancialOpen(next)
     window.sessionStorage.setItem('gmac-finance-open', String(next))
   }
@@ -235,7 +290,7 @@ function Sidebar({ collapsed, onToggle, activeNav, onNavigate, onLogout }) {
           <Icon name={collapsed ? 'expand' : 'collapse'} />
         </button>
       </div>
-      <nav className="sidebar-nav" aria-label="Navegação principal">
+      <nav ref={navRef} className={`sidebar-nav${navEdges.above ? ' sidebar-nav--more-above' : ''}${navEdges.below ? ' sidebar-nav--more-below' : ''}`} aria-label="Navegação principal" onScroll={(event) => { sidebarScrollTop = event.currentTarget.scrollTop; fitSpacer(); updateNavEdges() }}>
         {navigation.flatMap((item) => {
           if (item[0] === 'Funcionários') return [<div className="sidebar-nav-group" key="cadastros">
             <button className={`nav-item sidebar-nav-group-toggle ${!registrationsOpen && isRegistrationPage(activeNav) ? 'nav-item--active' : ''}`} type="button" title="Cadastros" aria-label="Cadastros" aria-expanded={registrationsOpen} aria-controls="sidebar-cadastros-menu" onClick={toggleRegistrations}>
@@ -251,6 +306,7 @@ function Sidebar({ collapsed, onToggle, activeNav, onNavigate, onLogout }) {
           </div>]
           return isRegistrationPage(item[0]) || isFinancialPage(item[0]) ? [] : [navigationItem(item)]
         })}
+        <div ref={spacerRef} className="sidebar-nav-spacer" aria-hidden="true" />
       </nav>
       <div className="sidebar-account"><div className="account-avatar">{initials}</div><div className="account-copy"><strong title={name}>{name}</strong><span>Administrador</span></div></div>
       <button className="logout-button" type="button" onClick={onLogout} title="Sair" aria-label="Sair"><span className="logout-icon" aria-hidden="true">↪</span><span>Sair</span></button>
@@ -327,7 +383,7 @@ function WorkspaceTabs({ tabs, activeNav, onNavigate, onCloseTab, onReorderTabs 
     </div>
     {scrollState.overflow && <button ref={rightArrowRef} className="workspace-tabs-control" type="button" aria-label="Rolar abas para a direita" title="Rolar abas para a direita" disabled={!scrollState.right} onClick={() => scrollTabs(1)}><ChevronRight size={17} aria-hidden="true" /></button>}
     {tabs.length > 3 && <button className="workspace-tabs-control workspace-tabs-close-all" type="button" aria-label="Fechar todas as abas" title="Fechar todas as abas" onClick={closeAllTabs}><X size={17} aria-hidden="true" /></button>}
-    <NotificationsButton onOpenAccount={(id) => { sessionStorage.setItem('gmac-payable-open', id); onNavigate('Contas a Pagar'); window.dispatchEvent(new CustomEvent('gmac-payable-open', { detail: id })) }} onOpenNotice={(notice) => onNavigate({ 'material-request': 'Pedidos', 'low-stock': 'Estoque', 'service-completed': 'Serviços em andamento', 'service-added': 'Serviços em andamento' }[notice.type] || 'Dashboard')} />
+    <NotificationsButton onOpenAccount={(id) => { sessionStorage.setItem('gmac-payable-open', id); onNavigate('Contas a Pagar'); window.dispatchEvent(new CustomEvent('gmac-payable-open', { detail: id })) }} onOpenReceivable={(id) => { sessionStorage.setItem('gmac-receivable-open', id); onNavigate('Contas a Receber'); window.dispatchEvent(new CustomEvent('gmac-receivable-open', { detail: id })) }} onOpenNotice={(notice) => onNavigate({ 'material-request': 'Pedidos', 'low-stock': 'Estoque', 'service-completed': 'Serviços em andamento', 'service-added': 'Serviços em andamento' }[notice.type] || 'Dashboard')} />
     <div className="workspace-tabs-clock" aria-label="Data e hora atual"><strong>{currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</strong><span>{currentTime.toLocaleDateString('pt-BR')}</span></div>
   </div>
 }
@@ -2037,9 +2093,7 @@ function App() {
 
   return (
     <main className="login-page">
-      <section className="brand-panel" aria-label="GMAC Metalúrgica">
-        <div className="brand-panel__veil" />
-      </section>
+      <LoginBrandPanel />
 
       <section className="access-panel">
         <div className="login-card">

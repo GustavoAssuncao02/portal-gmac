@@ -35,11 +35,15 @@ export function nameSimilarity(a, b) {
 }
 
 function financialRecords(store, kind) {
-  if (kind === 'payable') return store.payables.filter((row) => !row.inactive).map((row) => ({ kind, id: row.id, name: row.supplierName, document: (store.suppliers || []).find((item) => String(item.id) === String(row.supplierId))?.document || null, valueCents: row.payment ? row.payment.finalCents : row.valueCents, date: row.payment?.date || row.dueDate, dateKind: row.payment ? 'pagamento' : 'vencimento', description: row.description, settled: Boolean(row.payment) }))
-  return store.receivables.filter((row) => !row.inactive).map((row) => ({ kind, id: row.id, name: row.customerName, document: row.customerDocument || null, valueCents: row.receipt ? row.receipt.finalCents : row.valueCents, date: row.receipt?.date || row.dueDate, dateKind: row.receipt ? 'recebimento' : 'vencimento', description: row.description, settled: Boolean(row.receipt) }))
+  // Both the settlement date (when there is one) and the due date are compared with the bank date.
+  const dates = (settledOn, settledKind, dueDate) => [...(settledOn ? [{ date: settledOn, kind: settledKind }] : []), { date: dueDate, kind: 'vencimento' }]
+  if (kind === 'payable') return store.payables.filter((row) => !row.inactive).map((row) => ({ kind, id: row.id, name: row.supplierName, document: (store.suppliers || []).find((item) => String(item.id) === String(row.supplierId))?.document || null, valueCents: row.payment ? row.payment.finalCents : row.valueCents, date: row.payment?.date || row.dueDate, dateKind: row.payment ? 'pagamento' : 'vencimento', dates: dates(row.payment?.date, 'pagamento', row.dueDate), description: row.description, settled: Boolean(row.payment) }))
+  return store.receivables.filter((row) => !row.inactive).map((row) => ({ kind, id: row.id, name: row.customerName, document: row.customerDocument || null, valueCents: row.receipt ? row.receipt.finalCents : row.valueCents, date: row.receipt?.date || row.dueDate, dateKind: row.receipt ? 'recebimento' : 'vencimento', dates: dates(row.receipt?.date, 'recebimento', row.dueDate), description: row.description, settled: Boolean(row.receipt) }))
 }
 
 // Evidence ladder: value is always exact; document, name and date only add confidence. Nothing is chosen automatically.
+// Same CPF/CNPJ with a date outside the tolerance (up to 90 days) is still offered, as the weakest level, for the user to check.
+const OUTSIDE_TOLERANCE_DAYS = 90
 export function reconciliationCandidates(store, transaction, toleranceDays = store.bankSettings?.dateToleranceDays ?? 3) {
   const kind = transaction.direction === 'out' ? 'payable' : transaction.direction === 'in' ? 'receivable' : null
   if (!kind) return { kind, candidates: [], ambiguous: false, toleranceDays }
@@ -48,16 +52,18 @@ export function reconciliationCandidates(store, transaction, toleranceDays = sto
   const candidates = []
   for (const record of financialRecords(store, kind)) {
     if (record.valueCents !== amount || taken.has(`${kind}:${record.id}`)) continue
-    const days = daysBetween(record.date, transaction.bankDate)
+    const nearest = record.dates.map((item) => ({ ...item, days: daysBetween(item.date, transaction.bankDate) })).sort((a, b) => a.days - b.days)[0]
+    const days = nearest.days
     const documentMatch = Boolean(transaction.counterpartyDocument && record.document && record.document === transaction.counterpartyDocument)
     const similarity = transaction.counterpartyName ? nameSimilarity(transaction.counterpartyName, record.name) : 0
-    const level = documentMatch && days === 0 ? 1 : documentMatch && days <= toleranceDays ? 2 : similarity >= 0.6 && days <= toleranceDays ? 3 : days === 0 ? 4 : null
+    const level = documentMatch && days === 0 ? 1 : documentMatch && days <= toleranceDays ? 2 : similarity >= 0.6 && days <= toleranceDays ? 3 : days === 0 ? 4 : documentMatch && days <= OUTSIDE_TOLERANCE_DAYS ? 5 : null
     if (!level) continue
     const reasons = [`Valor exato: ${money(amount)}`]
     if (documentMatch) reasons.push(`${record.document.length === 14 ? 'CNPJ' : 'CPF'} coincide com o histórico bancário`)
     if (!documentMatch && similarity >= 0.6) reasons.push(`Nome semelhante: "${transaction.counterpartyName}" × "${record.name}"`)
-    reasons.push(days === 0 ? `Mesma data de ${record.dateKind}` : `Data de ${record.dateKind} a ${days} dia${days === 1 ? '' : 's'} (tolerância de ${toleranceDays})`)
-    candidates.push({ ...record, level, strength: { 1: 'Forte', 2: 'Boa', 3: 'Média', 4: 'Fraca' }[level], days, reasons })
+    reasons.push(days === 0 ? `Mesma data de ${nearest.kind}` : level === 5 ? `Data de ${nearest.kind} a ${days} dias do banco, fora da tolerância de ${toleranceDays}: confira antes de conciliar` : `Data de ${nearest.kind} a ${days} dia${days === 1 ? '' : 's'} (tolerância de ${toleranceDays})`)
+    const { dates: _dates, ...summary } = record
+    candidates.push({ ...summary, date: nearest.date, dateKind: nearest.kind, level, strength: { 1: 'Forte', 2: 'Boa', 3: 'Média', 4: 'Fraca', 5: 'Conferir data' }[level], days, reasons })
   }
   candidates.sort((a, b) => a.level - b.level || a.days - b.days || a.id.localeCompare(b.id))
   const best = candidates[0]?.level

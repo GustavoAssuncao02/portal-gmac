@@ -1,0 +1,52 @@
+{
+  "items": [
+    {
+      "type": "image",
+      "src": "/login-media/foto-01.webp"
+    },
+    {
+      "type": "image",
+      "src": "/login-media/foto-02.webp"
+    },
+    {
+      "type": "image",
+      "src": "/login-media/foto-03.webp"
+    },
+    {
+      "type": "image",
+      "src": "/login-media/foto-04.webp"
+    },
+    {
+      "type": "image",
+      "src": "/login-media/foto-05.webp"
+    },
+    {
+      "type": "image",
+      "src": "/login-media/foto-06.webp"
+    },
+    {
+      "type": "image",
+      "src": "/login-media/foto-07.webp"
+    },
+    {
+      "type": "image",
+      "src": "/login-media/foto-08.webp"
+    },
+    {
+      "type": "image",
+      "src": "/login-media/foto-09.webp"
+    },
+    {
+      "type": "image",
+      "src": "/login-media/foto-10.webp"
+    },
+    {
+      "type": "video",
+      "src": "/login-media/video-01.mp4"
+    },
+    {
+      "type": "video",
+      "src": "/login-media/video-02.mp4"
+    }
+  ]
+}

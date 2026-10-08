@@ -16,7 +16,7 @@ test('all four administrator notices are shared, deduplicated, individually read
   const alerts = async () => (await request('/notifications')).data.items
   assert.equal((await fixture.request('/notifications')).status, 401)
   assert.equal((await fixture.request('/notifications/read-all', 'POST', {}, { Authorization: `Bearer ${fixture.operatorToken}` })).status, 401)
-  assert.deepEqual((await request('/account/notifications')).data.settings, { payableReminderDays: 3, ...notificationDefaults })
+  assert.deepEqual((await request('/account/notifications')).data.settings, { payableReminderDays: 3, receivableReminderDays: 3, ...notificationDefaults })
   assert.deepEqual(await alerts(), [])
   const second = (await request('/admins', 'POST', { name: 'Segundo Admin', birthDate: '1990-01-01', cpf: '00000000002', email: 'segundo@example.invalid', password: 'teste123' })).data.item
   const secondAuth = { Authorization: `Bearer ${(await fixture.request('/auth/login', 'POST', { cpf: second.cpf, password: 'teste123' })).data.token}` }

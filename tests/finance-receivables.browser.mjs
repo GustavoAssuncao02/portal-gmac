@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { mkdir } from 'node:fs/promises'
 import { chromium } from 'playwright'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
+import { todayBahia, shiftMonth } from '../server/payableRules.js'
 import { stageLabel } from '../server/serviceStages.js'
 import { sampleOfx, sampleRows } from './ofxSample.js'
 
@@ -11,6 +12,10 @@ const browser = await chromium.launch()
 await mkdir('test-results', { recursive: true })
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
 const errors = []
+// Expected receipt dates cannot be in the past, so the scenario follows the current month.
+const nextMonth = shiftMonth(todayBahia(), 1), later = shiftMonth(todayBahia(), 2)
+const brDate = (value) => value.split('-').reverse().join('/')
+const monthLabel = (value) => new Date(`${value.slice(0, 7)}-15T12:00:00Z`).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit', timeZone: 'UTC' }).replace('.', '').replace(' de ', '/')
 page.on('pageerror', (error) => errors.push(error.message))
 try {
   const token = (await fixture.request('/auth/login', 'POST', { cpf: env.DEMO_ADMIN_CPF, password: env.DEMO_ADMIN_PASSWORD })).data.token
@@ -70,21 +75,22 @@ try {
   await row.getByRole('button', { name: 'Concluído', exact: true }).click()
   const schedule = page.getByRole('dialog', { name: 'Programar recebimento', exact: true })
   await schedule.getByLabel('Valor a receber', { exact: true }).waitFor()
-  assert.equal(await schedule.getByLabel('Valor a receber', { exact: true }).inputValue(), '1125.45', 'Defaults to the OS value after discount')
+  assert.equal(await schedule.getByLabel('Valor a receber', { exact: true }).inputValue(), '1.125,45', 'Defaults to the OS value after discount')
   await schedule.getByLabel('Valor a receber', { exact: true }).fill('1100')
-  await schedule.getByLabel('Data prevista de recebimento', { exact: true }).fill('2026-11-20')
+  await schedule.getByLabel('Data prevista de recebimento', { exact: true }).fill(nextMonth)
   await schedule.getByRole('button', { name: 'Programar e concluir', exact: true }).click()
   await row.waitFor({ state: 'detached' })
 
   await navigate('Contas a Receber')
   const receivable = page.locator('.receivable-table tbody tr').filter({ hasText: order.code })
   await receivable.waitFor()
-  assert.match(await receivable.innerText(), /REC-000001[\s\S]*R\$\s1\.100,00[\s\S]*20\/11\/2026/)
+  assert.ok((await receivable.innerText()).includes(brDate(nextMonth)))
+  assert.match(await receivable.innerText(), /REC-000001[\s\S]*R\$\s1\.100,00/)
   await page.getByRole('button', { name: 'Nova conta a receber', exact: true }).click()
   const form = page.getByRole('dialog', { name: 'Nova conta a receber', exact: true })
   await form.getByLabel('Nome do pagador', { exact: true }).fill('Cliente avulso')
   await form.getByLabel('Valor', { exact: true }).fill('250.10')
-  await form.getByLabel('Data prevista de recebimento', { exact: true }).fill('2026-12-05')
+  await form.getByLabel('Data prevista de recebimento', { exact: true }).fill(later)
   await form.getByRole('button', { name: 'Salvar conta', exact: true }).click()
   const details = page.getByRole('dialog', { name: 'REC-000002', exact: true })
   await details.getByRole('button', { name: 'Dar baixa', exact: true }).click()
@@ -102,7 +108,7 @@ try {
   await page.keyboard.press('End')
   await page.locator('.finance-trend-tooltip').waitFor()
   await page.getByRole('button', { name: 'Ver tabela', exact: true }).click()
-  const november = page.locator('.finance-trend-table tbody tr').filter({ hasText: 'nov/26' })
+  const november = page.locator('.finance-trend-table tbody tr').filter({ hasText: monthLabel(nextMonth) })
   assert.match(await november.innerText(), /R\$\s1\.100,00/)
   for (const [width, height] of [[1920, 1080], [390, 844], [320, 740]]) {
     await page.setViewportSize({ width, height })

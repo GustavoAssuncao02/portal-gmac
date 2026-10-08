@@ -8,6 +8,7 @@ import { exportPdf, exportWorkbook } from './reports.js'
 import { cents, validDate, todayBahia, payableStatus, daysUntil, makeInstallments, shiftMonth, filterPayables } from './payableRules.js'
 import { notificationSettings } from './accounts.js'
 import { assertNotReconciled } from './bankStatements.js'
+import { orderValue } from './receivables.js'
 
 const directory = path.join(path.dirname(fileURLToPath(import.meta.url)), 'data', 'payable-files')
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), { status }) }
@@ -57,7 +58,9 @@ function fields(store, body, current) {
   let valueCents
   try { valueCents = cents(body.value) } catch (error) { fail(error.message) }
   if (!valueCents) fail('O valor deve ser maior que zero.')
-  return { supplierId: supplier.id, supplierName: supplier.name, classificationId: classification.id, classificationName: classification.name, description: clean(body.description, 5000), documentNumber: clean(body.documentNumber, 160), issueDate: body.issueDate, dueDate: body.dueDate, valueCents, kind: body.kind, recurrence: body.kind === 'recurring' ? body.recurrence : null }
+  const orderCode = clean(body.orderCode, 40) || null
+  if (orderCode && !(store.orders || []).some((order) => order.code === orderCode)) fail('OS vinculada não encontrada.')
+  return { orderCode, supplierId: supplier.id, supplierName: supplier.name, classificationId: classification.id, classificationName: classification.name, description: clean(body.description, 5000), documentNumber: clean(body.documentNumber, 160), issueDate: body.issueDate, dueDate: body.dueDate, valueCents, kind: body.kind, recurrence: body.kind === 'recurring' ? body.recurrence : null }
 }
 function installments(body, valueCents, dueDate) {
   const count = Number(body.count ?? 1)
@@ -78,7 +81,18 @@ function payment(body, valueCents, bulk = false) {
   return { date: body.date, method: body.method, interestCents, discountCents, finalCents, note: clean(body.note, 5000), receipts: [] }
 }
 function view(row, store) {
-  return { ...row, supplierName: (store.suppliers || []).find((item) => String(item.id) === String(row.supplierId))?.name || row.supplierName, classificationName: store.classifications.find((item) => item.id === row.classificationId)?.name || row.classificationName, status: payableStatus(row), daysUntil: daysUntil(row.dueDate) }
+  const supplier = (store.suppliers || []).find((item) => String(item.id) === String(row.supplierId))
+  return { ...row, supplierDocument: supplier?.document || null, supplierName: supplier?.name || row.supplierName, classificationName: store.classifications.find((item) => item.id === row.classificationId)?.name || row.classificationName, status: payableStatus(row), daysUntil: daysUntil(row.dueDate) }
+}
+// Real cost of an OS: every payable linked to it (archived ones were still paid), against the OS price and the proposal estimate.
+export function orderCosts(store, order) {
+  const value = orderValue(order), proposal = order.proposal || {}
+  const linked = (store.payables || []).filter((row) => row.orderCode === order.code)
+  const amount = (row) => row.payment ? row.payment.finalCents : row.valueCents
+  const costCents = linked.reduce((sum, row) => sum + amount(row), 0), paidCostCents = linked.filter((row) => row.payment).reduce((sum, row) => sum + amount(row), 0)
+  const receivables = (store.receivables || []).filter((row) => row.orderCode === order.code && !row.inactive)
+  const marginCents = value.valueCents - costCents
+  return { code: order.code, service: order.service, company: order.company, status: order.operation?.status || 'waiting', ...value, estimatedCostCents: Math.round((Number(proposal.materials || 0) + Number(proposal.labor || 0)) * 100), expectedMarginPercent: Number(proposal.margin || 0), costCents, paidCostCents, pendingCostCents: costCents - paidCostCents, marginCents, marginPercent: value.valueCents ? Math.round(marginCents / value.valueCents * 1000) / 10 : null, receivableCents: receivables.reduce((sum, row) => sum + row.valueCents, 0), receivedCents: receivables.reduce((sum, row) => sum + (row.receipt?.finalCents || 0), 0), payables: linked.map((row) => view(row, store)) }
 }
 export function activeNotifications(store, userId) {
   const { payableReminderDays } = notificationSettings(store, userId)
@@ -135,8 +149,10 @@ export default function createPayablesRouter(accounts, requireAdmin) {
       return store
     })
   }
-  router.get('/payables', handle(async (_req, res) => { const store = await sweep(); res.json({ items: store.payables.map((r) => view(r, store)), classifications: store.classifications, suppliers: store.suppliers || [] }) }))
+  router.get('/payables', handle(async (_req, res) => { const store = await sweep(); res.json({ items: store.payables.map((r) => view(r, store)), classifications: store.classifications, suppliers: store.suppliers || [], orders: (store.orders || []).map((order) => ({ code: order.code, service: order.service, company: order.company, status: order.operation?.status || 'waiting' })) }) }))
   router.get('/payables/history', handle(async (_req, res) => { const store = await sweep(); res.json({ items: [...store.payableEvents].reverse() }) }))
+  router.get('/payables/order-costs', handle(async (_req, res) => { const store = await sweep(); res.json({ items: (store.orders || []).map((order) => { const { payables, ...summary } = orderCosts(store, order); return { ...summary, payableCount: payables.length } }) }) }))
+  router.get('/payables/order-costs/:code', handle(async (req, res) => { const store = await sweep(); const order = (store.orders || []).find((item) => item.code === req.params.code); if (!order) fail('OS não encontrada.', 404); res.json({ item: orderCosts(store, order) }) }))
   router.get('/payables/notifications', handle(async (req, res) => { const store = await sweep(req.actor.id); res.set('Cache-Control', 'no-store').json({ items: notificationItems(store, req.actor.id) }) }))
   router.post('/payables/notifications/read-all', handle(async (req, res) => {
     let store = await sweep(req.actor.id)
@@ -163,14 +179,19 @@ export default function createPayablesRouter(accounts, requireAdmin) {
       const previous = req.body.previousId ? find(store, req.body.previousId) : null
       if (previous && (!previous.payment || previous.kind !== 'recurring' || common.kind !== 'recurring')) fail('Origem recorrente inválida.')
       const groupId = common.kind === 'installment' ? randomUUID() : null
-      const proposed = parts.map((part, index) => ({ ...common, ...part, groupId, installmentNumber: index + 1, installmentCount: parts.length, originalTotalCents: common.valueCents, previousId: previous?.id || null, inactive: false, payment: null, attachments: [], createdAt: new Date().toISOString() }))
+      // Recurring accounts can be generated ahead so future months show up in planning; each occurrence stays independent.
+      const ahead = common.kind === 'recurring' ? Number(req.body.ahead || 0) : 0
+      if (!Number.isInteger(ahead) || ahead < 0 || ahead > 24) fail('Informe de 0 a 24 ocorrências futuras.')
+      const seriesId = ahead ? randomUUID() : null
+      const occurrences = ahead ? Array.from({ length: ahead + 1 }, (_, index) => ({ valueCents: common.valueCents, dueDate: shiftMonth(common.dueDate, index * (common.recurrence === 'yearly' ? 12 : 1)) })) : parts
+      const proposed = occurrences.map((part, index) => ({ ...common, ...part, groupId, installmentNumber: seriesId ? 1 : index + 1, installmentCount: seriesId ? 1 : parts.length, seriesId, seriesIndex: seriesId ? index + 1 : null, seriesCount: seriesId ? occurrences.length : null, originalTotalCents: common.valueCents, previousId: index === 0 ? previous?.id || null : null, inactive: false, payment: null, attachments: [], createdAt: new Date().toISOString() }))
       duplicates(store, proposed)
       const attachments = claimFiles(store, req.body.fileIds || [], req.actor)
-      for (const row of proposed) {
-        row.attachments = [...attachments]
+      for (const [index, row] of proposed.entries()) {
+        row.attachments = seriesId && index > 0 ? [] : [...attachments]
         store.payableSequence = (store.payableSequence || 0) + 1; row.id = `PAG-${String(store.payableSequence).padStart(6, '0')}`; row.lastStatus = payableStatus(row); store.payables.push(row)
-        event(store, req.actor, 'created', row.id, { details: { valueCents: row.valueCents, dueDate: row.dueDate, previousId: row.previousId, text: previous ? `Criada a partir de ${previous.id}` : '' } })
-        for (const file of attachments) event(store, req.actor, 'attachment_added', row.id, { details: { name: file.name } })
+        event(store, req.actor, 'created', row.id, { details: { valueCents: row.valueCents, dueDate: row.dueDate, previousId: row.previousId, text: previous ? `Criada a partir de ${previous.id}` : seriesId ? `Recorrência ${index + 1} de ${proposed.length}, gerada antecipadamente` : '' } })
+        if (!seriesId || index === 0) for (const file of attachments) event(store, req.actor, 'attachment_added', row.id, { details: { name: file.name } })
       }
       return proposed
     }); res.status(201).json({ items: result })

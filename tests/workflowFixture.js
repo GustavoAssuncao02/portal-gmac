@@ -38,9 +38,10 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   app.use('/api', reportsRouter(pool, accounts, requireAdmin))
   const payables = payablesRouter(accounts, requireAdmin)
   app.use('/api', payables)
-  app.use('/api', receivablesRouter(accounts, requireAdmin))
+  const receivables = receivablesRouter(accounts, requireAdmin)
+  app.use('/api', receivables)
   app.use('/api', bankStatementsRouter(accounts, requireAdmin))
-  app.use('/api', notificationsRouter({ requireAdmin, payables, loadInventory: notificationInventory }))
+  app.use('/api', notificationsRouter({ requireAdmin, payables, receivables, loadInventory: notificationInventory }))
   app.use('/api', materialRequestsRouter(requireAdmin, inventoryPool, accounts))
   app.get('/api/inventory', (_request, response) => response.status(503).json({ message: 'O banco de dados ainda não está configurado.' }))
   app.post('/api/auth/login', async (request, response, next) => {

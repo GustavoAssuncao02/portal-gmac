@@ -37,20 +37,108 @@ button {
   background: #ffffff;
 }
 
+/* Brand colors live in custom properties so the generated dark palette keeps the login art unchanged. */
 .brand-panel {
+  --brand-background: linear-gradient(165deg, #2c5786 0%, #12305a 100%);
+  --brand-tint: linear-gradient(180deg, rgba(14, 44, 84, 0.3) 0%, rgba(12, 38, 74, 0.42) 50%, rgba(6, 24, 50, 0.74) 100%);
+  --brand-logo-shadow: drop-shadow(0 2px 18px rgba(3, 16, 36, 0.55));
+  --brand-flash: rgba(46, 104, 178, 0.6);
+  --brand-rule: #f47c20;
+  --brand-text: #ffffff;
+  --brand-text-soft: rgba(236, 243, 251, 0.9);
+  --brand-shadow: rgba(4, 18, 38, 0.5);
   position: relative;
+  display: flex;
   width: 41.667%;
   min-height: 100vh;
-  background: #113966 url('/images/gmac-left-panel.jpg') center center / cover no-repeat;
+  background: var(--brand-background);
   overflow: hidden;
+  isolation: isolate;
 }
 
+.brand-media,
 .brand-panel__veil {
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, rgba(9, 39, 73, 0.04), rgba(9, 39, 73, 0.02));
   pointer-events: none;
 }
+
+.brand-media__slide {
+  position: absolute;
+  inset: -8%;
+  filter: blur(6px) saturate(0.95);
+  animation: brand-slide-in 1.6s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.brand-media__slide::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--brand-flash);
+  animation: brand-flash-in 1.6s ease both;
+}
+
+.brand-media__slide--leaving { animation-name: brand-slide-out; }
+.brand-media__slide--leaving::after { animation-name: brand-flash-out; }
+
+.brand-media__slide > :is(img, video) {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform-origin: var(--zoom-origin, 50% 50%);
+  animation: brand-zoom 16s linear both;
+}
+
+@keyframes brand-slide-in { from { opacity: 0; filter: blur(22px) saturate(0.6); } to { opacity: 1; filter: blur(6px) saturate(0.95); } }
+@keyframes brand-slide-out { from { filter: blur(6px) saturate(0.95); } to { filter: blur(22px) saturate(0.6); } }
+@keyframes brand-flash-in { from { opacity: 1; } to { opacity: 0; } }
+@keyframes brand-flash-out { from { opacity: 0; } to { opacity: 1; } }
+@keyframes brand-zoom { from { transform: scale(1); } to { transform: scale(1.16); } }
+
+.brand-panel__veil { background: var(--brand-tint); }
+
+.brand-panel__content {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 48px 40px;
+  text-align: center;
+}
+
+.brand-panel__mark { width: min(48%, 270px); }
+.brand-panel__logo { display: block; width: 100%; height: auto; filter: var(--brand-logo-shadow); }
+.brand-panel__rule { width: 68px; height: 3px; margin: 30px 0 26px; border-radius: 2px; background: var(--brand-rule); }
+
+.brand-panel__title {
+  margin: 0;
+  color: var(--brand-text);
+  font-size: 34px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-shadow: 0 2px 16px var(--brand-shadow);
+}
+
+.brand-panel__subtitle {
+  max-width: 380px;
+  margin: 14px 0 0;
+  color: var(--brand-text-soft);
+  font-size: 19px;
+  line-height: 1.5;
+  text-shadow: 0 1px 12px var(--brand-shadow);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-media__slide { animation-name: brand-fade; }
+  .brand-media__slide--leaving { animation: none; }
+  .brand-media__slide::after { display: none; }
+  .brand-media__slide > :is(img, video) { animation: none; }
+}
+@keyframes brand-fade { from { opacity: 0; } to { opacity: 1; } }
 
 .access-panel {
   display: flex;
@@ -417,6 +505,13 @@ button {
   gap: 5px;
   padding: 0 0 16px;
 }
+
+.sidebar-nav-spacer { flex: 0 0 auto; height: 0; margin-top: -5px; pointer-events: none; }
+
+/* Soft edges show that the menu continues instead of cutting items under the logo. */
+.sidebar-nav--more-above { mask-image: linear-gradient(to bottom, transparent 0, #000 28px); }
+.sidebar-nav--more-below { mask-image: linear-gradient(to top, transparent 0, #000 28px); }
+.sidebar-nav--more-above.sidebar-nav--more-below { mask-image: linear-gradient(to bottom, transparent 0, #000 28px, #000 calc(100% - 28px), transparent 100%); }
 
 .nav-item,
 .logout-button {
@@ -5240,8 +5335,13 @@ button {
     width: 100%;
     min-height: 290px;
     height: 39vh;
-    background-position: center center;
   }
+
+  .brand-panel__content { padding: 22px 20px; }
+  .brand-panel__mark { width: min(30%, 112px); }
+  .brand-panel__rule { width: 52px; margin: 16px 0 12px; }
+  .brand-panel__title { font-size: 21px; }
+  .brand-panel__subtitle { max-width: 280px; margin-top: 6px; font-size: 14px; line-height: 1.4; }
 
   .access-panel {
     display: block;

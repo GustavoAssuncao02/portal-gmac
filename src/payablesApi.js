@@ -31,3 +31,20 @@ export async function downloadPayableFile(accountId, file) {
   if (!response.ok) throw new Error('Não foi possível baixar o arquivo.')
   downloadBlob(await response.blob(), file.name)
 }
+const authHeader = () => ({ Authorization: `Bearer ${sessionStorage.getItem('gmac-admin-token') || ''}` })
+// Generic file helpers used by Contas a Receber (base is "/receivables").
+export async function uploadFiles(base, files, accountId) {
+  const ids = []
+  for (const file of files) {
+    const response = await fetch(`/api${base}/${accountId ? `${accountId}/files` : 'uploads'}?name=${encodeURIComponent(file.name)}&type=${encodeURIComponent(file.type || 'application/octet-stream')}`, { method: 'POST', headers: { ...authHeader(), 'Content-Type': 'application/octet-stream' }, body: file })
+    const result = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error(result.message || 'Falha ao enviar arquivo.')
+    ids.push(result.item.id)
+  }
+  return ids
+}
+export async function downloadFile(url, name) {
+  const response = await fetch(url, { headers: authHeader() })
+  if (!response.ok) throw new Error('Não foi possível baixar o arquivo.')
+  downloadBlob(await response.blob(), name)
+}

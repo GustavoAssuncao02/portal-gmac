@@ -1,0 +1,147 @@
+import assert from 'node:assert/strict'
+import { mkdir } from 'node:fs/promises'
+import { chromium } from 'playwright'
+import { createWorkflowFixture } from './workflowFixture.js'
+import { todayBahia } from '../server/payableRules.js'
+
+const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Gustavo' }
+const fixture = await createWorkflowFixture({ accountsEnv: env })
+const browser = await chromium.launch()
+await mkdir('test-results', { recursive: true })
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+const errors = []
+page.on('pageerror', (error) => errors.push(error.message))
+const modal = () => page.locator('dialog[open]').last()
+const tomorrow = new Date(Date.parse(todayBahia()) + 86400000).toISOString().slice(0, 10)
+// A tiny valid PNG for the preview check.
+const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64')
+try {
+  const token = (await fixture.request('/auth/login', 'POST', { cpf: env.DEMO_ADMIN_CPF, password: env.DEMO_ADMIN_PASSWORD })).data.token
+  const api = (route, method, body) => fixture.request(route, method, body, { Authorization: `Bearer ${token}` })
+  await fixture.mutateStore((store) => { store.orders = [{ code: 'OS-2026-0001', service: 'Eixo usinado', company: 'Cliente teste', proposal: { serviceValue: 1000, materials: 300, labor: 200, margin: 25 }, operation: { status: 'running' } }] })
+  const known = (await api('/suppliers', 'POST', { name: 'Fornecedor habitual', document: '12345678000190' })).data.item
+  const energy = (await api('/classifications', 'POST', { name: 'Energia' })).data.item
+  await api('/classifications', 'POST', { name: 'Materiais' })
+  await api('/payables', 'POST', { supplierId: known.id, classificationId: energy.id, issueDate: todayBahia(), value: '250', dueDate: tomorrow, kind: 'normal', description: 'Conta de energia' })
+
+  await page.goto(fixture.url)
+  await page.getByLabel('CPF', { exact: true }).fill(env.DEMO_ADMIN_CPF)
+  await page.getByLabel('Senha', { exact: true }).fill(env.DEMO_ADMIN_PASSWORD)
+  await page.getByRole('button', { name: 'Entrar', exact: true }).click()
+  await page.locator('.admin-home-main').waitFor()
+  await page.locator('.sidebar').getByRole('button', { name: 'Contas a Pagar', exact: true }).click()
+  await page.locator('.payable-table tbody tr').first().waitFor()
+  assert.match(await page.locator('.payable-table tbody tr').first().innerText(), /Vence em 1 dia(?!s)/)
+
+  // New account: value mask, supplier created without losing the draft, OS link, classification suggestion.
+  await page.getByRole('button', { name: 'Nova conta a pagar', exact: true }).click()
+  await modal().getByLabel('Descrição', { exact: true }).fill('Barras de aço para OS')
+  await modal().getByLabel('Valor', { exact: true }).fill('1.234,56')
+  await modal().getByLabel('Vencimento', { exact: true }).fill('2026-12-10')
+  await modal().getByLabel('Valor', { exact: true }).blur()
+  assert.equal(await modal().getByLabel('Valor', { exact: true }).inputValue(), '1.234,56')
+  await modal().getByRole('button', { name: 'Cadastrar fornecedor', exact: true }).click()
+  const supplierForm = page.getByRole('dialog', { name: 'Novo fornecedor', exact: true })
+  await supplierForm.getByLabel('Nome / razão social', { exact: true }).fill('Aços do Nordeste')
+  await supplierForm.getByLabel('CPF/CNPJ', { exact: true }).fill('11222333000181')
+  await supplierForm.getByRole('button', { name: 'Salvar fornecedor', exact: true }).click()
+  await supplierForm.waitFor({ state: 'hidden' })
+  const form = page.getByRole('dialog', { name: 'Nova conta a pagar', exact: true })
+  assert.equal(await form.getByLabel('Descrição', { exact: true }).inputValue(), 'Barras de aço para OS', 'The draft survives supplier creation')
+  assert.equal(await form.getByLabel('Fornecedor', { exact: true }).locator('option:checked').innerText(), 'Aços do Nordeste')
+  await form.getByLabel('Classificação', { exact: true }).selectOption({ label: 'Materiais' })
+  await form.getByLabel('OS vinculada (custo)', { exact: true }).selectOption('OS-2026-0001')
+  await form.getByRole('button', { name: 'Salvar conta', exact: true }).click()
+  await form.waitFor({ state: 'hidden' })
+  assert.equal((await api('/payables')).data.items.find((row) => row.description === 'Barras de aço para OS').valueCents, 123456)
+  await page.getByRole('button', { name: 'Nova conta a pagar', exact: true }).click()
+  await modal().getByLabel('Fornecedor', { exact: true }).selectOption({ label: 'Fornecedor habitual' })
+  assert.equal(await modal().getByLabel('Classificação', { exact: true }).locator('option:checked').innerText(), 'Energia')
+  await modal().getByText('Sugerida pelo último lançamento deste fornecedor.').waitFor()
+  await modal().getByRole('button', { name: 'Cancelar', exact: true }).click()
+
+  // Recurring ahead: 12 monthly accounts at once.
+  await page.getByRole('button', { name: 'Nova conta a pagar', exact: true }).click()
+  await modal().getByLabel('Fornecedor', { exact: true }).selectOption({ label: 'Fornecedor habitual' })
+  await modal().getByLabel('Descrição', { exact: true }).fill('Aluguel do galpão')
+  await modal().getByLabel('Valor', { exact: true }).fill('3000')
+  await modal().getByLabel('Vencimento', { exact: true }).fill('2026-11-05')
+  await modal().getByRole('radio', { name: 'Recorrente', exact: true }).check()
+  await modal().getByText('Serão criadas 12 contas de R$ 3.000,00, até 05/10/2027.').waitFor()
+  await page.screenshot({ path: 'test-results/payables-recurring-ahead.png' })
+  await modal().getByRole('button', { name: 'Salvar conta', exact: true }).click()
+  await page.waitForFunction(() => !document.querySelector('.payable-form'))
+  assert.equal((await api('/payables')).data.items.filter((row) => row.description === 'Aluguel do galpão').length, 12)
+
+  // Search by value and CNPJ, totals, due shortcuts and selection sum.
+  await page.getByLabel('Busca rápida', { exact: true }).fill('1.234,56')
+  await page.waitForFunction(() => document.querySelectorAll('.payable-table tbody tr').length === 1 && document.querySelector('.payable-table tbody tr').innerText.includes('Barras'))
+  await page.getByLabel('Busca rápida', { exact: true }).fill('11.222.333/0001-81')
+  await page.waitForFunction(() => document.querySelector('.payable-table tbody tr').innerText.includes('Barras'))
+  await page.getByLabel('Busca rápida', { exact: true }).fill('')
+  assert.match(await page.locator('.payable-pagination').innerText(), /14 contas · R\$\s37\.484,56/)
+  assert.match(await page.getByRole('group', { name: 'Situação' }).getByRole('button', { name: /Pendentes/ }).innerText(), /14[\s\S]*R\$\s37\.484,56/)
+  await page.getByRole('group', { name: 'Vencimento' }).getByRole('button', { name: 'Próximos 7 dias', exact: true }).click()
+  await page.waitForFunction(() => document.querySelectorAll('.payable-table tbody tr').length === 1)
+  await page.getByRole('checkbox', { name: 'Selecionar contas da página', exact: true }).first().check()
+  assert.match(await page.locator('.payable-bulk-actions').innerText(), /1 selecionadas · R\$\s250,00/)
+  await page.getByRole('checkbox', { name: 'Selecionar contas da página', exact: true }).first().uncheck()
+  await page.getByRole('group', { name: 'Vencimento' }).getByRole('button', { name: 'Próximos 7 dias', exact: true }).click()
+
+  // Details: only possible actions, paid amount fills interest, attachment preview, recurring offer skipped.
+  await page.getByLabel('Busca rápida', { exact: true }).fill('Barras')
+  await page.locator('.payable-table tbody tr').first().click()
+  const details = page.getByRole('dialog', { name: /^PAG-/ })
+  await details.getByRole('heading', { name: 'Dados principais', exact: true }).waitFor()
+  assert.equal(await details.getByRole('button', { name: 'Estornar baixa' }).count(), 0)
+  assert.equal(await details.getByRole('button', { name: 'Reativar' }).count(), 0)
+  assert.ok((await details.innerText()).includes('OS-2026-0001'))
+  await details.locator('input[type=file]').setInputFiles({ name: 'nota.png', mimeType: 'image/png', buffer: png })
+  await details.getByRole('button', { name: 'Visualizar nota.png', exact: true }).click()
+  const preview = page.getByRole('dialog', { name: 'nota.png', exact: true })
+  await preview.getByRole('img', { name: 'nota.png' }).waitFor()
+  await preview.getByRole('button', { name: 'Fechar', exact: true }).click()
+  await details.getByRole('button', { name: 'Mais ações', exact: true }).click()
+  assert.deepEqual(await details.getByRole('menuitem').allTextContents(), ['Duplicar', 'Gerar PDF individual', 'Excluir'])
+  await page.keyboard.press('Escape')
+  assert.equal(await details.getByRole('menu').count(), 0)
+  assert.equal(await details.count(), 1, 'Escape closes the menu, not the account')
+  await details.getByRole('button', { name: 'Dar baixa', exact: true }).click()
+  const payment = page.getByRole('dialog', { name: /^Dar baixa/ })
+  await payment.getByLabel('Valor pago', { exact: true }).fill('1.250,00')
+  assert.equal(await payment.getByLabel('Juros (R$)', { exact: true }).inputValue(), '15,44')
+  assert.ok((await payment.locator('.payable-final').innerText()).includes('1.250,00'))
+  await payment.getByLabel('Valor pago', { exact: true }).fill('1.200')
+  assert.equal(await payment.getByLabel('Desconto (R$)', { exact: true }).inputValue(), '34,56')
+  await payment.getByRole('button', { name: 'Confirmar baixa', exact: true }).click()
+  await details.getByRole('heading', { name: 'Pagamento', exact: true }).waitFor()
+  assert.equal(await details.getByRole('button', { name: 'Editar', exact: true }).count(), 0)
+  await details.getByRole('button', { name: 'Fechar janela', exact: true }).click()
+  await page.getByLabel('Busca rápida', { exact: true }).fill('Aluguel')
+  await page.locator('.payable-table tbody tr').first().click()
+  await details.getByRole('button', { name: 'Dar baixa', exact: true }).click()
+  await payment.getByRole('button', { name: 'Confirmar baixa', exact: true }).click()
+  await details.getByRole('heading', { name: 'Pagamento', exact: true }).waitFor()
+  assert.equal(await page.getByRole('heading', { name: 'Criar próxima conta recorrente?' }).count(), 0, 'The next month already exists in the series')
+  await details.getByRole('button', { name: 'Fechar janela', exact: true }).click()
+
+  // Real cost per OS in the BI.
+  await page.locator('.sidebar').getByRole('button', { name: 'Business Intelligence', exact: true }).click()
+  const margins = page.locator('.order-margins-table tbody tr').filter({ hasText: 'OS-2026-0001' })
+  await margins.waitFor()
+  assert.match(await margins.innerText(), /R\$\s1\.000,00[\s\S]*R\$\s500,00[\s\S]*R\$\s1\.200,00[\s\S]*−?-?R\$\s200,00|R\$\s1\.000,00[\s\S]*R\$\s500,00[\s\S]*R\$\s1\.200,00[\s\S]*-20/)
+  await page.locator('.order-margins').screenshot({ path: 'test-results/payables-order-margins.png' })
+
+  // Mobile: the first account appears sooner.
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.getByRole('button', { name: 'Abrir menu de navegação', exact: true }).click()
+  await page.locator('.sidebar').getByRole('button', { name: 'Contas a Pagar', exact: true }).click()
+  const first = page.locator('.payable-table tbody tr').first()
+  await first.waitFor()
+  const top = (await first.boundingBox()).y
+  assert.ok(top < 560, `First account starts at ${top}px on a phone`)
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+  await page.screenshot({ path: 'test-results/payables-mobile-compact.png' })
+  assert.deepEqual(errors, [])
+  console.log('Payables improvements: value mask, inline supplier, suggestion, recurring ahead, value/CNPJ search, totals, due shortcuts, selection sum, possible actions menu, paid amount, preview, OS cost/margin and compact mobile passed.')
+} catch (error) { await page.screenshot({ path: 'test-results/payables-improvements-failure.png', fullPage: true }); throw error } finally { await browser.close(); await fixture.close() }

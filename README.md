@@ -12,19 +12,39 @@ O Mini BI filtra por **vencimento** e agrupa pagamentos pela **data da baixa**, 
 
 O módulo usa a persistência JSON serializada e os anexos privados em `server/data/`, seguindo o fluxo local já utilizado pelas ofertas/OS. Faça backup dessa pasta; não é enviada ao GitHub. O acesso às contas, anexos, histórico e exportações exige sessão administrativa. Não há contas financeiras fictícias criadas automaticamente.
 
-Validação isolada, sem alterar dados locais: `npm run test:payables`.
+A busca encontra contas também pelo valor ("1.234,56", "1234,56" ou "1234.56") e pelo CPF/CNPJ do fornecedor. Os filtros de situação mostram a quantidade e o total em reais, há atalhos de vencimento (hoje, próximos 7 dias, este mês) e a seleção em massa exibe a soma antes da baixa. Os campos de valor aceitam o formato brasileiro. O fornecedor pode ser cadastrado sem sair do formulário, e a classificação usada por último com ele é sugerida. Na baixa, digitar o valor pago preenche juros ou desconto. Contas recorrentes podem gerar as próximas ocorrências de uma vez (até 24); cada ocorrência é independente, e a oferta de "próxima recorrência" após o pagamento só aparece quando a série acaba. PDFs e imagens anexados podem ser visualizados sem download.
+
+**Custo real por OS:** cada conta pode ser vinculada a uma OS no campo "OS vinculada (custo)". A tela da OS e o Business Intelligence mostram o valor da OS (proposta com desconto), o custo previsto na proposta (materiais + mão de obra), os custos lançados (pagos e a pagar) e a margem real comparada à prevista.
+
+Validação isolada, sem alterar dados locais: `npm run test:payables`, `node --test tests/payables-improvements.test.js` e `node tests/payables-improvements.browser.mjs` (após `npm run build`).
 
 Para popular a demonstração local solicitada de setembro a dezembro de 2026, com a API em execução e as credenciais administrativas locais configuradas, execute `node scripts/seed-payables.mjs`. O script cria 120 contas (30 por mês), 10 fornecedores fictícios e 10 classificações de teste. Registros são identificados por `DEMO-CP-2026`; executar novamente não duplica os lançamentos. As baixas nunca usam data futura. A execução não é automática na inicialização do sistema.
 
 ## Contas a Receber e conciliação bancária
 
-**Contas a Receber** segue as regras de Contas a Pagar: IDs `REC-`, baixa com juros ou desconto, estorno com motivo, histórico e exportação em PDF/Excel. Ao clicar em **Concluído** num serviço finalizado, um modal programa o recebimento da OS. O valor sugerido é o valor da proposta com o desconto aplicado, e pode ser alterado; a conclusão sem programar continua disponível. Cada OS gera no máximo uma conta a receber.
+**Contas a Receber** segue as regras de Contas a Pagar: IDs `REC-`, baixa com juros ou desconto, estorno com motivo, histórico e exportação em PDF/Excel. Ao clicar em **Concluído** num serviço finalizado, um modal programa o recebimento da OS. O valor sugerido é o valor da proposta com o desconto aplicado, e pode ser alterado; a conclusão sem programar continua disponível. Cada OS gera no máximo uma conta a receber (ou um parcelamento).
+
+A data prevista de recebimento (inclusive de cada parcela) não pode ser anterior à data de emissão do documento; datas passadas são aceitas quando a emissão também é anterior. Em **Recebimento parcelado**, um único documento é dividido em 2 a 120 parcelas mensais. Os valores e as datas sugeridos podem ser ajustados, e a soma precisa ser exatamente igual ao total. Enquanto nenhuma parcela foi recebida, o parcelamento pode ser reestruturado ou excluído por inteiro. Depois disso, valores e datas ficam bloqueados até o estorno. O parcelamento também está disponível ao programar o recebimento na conclusão da OS.
+
+Em **Contrato recorrente** (mensal ou anual), as próximas ocorrências são geradas na hora (até 24), e cada uma pode ser editada ou recebida separadamente. Os anexos do contrato ficam na primeira ocorrência. NF, boleto e contrato podem ser anexados e visualizados enquanto a conta está em aberto. Os comprovantes enviados na baixa acompanham o recebimento. Na baixa, informar o **Valor recebido** calcula juros ou desconto. Contas selecionadas podem receber baixa em massa, sem ajustes. A lista tem:
+
+- busca por valor (`1.500,00`) e por CPF/CNPJ do cliente;
+- filtros de situação com quantidade e total em reais;
+- atalhos de vencimento (hoje, próximos 7 dias e este mês);
+- ordenação pelas colunas;
+- paginação de 20, 50 ou 100 contas.
+
+O cliente pode ser cadastrado sem sair do formulário. O sininho avisa sobre contas a receber que vencem em breve ou já venceram. A antecedência é configurada por administrador em **Minha conta › Contas a receber a vencer** (3, 5 ou 7 dias, ou nunca).
 
 **Conciliação bancária** importa extratos OFX 1.x (SGML) e 2.x (XML). O conteúdo é lido como UTF-8 estrito e, só quando inválido, pela codificação declarada no cabeçalho; divergências de codificação ficam registradas no lote. Os registros `SALDO ANTERIOR` e `SALDO TOTAL DISPONÍVEL DIA` são guardados como posições de saldo, fora dos totais e da conciliação. A importação é idempotente por empresa (`COMPANY_SCOPE`, padrão `gmac`), banco, conta e FITID. Uma reimportação informa novas e existentes, e um FITID repetido com dados diferentes vira conflito para revisão, sem substituir nada. O fechamento diário agrupa todas as movimentações da data, e a diferença entre o saldo informado (LEDGERBAL) e o calculado aparece como ressalva, sem ajuste artificial.
 
-A conciliação sugere candidatos apenas com valor exato, ordenados por evidência: CPF/CNPJ e mesma data; CPF/CNPJ dentro da tolerância configurada; nome semelhante; mesma data. Candidatos empatados são sinalizados, e o vínculo sempre depende de confirmação manual. Um registro financeiro não participa de duas conciliações integrais, e contas conciliadas não podem ser editadas, estornadas, desativadas ou excluídas sem desfazer o vínculo. Os arquivos originais ficam em `server/data/bank-statements/`. Extratos `.ofx` são ignorados pelo Git.
+A conciliação sugere candidatos apenas com valor exato, ordenados por evidência: CPF/CNPJ e mesma data; CPF/CNPJ dentro da tolerância configurada; nome semelhante; mesma data; e, por último, **Conferir data**: mesmo CPF/CNPJ, mas com data fora da tolerância (até 90 dias). A data do banco é comparada com a data mais próxima entre a baixa e o vencimento. Candidatos empatados são sinalizados, e o vínculo sempre depende de confirmação manual. Um registro financeiro não participa de duas conciliações integrais, e contas conciliadas não podem ser editadas, estornadas, desativadas ou excluídas sem desfazer o vínculo. Os arquivos originais ficam em `server/data/bank-statements/`. Extratos `.ofx` são ignorados pelo Git.
 
-Validação isolada: `node --test tests/bank-statements.test.js` e `node tests/finance-receivables.browser.mjs` (após `npm run build`).
+Validação isolada: `node --test tests/bank-statements.test.js tests/receivables-installments.test.js tests/receivables-features.test.js` e, após `npm run build`, `node tests/finance-receivables.browser.mjs`, `node tests/receivables-installments.browser.mjs` e `node tests/receivables-features.browser.mjs`.
+
+## Tela de login
+
+O painel da esquerda mostra fotos e vídeos da oficina, desfocados e com zoom lento, trocados em ordem aleatória com uma transição azulada. Logo e textos ficam por cima, em HTML. Para trocar as mídias, coloque imagens (`.jpg`, `.png`, `.webp`) e vídeos (`.mp4`, `.webm`) na pasta `Midia/` e execute `npm run login-media`: as fotos são otimizadas em WebP e tudo é publicado em `public/login-media/`, com o `manifest.json` lido pela tela. Com a preferência "reduzir movimento" do sistema operacional, o painel mostra só fotos, sem zoom.
 
 ## Executar localmente
 

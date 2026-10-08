@@ -4,8 +4,9 @@ import { notificationSettings } from './accounts.js'
 import { notificationPreference } from './notificationRules.js'
 import { inventorySignal } from './notificationEvents.js'
 import { activeNotifications, notificationItems } from './payables.js'
+import { activeReceivableNotices, receivableNotificationItems } from './receivables.js'
 
-export default function createNotificationsRouter({ requireAdmin, payables, loadInventory }) {
+export default function createNotificationsRouter({ requireAdmin, payables, receivables, loadInventory }) {
   const router = express.Router()
   router.use('/notifications', requireAdmin)
   let inventorySweep = null
@@ -35,15 +36,17 @@ export default function createNotificationsRouter({ requireAdmin, payables, load
   }
   const items = (store, userId) => [
     ...notificationItems(store, userId).map((item) => ({ ...item, type: 'payable' })),
+    ...receivableNotificationItems(store, userId).map((item) => ({ ...item, type: 'receivable' })),
     ...operational(store, userId).map(({ readBy, ...item }) => ({ ...item, readAt: readBy?.find((entry) => String(entry.userId) === String(userId))?.at || null })),
   ].sort((left, right) => Date.parse(right.at) - Date.parse(left.at))
   for (const [method, route, reading] of [['get', '/notifications', false], ['post', '/notifications/read-all', true]]) router[method](route, async (request, response, next) => {
     try {
       await sweepInventory()
+      await receivables?.sweep(request.adminId)
       let store = await payables.sweep(request.adminId)
       if (reading && items(store, request.adminId).some((item) => !item.readAt)) store = await mutateStore((current) => {
         const at = new Date().toISOString()
-        for (const notice of [...activeNotifications(current, request.adminId), ...operational(current, request.adminId)]) {
+        for (const notice of [...activeNotifications(current, request.adminId), ...activeReceivableNotices(current, request.adminId), ...operational(current, request.adminId)]) {
           notice.readBy ||= []
           if (!notice.readBy.some((entry) => String(entry.userId) === String(request.adminId))) notice.readBy.push({ userId: request.adminId, at })
         }

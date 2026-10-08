@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "theme:build": "node scripts/build-dark-theme.mjs",
+    "login-media": "node scripts/build-login-media.mjs",
     "prebuild": "npm run theme:build",
     "dev": "concurrently --kill-others --names FRONTEND,BACKEND --prefix-colors cyan,green \"vite\" \"node server/index.js\"",
     "build": "vite build",

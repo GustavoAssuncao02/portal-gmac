@@ -14,6 +14,34 @@ const duration = (value) => {
 const statusLabels = { waiting: 'Aguardando', running: 'Em execução', paused: 'Pausado', finalizing: 'Finalizando', completed: 'Concluído' }
 const eventLabels = { started: 'Início', resumed: 'Retomada', paused: 'Pausa', machine_changed: 'Troca de máquina', labor_service_changed: 'Troca de serviço de hora homem', resource_changed: 'Troca entre máquina e serviço', session_ended: 'Sessão encerrada na conclusão', stage_progress: 'Peças registradas', completed: 'Conclusão', completion_acknowledged: 'Conclusão confirmada no painel', admin_interrupted: 'Interrupção administrativa', stages_configured: 'Etapas configuradas', order_edited: 'OS editada', order_reopened: 'OS reaberta' }
 
+const fromCents = (cents) => currency(cents / 100)
+const payableState = (row) => row.inactive ? 'Desativada' : row.payment ? 'Paga' : row.status === 'overdue' ? 'Vencida' : 'A pagar'
+
+// Real cost of the OS: payables linked to it in Contas a Pagar, compared with the OS price and the proposal estimate.
+function OrderCosts({ code }) {
+  const [data, setData] = useState(null), [error, setError] = useState('')
+  useEffect(() => {
+    let active = true
+    fetch(`/api/payables/order-costs/${encodeURIComponent(code)}`, { headers: { Authorization: `Bearer ${sessionStorage.getItem('gmac-admin-token') || ''}` } }).then(async (response) => {
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(body.message || 'Não foi possível carregar os custos da OS.')
+      if (active) setData(body.item)
+    }).catch((caught) => { if (active) setError(caught.message) })
+    return () => { active = false }
+  }, [code])
+  const tone = !data || data.marginPercent == null ? '' : data.marginCents < 0 ? 'negative' : data.marginPercent < data.expectedMarginPercent ? 'below' : 'ok'
+  return <section className="os-section os-costs"><div className="os-section-heading"><h3>Custo real e margem</h3>{data && <span>{data.payables.length} {data.payables.length === 1 ? 'conta vinculada' : 'contas vinculadas'}</span>}</div>
+    {error ? <p className="os-empty">{error}</p> : !data ? <p className="os-empty">Carregando custos...</p> : <>
+      <Facts className="os-cost-facts" items={[
+        ['Valor da OS', data.discount ? `${fromCents(data.valueCents)} (com ${String(data.discount).replace('.', ',')}% de desconto)` : fromCents(data.valueCents)], ['Custo previsto na proposta', fromCents(data.estimatedCostCents)],
+        ['Custos lançados', `${fromCents(data.costCents)}${data.pendingCostCents ? ` · ${fromCents(data.pendingCostCents)} a pagar` : ''}`], ['Margem real', <span className={`order-margin order-margin--${tone}`}>{fromCents(data.marginCents)}{data.marginPercent == null ? '' : ` · ${String(data.marginPercent).replace('.', ',')}%`}</span>],
+        ['Margem prevista', `${String(data.expectedMarginPercent).replace('.', ',')}%`], ['A receber / recebido', `${fromCents(data.receivableCents)} / ${fromCents(data.receivedCents)}`],
+      ]} />
+      {data.payables.length ? <ul className="os-cost-list">{data.payables.map((row) => <li key={row.id}><div><strong>{row.id} · {row.supplierName}</strong><span>{row.description || row.classificationName}</span></div><div><strong>{fromCents(row.payment ? row.payment.finalCents : row.valueCents)}</strong><span>{payableState(row)}</span></div></li>)}</ul> : <p className="os-empty">Nenhuma conta a pagar vinculada. Em Contas a Pagar, use o campo "OS vinculada (custo)" para lançar os custos desta OS.</p>}
+    </>}
+  </section>
+}
+
 function Facts({ items, className = '' }) {
   return <dl className={`os-facts ${className}`}>{items.map(([label, value, detail]) => <div key={label}><dt>{label}</dt><dd>{value ?? 'Não informado'}{detail && <small>{detail}</small>}</dd></div>)}</dl>
 }
@@ -181,6 +209,7 @@ export default function OrderDetails({ order, activeTime, stageNamesInput, onCha
         <div className="os-proposal-stages"><span>Etapas do serviço</span>{proposalStages.length ? <ol>{proposalStages.map((stage, index) => <li key={stage}><b>{index + 1}</b>{stageLabel(stage)}</li>)}</ol> : <p className="os-empty">A definir</p>}</div>
         <button className="os-button os-download-button" type="button" onClick={() => window.location.assign(`/api/offers/${order.offerId}/proposal.pdf`)}><Icon name="orders" />Baixar PDF da proposta</button>
       </section>
+      <OrderCosts code={order.code} />
       <section className="os-section os-attachments"><div className="os-section-heading"><h3>Anexos da OS</h3><span>{order.attachments?.length || 0} {order.attachments?.length === 1 ? 'arquivo' : 'arquivos'}</span></div>{order.attachments?.length ? <ul>{order.attachments.map((attachment) => <li key={attachment.id}><a href={`/api/offers/${order.offerId}/attachments/${attachment.id}`} download><Icon name="orders" /><span>{attachment.name}</span><Icon name="expand" /></a></li>)}</ul> : <p className="os-empty">Nenhum anexo.</p>}</section>
     </div></div>
     {historyOpen && <OrderHistoryModal order={order} onClose={() => setHistoryOpen(false)} Icon={Icon} />}

@@ -1,5 +1,6 @@
-import { useEffect, useId, useRef } from 'react'
-import { X, Upload, Trash2 } from 'lucide-react'
+import { useEffect, useId, useRef, useState } from 'react'
+import { X, Upload, Trash2, Download } from 'lucide-react'
+import { downloadFile } from './payablesApi.js'
 
 export function PayableModal({ title, children, footer, onClose, wide = false, busy = false, className = '' }) {
   const ref = useRef(null), id = useId()
@@ -8,6 +9,23 @@ export function PayableModal({ title, children, footer, onClose, wide = false, b
     <header><h2 id={id}>{title}</h2><button type="button" className="payable-icon" aria-label="Fechar janela" title="Fechar janela" disabled={busy} onClick={onClose}><X size={20} /></button></header>
     <div className="payable-modal-body" aria-busy={busy}>{children}</div>{footer && <footer>{footer}</footer>}
   </dialog>
+}
+export const previewable = (file) => file.contentType?.startsWith('image/') || file.contentType === 'application/pdf'
+// Files are fetched with the session token and shown from a local blob, so nothing is downloaded to disk.
+export function FilePreview({ url, file, onClose }) {
+  const [objectUrl, setObjectUrl] = useState(''), [error, setError] = useState('')
+  useEffect(() => {
+    let created = ''
+    fetch(url, { headers: { Authorization: `Bearer ${sessionStorage.getItem('gmac-admin-token') || ''}` } }).then(async (response) => {
+      if (!response.ok) throw new Error('Não foi possível abrir o arquivo.')
+      created = URL.createObjectURL(new Blob([await response.arrayBuffer()], { type: file.contentType }))
+      setObjectUrl(created)
+    }).catch((caught) => setError(caught.message))
+    return () => { if (created) URL.revokeObjectURL(created) }
+  }, [url, file.contentType])
+  return <PayableModal title={file.name} wide className="payable-preview" onClose={onClose} footer={<><button type="button" className="admin-tool-button" onClick={() => downloadFile(url, file.name).catch((caught) => setError(caught.message))}><Download size={15} />Baixar</button><button type="button" className="admin-tool-button admin-tool-button--primary" onClick={onClose}>Fechar</button></>}>
+    {error ? <p className="admin-tool-error" role="alert">{error}</p> : !objectUrl ? <p>Carregando arquivo...</p> : file.contentType === 'application/pdf' ? <iframe className="payable-preview-frame" title={`Pré-visualização de ${file.name}`} src={objectUrl} /> : <img className="payable-preview-image" src={objectUrl} alt={file.name} />}
+  </PayableModal>
 }
 export function FilePicker({ files, setFiles, title = 'Anexos', disabled = false }) {
   const input = useRef(null)

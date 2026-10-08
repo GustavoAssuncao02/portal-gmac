@@ -158,6 +158,8 @@
 @media (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .os-resource-table td { font-size: calc(11px * var(--account-font-scale)); } }
 @media (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .os-resource-table th { font-size: calc(9px * var(--account-font-scale)); } }
 @media (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .os-history-heading h2 { font-size: calc(17px * var(--account-font-scale)); } }
+:root:is([data-font-size="small"], [data-font-size="large"]) .os-cost-list li { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .os-cost-list span { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .home-eyebrow { font-size: calc(11px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .home-heading h1 { font-size: calc(28px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .home-heading p { font-size: calc(12px * var(--account-font-scale)); }
@@ -297,8 +299,17 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .finance-trend-axis { font-size: calc(11px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .finance-trend-end { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .finance-trend-tooltip { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .money-input > span { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .payable-hint { font-size: calc(11.5px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .payable-status-filters .payable-quick-label { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .payable-status-filters small { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .payable-more-menu button { font-size: inherit; font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .admin-tools-main .order-margins-heading .payable-mobile-select { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .order-margins-table td small { font-size: calc(11px * var(--account-font-scale)); }
 @media (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .machine-history-modal td[data-label]::before { font-size: calc(12px * var(--account-font-scale)); } }
 :root:is([data-font-size="small"], [data-font-size="large"]) button, :root:is([data-font-size="small"], [data-font-size="large"]) input { font-size: inherit; }
+:root:is([data-font-size="small"], [data-font-size="large"]) .brand-panel__title { font-size: calc(34px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .brand-panel__subtitle { font-size: calc(19px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .login-card h1 { font-size: calc(34px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .login-card__heading p { font-size: calc(17px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .field-label { font-size: calc(17px * var(--account-font-scale)); }
@@ -585,6 +596,8 @@
 @media (max-width: 1100px) {:root:is([data-font-size="small"], [data-font-size="large"]) .login-card h1 { font-size: calc(31px * var(--account-font-scale)); } }
 @media (max-width: 1100px) {:root:is([data-font-size="small"], [data-font-size="large"]) .login-card__heading p, :root:is([data-font-size="small"], [data-font-size="large"]) .input-wrap input, :root:is([data-font-size="small"], [data-font-size="large"]) .forgot-link { font-size: calc(17px * var(--account-font-scale)); } }
 @media (max-width: 1100px) {:root:is([data-font-size="small"], [data-font-size="large"]) .field-label { font-size: calc(17px * var(--account-font-scale)); } }
+@media (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .brand-panel__title { font-size: calc(21px * var(--account-font-scale)); } }
+@media (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .brand-panel__subtitle { font-size: calc(14px * var(--account-font-scale)); } }
 @media (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .login-card h1 { font-size: calc(26px * var(--account-font-scale)); } }
 @media (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .login-card__heading p { font-size: calc(15px * var(--account-font-scale)); } }
 @media (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .field-label { font-size: calc(16px * var(--account-font-scale)); } }
@@ -748,6 +761,8 @@
 @media (min-width: 1101px) {:root:is([data-font-size="small"], [data-font-size="large"]) .offer-table-status strong { font-size: calc(13px * var(--account-font-scale)); } }
 @media (min-width: 1101px) {:root:is([data-font-size="small"], [data-font-size="large"]) .offer-table-status span { font-size: calc(11px * var(--account-font-scale)); } }
 @media (min-width: 1101px) {:root:is([data-font-size="small"], [data-font-size="large"]) .offer-table-actions button { font-size: calc(12px * var(--account-font-scale)); } }
+@media (min-width: 1101px) and (max-height: 860px) {:root:is([data-font-size="small"], [data-font-size="large"]) .sidebar .nav-item { font-size: calc(13.5px * var(--account-font-scale)); } }
+@media (min-width: 1101px) and (max-height: 860px) {:root:is([data-font-size="small"], [data-font-size="large"]) .sidebar .sidebar-submenu .nav-item { font-size: calc(12.5px * var(--account-font-scale)); } }
 @media (min-width: 1800px) {:root:is([data-font-size="small"], [data-font-size="large"]) .offer-piece strong { font-size: calc(15px * var(--account-font-scale)); } }
 @media (min-width: 1800px) {:root:is([data-font-size="small"], [data-font-size="large"]) .offer-table-status strong { font-size: calc(14px * var(--account-font-scale)); } }
 @media (min-width: 1800px) {:root:is([data-font-size="small"], [data-font-size="large"]) .offer-table-actions button { font-size: calc(13px * var(--account-font-scale)); } }
@@ -842,6 +857,7 @@
 @media screen and (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .os-resource-table th { font-size: calc(12px * var(--account-font-scale)); } }
 @media screen and (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .os-resource-table td { font-size: calc(13px * var(--account-font-scale)); } }
 @media screen and (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .admin-tool-button { font-size: calc(14px * var(--account-font-scale)); } }
+@media screen and (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .payable-toolbar .admin-tool-button { font-size: calc(12px * var(--account-font-scale)); } }
 @media screen and (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .payable-table td { font-size: calc(14px * var(--account-font-scale)); } }
 @media screen and (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .payable-table td::before { font-size: calc(12px * var(--account-font-scale)); } }
 @media screen and (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .payable-status strong { font-size: calc(13px * var(--account-font-scale)); } }

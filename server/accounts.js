@@ -10,7 +10,7 @@ const digits = (value) => String(value || '').replace(/\D/g, '')
 const fail = (status, message) => { const error = new Error(message); error.status = status; throw error }
 export function notificationSettings(store, userId) {
   const preference = store.adminNotificationPreferences?.find((item) => String(item.userId) === String(userId))
-  return { payableReminderDays: preference?.payableReminderDays ?? 3, ...Object.fromEntries(notificationOptions.map(([key]) => [key, preference?.[key] ?? notificationDefaults[key]])) }
+  return { payableReminderDays: preference?.payableReminderDays ?? 3, receivableReminderDays: preference?.receivableReminderDays ?? 3, ...Object.fromEntries(notificationOptions.map(([key]) => [key, preference?.[key] ?? notificationDefaults[key]])) }
 }
 export function appearanceSettings(store, userId) {
   const preference = store.adminAppearancePreferences?.find((item) => String(item.userId) === String(userId))
@@ -136,8 +136,8 @@ export function createAccountService(pool, env = process.env) {
   }
   async function updateNotificationSettings(id, fields) {
     const keys = notificationOptions.map(([key]) => key)
-    if (!fields || fields.payableReminderDays === undefined && !keys.some((key) => fields[key] !== undefined)) fail(400, 'Informe uma preferencia de notificacoes.')
-    if (fields.payableReminderDays !== undefined && ![3, 5, 7, 'never'].includes(fields.payableReminderDays)) fail(400, 'Escolha 3, 5, 7 dias ou nunca.')
+    if (!fields || fields.payableReminderDays === undefined && fields.receivableReminderDays === undefined && !keys.some((key) => fields[key] !== undefined)) fail(400, 'Informe uma preferencia de notificacoes.')
+    for (const key of ['payableReminderDays', 'receivableReminderDays']) if (fields[key] !== undefined && ![3, 5, 7, 'never'].includes(fields[key])) fail(400, 'Escolha 3, 5, 7 dias ou nunca.')
     if (keys.some((key) => fields[key] !== undefined && typeof fields[key] !== 'boolean')) fail(400, 'Informe verdadeiro ou falso para as notificacoes.')
     await getNotificationSettings(id)
     return mutateStore((store) => {
@@ -145,6 +145,7 @@ export function createAccountService(pool, env = process.env) {
       let preference = store.adminNotificationPreferences.find((item) => String(item.userId) === String(id))
       if (!preference) { preference = { userId: id }; store.adminNotificationPreferences.push(preference) }
       if (fields.payableReminderDays !== undefined) preference.payableReminderDays = fields.payableReminderDays
+      if (fields.receivableReminderDays !== undefined) preference.receivableReminderDays = fields.receivableReminderDays
       for (const key of keys) if (fields[key] !== undefined) preference[key] = fields[key]
       return notificationSettings(store, id)
     })
