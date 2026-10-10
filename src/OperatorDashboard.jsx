@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ArrowLeftRight, ChevronDown, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import OperatorProjectInformation from './OperatorProjectInformation.jsx'
 import PendingMaterialsModal from './PendingMaterialsModal.jsx'
+import { pollWhileVisible } from './polling.js'
 import { pendingOrderMaterials } from '../server/pendingMaterials.js'
 import { activeEmployeeNames, activeSessions, activeSince, operationElapsed } from '../server/operationSessions.js'
 import { currentPieceProgress, groupProjectStages } from './serviceProgress.js'
@@ -135,14 +136,14 @@ export default function OperatorDashboard({ token, onLogout }) {
     request('/api/machines', { signal: controller.signal }).then((data) => { if (!controller.signal.aborted) setMachines(data.items) }).catch((caught) => { if (!controller.signal.aborted) setError(caught.message) })
     request('/api/labor-services', { signal: controller.signal }).then((data) => { if (!controller.signal.aborted) setLaborServices(data.items) }).catch((caught) => { if (!controller.signal.aborted) setError(caught.message) })
     update()
-    const polling = window.setInterval(update, 10000)
+    const stopPolling = pollWhileVisible(update, 10000)
     const clock = window.setInterval(() => setNow(Date.now()), 1000)
     window.addEventListener('focus', resume)
     window.addEventListener('online', resume)
     document.addEventListener('visibilitychange', resume)
     return () => {
       controller.abort()
-      window.clearInterval(polling)
+      stopPolling()
       window.clearInterval(clock)
       window.removeEventListener('focus', resume)
       window.removeEventListener('online', resume)
@@ -152,8 +153,7 @@ export default function OperatorDashboard({ token, onLogout }) {
 
   useEffect(() => {
     refreshEvents(selectedCode)
-    const polling = window.setInterval(() => refreshEvents(selectedCode), 10000)
-    return () => window.clearInterval(polling)
+    return pollWhileVisible(() => refreshEvents(selectedCode), 10000)
   }, [selectedCode])
 
   const selected = orders.find((order) => order.code === selectedCode)

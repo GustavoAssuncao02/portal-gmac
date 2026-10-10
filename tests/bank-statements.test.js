@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import { createWorkflowFixture } from './workflowFixture.js'
 import { parseOfx, parseOfxDate, amountCents, extractDocument, describeMemo, balanceKind } from '../server/ofx.js'
-import { nameSimilarity, reconciliationCandidates } from '../server/bankStatements.js'
+import { nameSimilarity, reconciliationCandidates, visibleWarnings } from '../server/bankStatements.js'
 import { todayBahia, shiftMonth } from '../server/payableRules.js'
 import { sampleOfx, sampleRows } from './ofxSample.js'
 
@@ -44,6 +44,14 @@ test('balance records are separated, daily closings include movements after the 
   assert.ok(inconsistent.warnings.some((warning) => warning.code === 'type-sign-mismatch'))
 })
 
+test('the statement balance warning only shows above R$ 10,00 and the encoding notice is hidden', () => {
+  const warnings = [{ code: 'balance-divergence' }, { code: 'encoding-mismatch' }, { code: 'encoding-fallback' }, { code: 'daily-balance-divergence' }]
+  const codes = (differenceCents) => visibleWarnings({ warnings, validation: { differenceCents } }).map((row) => row.code)
+  assert.deepEqual(codes(1000), ['encoding-fallback', 'daily-balance-divergence'])
+  assert.deepEqual(codes(1001), ['balance-divergence', 'encoding-fallback', 'daily-balance-divergence'])
+  assert.deepEqual(codes(-1500)[0], 'balance-divergence', 'The size of the gap counts, not its sign')
+})
+
 test('the October statement meets the acceptance totals', { skip: !existsSync(realFile) && 'Extrato real não versionado' }, () => {
   const parsed = parseOfx(readFileSync(realFile))
   const v = parsed.validation
@@ -68,7 +76,8 @@ test('imports are idempotent per account and FITID, conflicts are kept for revie
     assert.equal((await f.request('/bank-statements')).status, 401)
     const first = await upload(sampleOfx(sampleRows)); assert.equal(first.status, 201)
     assert.deepEqual([first.data.item.counts.new, first.data.item.counts.existing, first.data.item.counts.balancesNew], [6, 0, 2])
-    assert.equal(first.data.item.warnings[0].message, 'Divergência de saldo do extrato: R$ 0,18.')
+    assert.ok(!first.data.item.warnings.some((row) => ['balance-divergence', 'encoding-mismatch'].includes(row.code)), 'A R$ 0,18 gap and a valid UTF-8 file declared as 1252 show no warning')
+    assert.equal(first.data.item.validation.differenceCents, 18)
     const again = await upload(sampleOfx(sampleRows)); assert.deepEqual([again.data.item.counts.new, again.data.item.counts.existing], [0, 6]); assert.deepEqual(again.data.item.sameFileImportIds, [first.data.item.id])
     const changed = await upload(sampleOfx(sampleRows.map((row) => row[3] === 'T1' ? [...row.slice(0, 2), '501.00', ...row.slice(3)] : row)))
     assert.equal(changed.data.item.counts.conflicts, 1)

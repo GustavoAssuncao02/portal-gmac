@@ -11,6 +11,7 @@
     "build": "vite build",
     "start": "node server/index.js",
     "db:setup": "node scripts/setup-local-database.mjs",
+    "db:optimize": "node scripts/optimize-sql.mjs",
     "preview": "vite preview",
     "test": "node --test tests/*.test.js",
     "pretest:browser": "npm run build",
@@ -19,10 +20,13 @@
     "test:payables": "node --test tests/payables.test.js && node tests/payables.browser.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.132.1",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "bcryptjs": "^3.0.3",
+    "chart.js": "^4.5.1",
+    "compression": "^1.8.2",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "exceljs": "^4.4.0",

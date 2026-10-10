@@ -1,5 +1,20 @@
 const dayMs = 86400000
 
+export function employeeActivityQuery(employeeId, range) {
+  // DISTINCT materializes the employee's session set once. Do not restrict its
+  // dates: an interruption today can belong to a session started before today.
+  const sql = `SELECT order_code AS orderCode, data FROM order_operation_events
+    WHERE (JSON_UNQUOTE(JSON_EXTRACT(data, '$.employeeId')) = ? OR
+      (JSON_UNQUOTE(JSON_EXTRACT(data, '$.type')) = 'admin_interrupted' AND
+        JSON_UNQUOTE(JSON_EXTRACT(data, '$.sessionId')) IN
+          (SELECT session_id FROM
+            (SELECT DISTINCT JSON_UNQUOTE(JSON_EXTRACT(data, '$.sessionId')) AS session_id
+               FROM order_operation_events
+              WHERE JSON_UNQUOTE(JSON_EXTRACT(data, '$.employeeId')) = ?) AS employee_sessions)))${range ? ' AND occurred_at >= ? AND occurred_at < ?' : ''}
+    ORDER BY occurred_at DESC, seq DESC`
+  return { sql, params: range ? [employeeId, employeeId, new Date(range.start), new Date(range.end)] : [employeeId, employeeId] }
+}
+
 export function activityDateRange(period = 'today', date, now = Date.now()) {
   if (period === 'all') return null
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bahia', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(now))

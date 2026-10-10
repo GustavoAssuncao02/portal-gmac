@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { Bell, X } from 'lucide-react'
 import './notifications.css'
 import { payableRequest, money, dateLabel } from './payablesApi.js'
+import { pollWhileVisible } from './polling.js'
 import { dueLabel } from '../server/payableRules.js'
 
 export default function NotificationsButton({ onOpenAccount, onOpenReceivable, onOpenNotice }) {
@@ -24,9 +25,9 @@ export default function NotificationsButton({ onOpenAccount, onOpenReceivable, o
         if (active) { setItems(result.items); setError('') }
       }).catch(() => { if (active) setError(open ? 'Não foi possível marcar as notificações como lidas. Abra o sino novamente para tentar.' : 'Não foi possível carregar as notificações.') })
     }
-    refresh(); const timer = setInterval(refresh, 10000)
+    refresh(); const stopPolling = pollWhileVisible(refresh, 10000)
     window.addEventListener('gmac-notification-settings-changed', refresh)
-    return () => { active = false; clearInterval(timer); window.removeEventListener('gmac-notification-settings-changed', refresh) }
+    return () => { active = false; stopPolling(); window.removeEventListener('gmac-notification-settings-changed', refresh) }
   }, [open, token])
   const unreadCount = items.filter((item) => !item.readAt).length
 

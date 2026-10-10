@@ -39,7 +39,7 @@ export function requireAdmin(request, response, next) {
 export function createAccountService(pool, env = process.env) {
   async function admins(privateFields = false) {
     let rows
-    if (pool) [rows] = await pool.execute("SELECT id, name, DATE_FORMAT(birth_date, '%Y-%m-%d') AS birthDate, cpf, email, created_at AS createdAt, password_hash AS passwordHash FROM users WHERE role = 'admin' ORDER BY name")
+    if (pool) [rows] = await pool.execute(`SELECT id, name, DATE_FORMAT(birth_date, '%Y-%m-%d') AS birthDate, cpf, email, created_at AS createdAt${privateFields ? ', password_hash AS passwordHash' : ''} FROM users WHERE role = 'admin' ORDER BY name`)
     else {
       const store = await readStore()
       rows = store.admins || []

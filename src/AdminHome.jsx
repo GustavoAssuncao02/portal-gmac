@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ArrowUpRight, Calculator, CalendarClock, CalendarDays, CirclePlay, ClipboardList, CreditCard, FileText, Package, RefreshCw, ShoppingCart, TriangleAlert } from 'lucide-react'
 import { adminFirstName, adminOverview, payableOverview } from './adminOverview.js'
 import { money } from './payablesApi.js'
+import { pollWhileVisible } from './polling.js'
 import './adminHome.css'
 
 const number = (value) => Number(value || 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 })
@@ -42,8 +43,8 @@ export default function AdminHome({ user, orders, offers, workflowError, workflo
       }
     }
     load()
-    const timer = window.setInterval(load, 30000)
-    return () => { controller.abort(); window.clearInterval(timer) }
+    const stopPolling = pollWhileVisible(load, 30000)
+    return () => { controller.abort(); stopPolling() }
   }, [retry, loadPayables])
   useEffect(() => {
     const controller = new AbortController()
@@ -62,8 +63,8 @@ export default function AdminHome({ user, orders, offers, workflowError, workflo
       }
     }
     load()
-    const timer = window.setInterval(() => { setNow(Date.now()); load() }, 60000)
-    return () => { controller.abort(); window.clearInterval(timer) }
+    const stopPolling = pollWhileVisible(() => { setNow(Date.now()); load() }, 60000)
+    return () => { controller.abort(); stopPolling() }
   }, [retry, loadInventory])
   const summary = adminOverview(orders, offers, inventory, now)
   const payableSummary = payableOverview(payables || [], now)

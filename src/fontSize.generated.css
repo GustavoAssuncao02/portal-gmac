@@ -306,6 +306,35 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .payable-more-menu button { font-size: inherit; font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .admin-tools-main .order-margins-heading .payable-mobile-select { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .order-margins-table td small { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .ai-meta { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .ai-progress p { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .proposal-model-step > p { font-size: calc(14px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .proposal-model-card { font-size: inherit; }
+:root:is([data-font-size="small"], [data-font-size="large"]) .proposal-model-card strong { font-size: calc(16px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .proposal-model-card > span:not(.proposal-model-thumb) { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .proposal-model-card small { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .payable-modal .proposal-doc-check { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .proposal-doc-prefix { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .proposal-doc-total { font-size: calc(14px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .proposal-doc-total strong { font-size: calc(18px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .fiscal-picker-list button { font-size: inherit; font-size: calc(12.5px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .fiscal-picker-list small { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .fiscal-picker-empty { font-size: calc(12.5px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .fiscal-picker-value { font-size: calc(12.5px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .fiscal-badge { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .proposal-table { font-size: calc(12.5px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .proposal-table td small { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .payable-modal .proposal-table select { font-size: calc(12.5px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .payable-modal .proposal-table--edit input { font-size: calc(12.5px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .proposal-usage li small { font-size: calc(11.5px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .proposal-doc-totals { font-size: calc(12.5px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .proposal-doc-totals strong { font-size: calc(15px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .proposal-doc-totals-main strong { font-size: calc(19px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .proposal-settings-tabs button { font-size: inherit; font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .proposal-catalog { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .proposal-catalog-facts dt { font-size: calc(11.5px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .payable-modal .proposal-catalog-company h3 { font-size: calc(14px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .proposal-success { font-size: calc(13px * var(--account-font-scale)); }
 @media (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .machine-history-modal td[data-label]::before { font-size: calc(12px * var(--account-font-scale)); } }
 :root:is([data-font-size="small"], [data-font-size="large"]) button, :root:is([data-font-size="small"], [data-font-size="large"]) input { font-size: inherit; }
 :root:is([data-font-size="small"], [data-font-size="large"]) .brand-panel__title { font-size: calc(34px * var(--account-font-scale)); }
@@ -348,6 +377,7 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .availability-donut span { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .availability-legend { font-size: calc(14px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .usage-line { font-size: calc(14px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .usage-empty { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .modal-heading h2 { font-size: calc(23px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .modal-heading p { font-size: calc(14px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .modal-close { font-size: calc(28px * var(--account-font-scale)); }

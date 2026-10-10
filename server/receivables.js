@@ -60,6 +60,11 @@ function partsOf(body, common, creating = false) {
 // The OS price is the accepted proposal: service value with the proposal discount applied.
 export function orderValue(order) {
   const proposal = order?.proposal || {}
+  // A proposal made with the commercial models states the amount agreed with the customer.
+  if (Number(proposal.document?.total) > 0) {
+    const valueCents = Math.round(Number(proposal.document.total) * 100)
+    return { serviceCents: valueCents, discount: 0, valueCents }
+  }
   const serviceCents = Math.round(Number(proposal.serviceValue || 0) * 100)
   const discount = Math.min(100, Math.max(0, Number(proposal.discount || 0)))
   return { serviceCents, discount, valueCents: Math.round(serviceCents * (100 - discount) / 100) }

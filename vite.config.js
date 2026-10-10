@@ -7,6 +7,17 @@ export default defineConfig(({ mode }) => {
   const apiPort = Number(process.env.PORT || env.PORT || 3002)
   return {
     plugins: [react(), devNetworkPlugin()],
+    build: {
+      rollupOptions: {
+        output: {
+          // Libraries change far less often than the portal itself; in their own files they stay in the browser cache across deploys.
+          manualChunks(id) {
+            if (/node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id) || id.includes('commonjsHelpers')) return 'react'
+            if (id.includes('node_modules')) return 'interface'
+          },
+        },
+      },
+    },
     server: {
       host: '0.0.0.0',
       port: 5174,

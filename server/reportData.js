@@ -5,10 +5,30 @@ export const duration = (ms) => {
   return [Math.floor(seconds / 3600), Math.floor(seconds % 3600 / 60), seconds % 60].map((part) => String(part).padStart(2, '0')).join(':')
 }
 export const localDate = (timestamp) => new Date(Number(timestamp) - 3 * 3600000).toISOString().slice(0, 10)
+async function orderRows(orders, pool, history = false) {
+  const codes = [...new Set(orders.map((order) => order.code).filter((code) => typeof code === 'string'))]
+  const rows = []
+  // Bound the number of placeholders; keep every event of each selected OS.
+  for (let offset = 0; offset < codes.length; offset += 500) {
+    const batch = codes.slice(offset, offset + 500)
+    const placeholders = batch.map(() => '?').join(', ')
+    const sql = history
+      ? `SELECT order_code, data FROM order_operation_events WHERE order_code IN (${placeholders}) ORDER BY seq`
+      : `SELECT order_code, data FROM order_operations WHERE order_code IN (${placeholders})`
+    const [result] = await pool.execute(sql, batch)
+    // SQL collations may match another spelling; retain the original JS key semantics.
+    const exactCodes = new Set(batch)
+    for (const row of result) if (exactCodes.has(row.order_code)) rows.push(row)
+  }
+  return rows
+}
+
+export const operationStates = (orders, pool) => orderRows(orders, pool)
+
 export async function ordersWithOperations(orders, pool) {
   if (!pool) return orders
-  const [states] = await pool.execute('SELECT order_code, data FROM order_operations')
-  const [events] = await pool.execute('SELECT order_code, data FROM order_operation_events ORDER BY seq')
+  const states = await operationStates(orders, pool)
+  const events = await orderRows(orders, pool, true)
   const parse = (value) => typeof value === 'string' ? JSON.parse(value) : value
   const operations = new Map(states.map((row) => [row.order_code, parse(row.data)]))
   const history = new Map()

@@ -1,4 +1,6 @@
 import 'dotenv/config'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import cors from 'cors'
 import express from 'express'
 import mysql from 'mysql2/promise'
@@ -12,6 +14,9 @@ import createReportsRouter from './reports.js'
 import createPayablesRouter from './payables.js'
 import createReceivablesRouter from './receivables.js'
 import createBankStatementsRouter from './bankStatements.js'
+import createAiReconciliationRouter from './aiReconciliation.js'
+import createFiscalRouter, { startFiscalCatalogSchedule } from './fiscalCatalog.js'
+import createProposalDocumentsRouter from './proposalDocuments.js'
 import createInventoryImportRouter from './inventoryImport.js'
 import createMaterialRequestsRouter, { saveRequestedMaterial } from './materialRequests.js'
 import createNotificationsRouter from './notifications.js'
@@ -19,14 +24,21 @@ import { inventorySignal } from './notificationEvents.js'
 import { allocateReceivedMaterial } from './orderMaterials.js'
 import { createApiRateLimiter } from './rateLimit.js'
 import { ensureInventoryAppearance, inventoryAppearance } from './inventoryAppearance.js'
+import { configureWeb, serveInterface, trustProxySetting } from './webServer.js'
 
 const app = express()
 const port = Number(process.env.PORT || 3002)
 const host = process.env.API_HOST || '127.0.0.1'
 
-app.set('trust proxy', 'loopback')
-app.use(cors())
-app.use('/api', createApiRateLimiter())
+const production = process.env.NODE_ENV === 'production'
+const corsOrigins = String(process.env.CORS_ORIGIN || '').split(',').map((origin) => origin.trim()).filter(Boolean)
+
+app.set('trust proxy', trustProxySetting(process.env.TRUST_PROXY))
+configureWeb(app)
+// The interface and the API share one address, so a published portal answers other sites only when CORS_ORIGIN lists them.
+if (corsOrigins.length) app.use(cors({ origin: corsOrigins }))
+else if (!production) app.use(cors())
+app.use('/api', createApiRateLimiter({ limit: Number(process.env.API_RATE_LIMIT) || 200 }))
 app.use(express.json())
 
 let pool
@@ -59,6 +71,9 @@ app.use('/api', payablesRouter)
 const receivablesRouter = createReceivablesRouter(accounts, requireAdmin)
 app.use('/api', receivablesRouter)
 app.use('/api', createBankStatementsRouter(accounts, requireAdmin))
+app.use('/api', createAiReconciliationRouter(accounts, requireAdmin))
+app.use('/api', createFiscalRouter(requireAdmin))
+app.use('/api', createProposalDocumentsRouter(requireAdmin))
 const notificationsRouter = createNotificationsRouter({ requireAdmin, payables: payablesRouter, receivables: receivablesRouter, loadInventory: async () => {
   if (!pool) return null
   const [rows] = await pool.execute('SELECT id, name, quantity_kg AS quantity, minimum_kg AS minimum FROM inventory_materials')
@@ -71,6 +86,8 @@ await refreshInventoryNotifications()
 setInterval(refreshInventoryNotifications, 10000).unref()
 setInterval(() => payablesRouter.sweep().catch((error) => console.error('Falha ao verificar vencimentos:', error.message)), 60000).unref()
 setInterval(() => receivablesRouter.sweep().catch((error) => console.error('Falha ao verificar recebimentos:', error.message)), 60000).unref()
+// CNAE, NCM, NBS and the companies' registered activities are refreshed every Sunday at midnight.
+if (process.env.FISCAL_CATALOG_SYNC !== 'off') startFiscalCatalogSchedule()
 
 app.get('/api/health', async (_request, response) => {
   try {
@@ -105,9 +122,14 @@ app.get('/api/inventory', async (_request, response) => {
         ORDER BY created_at ASC, id ASC`,
       ids,
     )
+    const historyByMaterial = new Map()
+    for (const movement of movements) {
+      if (!historyByMaterial.has(movement.material_id)) historyByMaterial.set(movement.material_id, [])
+      historyByMaterial.get(movement.material_id).push(movement)
+    }
     const items = materials.map((material) => ({
       ...material,
-      history: movements.filter((movement) => movement.material_id === material.id),
+      history: historyByMaterial.get(material.id) || [],
     }))
     return response.json({ items })
   } catch (error) {
@@ -284,6 +306,8 @@ app.post('/api/inventory/:materialId/movements', (request, response, next) => re
   }
 })
 
+const interfacePublished = serveInterface(app, path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist'))
+
 app.use((error, _request, response, _next) => {
   console.error('Falha na API:', error.message)
   response.status(error.status || 500).json({ message: error.status ? error.message : 'Não foi possível concluir a operação.' })
@@ -291,5 +315,7 @@ app.use((error, _request, response, _next) => {
 
 app.listen(port, host, () => {
   console.log(`API GMAC disponível em http://${host}:${port}`)
+  if (interfacePublished) console.log('Interface publicada no mesmo endereço, a partir de dist/.')
+  else if (production) console.warn('ATENCAO: dist/ não encontrado. Execute "npm run build" para publicar a interface.')
   if (testLoginEnabled()) console.warn('ATENCAO: acesso sem senha ativado para testes. Desative TEST_LOGIN_ENABLED antes de publicar o portal.')
 })

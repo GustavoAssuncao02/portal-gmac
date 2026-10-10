@@ -2,14 +2,15 @@ import express from 'express'
 import { copyFile, cp, mkdir, mkdtemp, rm } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { configureWeb, serveInterface } from '../server/webServer.js'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
-export async function createWorkflowFixture({ pool, inventoryPool = pool, accountsEnv, notificationInventory } = {}) {
+export async function createWorkflowFixture({ pool, inventoryPool = pool, accountsEnv, notificationInventory, aiAnalyze } = {}) {
   const results = path.join(root, 'test-results')
   await mkdir(results, { recursive: true })
   const directory = await mkdtemp(path.join(results, 'workflow-'))
-  for (const name of ['offers.js', 'orderMaterials.js', 'pendingMaterials.js', 'operations.js', 'orderEditing.js', 'operatorAuth.js', 'employeeActivity.js', 'serviceStages.js', 'machines.js', 'laborServices.js', 'accounts.js', 'reports.js', 'reportData.js', 'documentExports.js', 'payables.js', 'payableRules.js', 'receivables.js', 'bankStatements.js', 'ofx.js', 'materialRequests.js', 'notificationRules.js', 'notificationEvents.js', 'operationSessions.js', 'materialRequestCodes.js', 'notifications.js']) {
+  for (const name of ['offers.js', 'orderMaterials.js', 'pendingMaterials.js', 'operations.js', 'orderEditing.js', 'operatorAuth.js', 'employeeActivity.js', 'serviceStages.js', 'machines.js', 'laborServices.js', 'accounts.js', 'reports.js', 'reportData.js', 'documentExports.js', 'payables.js', 'payableRules.js', 'receivables.js', 'bankStatements.js', 'aiReconciliation.js', 'ofx.js', 'materialRequests.js', 'notificationRules.js', 'notificationEvents.js', 'operationSessions.js', 'materialRequestCodes.js', 'notifications.js', 'fiscalCatalog.js', 'proposalDocuments.js', 'proposalDefaults.js', 'proposalPdf.js', 'proposalBrand.js', 'proposalMath.js', 'moneyWords.js']) {
     await copyFile(path.join(root, 'server', name), path.join(directory, name))
   }
   // PDFs use the bundled logo and fonts.
@@ -25,10 +26,15 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   const { default: payablesRouter } = await import(pathToFileURL(path.join(directory, 'payables.js')))
   const { default: receivablesRouter } = await import(pathToFileURL(path.join(directory, 'receivables.js')))
   const { default: bankStatementsRouter } = await import(pathToFileURL(path.join(directory, 'bankStatements.js')))
+  const { default: aiReconciliationRouter } = await import(pathToFileURL(path.join(directory, 'aiReconciliation.js')))
   const { default: materialRequestsRouter, saveRequestedMaterial } = await import(pathToFileURL(path.join(directory, 'materialRequests.js')))
   const { default: notificationsRouter } = await import(pathToFileURL(path.join(directory, 'notifications.js')))
+  const { default: fiscalRouter } = await import(pathToFileURL(path.join(directory, 'fiscalCatalog.js')))
+  const { default: proposalDocumentsRouter } = await import(pathToFileURL(path.join(directory, 'proposalDocuments.js')))
   const accounts = createAccountService(pool, accountsEnv || {})
   const app = express()
+  // Same compression, cache and security headers as the published portal.
+  configureWeb(app)
   app.use(express.json())
   app.use('/api', createOffersRouter(inventoryPool, requireAdmin))
   app.use('/api', operationsRouter(pool))
@@ -41,6 +47,10 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   const receivables = receivablesRouter(accounts, requireAdmin)
   app.use('/api', receivables)
   app.use('/api', bankStatementsRouter(accounts, requireAdmin))
+  // Tests never reach the Anthropic API; they pass a fake analysis.
+  app.use('/api', aiReconciliationRouter(accounts, requireAdmin, { analyze: aiAnalyze || (async () => { throw new Error('Análise com IA não configurada neste teste.') }) }))
+  app.use('/api', fiscalRouter(requireAdmin))
+  app.use('/api', proposalDocumentsRouter(requireAdmin))
   app.use('/api', notificationsRouter({ requireAdmin, payables, receivables, loadInventory: notificationInventory }))
   app.use('/api', materialRequestsRouter(requireAdmin, inventoryPool, accounts))
   app.get('/api/inventory', (_request, response) => response.status(503).json({ message: 'O banco de dados ainda não está configurado.' }))
@@ -53,12 +63,13 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
     } catch (error) { next(error) }
   })
   app.use((error, _request, response, _next) => response.status(error.status || 500).json({ message: error.message }))
-  app.use(express.static(path.join(root, 'dist')))
+  serveInterface(app, path.join(root, 'dist'))
   const server = app.listen(0, '127.0.0.1')
   await new Promise((resolve) => server.once('listening', resolve))
   const url = `http://127.0.0.1:${server.address().port}`
   return {
     url,
+    directory,
     adminToken: issueAdminToken({ id: 0 }),
     operatorToken: issueOperatorToken(),
     mutateStore,

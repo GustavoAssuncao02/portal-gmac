@@ -8,21 +8,28 @@ import { activeSessions } from './operationSessions.js'
 export async function machineRows() { return (await readStore()).machines || [] }
 const normalize = (item) => ({ id: item.id || randomUUID(), name: String(item.name || '').trim().slice(0, 160), type: String(item.type || '').slice(0, 100), sector: String(item.sector || '').slice(0, 100), hourlyRate: Math.max(0, Number(item.hourlyRate) || 0), status: 'idle', operator: '\u2014', started: '\u2014', usage: '0h 00min' })
 
+const hoursLabel = (ms) => { const minutes = Math.floor(Math.max(0, ms) / 60000); return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, '0')}min` }
+
 export function machineAvailability(machines, orders, now = Date.now()) {
   const today = localDate(now)
-  const totals = hourReport(workIntervals(orders, now), machines, 'machineId', reportRange(today, today)).totals
+  const range = reportRange(today, today)
+  const totals = hourReport(workIntervals(orders, now), machines, 'machineId', range).totals
   const usage = new Map(totals.map((row) => [row.id, row.ms]))
+  // Idle today is the time elapsed since midnight in Bahia without the machine in use (overlapping sessions already merged).
+  const elapsed = now - range.start
   const active = orders.flatMap((order) => activeSessions(order.operation)).filter((session) => session?.machineId != null)
   return machines.map((machine) => {
     const sessions = active.filter((session) => String(session.machineId) === String(machine.id))
     const starts = sessions.map((session) => Date.parse(session.machineStartedAt || session.startedAt)).filter(Number.isFinite)
-    const minutes = Math.floor((usage.get(String(machine.id)) || 0) / 60000)
+    const used = usage.get(String(machine.id)) || 0
     return {
       ...machine,
       status: sessions.length ? 'working' : 'idle',
       operator: [...new Set(sessions.map((session) => session.employeeName || 'Operador não identificado'))].join(', ') || '\u2014',
       started: starts.length ? new Date(Math.min(...starts)).toLocaleTimeString('pt-BR', { timeZone: 'America/Bahia', hour: '2-digit', minute: '2-digit' }) : '\u2014',
-      usage: `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, '0')}min`,
+      usage: hoursLabel(used),
+      usageMs: used,
+      idle: hoursLabel(elapsed - used),
     }
   })
 }

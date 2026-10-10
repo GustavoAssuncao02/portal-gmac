@@ -343,6 +343,22 @@ button {
   scrollbar-width: thin;
 }
 
+/* Desktop: the window bar stays visible while the page scrolls (position and width come from WorkspaceTabs). */
+@media (min-width: 761px) {
+  .workspace-tabs {
+    position: fixed;
+    /* Above page content (menus use 5), below modal backdrops (10). */
+    z-index: 9;
+    left: var(--workspace-tabs-left, 0px);
+    right: auto;
+    width: var(--workspace-tabs-width, 100%);
+  }
+
+  html:has(.workspace-tabs) {
+    scroll-padding-top: 52px;
+  }
+}
+
 .workspace-tabs-list {
   display: flex;
   min-width: 0;
@@ -1106,13 +1122,24 @@ button {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  --donut-working: #0bab50;
+  --donut-idle: #dce4ee;
+  position: relative;
   width: 135px;
   height: 135px;
-  border: 14px solid #dce4ee;
-  border-right-color: #0bab50;
-  border-top-color: #0bab50;
   border-radius: 50%;
   color: #0b315d;
+}
+
+/* The green arc follows --working-share (machines in use / total); the ring is a masked conic gradient so the text stays visible. */
+.availability-donut::before {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(var(--donut-working) var(--working-share, 0%), var(--donut-idle) 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 14px), #000 calc(100% - 13px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 14px), #000 calc(100% - 13px));
+  content: "";
 }
 
 .availability-donut strong {
@@ -1166,6 +1193,12 @@ button {
 
 .usage-line strong {
   color: #17385f;
+}
+
+.usage-empty {
+  margin: 4px 0 0;
+  color: #7189a4;
+  font-size: 13px;
 }
 
 .modal-backdrop {

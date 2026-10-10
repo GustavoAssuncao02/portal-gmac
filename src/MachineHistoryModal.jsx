@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
+import { pollWhileVisible } from './polling.js'
 import './employeeActivity.css'
 import './machineHistory.css'
 
@@ -43,8 +44,8 @@ export default function MachineHistoryModal({ machine, subject = 'machine', load
       finally { pending = false }
     }
     refresh()
-    const polling = window.setInterval(refresh, 10000)
-    return () => { controller.abort(); window.clearInterval(polling) }
+    const stopPolling = pollWhileVisible(refresh, 10000)
+    return () => { controller.abort(); stopPolling() }
   }, [machine.id, period, date, retry, loadHistory])
 
   return <dialog ref={dialog} className="employee-activity-modal machine-history-modal" aria-labelledby="machine-history-title" onCancel={(event) => { event.preventDefault(); onClose() }} onClick={(event) => {

@@ -137,3 +137,9 @@
 .order-margin { font-weight:700; }.order-margin--ok { color:#137b44; }.order-margin--below { color:#9f6508; }.order-margin--negative { color:#b42c3c; }
 @media(max-width:760px) { .payable-adjustments { grid-template-columns:minmax(0,1fr); }.payable-more-menu { left:0; right:auto; }.payable-quick-label { flex:0 0 auto; padding-left:6px; } }
 .receivable-sum--off { color:#b42c3c; }.payable-siblings button[aria-current] { padding-left:10px; border-left:3px solid #0c4c91; background:#f1f6fb; }
+.ai-intro { max-width:860px; margin:0 0 18px; line-height:1.5; }.ai-intro + .bank-warning { margin-bottom:18px; }
+.ai-toolbar { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px 16px; margin-bottom:8px; }.ai-toolbar .bank-filter { flex:0 1 auto; min-width:0; max-width:100%; }.ai-toolbar select { flex:1 1 auto; min-width:0; max-width:640px; text-overflow:ellipsis; }
+.ai-meta { margin:0 0 16px; color:#5c7288; font-size:12px; line-height:1.5; }
+.ai-progress { display:flex; align-items:flex-start; gap:14px; padding:18px 20px; border:1px solid #cfe0f1; border-radius:6px; background:#f4f8fc; color:#173f6a; }.ai-progress p { margin:5px 0 0; color:#5c7288; font-size:13px; line-height:1.45; }
+.ai-spin { flex-shrink:0; animation:ai-spin 1s linear infinite; }@keyframes ai-spin { to { transform:rotate(360deg); } }@media(prefers-reduced-motion:reduce) { .ai-spin { animation:none; } }
+.ai-report-frame { display:block; width:100%; min-height:480px; border:1px solid #dce5ef; border-radius:6px; background:#ffffff; }

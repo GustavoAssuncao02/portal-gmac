@@ -41,7 +41,8 @@ try {
   await navigate('Conciliação bancária')
   await page.getByLabel('Arquivo OFX', { exact: true }).setInputFiles(file)
   const result = page.locator('.bank-import-result')
-  await result.getByText('Divergência de saldo do extrato: R$ 0,18.', { exact: true }).waitFor()
+  await result.waitFor()
+  assert.doesNotMatch(await result.innerText(), /Divergência de saldo/, 'R$ 0,18 is below the R$ 10,00 warning threshold')
   assert.match(await result.innerText(), /6 movimentações[\s\S]*2 posições de saldo[\s\S]*6\s*movimentações novas/)
   assert.match(await result.innerText(), /windows-1252/, 'Encoding fallback is reported')
   assert.equal(await page.locator('.bank-transactions tbody tr').count(), 6)
@@ -122,5 +123,5 @@ try {
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${name} fits 390`)
   }
   assert.deepEqual(errors, [])
-  console.log('Finance browser: OFX import with encoding fallback and R$ 0,18 caveat, idempotent re-import, evidence-ranked reconciliation without reuse, OS completion scheduling, manual receivable and receipt, BI trend chart and responsive screens passed.')
+  console.log('Finance browser: OFX import with encoding fallback and no warning for a R$ 0,18 gap, idempotent re-import, evidence-ranked reconciliation without reuse, OS completion scheduling, manual receivable and receipt, BI trend chart and responsive screens passed.')
 } catch (error) { await page.screenshot({ path: 'test-results/finance-browser-failure.png', fullPage: true }); throw error } finally { await browser.close(); await fixture.close() }

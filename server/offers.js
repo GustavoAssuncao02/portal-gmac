@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { setTimeout as delay } from 'node:timers/promises'
 import express from 'express'
 import { exportPdf } from './documentExports.js'
+import { renderProposalDocument } from './proposalPdf.js'
 import { productionStages, stageLabel, serviceDetails, readStageLayout, validStageLayout } from './serviceStages.js'
 import { consumeOrderMaterials } from './orderMaterials.js'
 import { workflowSnapshot, recordWorkflowNotifications } from './notificationEvents.js'
@@ -232,8 +233,11 @@ router.get('/offers/:id/proposal.pdf', async (request, response) => {
     if (!offer?.proposal) return response.status(404).json({ message: 'Proposta não encontrada.' })
     // Always built from the saved proposal: editing the resources discards the proposal, so it matches the current offer,
     // and files stored by earlier versions are never sent.
-    const pdf = await createPdf(offer, offer.proposal, offer.resources, offer.proposal.layout || 'classic', offer.proposal.generatedAt)
-    response.type('pdf').attachment(`Proposta-${offer.code}.pdf`).send(pdf)
+    // Proposals made with the commercial models (A, B, Nestlé, Etiqueta) keep their own document; older ones use the generic layout.
+    const document = offer.proposal.document
+    const pdf = document ? await renderProposalDocument(document) : await createPdf(offer, offer.proposal, offer.resources, offer.proposal.layout || 'classic', offer.proposal.generatedAt)
+    const name = document ? ({ nestle: `FS-3055-${document.number}`, etiqueta: `Etiqueta-${document.labelNumber}` }[document.model] || `Proposta-${document.quoteNumber}`) : `Proposta-${offer.code}`
+    response.type('pdf').attachment(`${name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9._-]+/g, '-')}.pdf`).send(pdf)
   } catch (error) { handleError(response, error) }
 })
 

@@ -6,6 +6,6 @@ export function createApiRateLimiter({ windowMs = 60_000, limit = 200 } = {}) {
     limit,
     standardHeaders: 'draft-8',
     legacyHeaders: false,
-    message: { message: 'Limite de 200 requisições por minuto atingido. Aguarde e tente novamente.' },
+    message: { message: `Limite de ${limit} requisições por minuto atingido. Aguarde e tente novamente.` },
   })
 }

@@ -7,6 +7,7 @@ import { todayBahia, cents, dueLabel, matchesSearch, shiftMonth } from '../serve
 import MoneyInput from './MoneyInput.jsx'
 import { InstallmentFields, withInstallments, installmentPayload } from './ReceivableInstallments.jsx'
 import { sumOf, dueShortcuts } from './financeFilters.js'
+import { pollWhileVisible } from './polling.js'
 import './payables.css'
 
 export const receiptMethods = { pix: 'Pix', boleto: 'Boleto', transfer: 'Transferência', card: 'Cartão', cash: 'Dinheiro' }
@@ -179,11 +180,11 @@ export default function ReceivablesScreen(props) {
   useEffect(() => {
     let active = true
     const load = () => payableRequest('/receivables').then((result) => { if (active) { setData(result); setError(''); setLoading(false) } }).catch((caught) => { if (active) { setError(caught.message); setLoading(false) } })
-    load(); const timer = setInterval(load, 30000)
+    load(); const stopPolling = pollWhileVisible(load, 30000)
     // The bell opens a receivable directly.
     const open = (event) => { setDetailId(event.detail); sessionStorage.removeItem('gmac-receivable-open') }
     window.addEventListener('gmac-receivable-open', open); sessionStorage.removeItem('gmac-receivable-open')
-    return () => { active = false; clearInterval(timer); window.removeEventListener('gmac-receivable-open', open) }
+    return () => { active = false; stopPolling(); window.removeEventListener('gmac-receivable-open', open) }
   }, [])
   useEffect(() => { setPage(1); setSelected([]) }, [filters, pageSize])
   const inPeriod = (row) => (!filters.start || row.dueDate >= filters.start) && (!filters.end || row.dueDate <= filters.end) && matches(row, filters.search)

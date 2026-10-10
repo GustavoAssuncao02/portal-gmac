@@ -2,7 +2,8 @@ import { createHash, randomUUID, timingSafeEqual } from 'node:crypto'
 import express from 'express'
 import { mutateStore, readStore } from './offers.js'
 import { requireOperator } from './operatorAuth.js'
-import { activityDateRange } from './employeeActivity.js'
+import { activityDateRange, employeeActivityQuery } from './employeeActivity.js'
+import { operationStates } from './reportData.js'
 import { stageLabel, serviceDetails } from './serviceStages.js'
 import { machineRows } from './machines.js'
 import { laborServiceRows } from './laborServices.js'
@@ -205,13 +206,8 @@ export default function createOperationsRouter(pool) {
       const { orders } = await readStore()
       let events
       if (pool) {
-        const [rows] = await pool.execute(`SELECT order_code AS orderCode, data FROM order_operation_events
-          WHERE (JSON_UNQUOTE(JSON_EXTRACT(data, '$.employeeId')) = ? OR
-            (JSON_UNQUOTE(JSON_EXTRACT(data, '$.type')) = 'admin_interrupted' AND
-              JSON_UNQUOTE(JSON_EXTRACT(data, '$.sessionId')) IN
-                (SELECT JSON_UNQUOTE(JSON_EXTRACT(data, '$.sessionId')) FROM order_operation_events
-                  WHERE JSON_UNQUOTE(JSON_EXTRACT(data, '$.employeeId')) = ?)))${range ? ' AND occurred_at >= ? AND occurred_at < ?' : ''}
-          ORDER BY occurred_at DESC, seq DESC`, range ? [request.params.id, request.params.id, new Date(range.start), new Date(range.end)] : [request.params.id, request.params.id])
+        const { sql, params } = employeeActivityQuery(request.params.id, range)
+        const [rows] = await pool.execute(sql, params)
         events = rows.map((row) => ({ ...json(row.data), orderCode: row.orderCode }))
       } else {
         const allEvents = orders.flatMap((order) => (order.operationEvents || []).map((event) => ({ ...event, orderCode: order.code })))
@@ -294,7 +290,7 @@ export default function createOperationsRouter(pool) {
     if (!orders.length) return []
     let stored = new Map()
     if (pool) {
-      const [rows] = await pool.query('SELECT order_code, data FROM order_operations')
+      const rows = await operationStates(orders, pool)
       stored = new Map(rows.map((row) => [row.order_code, json(row.data)]))
     }
     return orders.map((order) => ({ ...order, operation: publicOperation(order, pool ? stored.get(order.code) : order.operation) }))

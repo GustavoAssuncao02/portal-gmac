@@ -15,14 +15,17 @@ import AccountSettings from './AccountSettings.jsx'
 import PayablesScreen from './PayablesScreen.jsx'
 import ReceivablesScreen from './ReceivablesScreen.jsx'
 import BankStatementsScreen from './BankStatementsScreen.jsx'
+import AiReconciliationScreen from './AiReconciliationScreen.jsx'
 import ReceivableScheduleModal from './ReceivableScheduleModal.jsx'
+import ProposalDocumentModal, { modelLabel } from './ProposalDocumentModal.jsx'
 import LoginBrandPanel from './LoginBrandPanel.jsx'
 import ServiceStageEditor from './ServiceStageEditor.jsx'
 import MaterialAppearance, { MaterialVisual } from './MaterialAppearance.jsx'
 import MachineHistoryModal from './MachineHistoryModal.jsx'
 import { useMobileModal } from './useMobileModal.js'
 import { ThemeContext, useAccountTheme } from './accountTheme.js'
-import { Monitor, Minimize2, CreditCard, HandCoins, Landmark, ChartColumn, Tags, Truck, WalletCards, ChevronLeft, ChevronRight, ChevronDown, UsersRound, Menu, X, Info, ArrowLeft, ListChecks, TriangleAlert, CircleCheck, CircleX } from 'lucide-react'
+import { pollWhileVisible } from './polling.js'
+import { Monitor, Minimize2, CreditCard, HandCoins, Landmark, Sparkles, ChartColumn, Tags, Truck, WalletCards, ChevronLeft, ChevronRight, ChevronDown, UsersRound, Menu, X, Info, ArrowLeft, ListChecks, TriangleAlert, CircleCheck, CircleX } from 'lucide-react'
 import { stageLabel, stageGroupLabel, serviceDetails, readStageLayout, orderedStageSelection } from '../server/serviceStages.js'
 import { findInventoryMaterial, materialsStock, normalizeSearch, purchaseMaterialRequests } from './offerResources.js'
 import { deadlineCategories, serviceDeadline } from './serviceDeadline.js'
@@ -134,6 +137,7 @@ const navigation = [
   ['Contas a Pagar', 'payables'],
   ['Contas a Receber', 'receivables'],
   ['Conciliação bancária', 'bank'],
+  ['Conciliação bancária com IA', 'bank-ai'],
   ['Business Intelligence', 'bi'],
   ['Classificações', 'classifications'],
   ['Fornecedores', 'suppliers'],
@@ -143,7 +147,7 @@ const navigation = [
 
 const registrationNavigation = ['Fornecedores', 'Administradores', 'Funcionários', 'Clientes'].map((label) => navigation.find(([name]) => name === label))
 const isRegistrationPage = (label) => registrationNavigation.some(([name]) => name === label)
-const financialNavigation = ['Contas a Pagar', 'Contas a Receber', 'Conciliação bancária', 'Business Intelligence', 'Classificações'].map((label) => navigation.find(([name]) => name === label))
+const financialNavigation = ['Contas a Pagar', 'Contas a Receber', 'Conciliação bancária', 'Conciliação bancária com IA', 'Business Intelligence', 'Classificações'].map((label) => navigation.find(([name]) => name === label))
 const isFinancialPage = (label) => financialNavigation.some(([name]) => name === label)
 
 const AdminIdentityContext = createContext(null)
@@ -271,7 +275,7 @@ function Sidebar({ collapsed, onToggle, activeNav, onNavigate, onLogout }) {
   }
   function navigationItem([label, icon]) {
     return <button className={`nav-item ${activeNav === label ? 'nav-item--active' : ''}`} key={label} type="button" title={pageLabel(label)} aria-label={pageLabel(label)} onClick={() => { setMobileOpen(false); onNavigate(label) }}>
-      {['payables', 'receivables', 'bank', 'bi', 'classifications', 'suppliers', 'completed-services'].includes(icon) ? (() => { const NavIcon = { payables: CreditCard, receivables: HandCoins, bank: Landmark, bi: ChartColumn, classifications: Tags, suppliers: Truck, 'completed-services': ListChecks }[icon]; return <NavIcon className="icon nav-icon" size={20} /> })() : <Icon name={icon} className="nav-icon" />}
+      {['payables', 'receivables', 'bank', 'bank-ai', 'bi', 'classifications', 'suppliers', 'completed-services'].includes(icon) ? (() => { const NavIcon = { payables: CreditCard, receivables: HandCoins, bank: Landmark, 'bank-ai': Sparkles, bi: ChartColumn, classifications: Tags, suppliers: Truck, 'completed-services': ListChecks }[icon]; return <NavIcon className="icon nav-icon" size={20} /> })() : <Icon name={icon} className="nav-icon" />}
       <span>{pageLabel(label)}</span>
     </button>
   }
@@ -317,6 +321,7 @@ function Sidebar({ collapsed, onToggle, activeNav, onNavigate, onLogout }) {
 
 function WorkspaceTabs({ tabs, activeNav, onNavigate, onCloseTab, onReorderTabs }) {
   const closeAllTabs = useContext(WorkspaceTabsContext)
+  const barRef = useRef(null)
   const listRef = useRef(null)
   const leftArrowRef = useRef(null)
   const rightArrowRef = useRef(null)
@@ -348,6 +353,25 @@ function WorkspaceTabs({ tabs, activeNav, onNavigate, onCloseTab, onReorderTabs 
     return () => { active = false; observer.disconnect() }
   }, [tabs])
 
+  // On desktop the bar is fixed to the top; it follows the page area, whose width depends on the sidebar.
+  useLayoutEffect(() => {
+    const bar = barRef.current
+    const area = bar.parentElement
+    let left = null
+    let width = null
+    function place() {
+      const rect = area.getBoundingClientRect()
+      if (rect.left !== left) { left = rect.left; bar.style.setProperty('--workspace-tabs-left', `${left}px`) }
+      if (rect.width !== width) { width = rect.width; bar.style.setProperty('--workspace-tabs-width', `${width}px`) }
+    }
+    place()
+    const observer = new ResizeObserver(place)
+    observer.observe(area)
+    window.addEventListener('scroll', place, { passive: true })
+    window.addEventListener('resize', place)
+    return () => { observer.disconnect(); window.removeEventListener('scroll', place); window.removeEventListener('resize', place) }
+  }, [])
+
   useLayoutEffect(() => {
     const list = listRef.current
     const selected = list.querySelector('.workspace-tab--active')
@@ -375,7 +399,7 @@ function WorkspaceTabs({ tabs, activeNav, onNavigate, onCloseTab, onReorderTabs 
     setDraggedTab(null)
   }
 
-  return <div className="workspace-tabs">
+  return <div ref={barRef} className="workspace-tabs">
     <span className="mobile-page-title">{pageLabel(activeNav)}</span>
     {scrollState.overflow && <button ref={leftArrowRef} className="workspace-tabs-control" type="button" aria-label="Rolar abas para a esquerda" title="Rolar abas para a esquerda" disabled={!scrollState.left} onClick={() => scrollTabs(-1)}><ChevronLeft size={17} aria-hidden="true" /></button>}
     <div ref={listRef} className="workspace-tabs-list" role="tablist" aria-label="Telas abertas" onScroll={measureTabs}>
@@ -534,14 +558,14 @@ function Machines({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, 
     }
     const resume = () => { if (document.visibilityState !== 'hidden') refresh() }
     refresh()
-    const polling = window.setInterval(refresh, 10000)
+    const stopPolling = pollWhileVisible(refresh, 10000)
     window.addEventListener('focus', resume)
     window.addEventListener('online', resume)
     document.addEventListener('visibilitychange', resume)
     return () => {
       active = false
       controller.abort()
-      window.clearInterval(polling)
+      stopPolling()
       window.removeEventListener('focus', resume)
       window.removeEventListener('online', resume)
       document.removeEventListener('visibilitychange', resume)
@@ -554,6 +578,8 @@ function Machines({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, 
   })
   const workingCount = machines.filter((machine) => machine.status === 'working').length
   const idleCount = machines.length - workingCount
+  // Machines used earlier today stay listed after they stop; the dot shows whether they are running now.
+  const usedToday = machines.filter((machine) => machine.status === 'working' || machine.usageMs > 0).sort((a, b) => (b.usageMs || 0) - (a.usageMs || 0))
   const selectedMachine = machines.find((machine) => machine.id === selectedId)
   const percentage = (count) => machines.length ? `${((count / machines.length) * 100).toFixed(1).replace('.', ',')}%` : '0,0%'
 
@@ -564,7 +590,7 @@ function Machines({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, 
   async function saveMachine(machine) {
     try {
       const data = await apiRequest(machine.id != null ? `/api/machines/${machine.id}` : '/api/machines', jsonOptions(machine.id != null ? 'PUT' : 'POST', machine))
-      setMachines((current) => machine.id != null ? current.map((item) => String(item.id) === String(machine.id) ? { ...data.item, status: item.status, operator: item.operator, started: item.started, usage: item.usage } : item) : [...current, data.item])
+      setMachines((current) => machine.id != null ? current.map((item) => String(item.id) === String(machine.id) ? { ...data.item, status: item.status, operator: item.operator, started: item.started, usage: item.usage, idle: item.idle } : item) : [...current, data.item])
       setSelectedId(data.item.id)
       setMachineError('')
       setModalMachine(undefined)
@@ -588,7 +614,7 @@ function Machines({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, 
         <div className="machine-toolbar"><div className="machine-filters"><button className={`machine-filter ${filter === 'all' ? 'machine-filter--selected' : ''}`} type="button" onClick={() => setFilter('all')}>Todas</button><button className={`machine-filter ${filter === 'working' ? 'machine-filter--selected' : ''}`} type="button" onClick={() => setFilter('working')}><span className="status-dot status-dot--green" />Em funcionamento</button><button className={`machine-filter ${filter === 'idle' ? 'machine-filter--selected' : ''}`} type="button" onClick={() => setFilter('idle')}><span className="status-dot status-dot--gray" />Ociosas</button></div><div className="machine-actions"><button className="machine-action machine-action--primary" type="button" onClick={() => setModalMachine(null)}><Icon name="plus" />Adicionar máquina</button><button className="machine-action" type="button" disabled={!selectedMachine} onClick={() => setModalMachine(selectedMachine)}><Icon name="edit" />Editar máquina</button><button className="machine-action machine-action--danger" type="button" disabled={!selectedMachine} onClick={() => removeSelected()}><Icon name="trash" />Remover máquina</button></div></div>
         <div className="machine-metrics"><div className="machine-metric"><span className="metric-icon metric-icon--blue"><Icon name="machines" /></span><div><span>Máquinas totais</span><strong>{machines.length}</strong><small>Parque de máquinas</small></div></div><div className="machine-metric"><span className="metric-icon metric-icon--green">▷</span><div><span>Em funcionamento</span><strong>{workingCount}</strong><small>{percentage(workingCount)} do total</small></div></div><div className="machine-metric"><span className="metric-icon metric-icon--blue">Ⅱ</span><div><span>Ociosas</span><strong>{idleCount}</strong><small>{percentage(idleCount)} do total</small></div></div></div>
         <section className="machine-list-card"><h2>Lista de máquinas</h2><div className="machine-table-scroll"><div className="machine-table"><div className="machine-row machine-row--header"><span>Máquina</span><span>Tipo</span><span>Setor</span><span>Status</span><span>Operador atual</span><span>Início de uso</span><span>Tempo de uso<br />Total hoje</span><span>Ações</span></div>{filteredMachines.map((machine) => <div className={`machine-row ${selectedId === machine.id ? 'machine-row--selected' : ''}`} key={machine.id} onClick={() => setSelectedId(machine.id)}><div className="machine-name"><Icon name="machines" /><strong>{machine.name}</strong></div><span>{machine.type}</span><span>{machine.sector}</span><span><span className={`machine-status machine-status--${machine.status}`}><i />{machine.status === 'working' ? 'Em funcionamento' : 'Ociosa'}</span></span><span>{machine.operator}</span><span><span className="machine-started-content"><span>{machine.started}</span><button className="machine-history-button" type="button" title="Histórico de uso" aria-label={`Ver histórico de uso de ${machine.name}`} onClick={(event) => { event.stopPropagation(); event.currentTarget.focus({ preventScroll: true }); setHistoryMachine(machine) }}><Info size={16} aria-hidden="true" /></button></span></span><span>{machine.usage}</span><div className="row-actions"><button type="button" onClick={(event) => { event.stopPropagation(); setSelectedId(machine.id) }} aria-label={`Visualizar ${machine.name}`}><Icon name="eye" /></button><button type="button" onClick={(event) => { event.stopPropagation(); setModalMachine(machine) }} aria-label={`Editar ${machine.name}`}><Icon name="edit" /></button><button className="row-delete" type="button" onClick={(event) => { event.stopPropagation(); removeSelected(machine) }} aria-label={`Remover ${machine.name}`}><Icon name="trash" /></button></div></div>)}</div></div></section>
-        <div className="machine-summary-grid"><section className="machine-summary-card availability-card"><h2>Visão de disponibilidade</h2><div className="availability-content"><div className="availability-donut" style={{ '--working': percentage(workingCount) }}><strong>{machines.length}</strong><span>máquinas</span></div><div className="availability-legend"><div><i className="dot-green" />Em funcionamento <strong>{workingCount}</strong><span>{percentage(workingCount)}</span></div><div><i className="dot-gray" />Ociosas <strong>{idleCount}</strong><span>{percentage(idleCount)}</span></div></div></div></section><section className="machine-summary-card"><h2>Tempo de uso (hoje)</h2>{machines.filter((machine) => machine.status === 'working').map((machine) => <div className="usage-line" key={machine.id}><i className="dot-green" /><span>{machine.name}</span><strong>{machine.usage}</strong></div>)}</section><section className="machine-summary-card"><h2>Máquinas ociosas (hoje)</h2>{machines.filter((machine) => machine.status === 'idle').map((machine) => <div className="usage-line" key={machine.id}><i className="dot-gray" /><span>{machine.name}</span><strong>{machine.usage}</strong></div>)}</section></div>
+        <div className="machine-summary-grid"><section className="machine-summary-card availability-card"><h2>Visão de disponibilidade</h2><div className="availability-content"><div className="availability-donut" style={{ '--working-share': `${machines.length ? (workingCount / machines.length) * 100 : 0}%` }}><strong>{machines.length}</strong><span>máquinas</span></div><div className="availability-legend"><div><i className="dot-green" />Em funcionamento <strong>{workingCount}</strong><span>{percentage(workingCount)}</span></div><div><i className="dot-gray" />Ociosas <strong>{idleCount}</strong><span>{percentage(idleCount)}</span></div></div></div></section><section className="machine-summary-card"><h2>Tempo de uso (hoje)</h2>{usedToday.map((machine) => <div className="usage-line" key={machine.id}><i className={machine.status === 'working' ? 'dot-green' : 'dot-gray'} title={machine.status === 'working' ? 'Em funcionamento' : 'Parada agora'} /><span>{machine.name}</span><strong>{machine.usage}</strong></div>)}{!usedToday.length && <p className="usage-empty">Nenhuma máquina foi usada hoje.</p>}</section><section className="machine-summary-card"><h2>Máquinas ociosas (hoje)</h2>{machines.filter((machine) => machine.status === 'idle').map((machine) => <div className="usage-line" key={machine.id}><i className="dot-gray" /><span>{machine.name}</span><strong>{machine.idle}</strong></div>)}{machines.length > 0 && !idleCount && <p className="usage-empty">Todas as máquinas estão em funcionamento.</p>}</section></div>
       </main>
       {modalMachine !== undefined && <MachineModal machine={modalMachine == null ? modalMachine : machines.find((machine) => machine.id === modalMachine.id) || modalMachine} onClose={() => setModalMachine(undefined)} onSave={saveMachine} />}
       {historyMachine && <MachineHistoryModal machine={historyMachine} loadHistory={loadMachineHistory} onClose={() => setHistoryMachine(null)} />}
@@ -655,8 +681,8 @@ function InventoryScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout,
       })
       .catch((failure) => { if (active) setError(failure.message) })
     refresh()
-    const polling = window.setInterval(refresh, 10000)
-    return () => { active = false; window.clearInterval(polling) }
+    const stopPolling = pollWhileVisible(refresh, 10000)
+    return () => { active = false; stopPolling() }
   }, [])
 
   async function saveItem(item) {
@@ -1485,8 +1511,6 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
 function ProposalBuilder({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, offer, onRefresh, onSelectOrder }) {
   const [selectedKey, setSelectedKey] = useState(offer?.proposal?.key || 'A')
   const [layoutOpen, setLayoutOpen] = useState(false)
-  useMobileModal(layoutOpen, '.proposal-layout-modal', () => setLayoutOpen(false))
-  const [selectedLayout, setSelectedLayout] = useState(offer?.proposal?.layout || 'classic')
   const [editingCell, setEditingCell] = useState(null)
   const [generated, setGenerated] = useState(Boolean(offer?.proposal))
   const [saving, setSaving] = useState(false)
@@ -1524,29 +1548,24 @@ function ProposalBuilder({ collapsed, onToggle, activeNav, onNavigate, onLogout,
     return <><strong>{displayValue}</strong><button className="proposal-edit-button" type="button" onClick={(event) => { event.stopPropagation(); setEditingCell({ key: proposal.key, field }) }} aria-label={`Editar ${field}`}><Icon name="edit" /></button></>
   }
 
-  async function generatePdf() {
+  // The commercial models (A, B, Nestlé and Etiqueta) are chosen and filled in the next window.
+  function openModels() {
     if (!offer) return
-    if (Number(selectedProposal.serviceValue) <= 0 || !String(selectedProposal.deadline).trim() || !selectedProposal.stages.length) {
-      setError('Informe o valor, o prazo e selecione pelo menos uma etapa antes de gerar o PDF.')
-      setLayoutOpen(false)
+    if (!selectedProposal.stages.length) {
+      setError('Defina as etapas nos detalhes da oferta antes de gerar a proposta.')
       return
     }
-    setSaving(true)
     setError('')
-    try {
-      await apiRequest(`/api/offers/${offer.id}/proposal`, jsonOptions('POST', { proposal: selectedProposal, layout: selectedLayout }))
-      await onRefresh()
-      setGenerated(true)
-      setLayoutOpen(false)
-      const link = document.createElement('a')
-      link.href = `/api/offers/${offer.id}/proposal.pdf`
-      link.click()
-    } catch (caught) {
-      setError(caught.message)
-      setLayoutOpen(false)
-    } finally {
-      setSaving(false)
-    }
+    setLayoutOpen(true)
+  }
+
+  async function proposalSaved() {
+    await onRefresh()
+    setGenerated(true)
+    setLayoutOpen(false)
+    const link = document.createElement('a')
+    link.href = `/api/offers/${offer.id}/proposal.pdf`
+    link.click()
   }
 
   async function acceptOffer() {
@@ -1574,11 +1593,11 @@ function ProposalBuilder({ collapsed, onToggle, activeNav, onNavigate, onLogout,
         <section className="proposal-service-summary"><div className="proposal-service-image">▰</div><div className="proposal-service-client"><h2>{offer.service}</h2><span>Cliente solicitante</span><strong>{offer.company}</strong><small>CNPJ: {offer.cnpj}</small><small>Etiqueta: {offer.labelNumber}</small></div><div className="proposal-service-fact"><span>▣</span><div><small>Prazo solicitado</small><strong>{displayDate(offer.deadline)}</strong></div><span>◇</span><div><small>Quantidade</small><strong>{offer.quantity} unidades</strong></div></div><div className="proposal-service-summary-copy"><strong>Resumo do serviço</strong><p>{offer.description}</p></div><div className="proposal-material-summary"><span>Materiais informados</span><strong>{formatMoney(materialCost)}</strong><button type="button" onClick={() => onNavigate('Detalhes da oferta')}>Ver detalhamento <span>›</span></button></div></section>
         <h2 className="proposal-section-heading">Escolha uma das propostas abaixo ou personalize os valores</h2>
         <div className="proposal-card-grid">{visibleProposals.map((proposal) => <article className={`proposal-card proposal-card--${proposal.tone} ${selectedKey === proposal.key ? 'proposal-card--selected' : ''}`} key={proposal.key} onClick={() => { setSelectedKey(proposal.key); if (proposal.key !== selectedKey) setGenerated(false) }}><div className="proposal-card-heading"><div><span className="proposal-card-label">PROPOSTA {proposal.key}</span><div className="proposal-card-intro"><span className="proposal-card-icon">{proposal.icon}</span><div><strong>{proposal.title}</strong><p>{proposal.description}</p></div></div></div><span className="proposal-card-tag">{proposal.tag}</span></div><div className="proposal-card-content"><div className="proposal-card-column"><div><span>◷</span><label>Prazo de entrega</label>{renderEditable(proposal, 'deadline', proposal.deadline)}</div><div><span>＄</span><label>Valor do serviço</label>{renderEditable(proposal, 'serviceValue', formatMoney(Number(proposal.serviceValue)), 'number')}</div><div><span>◇</span><label>Materiais</label>{renderEditable(proposal, 'materials', formatMoney(Number(proposal.materials)), 'number')}</div><div><span>♧</span><label>Mão de obra</label>{renderEditable(proposal, 'labor', formatMoney(Number(proposal.labor)), 'number')}</div></div><div className="proposal-card-column"><div><span>⚙</span><label>Tempo de máquina</label>{renderEditable(proposal, 'machine', proposal.machine)}</div><div><span>◷</span><label>Tempo de serviço</label>{renderEditable(proposal, 'serviceTime', proposal.serviceTime)}</div><div><span>▥</span><label>% de lucro bruto</label>{renderEditable(proposal, 'margin', `${Number(proposal.margin).toFixed(1).replace('.', ',')}%`, 'number')}</div><div><span>◇</span><label>Desconto</label>{renderEditable(proposal, 'discount', `${Number(proposal.discount).toFixed(1).replace('.', ',')}%`, 'number')}</div></div></div><div className="proposal-profit"><strong>Lucro bruto esperado</strong><b>{formatMoney(proposal.profit)}</b></div></article>)}</div>
-        <div className="proposal-bottom"><div className="proposal-notice"><span>ⓘ</span><div><strong>Confira os valores</strong><p>Os valores e prazos são definidos por você antes da geração do PDF.</p></div></div><div className="proposal-actions"><button className="proposal-cancel-button" type="button" onClick={() => onNavigate('Detalhes da oferta')}>× <strong>Cancelar</strong></button><button className="proposal-send-button" type="button" onClick={() => setLayoutOpen(true)}><Icon name="send" /><strong>Gerar proposta em PDF</strong></button></div></div>
+        <div className="proposal-bottom"><div className="proposal-notice"><span>ⓘ</span><div><strong>Confira os valores</strong><p>Os valores e prazos são definidos por você antes da geração do PDF.</p></div></div><div className="proposal-actions"><button className="proposal-cancel-button" type="button" onClick={() => onNavigate('Detalhes da oferta')}>× <strong>Cancelar</strong></button><button className="proposal-send-button" type="button" onClick={openModels}><Icon name="send" /><strong>Gerar proposta em PDF</strong></button></div></div>
         {error && <p className="workflow-error" role="alert">{error}</p>}
-        {generated && <div className="proposal-generated-actions"><a href={`/api/offers/${offer.id}/proposal.pdf`}>Baixar PDF da proposta</a><button className="proposal-cancel-button" type="button" onClick={() => onNavigate('Ofertas e serviços')}>Retornar às ofertas</button><button className="proposal-send-button" type="button" disabled={saving || Boolean(offer.orderCode)} onClick={acceptOffer}>{offer.orderCode ? `OS ${offer.orderCode} gerada` : saving ? 'Aceitando...' : 'Aceitar Oferta'}</button>{offer.orderCode && <button className="proposal-cancel-button" type="button" onClick={() => onSelectOrder(offer.orderCode)}>Ver OS</button>}</div>}
+        {generated && <div className="proposal-generated-actions"><a href={`/api/offers/${offer.id}/proposal.pdf`}>Baixar PDF da proposta{offer.proposal?.document ? ` · ${modelLabel(offer.proposal.document)}` : ''}</a><button className="proposal-cancel-button" type="button" onClick={() => onNavigate('Ofertas e serviços')}>Retornar às ofertas</button><button className="proposal-send-button" type="button" disabled={saving || Boolean(offer.orderCode)} onClick={acceptOffer}>{offer.orderCode ? `OS ${offer.orderCode} gerada` : saving ? 'Aceitando...' : 'Aceitar Oferta'}</button>{offer.orderCode && <button className="proposal-cancel-button" type="button" onClick={() => onSelectOrder(offer.orderCode)}>Ver OS</button>}</div>}
       </main>
-      {layoutOpen && <div className="modal-backdrop proposal-layout-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setLayoutOpen(false) }}><section className="proposal-layout-modal" role="dialog" aria-modal="true" aria-labelledby="proposal-layout-title" onMouseDown={(event) => event.stopPropagation()}><button className="proposal-modal-close" type="button" onClick={() => setLayoutOpen(false)} aria-label="Fechar">×</button><span className="proposal-modal-kicker">Gerar documento</span><h2 id="proposal-layout-title">Escolha o layout da proposta</h2><p>Selecione o modelo que será usado para gerar o PDF da proposta.</p><div className="proposal-layout-options">{[['classic', 'Clássico', 'Visual limpo com destaque para o serviço'], ['executive', 'Executivo', 'Resumo direto e corporativo'], ['compact', 'Compacto', 'Mais informações em menos espaço']].map(([key, label, description]) => <button className={`proposal-layout-option ${selectedLayout === key ? 'proposal-layout-option--selected' : ''}`} type="button" key={key} onClick={() => setSelectedLayout(key)}><span className={`proposal-layout-preview proposal-layout-preview--${key}`}><i /><i /><i /><i /></span><strong>{label}</strong><small>{description}</small></button>)}</div><div className="proposal-modal-actions"><button className="proposal-cancel-button" type="button" onClick={() => setLayoutOpen(false)}>Cancelar</button><button className="proposal-send-button" type="button" disabled={saving} onClick={generatePdf}><Icon name="send" /><strong>{saving ? 'Gerando...' : 'Gerar PDF'}</strong></button></div></section></div>}
+      {layoutOpen && <ProposalDocumentModal offer={offer} option={selectedProposal} onClose={() => setLayoutOpen(false)} onSaved={proposalSaved} />}
     </div>
   )
 }
@@ -1605,8 +1624,8 @@ function OrdersScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout, ta
       catch (error) { if (!controller.signal.aborted) setRequestListError(error.message) }
     }
     refresh()
-    const timer = window.setInterval(refresh, 10000)
-    return () => { controller.abort(); window.clearInterval(timer) }
+    const stopPolling = pollWhileVisible(refresh, 10000)
+    return () => { controller.abort(); stopPolling() }
   }, [])
   async function openManualRequest() {
     if (openingRequest) return
@@ -1657,10 +1676,7 @@ function OrdersScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout, ta
     const timer = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(timer)
   }, [])
-  useEffect(() => {
-    const polling = window.setInterval(() => onRefresh().catch(() => {}), 10000)
-    return () => window.clearInterval(polling)
-  }, [selectedOrderCode])
+  useEffect(() => pollWhileVisible(() => onRefresh().catch(() => {}), 10000), [selectedOrderCode])
   const operation = selectedOrder?.operation
   const activeMs = operation ? operationElapsed(operation, now) : 0
   const seconds = Math.floor(activeMs / 1000)
@@ -1846,6 +1862,7 @@ function Dashboard({ user, onUpdateUser, collapsed, onToggle, activeNav, onNavig
   if (['Contas a Pagar', 'Business Intelligence', 'Classificações', 'Fornecedores'].includes(activeNav)) return <PayablesScreen {...toolProps} accountFilters={payableFilters} mode={{ 'Contas a Pagar': 'accounts', 'Business Intelligence': 'bi', 'Classificações': 'classifications', 'Fornecedores': 'suppliers' }[activeNav]} />
   if (activeNav === 'Contas a Receber') return <ReceivablesScreen {...toolProps} />
   if (activeNav === 'Conciliação bancária') return <BankStatementsScreen {...toolProps} />
+  if (activeNav === 'Conciliação bancária com IA') return <AiReconciliationScreen {...toolProps} />
   if (activeNav === 'Relatórios') return <ReportsScreen {...toolProps} />
   if (activeNav === 'Serviços') return <LaborServicesScreen {...toolProps} />
   if (activeNav === 'Configurações') return <AccountSettings {...toolProps} user={user} onUpdateUser={onUpdateUser} />
@@ -1908,8 +1925,9 @@ function App() {
     return () => { controller.abort(); window.clearTimeout(retryTimer) }
   }, [])
 
+  // Every screen opens at its top, whatever the scroll of the previous one.
   useLayoutEffect(() => {
-    if (isDashboard && window.matchMedia('(max-width: 760px)').matches) window.scrollTo({ top: 0, behavior: 'auto' })
+    if (isDashboard) window.scrollTo({ top: 0, behavior: 'auto' })
   }, [isDashboard, activeNav, selectedOfferId, selectedOrderCode])
 
   async function refreshWorkflow() {
@@ -1970,8 +1988,7 @@ function App() {
 
   useEffect(() => {
     if (!isDashboard || !['Serviços em andamento', 'Serviços concluídos', 'Dashboard'].includes(activeNav)) return undefined
-    const polling = window.setInterval(() => refreshWorkflow().catch(() => {}), 10000)
-    return () => window.clearInterval(polling)
+    return pollWhileVisible(() => refreshWorkflow().catch(() => {}), 10000)
   }, [isDashboard, activeNav])
 
   function selectOffer(id) {

@@ -49,7 +49,7 @@ test('rate limit expires automatically and the next window accepts requests agai
 
 test('Vite LAN proxy overwrites spoofed forwarding headers so clients cannot evade IP limits', async (t) => {
   const backend = await fixture(t, { limit: 2 })
-  const proxy = viteConfig.server.proxy['/api']
+  const proxy = viteConfig({ mode: 'test', command: 'serve' }).server.proxy['/api']
   const vite = await createServer({ configFile: false, logLevel: 'silent', server: { host: '127.0.0.1', port: 0, strictPort: false, proxy: { '/api': { ...proxy, target: backend.url } } } })
   await vite.listen()
   t.after(() => vite.close())

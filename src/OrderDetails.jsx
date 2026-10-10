@@ -3,6 +3,7 @@ import './orderDetails.css'
 import { stageLabel } from '../server/serviceStages.js'
 import OrderEditModal, { OrderActionModal } from './OrderEditModal.jsx'
 import { activeEmployeeNames, activeSessions } from '../server/operationSessions.js'
+import { pollWhileVisible } from './polling.js'
 
 const currency = (value) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const date = (value) => value ? new Date(value).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : 'Não informado'
@@ -80,8 +81,8 @@ function OrderHistoryModal({ order, onClose, Icon }) {
       }
     }
     load()
-    const timer = window.setInterval(load, 10000)
-    return () => { window.clearInterval(timer); controller.abort() }
+    const stopPolling = pollWhileVisible(load, 10000)
+    return () => { stopPolling(); controller.abort() }
   }, [order.code, retry])
   return <dialog ref={dialog} className="os-history-modal" aria-labelledby="os-history-title" onCancel={(event) => { event.preventDefault(); onClose() }} onClick={(event) => {
     if (event.target !== event.currentTarget) return

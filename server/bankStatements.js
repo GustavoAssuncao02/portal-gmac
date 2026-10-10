@@ -70,6 +70,13 @@ export function reconciliationCandidates(store, transaction, toleranceDays = sto
   return { kind, candidates, ambiguous: candidates.filter((row) => row.level === best).length > 1, toleranceDays }
 }
 
+// The statement balance warning only appears above R$ 10,00 (company's choice); the difference itself stays in the validation.
+const DIVERGENCE_WARNING_CENTS = 1000
+// Stored warnings stay complete for audit; this is what the screens show. A header declaring another encoding over valid UTF-8 changes nothing for the user.
+export function visibleWarnings(item) {
+  return (item.warnings || []).filter((row) => row.code !== 'encoding-mismatch' && (row.code !== 'balance-divergence' || Math.abs(item.validation?.differenceCents || 0) > DIVERGENCE_WARNING_CENTS))
+}
+
 function snapshot(row) { return { bankDate: row.bankDate, amountCents: row.amountCents, memo: row.memo } }
 function event(store, actor, type, details = {}) { store.bankEvents.push({ id: randomUUID(), at: new Date().toISOString(), type, userId: actor?.id ?? null, userName: actor?.name || 'Sistema', ...details }) }
 
@@ -143,7 +150,7 @@ export default function createBankStatementsRouter(accounts, requireAdmin) {
   const handle = (fn) => async (req, res, next) => { try { await fn(req, res) } catch (error) { next(error) } }
   router.get('/bank-statements', handle(async (_req, res) => {
     const store = await readStore(); init(store)
-    res.json({ accounts: store.bankAccounts, imports: [...store.bankImports].reverse().map(({ header, ...row }) => row), transactions: store.bankTransactions.map((row) => transactionView(store, row)), balances: store.bankBalances, conflicts: store.bankConflicts, settings: store.bankSettings, operationLabels })
+    res.json({ accounts: store.bankAccounts, imports: [...store.bankImports].reverse().map(({ header, ...row }) => ({ ...row, warnings: visibleWarnings(row) })), transactions: store.bankTransactions.map((row) => transactionView(store, row)), balances: store.bankBalances, conflicts: store.bankConflicts, settings: store.bankSettings, operationLabels })
   }))
   router.post('/bank-statements/import', express.raw({ type: 'application/octet-stream', limit: '10mb' }), handle(async (req, res) => {
     if (!Buffer.isBuffer(req.body) || !req.body.length) fail('Selecione um arquivo OFX com até 10 MB.')
@@ -157,7 +164,7 @@ export default function createBankStatementsRouter(accounts, requireAdmin) {
       await writeFile(path.join(directory, `${result.id}.ofx`), req.body)
       return result
     })
-    res.status(201).json({ item: record })
+    res.status(201).json({ item: { ...record, warnings: visibleWarnings(record) } })
   }))
   router.put('/bank-statements/settings', handle(async (req, res) => {
     const days = Number(req.body.dateToleranceDays)

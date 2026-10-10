@@ -1,0 +1,121 @@
+/* Commercial proposal models (A, B, Nestlé, Etiqueta) and their settings. */
+.proposal-doc-modal.payable-modal--wide { width: min(1180px, calc(100vw - 24px)); }
+.proposal-model-step > p { margin: 0 0 16px; color: #48627a; font-size: 14px; line-height: 1.5; }
+.proposal-model-saved { padding: 10px 12px; border: 1px solid #d7e3ee; border-radius: 6px; background: #f6f9fc; }
+.proposal-model-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; }
+.proposal-model-card { display: grid; gap: 6px; align-content: start; min-height: 190px; padding: 14px; border: 1px solid #cbd9e6; border-radius: 8px; color: #29435e; background: #ffffff; font: inherit; text-align: left; cursor: pointer; }
+.proposal-model-card:hover:not(:disabled), .proposal-model-card:focus-visible { border-color: #0c4c91; box-shadow: 0 0 0 3px #0c4c911f; }
+.proposal-model-card strong { color: #0c4c91; font-size: 16px; }
+.proposal-model-card > span:not(.proposal-model-thumb) { font-size: 13px; font-weight: 600; }
+.proposal-model-card small { color: #6b7f92; font-size: 12px; line-height: 1.4; }
+.proposal-model-thumb { display: grid; gap: 4px; height: 64px; margin-bottom: 4px; padding: 8px; border: 1px solid #e0e8f0; border-radius: 5px; background: #f8fafc; }
+.proposal-model-thumb i { display: block; height: 6px; border-radius: 2px; background: #dbe5ee; }
+.proposal-model-card--model-a .proposal-model-thumb i:first-child, .proposal-model-card--model-b .proposal-model-thumb i:first-child { width: 45%; margin: 0 auto; background: #f0912c; }
+.proposal-model-card--model-b .proposal-model-thumb i:nth-child(n+2) { background: repeating-linear-gradient(90deg, #dbe5ee 0 70%, #0c4c9155 70% 100%); }
+.proposal-model-card--nestle .proposal-model-thumb { background: #ffff0040; }
+.proposal-model-card--nestle .proposal-model-thumb i:first-child { background: #9bc2e6; }
+.proposal-model-card--nestle .proposal-model-thumb i:nth-child(n+3) { background: linear-gradient(90deg, #dbe5ee 0 55%, #ffd34d 55% 70%, #b9babc 70% 85%, #2fb36b 85%); }
+.proposal-model-card--etiqueta .proposal-model-thumb { border: 3px solid #ff6600; }
+.proposal-model-card--etiqueta .proposal-model-thumb i:nth-child(n+3) { background: linear-gradient(90deg, #dbe5ee 0 55%, #ffd34d 55% 70%, #2fb36b 70% 85%, #dbe5ee 85%); }
+.proposal-settings-link { display: inline-flex; align-items: center; gap: 6px; margin-top: 16px; }
+
+.proposal-doc-form { display: grid; gap: 18px; }
+.proposal-doc-section { display: grid; gap: 12px; padding: 16px; border: 1px solid #dce6ef; border-radius: 8px; background: #ffffff; }
+.payable-modal .proposal-doc-section h3 { display: flex; align-items: center; gap: 8px; margin: 0; color: #0c4c91; }
+.proposal-doc-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.proposal-doc-tools { display: flex; flex-wrap: wrap; gap: 8px; }
+.proposal-doc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px 16px; }
+.proposal-doc-wide { grid-column: span 2; }
+.proposal-doc-full { grid-column: 1 / -1; }
+.proposal-doc-inline { display: flex; gap: 8px; align-items: flex-end; }
+.proposal-doc-inline > * { flex: 1; }
+.payable-modal .proposal-doc-check { flex-direction: row; align-items: center; gap: 8px; font-size: 13px; }
+.payable-modal .proposal-doc-check input { width: 16px; min-height: 0; height: 16px; accent-color: #0c4c91; }
+.proposal-doc-prefix { color: #6b7f92; font-size: 12px; }
+.proposal-doc-total { margin: 0; text-align: right; color: #29435e; font-size: 14px; }
+.proposal-doc-total strong { color: #0c4c91; font-size: 18px; }
+
+/* Fiscal identification: highlighted like in the PDF. */
+.proposal-fiscal { border-color: #f0b46a; border-left: 5px solid #e8891d; background: #fff8ef; }
+.payable-modal .proposal-fiscal h3 { color: #9a4f00; }
+.proposal-doc-grid--fiscal { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); align-items: start; }
+.fiscal-picker { position: relative; display: grid; gap: 6px; }
+.fiscal-picker-search { position: relative; display: block; }
+.fiscal-picker-search svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #6b7f92; }
+.payable-modal .fiscal-picker-search input { padding-left: 32px; }
+.fiscal-picker-list { position: absolute; z-index: 5; top: 64px; left: 0; right: 0; max-height: 280px; overflow: auto; margin: 0; padding: 4px; list-style: none; border: 1px solid #cbd9e6; border-radius: 6px; background: #ffffff; box-shadow: 0 10px 24px #10283e26; }
+.fiscal-picker-list button { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: start; width: 100%; padding: 8px; border: 0; border-radius: 4px; color: #29435e; background: transparent; font: inherit; font-size: 12.5px; text-align: left; cursor: pointer; }
+.fiscal-picker-list button:hover, .fiscal-picker-list button:focus-visible { background: #edf4fb; }
+.fiscal-picker-list strong { white-space: nowrap; color: #0c4c91; }
+.fiscal-picker-list small { display: block; color: #6b7f92; font-size: 11px; }
+.fiscal-picker-empty { padding: 8px; color: #6b7f92; font-size: 12.5px; }
+.fiscal-picker-value { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 8px; margin: 0; padding: 8px 10px; border: 1px solid #f0c48f; border-radius: 6px; background: #ffffff; font-size: 12.5px; }
+.fiscal-picker-value strong { color: #9a4f00; }
+.fiscal-picker-value span { flex: 1 1 160px; }
+.fiscal-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: 999px; font-size: 11px; font-style: normal; font-weight: 600; white-space: nowrap; }
+.fiscal-badge--ok { color: #0f6a3a; background: #e3f6eb; }
+.fiscal-badge--warn { color: #8a4b00; background: #fff1d6; }
+
+/* Composition lines of models A and B. */
+.proposal-items { display: grid; gap: 10px; }
+.proposal-item { display: grid; grid-template-columns: 40px minmax(200px, 1fr) 110px 120px 160px 130px; gap: 10px; align-items: end; }
+.proposal-item--grouped { grid-template-columns: 40px 140px minmax(170px, 1fr) 96px 116px 150px 116px 36px; }
+.payable-modal .proposal-item .proposal-qty { width: 100%; min-height: 38px; padding: 9px 11px; }
+.proposal-item > strong { padding-bottom: 10px; color: #0c4c91; }
+.proposal-item-total { padding-bottom: 10px; text-align: right; font-weight: 700; color: #29435e; }
+
+/* Price list grids (Nestlé and Etiqueta). */
+.proposal-table-wrap { max-height: 420px; overflow: auto; border: 1px solid #dce6ef; border-radius: 6px; }
+.proposal-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.proposal-table th { position: sticky; top: 0; z-index: 1; padding: 8px; border-bottom: 1px solid #cbd9e6; color: #234768; background: #eef4fa; text-align: left; white-space: nowrap; }
+.proposal-table td { padding: 5px 8px; border-bottom: 1px solid #edf2f7; vertical-align: middle; }
+.proposal-table td small { display: block; color: #6b7f92; font-size: 11px; }
+.proposal-table tr:hover td { background: #f8fbfe; }
+.proposal-table td.proposal-yellow { background: #fffbd6; }
+.payable-modal .proposal-table select { min-height: 32px; padding: 4px 6px; font-size: 12.5px; }
+.payable-modal .proposal-qty { width: 92px; min-height: 32px; padding: 4px 8px; text-align: right; }
+.proposal-table--edit td { padding: 4px; }
+.payable-modal .proposal-table--edit input { min-height: 32px; padding: 4px 8px; font-size: 12.5px; }
+.proposal-table--edit .money-input { min-width: 120px; }
+
+.proposal-usage ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.proposal-usage li { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.2fr); gap: 10px; align-items: end; padding: 8px 10px; border: 1px solid #e0e8f0; border-radius: 6px; }
+.proposal-usage li > span { display: grid; gap: 2px; }
+.proposal-usage li small { color: #6b7f92; font-size: 11.5px; }
+.proposal-usage li.proposal-usage--pending { border-color: #f0c48f; background: #fff8ef; }
+
+.proposal-doc-totals { position: sticky; bottom: -14px; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px 24px; padding: 12px 16px; border: 1px solid #cbd9e6; border-radius: 8px; color: #48627a; background: #f6f9fc; font-size: 12.5px; }
+.proposal-doc-totals span { display: grid; gap: 2px; text-align: right; }
+.proposal-doc-totals strong { color: #29435e; font-size: 15px; }
+.proposal-doc-totals-main strong { color: #0c4c91; font-size: 19px; }
+
+/* Settings. */
+.proposal-settings-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; border-bottom: 1px solid #dce6ef; }
+.proposal-settings-tabs button { padding: 9px 12px; border: 0; border-bottom: 3px solid transparent; color: #48627a; background: transparent; font: inherit; font-size: 13px; cursor: pointer; }
+.proposal-settings-tabs button.active { border-bottom-color: #0c4c91; color: #0c4c91; font-weight: 700; }
+.proposal-settings-table { display: grid; gap: 12px; }
+.payable-modal .proposal-settings-table h3 { margin: 6px 0 0; }
+.proposal-catalog { font-size: 13px; line-height: 1.5; }
+.proposal-catalog p { margin: 0; }
+.proposal-catalog-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 0; }
+.proposal-catalog-facts div { padding: 10px; border: 1px solid #e0e8f0; border-radius: 6px; }
+.proposal-catalog-facts dt { color: #6b7f92; font-size: 11.5px; }
+.proposal-catalog-facts dd { margin: 2px 0 0; color: #29435e; font-weight: 700; }
+.proposal-catalog-sources, .proposal-catalog-company ul { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.proposal-catalog-sources li { display: grid; gap: 2px; padding: 8px 10px; border-left: 3px solid #2fb36b; background: #f6faf8; }
+.proposal-catalog-sources li.proposal-catalog-error { border-left-color: #e8891d; background: #fff8ef; }
+.proposal-catalog-company { padding: 10px 12px; border: 1px solid #e0e8f0; border-radius: 6px; }
+.payable-modal .proposal-catalog-company h3 { margin: 0 0 8px; font-size: 14px; }
+.proposal-catalog-company li { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+.proposal-success { margin: 12px 0 0; padding: 10px 12px; border: 1px solid #bfe3cd; border-radius: 5px; color: #0f6a3a; background: #effaf3; font-size: 13px; }
+
+
+@media (max-width: 760px) {
+  .proposal-doc-wide { grid-column: auto; }
+  .proposal-item { grid-template-columns: 1fr 1fr; align-items: stretch; }
+  .proposal-item > strong, .proposal-item > label:first-of-type { grid-column: 1 / -1; }
+  .proposal-item-total { grid-column: 1 / -1; padding: 0; }
+  .proposal-usage li { grid-template-columns: 1fr; }
+  .proposal-doc-totals { position: static; justify-content: space-between; }
+  .proposal-table-wrap { max-height: none; }
+}

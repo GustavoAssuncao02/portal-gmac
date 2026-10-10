@@ -10,6 +10,7 @@ import { filterPayables, todayBahia, shiftMonth, validDate, dueLabel } from '../
 import { payableAnalytics } from './payableAnalytics.js'
 import FinanceTrendChart from './FinanceTrendChart.jsx'
 import { sumOf, dueShortcuts } from './financeFilters.js'
+import { pollWhileVisible } from './polling.js'
 import './payables.css'
 
 const initialFilters = () => ({ search: '', supplierId: '', classificationId: '', status: '', start: '', end: '' })
@@ -75,10 +76,10 @@ export default function PayablesScreen({ mode = 'accounts', accountFilters, ...p
   useEffect(() => {
     let active = true
     const load = () => payableRequest('/payables').then((result) => { if (active) { setData(result); setError(''); setLoading(false) } }).catch((caught) => { if (active) { setError(caught.message); setLoading(false) } })
-    load(); const timer = setInterval(load, 30000)
+    load(); const stopPolling = pollWhileVisible(load, 30000)
     const open = (event) => { setDetailId(event.detail); sessionStorage.removeItem('gmac-payable-open') }
     window.addEventListener('gmac-payable-open', open); sessionStorage.removeItem('gmac-payable-open')
-    return () => { active = false; clearInterval(timer); window.removeEventListener('gmac-payable-open', open) }
+    return () => { active = false; stopPolling(); window.removeEventListener('gmac-payable-open', open) }
   }, [mode])
   useEffect(() => { setPage(1); setSelected([]) }, [filters, pageSize, mode])
   const filtered = filterPayables(data.items, filters).sort((a, b) => { const av = a[sort.key] ?? '', bv = b[sort.key] ?? ''; return sort.direction * (typeof av === 'number' ? av - bv : String(av).localeCompare(String(bv), 'pt-BR')) })

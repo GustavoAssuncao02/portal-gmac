@@ -146,7 +146,7 @@ test('SQL management rolls back metadata when commit fails, and persists state/h
     async rollback() { transaction = null },
     release() {},
   }
-  const fixture = await createWorkflowFixture({ pool: { async getConnection() { return connection }, async query() { return [stored ? [{ order_code: 'OS-SQL', data: JSON.stringify(stored) }] : []] } } })
+  const fixture = await createWorkflowFixture({ pool: { async getConnection() { return connection }, async execute() { return [stored ? [{ order_code: 'OS-SQL', data: JSON.stringify(stored) }] : []] } } })
   t.after(() => fixture.close())
   const operation = { status: 'waiting', stages: [{ key: 'stage-1', name: 'Tornearia' }], stageCounts: { 'stage-1': 0 }, activeSession: null, accumulatedMs: 0, startedAt: null }
   stored = operation

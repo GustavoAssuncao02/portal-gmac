@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Plus, Pencil, Trash2, Info, Search, Save, X, Wrench } from 'lucide-react'
 import AdminWorkspace from './AdminWorkspace.jsx'
 import MachineHistoryModal from './MachineHistoryModal.jsx'
+import { pollWhileVisible } from './polling.js'
 
 const money = (value) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 async function request(path, options = {}) {
@@ -64,8 +65,8 @@ export default function LaborServicesScreen(props) {
       catch (caught) { if (!controller.signal.aborted) setError(caught.message) }
       finally { pending = false; if (!controller.signal.aborted) setLoading(false) }
     }
-    refresh(); const timer = setInterval(refresh, 10000)
-    return () => { controller.abort(); clearInterval(timer) }
+    refresh(); const stopPolling = pollWhileVisible(refresh, 10000)
+    return () => { controller.abort(); stopPolling() }
   }, [retry])
   const selected = items.find((item) => item.id === selectedId)
   const visible = items.filter((item) => [item.name, item.type, item.sector].some((value) => value.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())))

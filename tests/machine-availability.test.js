@@ -22,6 +22,10 @@ test('machine availability follows real sessions, Bahia midnight and machine cha
   assert.equal(result[1].operator, 'Ana')
   assert.equal(result[1].started, '01:00')
   assert.equal(result[1].usage, '1h 30min')
+  assert.equal(result[0].usageMs, 3600000, 'Torno stopped but keeps the hour it was used today')
+  assert.equal(result[0].idle, '1h 00min', 'Two hours since Bahia midnight minus one hour of use')
+  assert.equal(result[1].idle, '0h 30min')
+  assert.equal(machineAvailability([{ id: 3, name: 'Prensa' }], [], Date.parse('2026-10-09T10:38:00-03:00'))[0].idle, '10h 38min', 'An unused machine is idle since midnight')
   assert.equal(machines[1].operator, 'Outdated')
 })
 

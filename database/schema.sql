@@ -49,6 +49,8 @@ CREATE TABLE IF NOT EXISTS order_operation_events (
   occurred_at DATETIME(3) NOT NULL,
   PRIMARY KEY (seq),
   INDEX idx_order_operation_events_order (order_code, occurred_at),
+  INDEX idx_order_operation_events_order_seq (order_code, seq),
+  INDEX idx_order_operation_events_date_seq (occurred_at, seq),
   CONSTRAINT fk_order_operation_events_operation FOREIGN KEY (order_code)
     REFERENCES order_operations (order_code) ON DELETE CASCADE
 );
@@ -81,6 +83,7 @@ CREATE TABLE IF NOT EXISTS inventory_movements (
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   INDEX idx_inventory_movements_material_date (material_id, created_at),
+  INDEX idx_inventory_movements_order_type (order_code, movement_type),
   CONSTRAINT fk_inventory_movements_material
     FOREIGN KEY (material_id) REFERENCES inventory_materials (id)
     ON DELETE CASCADE

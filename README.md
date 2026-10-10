@@ -36,11 +36,57 @@ Em **Contrato recorrente** (mensal ou anual), as próximas ocorrências são ger
 
 O cliente pode ser cadastrado sem sair do formulário. O sininho avisa sobre contas a receber que vencem em breve ou já venceram. A antecedência é configurada por administrador em **Minha conta › Contas a receber a vencer** (3, 5 ou 7 dias, ou nunca).
 
-**Conciliação bancária** importa extratos OFX 1.x (SGML) e 2.x (XML). O conteúdo é lido como UTF-8 estrito e, só quando inválido, pela codificação declarada no cabeçalho; divergências de codificação ficam registradas no lote. Os registros `SALDO ANTERIOR` e `SALDO TOTAL DISPONÍVEL DIA` são guardados como posições de saldo, fora dos totais e da conciliação. A importação é idempotente por empresa (`COMPANY_SCOPE`, padrão `gmac`), banco, conta e FITID. Uma reimportação informa novas e existentes, e um FITID repetido com dados diferentes vira conflito para revisão, sem substituir nada. O fechamento diário agrupa todas as movimentações da data, e a diferença entre o saldo informado (LEDGERBAL) e o calculado aparece como ressalva, sem ajuste artificial.
+**Conciliação bancária** importa extratos OFX 1.x (SGML) e 2.x (XML). O conteúdo é lido como UTF-8 estrito e, só quando inválido, pela codificação declarada no cabeçalho; divergências de codificação ficam registradas no lote. Os registros `SALDO ANTERIOR` e `SALDO TOTAL DISPONÍVEL DIA` são guardados como posições de saldo, fora dos totais e da conciliação. A importação é idempotente por empresa (`COMPANY_SCOPE`, padrão `gmac`), banco, conta e FITID. Uma reimportação informa novas e existentes, e um FITID repetido com dados diferentes vira conflito para revisão, sem substituir nada. O fechamento diário agrupa todas as movimentações da data, e a diferença entre o saldo informado (LEDGERBAL) e o calculado fica registrada na validação, sem ajuste artificial; o aviso de divergência só aparece acima de R$ 10,00. O aviso de cabeçalho com codificação diferente de um conteúdo UTF-8 válido não é exibido.
 
 A conciliação sugere candidatos apenas com valor exato, ordenados por evidência: CPF/CNPJ e mesma data; CPF/CNPJ dentro da tolerância configurada; nome semelhante; mesma data; e, por último, **Conferir data**: mesmo CPF/CNPJ, mas com data fora da tolerância (até 90 dias). A data do banco é comparada com a data mais próxima entre a baixa e o vencimento. Candidatos empatados são sinalizados, e o vínculo sempre depende de confirmação manual. Um registro financeiro não participa de duas conciliações integrais, e contas conciliadas não podem ser editadas, estornadas, desativadas ou excluídas sem desfazer o vínculo. Os arquivos originais ficam em `server/data/bank-statements/`. Extratos `.ofx` são ignorados pelo Git.
 
 Validação isolada: `node --test tests/bank-statements.test.js tests/receivables-installments.test.js tests/receivables-features.test.js` e, após `npm run build`, `node tests/finance-receivables.browser.mjs`, `node tests/receivables-installments.browser.mjs` e `node tests/receivables-features.browser.mjs`.
+
+**Conciliação bancária com IA** envia o extrato OFX (já interpretado), todas as contas a pagar e a receber ativas e as sugestões do motor de conciliação ao Claude (`claude-opus-5-5`) pela API da Anthropic. O Claude devolve uma página HTML com resumo, gráficos, a classificação de cada movimentação e os próximos passos. Nada é alterado no sistema. O prompt está em `server/aiReconciliation.js` (`SYSTEM_PROMPT`).
+
+- Configure `ANTHROPIC_API_KEY` no `.env` e reinicie o servidor. A chave é criada em [platform.claude.com](https://platform.claude.com) e o uso é cobrado por token, à parte da assinatura do claude.ai. Cada análise mostra os tokens gastos e uma estimativa em dólares.
+- A análise roda em segundo plano no servidor (costuma levar alguns minutos) e a tela acompanha o progresso. Enquanto uma análise está em andamento, outra não pode ser iniciada.
+- A página gerada roda num iframe isolado (`sandbox="allow-scripts"`, sem acesso à sessão do portal) e com CSP que bloqueia qualquer acesso à rede. O servidor injeta nela os dados (`window.GMAC_DADOS`) e o Chart.js local, assim os gráficos são calculados a partir dos números reais, sem depender de CDN.
+- As análises ficam em `server/data/ai-reconciliations/`, fora do Git.
+
+Validação isolada, sem chamar a API: `node --test tests/ai-reconciliation.test.js` e, após `npm run build`, `node tests/ai-reconciliation.browser.mjs`.
+
+## Modelos de proposta
+
+Ao clicar em **Gerar proposta em PDF**, o usuário escolhe um dos quatro modelos usados pelo comercial. Os dados do sistema já vêm preenchidos:
+
+- **Modelo A** (como a cotação 13482): carta com escopo em tópicos e uma única linha de composição, em destaque.
+- **Modelo B** (como a cotação 13357): escopo numerado e composição com cada item e seu valor. Itens com o mesmo grupo (ex.: Obra civil) aparecem juntos, com subtotal.
+- **Nestlé** (planilha FS-3055, como a solicitação 2022906): reproduz a planilha do cliente, com códigos SAP.
+- **Etiqueta** (como a 5319): planilha de preços com todos os serviços e materiais, frete e total.
+
+Os modelos A e B usam um timbrado com a identidade da GMAC: faixa azul com detalhe laranja no topo e no rodapé, logo à esquerda e o título "Proposta Comercial" à direita. O logo é desenhado em vetor, nítido em qualquer zoom ou impressão. O documento é organizado assim:
+
+- **Identificação em duas colunas.** De um lado, cliente, CNPJ, solicitante e aos cuidados de. Do outro, número da cotação, data, validade (com a data final) e empresa emissora. Campos vazios não aparecem.
+- **Identificação fiscal compacta.** CNAE (código de atividade) e NBS (serviço) ou NCM (produto), uma linha cada.
+- **Composição e preço global juntos.** O valor global e o valor por extenso ficam num quadro logo após os itens, com os números alinhados à direita.
+- **Prazos e condições em quadro.** Prazo de entrega, pagamento e validade; o que não for informado aparece como "A combinar".
+- **"Importante" em duas partes.** As condições gerais em tópicos e o fechamento com o técnico responsável e o contato. Os textos são os originais, só com a correção do português. O técnico vem do cadastro da empresa emissora e pode ser trocado no formulário de cada proposta; em branco, a linha não aparece.
+- **Rodapé em todas as páginas.** Endereço, telefone, e-mail, site, número da cotação e "Página X de Y". O telefone tem um selo de WhatsApp clicável (`wa.me`), que abre uma conversa já mencionando a cotação. O número vem do campo "WhatsApp" do cadastro da empresa; em branco, o selo não aparece. Um título de seção nunca fica sozinho no fim da página.
+
+A data, o número da cotação (sequencial, a partir da última emitida) e o valor por extenso são preenchidos automaticamente. A empresa emissora pode ser a GMAC Usinagem ou a GMAC Metalúrgica.
+
+Nas planilhas Nestlé e Etiqueta, as horas e os materiais previstos na oferta são lançados nas linhas correspondentes da tabela de preços. Quando uma correspondência é ambígua, o usuário escolhe a linha, e a escolha fica lembrada. O total do documento passa a ser o valor sugerido no Contas a Receber da OS.
+
+Os preços de cada documento são gravados no momento da geração; mudar a tabela depois não altera PDFs já emitidos. Empresas, tabelas de preço, textos padrão e o catálogo fiscal ficam em **Empresas, tabelas de preço e catálogo fiscal**, na escolha do modelo.
+
+O **catálogo fiscal** é atualizado todo domingo à meia-noite (horário da Bahia), a partir destas fontes:
+
+- CNAE: [API do IBGE](https://servicodados.ibge.gov.br/api/v2/cnae/subclasses);
+- NBS: CSV oficial do MDIC;
+- NCM: BrasilAPI;
+- atividades registradas nos CNPJs das duas empresas: BrasilAPI, com a cnpj.ws como reserva.
+
+Uma fonte fora do ar não apaga a versão anterior, e a tentativa se repete em 6 horas. O catálogo também pode ser atualizado manualmente. Ele fica em `server/data/fiscal-catalog.json`. Para desligar a atualização automática, use `FISCAL_CATALOG_SYNC=off`.
+
+As fontes Arial, Calibri e Berlin Sans do Windows são usadas quando presentes. Fora do Windows, o sistema usa equivalentes de mesmas medidas: Helvetica e Carlito. O título "Proposta Comercial" usa a Montserrat. Carlito e Montserrat têm licença OFL e ficam em `server/assets/fonts`. O logo vetorial fica em `server/proposalBrand.js`.
+
+Validação: `node --test tests/proposal-documents.test.js` e, após `npm run build`, `node tests/proposal-documents.browser.mjs`.
 
 ## Tela de login
 
@@ -96,6 +142,52 @@ As rotas `/api` aceitam ate 200 requisicoes por minuto por IP, somadas entre tod
 O estoque anterior do navegador e copiado para a chave local `gmac-inventory-before-mysql` antes da primeira importacao. Materiais ausentes sao importados para o MySQL; saldos ja existentes no servidor nao sao sobrescritos por caches de outros computadores. Um navegador novo so inicializa o catalogo de demonstracao quando o estoque compartilhado esta vazio. Edicoes e entradas usam os IDs e saldos retornados pelo servidor; a tela consulta o estoque a cada 10 segundos.
 
 Ofertas, conteudo das OS, maquinas, aprovacoes de compra e contas a pagar continuam em `server/data/`, agora compartilhados pela mesma API. A primeira sessao administrativa importa aprovacoes validas do navegador sem apagar as de outros computadores; novas aprovacoes sao persistidas no servidor e consultadas a cada 10 segundos. Portanto, faca backup tanto do MySQL quanto dessa pasta, incluindo anexos. Nao copie a pasta de dados para cada cliente. Este ambiente e de teste em rede confiavel; nao publique a porta do Vite na internet. Se houver bloqueio no Firewall do Windows, permita Node.js/porta TCP 5174 apenas na rede local. Nao desative o firewall.
+
+## Hospedagem (SaveInCloud ou outro servidor)
+
+Em produção, um único processo Node atende a interface e a API no mesmo endereço. A interface é a pasta `dist/`, gerada por `npm run build`; sem ela, só a API responde e o servidor avisa na inicialização.
+
+```bash
+npm install
+npm run build
+npm start
+```
+
+O build precisa das dependências de desenvolvimento (Vite). Se a hospedagem instalar só as de produção, gere o `dist/` antes e envie a pasta junto.
+
+Variáveis de ambiente no servidor, além das do banco e das credenciais:
+
+| Variável | Valor na hospedagem | Para quê |
+| --- | --- | --- |
+| `API_HOST` | `0.0.0.0` | Aceitar conexões de fora do contêiner. O padrão `127.0.0.1` só atende a própria máquina. |
+| `PORT` | a porta que a hospedagem encaminha | Porta do processo Node. |
+| `NODE_ENV` | `production` | Bloqueia o acesso de teste sem senha e deixa a API fechada para outros sites. |
+| `TRUST_PROXY` | `1` com um balanceador na frente | Faz o servidor enxergar o IP real de cada usuário. Com o padrão `loopback`, atrás de um balanceador todos os usuários contam como um só IP no limite de requisições. |
+| `API_RATE_LIMIT` | `200` ou mais | Requisições por minuto por IP. Usuários da mesma rede saem para a internet com o mesmo IP público e dividem esse limite; aumente se aparecer o erro 429. |
+| `CORS_ORIGIN` | vazio | Lista de outros sites autorizados a chamar a API. Vazio, em produção, só o próprio portal chama. |
+
+Confirme no painel da hospedagem a porta encaminhada e quantos proxies ficam à frente do contêiner.
+
+**Desempenho no navegador**
+
+- Respostas de texto (JSON, JavaScript, CSS, HTML) são comprimidas com Brotli ou gzip. Imagens, vídeos, PDFs e planilhas seguem como estão.
+- Arquivos em `dist/assets/` têm o conteúdo no nome e ficam no cache do navegador por um ano; um novo build muda o nome, então nunca ficam desatualizados. As bibliotecas (React, ícones) ficam em arquivos separados do código do portal e continuam em cache entre deploys.
+- `index.html` e `login-media/manifest.json` são sempre confirmados com o servidor. Fontes ficam 30 dias em cache; logos, fotos e vídeos do login, um dia.
+- Os dados da API nunca são guardados por caches intermediários. O navegador confirma a cópia com o servidor a cada consulta e recebe um `304`, sem corpo, quando nada mudou.
+- As consultas periódicas das telas param enquanto a aba está oculta e são refeitas no instante em que ela volta a aparecer.
+- No `localStorage` ficam as preferências de aparência de cada conta (tema, tamanho e tipo de letra) e a última cópia do estoque, usada quando o banco não está configurado. A sessão e o estado das abas ficam no `sessionStorage` e somem ao fechar a aba. Ofertas, OS, clientes e contas a pagar e a receber não são gravados no navegador.
+- A fonte escolhida na conta começa a ser baixada junto com a página, antes dos estilos.
+
+**Segurança**
+
+- Todas as respostas levam `X-Content-Type-Options`, `X-Frame-Options`, `Content-Security-Policy` (`frame-ancestors`, `base-uri`, `form-action`), `Referrer-Policy` e `Permissions-Policy`. Com HTTPS, também `Strict-Transport-Security`.
+- O cabeçalho `X-Powered-By` não é enviado.
+
+**Antes de abrir o portal para a internet**
+
+- Parte das rotas da API (ofertas, OS, estoque, funcionários, máquinas e serviços de mão de obra) ainda não exige sessão, como no uso em rede local. Restrinja o acesso na hospedagem (VPN ou lista de IPs) ou adicione autenticação a essas rotas.
+- Sessões e o limite de requisições ficam na memória do processo: use uma única instância. Reiniciar o servidor exige novo login.
+- `server/data/` guarda ofertas, OS, contas, anexos e extratos. A pasta precisa sobreviver a cada deploy e entrar no backup, junto com o MySQL.
 
 ## Cadastros e Conta
 
