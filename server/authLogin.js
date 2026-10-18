@@ -1,9 +1,10 @@
 import express from 'express'
 import { issueAdminToken } from './accounts.js'
+import { enabled, isProduction } from './envFlags.js'
 import { issueOperatorToken, operatorConfigured, operatorCredentialsMatch } from './operatorAuth.js'
 
 export function testLoginEnabled(env = process.env) {
-  return env.TEST_LOGIN_ENABLED === 'true' && env.NODE_ENV !== 'production'
+  return enabled(env.TEST_LOGIN_ENABLED) && !isProduction(env)
 }
 
 export default function createLoginRouter(accounts, env = process.env) {

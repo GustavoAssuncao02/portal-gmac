@@ -32,6 +32,9 @@ test('temporary login requires explicit opt-in and is always disabled in product
   assert.equal(testLoginEnabled({ TEST_LOGIN_ENABLED: 'false' }), false)
   assert.equal(testLoginEnabled({ TEST_LOGIN_ENABLED: 'true' }), true)
   assert.equal(testLoginEnabled({ TEST_LOGIN_ENABLED: 'true', NODE_ENV: 'production' }), false)
+  // Hosting panels keep what was typed.
+  assert.equal(testLoginEnabled({ TEST_LOGIN_ENABLED: 'True', NODE_ENV: 'Development' }), true)
+  assert.equal(testLoginEnabled({ TEST_LOGIN_ENABLED: 'TRUE', NODE_ENV: 'Production' }), false)
 })
 
 test('empty credentials issue genuine sessions for the correct role in test mode', async (t) => {

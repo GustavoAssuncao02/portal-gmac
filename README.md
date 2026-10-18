@@ -143,7 +143,7 @@ npm install
 npm start
 ```
 
-`dist/` não vai para o GitHub. Com `NODE_ENV=production` (ou `BUILD_ON_START=true`), `npm start` (e o `server.js` da raiz, usado por pm2 e forever) gera a interface antes de subir o servidor sempre que algum arquivo da interface for mais novo que o último build (`scripts/ensure-build.mjs`). Por isso Vite, o plugin do React e o PostCSS ficam em `dependencies`: a hospedagem instala só elas em produção. Fora de produção nada muda: o desenvolvimento segue com Vite e os testes geram o próprio build.
+`dist/` não vai para o GitHub. Com `NODE_ENV=production` (ou `BUILD_ON_START=true`), `npm start` (e o `server.js` da raiz, usado por pm2 e forever) instala as dependências quando faltam ou estão mais velhas que o `package-lock.json` (a hospedagem nem sempre roda `npm install` no deploy) e gera a interface sempre que algum arquivo dela for mais novo que o último build (`scripts/ensure-build.mjs`). As chaves `true`/`production` valem com qualquer caixa (`True`, `Production`), como o painel da hospedagem às vezes grava. Por isso Vite, o plugin do React e o PostCSS ficam em `dependencies`: a hospedagem instala só elas em produção. Fora de produção nada muda: o desenvolvimento segue com Vite e os testes geram o próprio build.
 
 Variáveis de ambiente no servidor, além das do banco e das credenciais:
 

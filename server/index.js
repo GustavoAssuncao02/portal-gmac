@@ -27,12 +27,13 @@ import { ensureInventoryAppearance, inventoryAppearance } from './inventoryAppea
 import { configureWeb, serveInterface, trustProxySetting } from './webServer.js'
 import { startDataBackups } from './dataBackup.js'
 import { dataDirectory } from './dataDirectory.js'
+import { flag, isProduction } from './envFlags.js'
 
 const app = express()
 const port = Number(process.env.PORT || 3002)
 const host = process.env.API_HOST || '127.0.0.1'
 
-const production = process.env.NODE_ENV === 'production'
+const production = isProduction()
 const corsOrigins = String(process.env.CORS_ORIGIN || '').split(',').map((origin) => origin.trim()).filter(Boolean)
 
 app.set('trust proxy', trustProxySetting(process.env.TRUST_PROXY))
@@ -91,7 +92,7 @@ setInterval(() => payablesRouter.sweep().catch((error) => console.error('Falha a
 startDataBackups(dataDirectory)
 setInterval(() => receivablesRouter.sweep().catch((error) => console.error('Falha ao verificar recebimentos:', error.message)), 60000).unref()
 // CNAE, NCM, NBS and the companies' registered activities are refreshed every Sunday at midnight.
-if (process.env.FISCAL_CATALOG_SYNC !== 'off') startFiscalCatalogSchedule()
+if (flag(process.env.FISCAL_CATALOG_SYNC) !== 'off') startFiscalCatalogSchedule()
 
 app.get('/api/health', async (_request, response) => {
   try {
