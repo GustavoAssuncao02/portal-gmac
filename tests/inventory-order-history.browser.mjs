@@ -8,10 +8,10 @@ const fixture = await createWorkflowFixture({ accountsEnv: env })
 const browser = await chromium.launch()
 await mkdir('test-results', { recursive: true })
 try {
-  const offer = (await fixture.request('/offers', 'POST', offerDraft)).data.item
-  await fixture.request(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], stages: ['painting'], kind: 'service' })
-  await fixture.request(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', title: 'Teste', serviceValue: 100, deadline: offer.deadline } })
-  const order = (await fixture.request(`/offers/${offer.id}/accept`, 'POST')).data.item
+  const offer = (await fixture.adminRequest('/offers', 'POST', offerDraft)).data.item
+  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], stages: ['painting'], kind: 'service' })
+  await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', title: 'Teste', serviceValue: 100, deadline: offer.deadline } })
+  const order = (await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')).data.item
   const material = { id: 1, name: 'Inox 304', quantity: 0, minimum: 1, unitPrice: 38.4, icon: 'sheet' }
   const history = [{ id: 1, type: 'exit', date: new Date().toISOString(), quantity: 24, unitPrice: 38.4, balance: 0, destination: 'Utilizado na ordem de servico', order: order.code }]
   for (const viewport of [{ width: 1920, height: 1080 }, { width: 393, height: 852 }]) {

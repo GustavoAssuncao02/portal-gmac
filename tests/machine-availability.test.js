@@ -47,26 +47,26 @@ test('machine API updates status on start, change and pause without altering its
   t.after(() => fixture.close())
   const login = await fixture.request('/auth/login', 'POST', { cpf: '12345678901', password: 'teste123' })
   const headers = { Authorization: `Bearer ${login.data.token}` }
-  const machine = (await fixture.request('/machines', 'POST', { name: 'Torno', type: 'Torno', hourlyRate: 50 }, headers)).data.item
-  const second = (await fixture.request('/machines', 'POST', { name: 'Fresa', type: 'Fresa', hourlyRate: 50 }, headers)).data.item
-  const employee = (await fixture.request('/employees', 'POST', { name: 'Ana', birthDate: '1990-01-01', cpf: '00000000001', email: 'ana@test.invalid', identification: '001' })).data.item
-  const offer = (await fixture.request('/offers', 'POST', offerDraft)).data.item
-  assert.equal((await fixture.request(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], stages: ['turning'], kind: 'service' })).status, 200)
-  assert.equal((await fixture.request(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', deadline: '2026-12-20', serviceValue: 100 } })).status, 200)
-  const accepted = await fixture.request(`/offers/${offer.id}/accept`, 'POST')
+  const machine = (await fixture.adminRequest('/machines', 'POST', { name: 'Torno', type: 'Torno', hourlyRate: 50 }, headers)).data.item
+  const second = (await fixture.adminRequest('/machines', 'POST', { name: 'Fresa', type: 'Fresa', hourlyRate: 50 }, headers)).data.item
+  const employee = (await fixture.adminRequest('/employees', 'POST', { name: 'Ana', birthDate: '1990-01-01', cpf: '00000000001', email: 'ana@test.invalid', identification: '001' }, fixture.admin)).data.item
+  const offer = (await fixture.adminRequest('/offers', 'POST', offerDraft)).data.item
+  assert.equal((await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], stages: ['turning'], kind: 'service' })).status, 200)
+  assert.equal((await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', deadline: '2026-12-20', serviceValue: 100 } })).status, 200)
+  const accepted = await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')
   assert.equal(accepted.status, 201, JSON.stringify(accepted.data))
   const order = accepted.data.item
   const operator = { Authorization: `Bearer ${fixture.operatorToken}` }
   const started = (await fixture.request(`/operations/orders/${order.code}/start`, 'POST', { employeeId: employee.id, machineId: machine.id }, operator)).data
   const session = { sessionId: started.operation.activeSession.id, sessionToken: started.sessionToken }
-  let items = (await fixture.request('/machines')).data.items
+  let items = (await fixture.adminRequest('/machines')).data.items
   assert.equal(items.find((row) => row.id === machine.id).status, 'working')
   assert.equal(items.find((row) => row.id === machine.id).operator, 'Ana')
   assert.equal((await fixture.request(`/operations/orders/${order.code}/machine`, 'POST', { ...session, machineId: second.id }, operator)).status, 200)
-  items = (await fixture.request('/machines')).data.items
+  items = (await fixture.adminRequest('/machines')).data.items
   assert.equal(items.find((row) => row.id === machine.id).status, 'idle')
   assert.equal(items.find((row) => row.id === second.id).status, 'working')
   assert.equal((await fixture.request(`/operations/orders/${order.code}/pause`, 'POST', { ...session, reason: 'Descanso' }, operator)).status, 200)
-  items = (await fixture.request('/machines')).data.items
+  items = (await fixture.adminRequest('/machines')).data.items
   assert.ok(items.every((row) => row.status === 'idle' && row.operator === '\u2014'))
 })

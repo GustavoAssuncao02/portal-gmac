@@ -4,9 +4,14 @@ import { readStore, mutateStore } from './offers.js'
 import { hourReport, localDate, ordersWithOperations, reportRange, workIntervals } from './reportData.js'
 import { activityDateRange } from './employeeActivity.js'
 import { activeSessions } from './operationSessions.js'
+import { requireAdminOrOperator } from './access.js'
 
 export async function machineRows() { return (await readStore()).machines || [] }
-const normalize = (item) => ({ id: item.id || randomUUID(), name: String(item.name || '').trim().slice(0, 160), type: String(item.type || '').slice(0, 100), sector: String(item.sector || '').slice(0, 100), hourlyRate: Math.max(0, Number(item.hourlyRate) || 0), status: 'idle', operator: '\u2014', started: '\u2014', usage: '0h 00min' })
+// A machine may serve more than one sector (the same T\u00eampera for Usinagem and Caldeiraria): `sectors` lists them and
+// `sector` keeps the readable label ("Usinagem e Caldeiraria") for the screens, searches and reports.
+export const machineSectors = (item) => [...new Set((Array.isArray(item.sectors) ? item.sectors : String(item.sector || '').split(/[,;]/)).map((value) => String(value ?? '').trim().slice(0, 100)).filter(Boolean))].slice(0, 10)
+export const sectorLabel = (sectors) => sectors.length > 1 ? `${sectors.slice(0, -1).join(', ')} e ${sectors.at(-1)}` : sectors[0] || ''
+const normalize = (item) => { const sectors = machineSectors(item); return { id: item.id || randomUUID(), name: String(item.name || '').trim().slice(0, 160), type: String(item.type || '').slice(0, 100), sectors, sector: sectorLabel(sectors), hourlyRate: Math.max(0, Number(item.hourlyRate) || 0), status: 'idle', operator: '\u2014', started: '\u2014', usage: '0h 00min' } }
 
 const hoursLabel = (ms) => { const minutes = Math.floor(Math.max(0, ms) / 60000); return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, '0')}min` }
 
@@ -17,7 +22,7 @@ export function machineAvailability(machines, orders, now = Date.now()) {
   const usage = new Map(totals.map((row) => [row.id, row.ms]))
   // Idle today is the time elapsed since midnight in Bahia without the machine in use (overlapping sessions already merged).
   const elapsed = now - range.start
-  const active = orders.flatMap((order) => activeSessions(order.operation)).filter((session) => session?.machineId != null)
+  const active = orders.flatMap((order) => activeSessions(order.operation).map((session) => ({ ...session, orderCode: order.code }))).filter((session) => session?.machineId != null)
   return machines.map((machine) => {
     const sessions = active.filter((session) => String(session.machineId) === String(machine.id))
     const starts = sessions.map((session) => Date.parse(session.machineStartedAt || session.startedAt)).filter(Number.isFinite)
@@ -26,6 +31,8 @@ export function machineAvailability(machines, orders, now = Date.now()) {
       ...machine,
       status: sessions.length ? 'working' : 'idle',
       operator: [...new Set(sessions.map((session) => session.employeeName || 'Operador não identificado'))].join(', ') || '\u2014',
+      // Who holds the machine now (one person at a time): the operator screen shows it as taken.
+      inUseBy: sessions.map((session) => ({ employeeId: session.employeeId ?? null, employeeName: session.employeeName || 'Operador não identificado', orderCode: session.orderCode })),
       started: starts.length ? new Date(Math.min(...starts)).toLocaleTimeString('pt-BR', { timeZone: 'America/Bahia', hour: '2-digit', minute: '2-digit' }) : '\u2014',
       usage: hoursLabel(used),
       usageMs: used,
@@ -56,7 +63,8 @@ export function machineUsageHistory(machineId, orders, range = null, now = Date.
 
 export default function createMachinesRouter(requireAdmin, pool) {
   const router = express.Router()
-  router.get('/machines', async (_request, response, next) => {
+  // The operator account chooses the machine when it starts the work.
+  router.get('/machines', requireAdminOrOperator, async (_request, response, next) => {
     try {
       const store = await readStore()
       const orders = await ordersWithOperations(store.orders, pool)

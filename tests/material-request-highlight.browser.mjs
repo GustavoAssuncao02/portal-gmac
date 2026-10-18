@@ -6,11 +6,11 @@ const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DE
 const fixture = await createWorkflowFixture({ accountsEnv: env })
 const browser = await chromium.launch()
 try {
-  const offer = (await fixture.request('/offers', 'POST', offerDraft)).data.item
+  const offer = (await fixture.adminRequest('/offers', 'POST', offerDraft)).data.item
   const materials = ['Inox selecionado', 'Ferro selecionado'].map((name, index) => ({ id: `material-${index}`, name, quantity: 10, stockStatus: 'unknown', purchaseQuantity: 10 }))
-  await fixture.request(`/offers/${offer.id}/resources`, 'PUT', { materials, laborEntries: [], stages: ['painting'], kind: 'service' })
-  await fixture.request(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', serviceValue: 500, deadline: offer.deadline } })
-  const order = (await fixture.request(`/offers/${offer.id}/accept`, 'POST')).data.item
+  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials, laborEntries: [], stages: ['painting'], kind: 'service' })
+  await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', serviceValue: 500, deadline: offer.deadline } })
+  const order = (await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')).data.item
   // Unrelated requests put the target beyond the first viewport without touching live data.
   await fixture.mutateStore((store) => {
     const unrelated = Array.from({ length: 25 }, (_, index) => ({ ...structuredClone(store.offers[0]), id: `other-${index}`, orderCode: `OTHER-${index}`, resources: { materials: [{ ...materials[0], name: `Outro material ${index}` }] } }))

@@ -11,11 +11,11 @@ for (const device of ['desktop', 'iPhone 15', 'iPhone 15 Pro Max']) {
   page.on('pageerror', (error) => errors.push(error.message))
   page.on('dialog', async (dialog) => { errors.push(dialog.type()); await dialog.dismiss() })
   try {
-    const offer = (await fixture.request('/offers', 'POST', { ...offerDraft, service: 'OS concluida para revisar' })).data.item
-    await fixture.request(`/offers/${offer.id}/resources`, 'PUT', { materials: [{ id: 'm1', name: 'Ferro', detail: '10 mm', quantity: 5, unitPrice: 10 }], laborEntries: [{ id: 'l1', type: 'person', resource: 'Soldador', hours: 2, hourlyRate: 30 }], stages: ['turning', 'painting'], kind: 'service' })
-    await fixture.request(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', title: 'Proposta A', deadline: '2026-12-20', serviceValue: 300, materials: 50, labor: 60, margin: 15, discount: 0, machine: '2 horas', serviceTime: '2 horas' } })
-    const order = (await fixture.request(`/offers/${offer.id}/accept`, 'POST')).data.item
-    const employee = (await fixture.request('/employees', 'POST', { name: 'Ana Teste', cpf: '00000000001', identification: '001', birthDate: '1990-01-01', email: 'ana@example.invalid' })).data.item
+    const offer = (await fixture.adminRequest('/offers', 'POST', { ...offerDraft, service: 'OS concluida para revisar' })).data.item
+    await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [{ id: 'm1', name: 'Ferro', detail: '10 mm', quantity: 5, unitPrice: 10 }], laborEntries: [{ id: 'l1', type: 'person', resource: 'Soldador', hours: 2, hourlyRate: 30 }], stages: ['turning', 'painting'], kind: 'service' })
+    await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', title: 'Proposta A', deadline: '2026-12-20', serviceValue: 300, materials: 50, labor: 60, margin: 15, discount: 0, machine: '2 horas', serviceTime: '2 horas' } })
+    const order = (await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')).data.item
+    const employee = (await fixture.adminRequest('/employees', 'POST', { name: 'Ana Teste', cpf: '00000000001', identification: '001', birthDate: '1990-01-01', email: 'ana@example.invalid' }, fixture.admin)).data.item
     const operatorHeaders = { Authorization: `Bearer ${fixture.operatorToken}` }
     const base = `/operations/orders/${order.code}`
     // Materials still pending must be acknowledged before the work starts.
@@ -84,7 +84,7 @@ for (const device of ['desktop', 'iPhone 15', 'iPhone 15 Pro Max']) {
     await dialog.getByRole('button', { name: 'Reenviar anexos', exact: true }).click()
     await dialog.waitFor({ state: 'detached' })
     await article.getByRole('heading', { name: 'OS revisada pelo administrador', exact: true }).waitFor()
-    let current = (await fixture.request('/operations/orders')).data.items[0]
+    let current = (await fixture.request('/operations/orders', 'GET', undefined, fixture.admin)).data.items[0]
     assert.equal(current.operation.status, 'completed')
     assert.deepEqual(current.operation.stageCounts, { 'stage-1': 8, 'stage-2': 10 })
     assert.equal(current.attachments[0].name, 'revisao.txt')
@@ -93,12 +93,17 @@ for (const device of ['desktop', 'iPhone 15', 'iPhone 15 Pro Max']) {
     await article.getByRole('button', { name: 'Reabrir OS', exact: true }).click()
     await dialog.getByRole('button', { name: 'Cancelar', exact: true }).click()
     await dialog.waitFor({ state: 'detached' })
-    assert.equal((await fixture.request('/operations/orders')).data.items[0].operation.status, 'completed')
+    assert.equal((await fixture.request('/operations/orders', 'GET', undefined, fixture.admin)).data.items[0].operation.status, 'completed')
     await article.getByRole('button', { name: 'Reabrir OS', exact: true }).click()
     await dialog.getByRole('button', { name: 'Reabrir OS', exact: true }).click()
     await dialog.waitFor({ state: 'detached' })
+    // The reopened OS goes back to the panel of services in progress, highlighted so it is easy to find.
+    const reopenedRow = page.locator('.admin-os-table tbody tr.admin-os-row--reopened').filter({ hasText: 'OS revisada pelo administrador' })
+    await reopenedRow.waitFor()
+    assert.equal(await page.getByRole('heading', { name: 'Painel de serviços em andamento' }).count(), 1)
+    await reopenedRow.getByRole('button', { name: 'Ver OS', exact: true }).click()
     await article.locator('.os-status').getByText('Pausado', { exact: true }).waitFor()
-    current = (await fixture.request('/operations/orders')).data.items[0]
+    current = (await fixture.request('/operations/orders', 'GET', undefined, fixture.admin)).data.items[0]
     assert.equal(current.operation.completionAcknowledgedAt, null)
     assert.deepEqual(current.operation.stageCounts, { 'stage-1': 8, 'stage-2': 10 })
     await edit.click()

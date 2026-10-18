@@ -44,7 +44,7 @@ export default function EmployeeActivityModal({ employee, onClose }) {
     if (period === 'date' && !date) { setLoading(false); return () => controller.abort() }
     setLoading(true)
     const query = new URLSearchParams({ period, ...(period === 'date' ? { date } : {}) })
-    fetch(`/api/employees/${encodeURIComponent(employee.id)}/activities?${query}`, { signal: controller.signal })
+    fetch(`/api/employees/${encodeURIComponent(employee.id)}/activities?${query}`, { signal: controller.signal, headers: { Authorization: `Bearer ${window.sessionStorage.getItem('gmac-admin-token') || ''}` } })
       .then(async (response) => {
         const data = await response.json()
         if (!response.ok) throw new Error(data.message || 'Não foi possível carregar o histórico.')
@@ -64,7 +64,7 @@ export default function EmployeeActivityModal({ employee, onClose }) {
     <div className="employee-activity-filters"><label>Período<select aria-label="Período" value={period} onChange={(event) => setPeriod(event.target.value)}>{periods.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>{period === 'date' && <label>Data específica<input type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label>}<span role="status">{loading ? 'Carregando...' : `${items.length} ${items.length === 1 ? 'atividade' : 'atividades'}`}</span></div>
     <div className="employee-activity-content" aria-busy={loading}>
       {error ? <div className="employee-activity-error"><p role="alert">{error}</p><button type="button" onClick={() => setRetry((current) => current + 1)}>Tentar novamente</button></div> : <div className="employee-activity-table-scroll"><table><thead><tr><th>Data e hora</th><th>OS / Projeto</th><th>Atividade</th><th>Detalhes</th></tr></thead><tbody>
-        {loading ? <tr><td colSpan={4} className="employee-activity-empty">Carregando atividades...</td></tr> : items.length ? items.map((event) => <tr key={event.id}><td className="employee-activity-date">{formatMoment(event.at)}</td><td><strong>{event.orderCode}</strong>{event.service && <span>{event.service}</span>}{event.company && <small>{event.company}</small>}</td><td><span className={`employee-activity-type employee-activity-type--${event.type}`}>{labels[event.type] || event.type}</span></td><td>{details(event)}</td></tr>) : <tr><td colSpan={4} className="employee-activity-empty">{period === 'date' && !date ? 'Selecione uma data.' : 'Nenhuma atividade registrada neste período.'}</td></tr>}
+        {loading ? <tr><td colSpan={4} className="employee-activity-empty">Carregando atividades...</td></tr> : items.length ? items.map((event) => <tr key={event.id}><td className="employee-activity-date">{formatMoment(event.at)}{event.originalAt && <small>Horário editado · original: {formatMoment(event.originalAt)}</small>}</td><td><strong>{event.orderCode}</strong>{event.service && <span>{event.service}</span>}{event.company && <small>{event.company}</small>}</td><td><span className={`employee-activity-type employee-activity-type--${event.type}`}>{labels[event.type] || event.type}</span></td><td>{details(event)}</td></tr>) : <tr><td colSpan={4} className="employee-activity-empty">{period === 'date' && !date ? 'Selecione uma data.' : 'Nenhuma atividade registrada neste período.'}</td></tr>}
       </tbody></table></div>}
     </div>
   </dialog>

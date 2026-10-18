@@ -40,7 +40,8 @@ test('recurring accounts can be generated ahead, OS links are validated and the 
     const freight = (await request('/payables', 'POST', { ...base, kind: 'normal', value: '120.50', dueDate: '2026-05-06', orderCode: 'OS-2026-0001', description: 'Frete' })).data.items[0]
     await request(`/payables/${steel.id}/pay`, 'POST', { date: todayBahia(), method: 'pix', interest: '10' })
     const costs = (await request('/payables/order-costs/OS-2026-0001')).data.item
-    assert.deepEqual([costs.valueCents, costs.estimatedCostCents, costs.costCents, costs.paidCostCents, costs.pendingCostCents, costs.marginCents, costs.marginPercent, costs.expectedMarginPercent], [90000, 50000, 53050, 41000, 12050, 36950, 41.1, 25])
+    // The cost planned in the proposal is already posted; the linked accounts are what came up beyond it.
+    assert.deepEqual([costs.valueCents, costs.estimatedCostCents, costs.extraCostCents, costs.costCents, costs.paidCostCents, costs.pendingCostCents, costs.marginCents, costs.marginPercent, costs.expectedMarginPercent], [90000, 50000, 53050, 103050, 41000, 12050, -13050, -14.5, 25])
     assert.deepEqual(costs.payables.map((row) => row.id).sort(), [steel.id, freight.id].sort())
     const list = (await request('/payables/order-costs')).data.items
     assert.equal(list.find((row) => row.code === 'OS-2026-0001').payableCount, 2)

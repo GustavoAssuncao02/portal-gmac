@@ -30,12 +30,12 @@ test('purchase approvals are authenticated, shared, idempotent and preserved whe
 test('material request refusal is authenticated, persistent, idempotent and preserves the OS shortage and quantities', async (t) => {
   const fixture = await createWorkflowFixture()
   t.after(() => fixture.close())
-  const offer = (await fixture.request('/offers', 'POST', offerDraft)).data.item
+  const offer = (await fixture.adminRequest('/offers', 'POST', offerDraft)).data.item
   const materials = [{ id: 'first', name: 'Inox', quantity: 10, purchaseQuantity: 10, unitPrice: 20, stockStatus: 'unknown' }, { id: 'second', name: 'Ferro', quantity: 5, purchaseQuantity: 5, stockStatus: 'unknown' }]
-  await fixture.request(`/offers/${offer.id}/resources`, 'PUT', { materials, laborEntries: [], stages: ['painting'], kind: 'service' })
-  await fixture.request(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', serviceValue: 200, deadline: offer.deadline } })
-  const order = (await fixture.request(`/offers/${offer.id}/accept`, 'POST')).data.item
-  const before = (await fixture.request('/operations/orders')).data.items[0]
+  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials, laborEntries: [], stages: ['painting'], kind: 'service' })
+  await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', serviceValue: 200, deadline: offer.deadline } })
+  const order = (await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')).data.item
+  const before = (await fixture.request('/operations/orders', 'GET', undefined, fixture.admin)).data.items[0]
   const route = `/material-requests/${offer.id}-first/reject`
   const headers = { Authorization: `Bearer ${fixture.adminToken}` }
   assert.equal((await fixture.request(route, 'POST')).status, 401)
@@ -47,8 +47,8 @@ test('material request refusal is authenticated, persistent, idempotent and pres
   assert.equal(rejected.data.item.rejectedBy, 0)
   assert.ok(Number.isFinite(Date.parse(rejected.data.item.rejectedAt)))
   assert.deepEqual((await fixture.request(route, 'POST', {}, headers)).data, rejected.data)
-  const offers = (await fixture.request('/offers')).data.items
-  const orders = (await fixture.request('/operations/orders')).data.items
+  const offers = (await fixture.adminRequest('/offers', 'GET', undefined, fixture.admin)).data.items
+  const orders = (await fixture.request('/operations/orders', 'GET', undefined, fixture.admin)).data.items
   assert.deepEqual(purchaseMaterialRequests(offers, orders).map((request) => request.name), ['Inox', 'Ferro'])
   assert.ok(purchaseMaterialRequests(offers, orders)[0].rejection)
   assert.deepEqual(pendingOrderMaterials(orders[0]), pendingOrderMaterials(order))
@@ -57,7 +57,7 @@ test('material request refusal is authenticated, persistent, idempotent and pres
   assert.deepEqual(offers[0].resources.materials[0].requestRejection, orders[0].resources.materials[0].requestRejection)
   assert.equal((await fixture.request('/material-requests', 'GET', undefined, headers)).data.items[0].status, 'rejected')
   await fixture.mutateStore((store) => { store.offers = [] })
-  assert.deepEqual(purchaseMaterialRequests([], (await fixture.request('/operations/orders')).data.items).map((request) => request.name), ['Inox', 'Ferro'])
+  assert.deepEqual(purchaseMaterialRequests([], (await fixture.request('/operations/orders', 'GET', undefined, fixture.admin)).data.items).map((request) => request.name), ['Inox', 'Ferro'])
   assert.deepEqual((await fixture.request(route, 'POST', {}, headers)).data, rejected.data)
 })
 
@@ -70,5 +70,5 @@ test('materials without shortage cannot be refused and rejection metadata surviv
   const rejected = await fixture.request('/material-requests/offer-pending/reject', 'POST', {}, headers)
   const imported = await fixture.request('/material-requests/import', 'POST', { items: [{ id: 'offer-pending', status: 'purchase-requested' }] }, headers)
   assert.deepEqual(imported.data.items[0], rejected.data.item)
-  assert.equal(purchaseMaterialRequests((await fixture.request('/offers')).data.items, [])[0].rejection.rejectedBy, 0)
+  assert.equal(purchaseMaterialRequests((await fixture.adminRequest('/offers', 'GET', undefined, fixture.admin)).data.items, [])[0].rejection.rejectedBy, 0)
 })

@@ -4,7 +4,7 @@ import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
 
 const modulePath = process.env.PLAYWRIGHT_MODULE
 const { chromium } = await import(modulePath ? pathToFileURL(modulePath).href : 'playwright')
-const fixture = await createWorkflowFixture()
+const fixture = await createWorkflowFixture({ accountsEnv: { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste', DEMO_ADMIN_NAME: 'Gustavo' } })
 const browser = await chromium.launch({ headless: true })
 const page = await browser.newPage({ viewport: { width: 1366, height: 900 } })
 const errors = []
@@ -19,8 +19,8 @@ let maxInFlight = 0
 const waitSaved = () => page.waitForFunction(() => !document.querySelector('.offer-proposal-button')?.disabled)
 
 try {
-  const offer = (await fixture.request('/offers', 'POST', offerDraft)).data.item
-  await fixture.request(`/offers/${offer.id}/resources`, 'PUT', { materials: [{ id: 'material', name: 'Aluminio de teste', detail: 'Chapa', quantity: 5, unitPrice: 20 }], laborEntries: [{ id: 'labor', type: 'person', resource: 'Acabamento', hours: 2, hourlyRate: 100 }], stages: [], kind: 'service' })
+  const offer = (await fixture.adminRequest('/offers', 'POST', offerDraft)).data.item
+  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [{ id: 'material', name: 'Aluminio de teste', detail: 'Chapa', quantity: 5, unitPrice: 20 }], laborEntries: [{ id: 'labor', type: 'person', resource: 'Acabamento', hours: 2, hourlyRate: 100 }], stages: [], kind: 'service' })
   await page.route('**/resources', async (route) => {
     requests++
     inFlight++
@@ -67,7 +67,7 @@ try {
   assert.deepEqual(await page.evaluate(() => window.disabledChanges), [])
   assert.ok(await page.evaluate(() => window.originalOfferFields === document.querySelector('.offer-resource-fields')))
   assert.equal(await form.getByRole('combobox').inputValue(), 'Rascunho preservado')
-  let resources = (await fixture.request('/offers')).data.items.find((item) => item.id === offer.id).resources
+  let resources = (await fixture.adminRequest('/offers', 'GET', undefined, fixture.admin)).data.items.find((item) => item.id === offer.id).resources
   assert.deepEqual(resources.stages, stageKeys)
   assert.equal(resources.kind, 'product')
   assert.equal(resources.materials[0].name, 'Aluminio de teste')
@@ -83,7 +83,7 @@ try {
   await page.getByRole('radio', { name: 'Servi\u00e7o', exact: true }).check()
   await waitSaved()
   assert.equal(await page.getByRole('alert').count(), 0)
-  resources = (await fixture.request('/offers')).data.items.find((item) => item.id === offer.id).resources
+  resources = (await fixture.adminRequest('/offers', 'GET', undefined, fixture.admin)).data.items.find((item) => item.id === offer.id).resources
   assert.deepEqual(resources.stages, stageKeys.slice(1))
   assert.equal(resources.kind, 'service')
   await page.locator('.sidebar').getByRole('button', { name: 'Ofertas e servi\u00e7os', exact: true }).click()

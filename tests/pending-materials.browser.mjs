@@ -2,17 +2,18 @@ import assert from 'node:assert/strict'
 import { mkdir } from 'node:fs/promises'
 import { chromium } from 'playwright'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
+import { enterOperatorCode, startWork } from './operatorEntry.js'
 
 const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Gustavo' }
 const fixture = await createWorkflowFixture({ accountsEnv: env })
 const browser = await chromium.launch()
 await mkdir('test-results', { recursive: true })
 try {
-  const employee = (await fixture.request('/employees', 'POST', { name: 'Ana Teste', cpf: '00000000001', birthDate: '1990-01-01', email: 'ana@example.invalid', identification: '001' })).data.item
-  const offer = (await fixture.request('/offers', 'POST', offerDraft)).data.item
-  await fixture.request(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], stages: ['turning', 'milling', 'painting', 'cut-bend'], kind: 'service' })
-  await fixture.request(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', deadline: offer.deadline, serviceValue: 100 } })
-  const base = (await fixture.request(`/offers/${offer.id}/accept`, 'POST')).data.item
+  const employee = (await fixture.adminRequest('/employees', 'POST', { name: 'Ana Teste', cpf: '00000000001', birthDate: '1990-01-01', email: 'ana@example.invalid', identification: '001' }, fixture.admin)).data.item
+  const offer = (await fixture.adminRequest('/offers', 'POST', offerDraft)).data.item
+  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], stages: ['turning', 'milling', 'painting', 'cut-bend'], kind: 'service' })
+  await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', deadline: offer.deadline, serviceValue: 100 } })
+  const base = (await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')).data.item
   for (const viewport of [{ width: 1920, height: 1080 }, { width: 393, height: 852 }, { width: 430, height: 932 }]) {
     const errors = []
     await fixture.mutateStore((store) => {
@@ -46,13 +47,11 @@ try {
     let starts = 0
     page.on('request', (request) => { if (request.url().endsWith('/start')) starts++ })
     await page.goto(fixture.url)
-    await page.locator('.operator-detail').waitFor()
+    await enterOperatorCode(page, employee.accessCode)
+    await page.locator('.operator-project').first().click()
+    await page.locator('.operator-steps').waitFor()
     async function openWarning() {
-      await page.getByRole('button', { name: 'Trabalhar neste projeto', exact: true }).click()
-      await page.getByRole('combobox', { name: 'Funcion\u00e1rio', exact: true }).selectOption(String(employee.id))
-      await page.getByRole('radio', { name: 'Servi\u00e7o de hora homem', exact: true }).check()
-      await page.getByRole('combobox', { name: 'Servi\u00e7o de hora homem', exact: true }).selectOption({ index: 1 })
-      await page.getByRole('button', { name: 'Iniciar trabalho', exact: true }).click()
+      await startWork(page, 'Serviço', 'Tornearia')
       await page.getByRole('dialog', { name: 'Material pendente', exact: true }).waitFor()
     }
     await openWarning()
@@ -66,7 +65,7 @@ try {
     await page.screenshot({ path: `test-results/pending-material-modal-${viewport.width}.png` })
     await warning.getByRole('button', { name: 'Cancelar', exact: true }).click()
     assert.equal(starts, 0)
-    assert.equal((await fixture.request('/operations/orders')).data.items.find((item) => item.code === 'OS-2026-0006').operation.activeSession, null)
+    assert.equal((await fixture.request('/operations/orders', 'GET', undefined, fixture.admin)).data.items.find((item) => item.code === 'OS-2026-0006').operation.activeSession, null)
     await openWarning()
     await page.keyboard.press('Escape')
     await warning.waitFor({ state: 'detached' })
@@ -76,14 +75,14 @@ try {
       await fixture.mutateStore((store) => { store.orders[0].resources.materials[0].purchaseQuantity = 12 })
       await warning.getByRole('button', { name: 'Sim, iniciar servi\u00e7o', exact: true }).click()
       await page.waitForFunction(() => document.querySelector('.pending-material-total')?.textContent.includes('12 kg'))
-      assert.equal((await fixture.request('/operations/orders')).data.items.find((item) => item.code === 'OS-2026-0006').operation.activeSession, null)
+      assert.equal((await fixture.request('/operations/orders', 'GET', undefined, fixture.admin)).data.items.find((item) => item.code === 'OS-2026-0006').operation.activeSession, null)
     }
     await warning.getByRole('button', { name: 'Sim, iniciar servi\u00e7o', exact: true }).click()
     await warning.waitFor({ state: 'detached' })
-    await page.getByRole('button', { name: 'Pausar trabalho', exact: true }).waitFor()
-    const state = (await fixture.request('/operations/orders')).data.items.find((item) => item.code === 'OS-2026-0006')
+    await page.getByRole('button', { name: /^Pausar trabalho/ }).waitFor()
+    const state = (await fixture.request('/operations/orders', 'GET', undefined, fixture.admin)).data.items.find((item) => item.code === 'OS-2026-0006')
     assert.equal(state.operation.status, 'running')
-    const events = (await fixture.request('/operations/orders/OS-2026-0006/events')).data.items
+    const events = (await fixture.request('/operations/orders/OS-2026-0006/events', 'GET', undefined, { Authorization: `Bearer ${fixture.operatorToken}` })).data.items
     assert.equal(events.length, 1)
     assert.equal(events[0].pendingMaterialsAccepted, true)
     assert.equal(events[0].employeeName, 'Ana Teste')

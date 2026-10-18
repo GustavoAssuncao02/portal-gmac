@@ -6,15 +6,15 @@ import { currentPieceProgress } from '../src/serviceProgress.js'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
 
 async function createOrder(fixture, strictProcess) {
-  const offer = (await fixture.request('/offers', 'POST', { ...offerDraft, quantity: 20 })).data.item
+  const offer = (await fixture.adminRequest('/offers', 'POST', { ...offerDraft, quantity: 20 })).data.item
   const layout = defaultStageLayout()
   const resources = { materials: [], laborEntries: [], stages: ['cut-bend', 'turning', 'painting'], stageLayout: [layout[2], layout[0], layout[1]], kind: 'service' }
   if (strictProcess !== undefined) resources.strictProcess = strictProcess
-  assert.equal((await fixture.request(`/offers/${offer.id}/resources`, 'PUT', resources)).status, 200)
-  const proposed = await fixture.request(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', deadline: offerDraft.deadline, serviceValue: 100, strictProcess: strictProcess !== false ? false : true } })
+  assert.equal((await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', resources)).status, 200)
+  const proposed = await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', deadline: offerDraft.deadline, serviceValue: 100, strictProcess: strictProcess !== false ? false : true } })
   assert.equal(proposed.status, 200)
   assert.equal(proposed.data.item.proposal.strictProcess, strictProcess !== false)
-  const accepted = await fixture.request(`/offers/${offer.id}/accept`, 'POST')
+  const accepted = await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')
   assert.equal(accepted.status, 201)
   return { offer, order: accepted.data.item }
 }
@@ -23,29 +23,29 @@ test('process mode defaults to ordered, persists explicit free mode and validate
   const fixture = await createWorkflowFixture()
   t.after(() => fixture.close())
   assert.equal(serviceDetails().strictProcess, true)
-  const offer = (await fixture.request('/offers', 'POST', offerDraft)).data.item
+  const offer = (await fixture.adminRequest('/offers', 'POST', offerDraft)).data.item
   const route = `/offers/${offer.id}/resources`
   const resources = { materials: [], laborEntries: [], stages: ['painting'], kind: 'service' }
-  assert.equal((await fixture.request(route, 'PUT', resources)).data.item.resources.strictProcess, true)
-  assert.equal((await fixture.request(route, 'PUT', { ...resources, strictProcess: false })).data.item.resources.strictProcess, false)
-  assert.equal((await fixture.request('/offers')).data.items[0].resources.strictProcess, false)
+  assert.equal((await fixture.adminRequest(route, 'PUT', resources)).data.item.resources.strictProcess, true)
+  assert.equal((await fixture.adminRequest(route, 'PUT', { ...resources, strictProcess: false })).data.item.resources.strictProcess, false)
+  assert.equal((await fixture.adminRequest('/offers', 'GET', undefined, fixture.admin)).data.items[0].resources.strictProcess, false)
   // Older clients must not reset a previously saved choice.
-  assert.equal((await fixture.request(route, 'PUT', resources)).data.item.resources.strictProcess, false)
+  assert.equal((await fixture.adminRequest(route, 'PUT', resources)).data.item.resources.strictProcess, false)
   for (const strictProcess of ['false', null, 0, 1, {}, []]) {
-    assert.equal((await fixture.request(route, 'PUT', { ...resources, strictProcess })).status, 400)
+    assert.equal((await fixture.adminRequest(route, 'PUT', { ...resources, strictProcess })).status, 400)
   }
-  assert.equal((await fixture.request('/offers')).data.items[0].resources.strictProcess, false)
+  assert.equal((await fixture.adminRequest('/offers', 'GET', undefined, fixture.admin)).data.items[0].resources.strictProcess, false)
   const { order, offer: acceptedOffer } = await createOrder(fixture, false)
   assert.equal(order.resources.strictProcess, false)
-  assert.equal((await fixture.request(`/offers/${acceptedOffer.id}/resources`, 'PUT', { ...resources, strictProcess: true })).status, 404)
-  assert.equal((await fixture.request('/operations/orders')).data.items.find((item) => item.code === order.code).resources.strictProcess, false)
+  assert.equal((await fixture.adminRequest(`/offers/${acceptedOffer.id}/resources`, 'PUT', { ...resources, strictProcess: true })).status, 404)
+  assert.equal((await fixture.request('/operations/orders', 'GET', undefined, fixture.admin)).data.items.find((item) => item.code === order.code).resources.strictProcess, false)
 })
 
 test('free stages count only pieces processed in every stage and preserve session, quantity and completion protections', async (t) => {
   const fixture = await createWorkflowFixture()
   t.after(() => fixture.close())
   const { order } = await createOrder(fixture, false)
-  const employee = (await fixture.request('/employees', 'POST', { name: 'Ana', birthDate: '1990-01-01', cpf: '00000000001', email: 'ana@example.invalid', identification: '001' })).data.item
+  const employee = (await fixture.adminRequest('/employees', 'POST', { name: 'Ana', birthDate: '1990-01-01', cpf: '00000000001', email: 'ana@example.invalid', identification: '001' }, fixture.admin)).data.item
   const auth = { Authorization: `Bearer ${fixture.operatorToken}` }
   const route = `/operations/orders/${order.code}`
   const started = (await fixture.request(`${route}/start`, 'POST', { employeeId: employee.id }, auth)).data
@@ -77,7 +77,7 @@ test('free stages count only pieces processed in every stage and preserve sessio
 test('default and legacy orders still require pieces to pass the preceding stage', async (t) => {
   const fixture = await createWorkflowFixture()
   t.after(() => fixture.close())
-  const employee = (await fixture.request('/employees', 'POST', { name: 'Ana', birthDate: '1990-01-01', cpf: '00000000001', email: 'ana@example.invalid', identification: '001' })).data.item
+  const employee = (await fixture.adminRequest('/employees', 'POST', { name: 'Ana', birthDate: '1990-01-01', cpf: '00000000001', email: 'ana@example.invalid', identification: '001' }, fixture.admin)).data.item
   const auth = { Authorization: `Bearer ${fixture.operatorToken}` }
   for (const legacy of [false, true]) {
     const { order } = await createOrder(fixture)

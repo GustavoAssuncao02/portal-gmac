@@ -257,6 +257,7 @@
   .offers-table-row > span { display: flex; flex-direction: column; gap: 5px; }
   .offers-table-row > span::before { content: attr(data-label); color: #698097; font-size: 12px; }
   .offer-table-status { width: fit-content; padding: 8px 10px; align-self: end; }
+  .offer-status-cell { justify-items: start; align-self: end; }
   .offer-table-status strong { font-size: 13px; }
   .offer-table-status span { font-size: 12px; }
   .offer-table-actions { flex-wrap: wrap; gap: 8px; }
@@ -275,20 +276,17 @@
   .offer-inline-form input, .offer-inline-form select { width: 100%; }
   .offer-resource-remove { width: 44px; }
   .offer-material-row { grid-template-columns: 30px minmax(0, 1fr) 44px; }
-  .offer-labor-row--header { display: none !important; }
-  .offer-labor-row { grid-template-columns: minmax(0, 1fr) 44px; gap: 12px; padding: 16px 0; font-size: 14px; }
-  .offer-labor-row > * { min-width: 0; padding: 0; overflow-wrap: anywhere; }
-  .offer-labor-row > :not(button) { grid-column: 1; text-align: left; justify-self: start; font-size: 14px; }
-  .offer-labor-row button { grid-column: 2; grid-row: 1; }
-  .offer-labor-row > :nth-child(3)::before { content: 'Horas: '; }
-  .offer-labor-row > :nth-child(4)::before { content: 'Valor/hora: '; }
-  .offer-labor-row > :nth-child(5)::before { content: 'Total: '; }
+  .offer-material-row--labor .material-visual svg { width: 22px; height: 22px; }
+  .offer-material-row--labor > span:nth-child(3)::before { content: 'Tempo: '; }
+  .offer-material-row--labor > span:nth-child(4)::before { content: 'Setor: '; }
+  .offer-material-row--labor > span:nth-child(5)::before { content: 'Valor/hora: '; }
   .offer-process-settings { gap: 18px; }
   .offer-stage-group { padding-left: 8px; }
   .offer-stage-options { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .offer-stage-item { min-width: 0; }
   .offer-stage-item label { min-height: 44px; flex: 1; font-size: 14px; line-height: 1.4; }
-  .offer-stage-drag { width: 44px; min-height: 44px; flex-shrink: 0; }
+  /* The drag handles must not let the finger scroll the page (the general rule for buttons does), or the drag never starts. */
+  .dashboard-shell .offer-stage-drag, .os-history-modal .offer-stage-drag { width: 44px; min-height: 44px; flex-shrink: 0; touch-action: none; }
   .offer-stage-heading h3 { font-size: 16px; }
   .offer-service-field textarea { min-height: 88px; }
   .offer-process-settings .offer-kind-options label { min-height: 44px; font-size: 14px; }

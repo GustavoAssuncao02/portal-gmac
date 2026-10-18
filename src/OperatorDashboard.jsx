@@ -1,17 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeftRight, ChevronDown, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { Users } from 'lucide-react'
 import OperatorProjectInformation from './OperatorProjectInformation.jsx'
 import PendingMaterialsModal from './PendingMaterialsModal.jsx'
 import { pollWhileVisible } from './polling.js'
 import { pendingOrderMaterials } from '../server/pendingMaterials.js'
 import { activeEmployeeNames, activeSessions, activeSince, operationElapsed } from '../server/operationSessions.js'
-import { currentPieceProgress, groupProjectStages } from './serviceProgress.js'
+import StageGroupHeading from './OperatorStageGroup.jsx'
+import PieceTrack, { workingStageKeys, stageCode, stageElapsedMs, minutesLabel } from './PieceTrack.jsx'
+import { currentPieceProgress, groupProjectStages, stageGroupTone, isEmergency, emergenciesFirst } from './serviceProgress.js'
+import { bySector } from './machineSectors.js'
 import './operator.css'
 
-const pauseReasons = ['Descanso', 'Horário de almoço', 'Gilson mandou parar', 'Troca de atividade']
+const pauseReasons = ['Descanso', 'Horário de almoço', 'Jossenilson mandou parar', 'Troca de atividade']
 const statusLabels = { waiting: 'Aguardando', running: 'Em execução', paused: 'Pausado', finalizing: 'Finalizando', completed: 'Concluído' }
 const eventLabels = { started: 'Iniciou o trabalho', resumed: 'Retomou o trabalho', paused: 'Pausou o trabalho', machine_changed: 'Trocou de máquina', labor_service_changed: 'Trocou de serviço de hora homem', resource_changed: 'Trocou entre máquina e serviço', session_ended: 'Sessão encerrada na conclusão', stage_progress: 'Registrou peças', completed: 'Concluiu a OS', completion_acknowledged: 'Conclusão confirmada no painel', admin_interrupted: 'Sessão encerrada pelo admin', stages_configured: 'Etapas configuradas', order_edited: 'OS editada pelo admin', order_reopened: 'OS reaberta pelo admin' }
-const resourceTypes = [['machine', 'Máquina'], ['labor-service', 'Serviço de hora homem']]
 
 async function request(url, options = {}) {
   const response = await fetch(url, options)
@@ -21,6 +23,7 @@ async function request(url, options = {}) {
     error.status = response.status
     error.code = data.code
     error.pendingMaterials = data.pendingMaterials
+    error.busyOrder = data.busyOrder
     throw error
   }
   return data
@@ -71,6 +74,22 @@ function writeSessions(code, sessions) {
 
 function rememberSession(code, id, token) { writeSessions(code, { ...savedSessions(code), [id]: token }) }
 
+// The operator identified by code on the shared account: { id, name, identification }.
+export const operatorEmployeeKey = 'gmac-operator-employee'
+
+function savedEmployee() {
+  try { return JSON.parse(window.sessionStorage.getItem(operatorEmployeeKey) || 'null') } catch { return null }
+}
+
+function rememberEmployee(employee) {
+  try {
+    if (employee) window.sessionStorage.setItem(operatorEmployeeKey, JSON.stringify(employee))
+    else window.sessionStorage.removeItem(operatorEmployeeKey)
+  } catch { /* armazenamento indisponível */ }
+}
+
+const initials = (name) => { const words = String(name || '').trim().split(/\s+/); return [words[0], words.length > 1 ? words.at(-1) : ''].map((word) => word?.[0] || '').join('').toUpperCase() || 'OP' }
+
 function forgetSessions(code, ids) {
   const sessions = savedSessions(code)
   for (const id of ids) delete sessions[id]
@@ -79,23 +98,25 @@ function forgetSessions(code, ids) {
 
 export default function OperatorDashboard({ token, onLogout }) {
   const [orders, setOrders] = useState([])
-  const [employees, setEmployees] = useState([])
+  const [employee, setEmployee] = useState(savedEmployee)
+  const [entering, setEntering] = useState(false)
+  const [accessCode, setAccessCode] = useState('')
   const [machines, setMachines] = useState([])
   const [laborServices, setLaborServices] = useState([])
   const [resourceType, setResourceType] = useState('')
+  const [stageChoice, setStageChoice] = useState('')
   const [resourceId, setResourceId] = useState('')
   const [selectedCode, setSelectedCode] = useState(null)
-  const [selectedWorker, setSelectedWorker] = useState(null)
   const [dialogSessionId, setDialogSessionId] = useState(null)
   const [pendingStage, setPendingStage] = useState(null)
   const [completedBy, setCompletedBy] = useState('')
-  const [projectsCollapsed, setProjectsCollapsed] = useState(false)
+  const [picking, setPicking] = useState(false)
   const detailHeading = useRef(null)
   const [filter, setFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [dialog, setDialog] = useState(null)
   const [pendingStart, setPendingStart] = useState(null)
-  const [employeeId, setEmployeeId] = useState('')
+  const [switchStart, setSwitchStart] = useState(null)
   const [pauseReason, setPauseReason] = useState('')
   const [stageQuantity, setStageQuantity] = useState({})
   const [events, setEvents] = useState([])
@@ -105,11 +126,10 @@ export default function OperatorDashboard({ token, onLogout }) {
 
   async function refresh(signal) {
     try {
-      const [orderResult, employeeResult] = await Promise.all([request('/api/operations/operator/orders', { signal, cache: 'no-store', headers: { Authorization: `Bearer ${token}` } }), request('/api/employees', { signal, cache: 'no-store' })])
+      const orderResult = await request('/api/operations/operator/orders', { signal, cache: 'no-store', headers: { Authorization: `Bearer ${token}` } })
       if (signal?.aborted) return
       setOrders(orderResult.items)
-      setEmployees(employeeResult.items)
-      setSelectedCode((current) => orderResult.items.some((order) => order.code === current) ? current : orderResult.items[0]?.code || null)
+      setSelectedCode((current) => orderResult.items.some((order) => order.code === current) ? current : null)
       setError('')
     } catch (caught) {
       if (signal?.aborted) return
@@ -120,7 +140,7 @@ export default function OperatorDashboard({ token, onLogout }) {
 
   async function refreshEvents(code) {
     if (!code) return setEvents([])
-    try { setEvents((await request(`/api/operations/orders/${encodeURIComponent(code)}/events`)).items) } catch (caught) { setError(caught.message) }
+    try { setEvents((await request(`/api/operations/orders/${encodeURIComponent(code)}/events`, { headers: { Authorization: `Bearer ${token}` } })).items) } catch (caught) { if (caught.status === 401) onLogout(); else setError(caught.message) }
   }
 
   useEffect(() => {
@@ -133,8 +153,8 @@ export default function OperatorDashboard({ token, onLogout }) {
       finally { updating = false }
     }
     const resume = () => { if (document.visibilityState !== 'hidden') update() }
-    request('/api/machines', { signal: controller.signal }).then((data) => { if (!controller.signal.aborted) setMachines(data.items) }).catch((caught) => { if (!controller.signal.aborted) setError(caught.message) })
-    request('/api/labor-services', { signal: controller.signal }).then((data) => { if (!controller.signal.aborted) setLaborServices(data.items) }).catch((caught) => { if (!controller.signal.aborted) setError(caught.message) })
+    request('/api/machines', { signal: controller.signal, headers: { Authorization: `Bearer ${token}` } }).then((data) => { if (!controller.signal.aborted) setMachines(data.items) }).catch((caught) => { if (!controller.signal.aborted) setError(caught.message) })
+    request('/api/labor-services', { signal: controller.signal, headers: { Authorization: `Bearer ${token}` } }).then((data) => { if (!controller.signal.aborted) setLaborServices(data.items) }).catch((caught) => { if (!controller.signal.aborted) setError(caught.message) })
     update()
     const stopPolling = pollWhileVisible(update, 10000)
     const clock = window.setInterval(() => setNow(Date.now()), 1000)
@@ -157,10 +177,9 @@ export default function OperatorDashboard({ token, onLogout }) {
   }, [selectedCode])
 
   const selected = orders.find((order) => order.code === selectedCode)
-  const listCollapsed = projectsCollapsed && Boolean(selected)
   useEffect(() => {
-    if (listCollapsed) detailHeading.current?.focus({ preventScroll: true })
-  }, [listCollapsed, selectedCode])
+    if (selected) detailHeading.current?.focus({ preventScroll: true })
+  }, [selectedCode, picking])
   const operation = selected?.operation
   const stageGroups = groupProjectStages(operation?.stages)
   const sessions = activeSessions(operation)
@@ -168,37 +187,49 @@ export default function OperatorDashboard({ token, onLogout }) {
   const ownedSessions = sessions.filter((session) => credentials[session.id])
   const credentialFor = (session) => ({ sessionId: session.id, sessionToken: credentials[session.id] })
   const dialogSession = sessions.find((session) => session.id === dialogSessionId)
-  const workingEmployeeIds = new Set(sessions.map((session) => String(session.employeeId)))
+  const mySession = employee ? sessions.find((session) => String(session.employeeId) === String(employee.id)) : null
+  const myCredential = Boolean(mySession && credentials[mySession.id])
+  const chosenResource = (resourceType === 'machine' ? machines : resourceType === 'labor-service' ? laborServices : []).find((item) => String(item.id) === resourceId)
+  const currentResource = mySession ? { type: mySession.machineId != null ? 'machine' : 'labor-service', id: String(mySession.machineId ?? mySession.laborServiceId ?? '') } : { type: resourceType, id: resourceId }
   const currentSessionStart = activeSince(operation)
+  // The stage this operator works on: theirs while working; before starting, the one chosen or the first unfinished.
+  const firstOpenStage = operation?.stages?.find((stage) => Number(operation.stageCounts[stage.key] || 0) < Number(selected?.quantity))?.key || operation?.stages?.[0]?.key || ''
+  const chosenStage = mySession ? mySession.stageKey || '' : stageChoice || firstOpenStage
   const visible = orders.filter((order) => {
     const query = search.trim().toLocaleLowerCase()
     return (filter === 'all' ? order.operation.status !== 'completed' : order.operation.status === filter) && (!query || [order.service, order.company, order.code, order.labelNumber].some((value) => String(value || '').toLocaleLowerCase().includes(query)))
   })
+  const isMine = (order) => Boolean(employee) && activeSessions(order.operation).some((session) => String(session.employeeId) === String(employee.id))
+  const mine = emergenciesFirst(visible.filter(isMine))
+  const others = emergenciesFirst(visible.filter((order) => !isMine(order)))
+  const projectCard = (order) => <button className={`operator-project${isMine(order) ? " operator-project--mine" : ""}${isEmergency(order) ? ' operator-project--emergency' : ''}`} type="button" key={order.code} onClick={() => openOrder(order.code)}><div className="operator-project-visual">⚙</div><div className="operator-project-content"><div className="operator-project-top"><strong>{order.service}</strong><span className={`operator-status operator-status--${order.operation.status}`}>{statusLabels[order.operation.status]}</span></div><span>{order.company}</span><small>{order.code}{order.labelNumber ? ` · Etiqueta ${order.labelNumber}` : ''}{isEmergency(order) && <> · <span className="os-emergency-label">Emergencial</span></>}</small><div className="operator-project-bottom"><div><span>Etapa atual</span><strong>{currentStage(order)}</strong></div><div><span>Prazo</span><strong>{formatDate(order.deadline)}</strong></div><div><span>Produzido/total</span><strong>{currentPieceProgress(order.operation, order.quantity).completedPieces}/{order.quantity}</strong></div><div><span>Progresso</span><strong>{order.operation.progress}%</strong><i><b style={{ width: `${order.operation.progress}%` }} /></i></div></div></div></button>
   const activeCount = orders.filter((order) => order.operation.status !== 'completed').length
   const runningCount = orders.filter((order) => order.operation.status === 'running' || order.operation.status === 'finalizing').length
   const totalMs = orders.reduce((sum, order) => sum + operationElapsed(order.operation, now), 0)
   const soonCount = orders.filter((order) => { const days = (Date.parse(`${order.deadline}T23:59:59-03:00`) - now) / 86400000; return order.operation.status !== 'completed' && days >= 0 && days <= 3 }).length
 
-  // Collapses the worker actions once that employee is no longer working on the selected OS.
-  // While an action is saving, the list may not include a session that has just started.
-  useEffect(() => {
-    if (!busy && selectedWorker && !sessions.some((session) => session.id === selectedWorker)) setSelectedWorker(null)
-  }, [busy, selectedWorker, sessions.map((session) => session.id).join()])
 
   async function action(url, body, after) {
     setBusy(true)
     setError('')
     try {
       const result = await request(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) })
-      after?.(result)
+      const next = after?.(result)
       await refresh()
       await refreshEvents(selectedCode)
-      setDialog(null)
+      setDialog(next || null)
     } catch (caught) {
       if (caught.status === 401) onLogout()
       else if (caught.code === 'PENDING_MATERIALS') {
-        setPendingStart({ code: selectedCode, materials: caught.pendingMaterials })
+        setPendingStart({ code: selectedCode, materials: caught.pendingMaterials, switchFrom: body?.switchFrom })
         setDialog('pending-materials')
+        setError('')
+      }
+      else if (caught.code === 'WORKING_ELSEWHERE') {
+        // The operator started on another OS after this screen was loaded.
+        await refresh()
+        setSwitchStart({ code: selectedCode, fromCode: caught.busyOrder?.code, fromService: caught.busyOrder?.service })
+        setDialog('switch-order')
         setError('')
       }
       else if (caught.code === 'COMPLETED_BY_REQUIRED') {
@@ -208,6 +239,13 @@ export default function OperatorDashboard({ token, onLogout }) {
         setDialog('completed-by')
         setError('')
       }
+      else if (caught.code === 'MACHINE_BUSY') {
+        // Someone took the machine after the list was loaded: show who, and refresh the list of machines.
+        setError(caught.message)
+        setResourceType('')
+        setResourceId('')
+        await loadResources()
+      }
       else setError(caught.message)
     }
     finally { setBusy(false) }
@@ -215,32 +253,86 @@ export default function OperatorDashboard({ token, onLogout }) {
 
   async function loadResources() {
     try {
-      const [machineResult, serviceResult] = await Promise.all([request('/api/machines', { cache: 'no-store' }), request('/api/labor-services', { cache: 'no-store' })])
+      const [machineResult, serviceResult] = await Promise.all([request('/api/machines', { cache: 'no-store', headers: { Authorization: `Bearer ${token}` } }), request('/api/labor-services', { cache: 'no-store', headers: { Authorization: `Bearer ${token}` } })])
       setMachines(machineResult.items)
       setLaborServices(serviceResult.items)
     } catch (caught) { setError(caught.message) }
   }
 
-  function begin(confirmed) {
-    if (!selected || !employeeId) return setError('Selecione o seu nome para iniciar o trabalho.')
+  function pressKey(key) {
+    if (busy) return
+    setError('')
+    if (key === 'back') setAccessCode((current) => current.slice(0, -1))
+    else setAccessCode((current) => current.length < 4 ? current + key : current)
+  }
+
+  useEffect(() => {
+    if (employee || !entering) return undefined
+    const typed = (event) => {
+      if (/^\d$/.test(event.key)) pressKey(event.key)
+      else if (event.key === 'Backspace') pressKey('back')
+      else if (event.key === 'Enter' && accessCode.length === 4) identify()
+      else if (event.key === 'Escape') { setEntering(false); setAccessCode(''); setError('') }
+    }
+    window.addEventListener('keydown', typed)
+    return () => window.removeEventListener('keydown', typed)
+  })
+
+  async function identify(event) {
+    event?.preventDefault()
+    if (busy || accessCode.length !== 4) return
+    setBusy(true)
+    setError('')
+    try {
+      const result = await request('/api/operations/operator/identify', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ code: accessCode }) })
+      rememberEmployee(result.employee)
+      // Work this operator already has open (started on another device or in a closed tab) becomes theirs here too.
+      for (const session of result.sessions || []) rememberSession(session.orderCode, session.sessionId, session.sessionToken)
+      setEmployee(result.employee)
+      setEntering(false)
+      setAccessCode('')
+    } catch (caught) {
+      if (caught.status === 401) onLogout()
+      else { setAccessCode(''); setError(caught.message) }
+    } finally { setBusy(false) }
+  }
+
+  // Leaves the identified operator; the shared account stays signed in for the next one.
+  function switchEmployee() {
+    rememberEmployee(null)
+    setEmployee(null)
+    setDialog(null)
+    openOrder(null)
+  }
+
+  // `confirmed` carries what the operator already accepted: the switch from another OS and/or the pending materials.
+  function begin(confirmed = {}) {
+    if (!selected || !employee) return setError('Entre com o seu código para iniciar o trabalho.')
     if (!resourceType || !resourceId) return setError(resourceType === 'labor-service' ? 'Selecione o serviço de hora homem.' : resourceType === 'machine' ? 'Selecione a máquina.' : 'Selecione se vai usar uma máquina ou um serviço de hora homem.')
-    if (confirmed?.code && confirmed.code !== selected.code) {
+    if (confirmed.code && confirmed.code !== selected.code) {
       setDialog(null)
       return setError('O projeto selecionado mudou. Selecione novamente a OS para iniciar o trabalho.')
     }
+    // One OS at a time: working on another one, the operator confirms the change before starting here.
+    const elsewhere = orders.find((order) => order.code !== selected.code && activeSessions(order.operation).some((session) => String(session.employeeId) === String(employee.id)))
+    if (elsewhere && confirmed.switchFrom !== elsewhere.code) {
+      setSwitchStart({ code: selected.code, fromCode: elsewhere.code, fromService: elsewhere.service })
+      setError('')
+      return setDialog('switch-order')
+    }
     const pending = pendingOrderMaterials(selected)
-    if (pending.length && confirmed?.code !== selected.code) {
-      setPendingStart({ code: selected.code, materials: pending })
+    if (pending.length && !confirmed.materials) {
+      setPendingStart({ code: selected.code, materials: pending, switchFrom: confirmed.switchFrom })
       setError('')
       return setDialog('pending-materials')
     }
     const code = selected.code
-    action(`/api/operations/orders/${encodeURIComponent(code)}/start`, { employeeId, machineId: resourceType === 'machine' ? resourceId : null, laborServiceId: resourceType === 'labor-service' ? resourceId : null, ...(confirmed?.code === code ? { pendingMaterialsConfirmation: confirmed.materials.map((material) => [material.key, material.quantity]) } : {}) }, (result) => {
+    action(`/api/operations/orders/${encodeURIComponent(code)}/start`, { employeeId: employee.id, machineId: resourceType === 'machine' ? resourceId : null, laborServiceId: resourceType === 'labor-service' ? resourceId : null, stageKey: chosenStage || undefined, ...(confirmed.materials ? { pendingMaterialsConfirmation: confirmed.materials.map((material) => [material.key, material.quantity]) } : {}), ...(confirmed.switchFrom ? { switchFrom: confirmed.switchFrom } : {}) }, (result) => {
       rememberSession(code, result.session.id, result.sessionToken)
-      setSelectedWorker(result.session.id)
-      setEmployeeId('')
+      for (const item of result.switched || []) forgetSessions(item.orderCode, [item.sessionId])
       setResourceType('')
       setResourceId('')
+      setSwitchStart(null)
     })
   }
 
@@ -273,9 +365,11 @@ export default function OperatorDashboard({ token, onLogout }) {
     // Any session started in this browser authorizes the record; the event is credited to the selected employee.
     const credential = credentialFor(worker && credentials[worker.id] ? worker : ownedSessions[0])
     setPendingStage({ stage, quantity })
-    action(`/api/operations/orders/${encodeURIComponent(selected.code)}/stages/${stage.key}`, { quantity, ...credential, ...(worker ? { completedBySessionId: worker.id } : {}) }, () => {
+    action(`/api/operations/orders/${encodeURIComponent(selected.code)}/stages/${stage.key}`, { quantity, ...credential, ...(worker ? { completedBySessionId: worker.id } : {}) }, (result) => {
       setStageQuantity((current) => ({ ...current, [stage.key]: 1 }))
       setPendingStage(null)
+      // The last piece of the last stage: offer to complete the service right away.
+      if (operation.progress < 100 && result.operation?.progress >= 100) return 'complete'
     })
   }
 
@@ -286,31 +380,38 @@ export default function OperatorDashboard({ token, onLogout }) {
     registerStage(pendingStage.stage, worker)
   }
 
-  // One dialog for both kinds: it opens on what the employee is using now and lets them move to the other kind.
-  async function openResourceChange(session) {
-    const type = session.machineId != null ? 'machine' : session.laborServiceId != null ? 'labor-service' : ''
-    setDialogSessionId(session.id)
-    setResourceType(type)
-    setResourceId(String((type === 'machine' ? session.machineId : type === 'labor-service' ? session.laborServiceId : '') ?? ''))
-    setError('')
-    setDialog('resource')
-    await loadResources()
-  }
-
-  function changeResource() {
-    if (!selected || !dialogSession || !credentials[dialogSession.id]) return
-    if (!resourceType || !resourceId) return setError(resourceType === 'labor-service' ? 'Selecione o serviço de hora homem.' : 'Selecione a máquina.')
-    action(`/api/operations/orders/${encodeURIComponent(selected.code)}/resource`, { resourceType, resourceId, ...credentialFor(dialogSession) }, () => { setResourceType(''); setResourceId('') })
-  }
-
-  async function openStart() {
-    setError('')
-    setEmployeeId('')
-    const suggested = selected?.resources?.laborEntries?.filter((row) => row.type === 'person' && row.laborServiceId) || []
+  // An OS that plans a single labor service comes with it already chosen, while that service is still registered.
+  function openOrder(code) {
+    const suggested = orders.find((order) => order.code === code)?.resources?.laborEntries?.filter((row) => row.type === 'person' && laborServices.some((item) => String(item.id) === String(row.laborServiceId))) || []
+    setSelectedCode(code)
+    setPicking(false)
     setResourceType(suggested.length === 1 ? 'labor-service' : '')
+    setStageChoice('')
     setResourceId(suggested.length === 1 ? String(suggested[0].laborServiceId) : '')
-    setDialog('start')
+    setError('')
+  }
+
+  async function openPicker() {
+    setError('')
+    setPicking(true)
     await loadResources()
+  }
+
+  // While working, a new choice moves the running session; before starting, it waits for "Iniciar trabalho".
+  function pickResource(type, id) {
+    if (myCredential) return action(`/api/operations/orders/${encodeURIComponent(selected.code)}/resource`, { resourceType: type, resourceId: String(id), ...credentialFor(mySession) }, () => { setPicking(false) })
+    setResourceType(type)
+    setResourceId(String(id))
+    setPicking(false)
+    setError('')
+  }
+
+  // Before starting it only marks where the work begins; while working it moves the session to that stage.
+  function pickStage(stageKey) {
+    if (!selected || stageKey === chosenStage) return
+    if (myCredential) return action(`/api/operations/orders/${encodeURIComponent(selected.code)}/work-stage`, { stageKey, ...credentialFor(mySession) })
+    setStageChoice(stageKey)
+    setError('')
   }
 
   function complete() {
@@ -328,102 +429,117 @@ export default function OperatorDashboard({ token, onLogout }) {
     onLogout()
   }
 
-  const resourceFields = (prefix) => {
-    const options = resourceType === 'machine' ? machines : laborServices
-    const label = resourceType === 'machine' ? `${prefix === 'new' ? 'Nova máquina' : 'Máquina'}` : `${prefix === 'new' ? 'Novo serviço' : 'Serviço de hora homem'}`
-    return <>
-      <fieldset className="operator-resource-type" disabled={busy}><legend>{prefix === 'new' ? 'Trocar para' : 'Recurso utilizado'}</legend>
-        {resourceTypes.map(([key, text]) => <label key={key}><input type="radio" name={`operator-resource-${prefix}`} value={key} checked={resourceType === key} onChange={() => { setResourceType(key); setResourceId(prefix === 'new' ? String((key === 'machine' ? dialogSession?.machineId : dialogSession?.laborServiceId) ?? '') : ''); setError('') }} />{text}</label>)}
-      </fieldset>
-      {resourceType && <label>{label}<select aria-label={label} value={resourceId} onChange={(event) => { setResourceId(event.target.value); setError('') }}><option value="">{resourceType === 'machine' ? 'Selecione a máquina' : 'Selecione o serviço'}</option>{options.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
-    </>
-  }
 
-  const sameResource = dialogSession && String((resourceType === 'machine' ? dialogSession.machineId : dialogSession.laborServiceId) ?? '') === resourceId && (resourceType === 'machine' ? dialogSession.laborServiceId == null : dialogSession.machineId == null)
+  if (!employee) return <div className="operator-app">
+    <aside className="operator-sidebar">
+      <div className="operator-logo"><img src="/images/gmac-logo-transparent.png" alt="GMAC Metalúrgica" /></div>
+      <nav><span className="operator-nav-item operator-nav-item--active">▣ <b>Entrar</b></span></nav>
+      <div className="operator-sidebar-bottom"><span className="operator-avatar">OP</span><div><strong>Operador</strong><small>Conta compartilhada</small></div><button type="button" onClick={logout} title="Sair">↪</button></div>
+    </aside>
+    <main className="operator-main operator-entry">
+      <section className="operator-entry-card" aria-labelledby="operator-entry-title">
+        <h1 id="operator-entry-title">Projetos em andamento</h1>
+        <p>{entering ? 'Digite o seu código de 4 dígitos.' : 'Toque em Entrar e digite o seu código para ver as OS.'}</p>
+        {error && <p className="operator-error" role="alert">{error}</p>}
+        {entering ? <form onSubmit={identify} aria-label="Código do operador">
+          <div className="operator-code-dots" role="status" aria-label={`${accessCode.length} de 4 dígitos digitados`}>{[0, 1, 2, 3].map((index) => <span key={index} className={index < accessCode.length ? 'filled' : ''} />)}</div>
+          <div className="operator-keypad">
+            {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((key) => <button key={key} type="button" disabled={busy} onClick={() => pressKey(key)}>{key}</button>)}
+            <button type="button" className="operator-keypad-back" disabled={busy || !accessCode} onClick={() => pressKey('back')}>Apagar</button>
+            <button type="button" disabled={busy} onClick={() => pressKey('0')}>0</button>
+            <button type="submit" className="operator-keypad-ok" disabled={busy || accessCode.length !== 4}>{busy ? '...' : 'OK'}</button>
+          </div>
+          <button className="operator-entry-cancel" type="button" disabled={busy} onClick={() => { setEntering(false); setAccessCode(''); setError('') }}>Cancelar</button>
+        </form> : <button className="operator-primary" type="button" onClick={() => { setEntering(true); setError('') }}>Entrar</button>}
+      </section>
+    </main>
+  </div>
 
   return <div className="operator-app">
     <aside className="operator-sidebar">
       <div className="operator-logo"><img src="/images/gmac-logo-transparent.png" alt="GMAC Metalúrgica" /></div>
       <nav><span className="operator-nav-item operator-nav-item--active">▣ <b>Projetos em andamento</b></span></nav>
-      <div className="operator-sidebar-bottom"><span className="operator-avatar">OP</span><div><strong>Operador</strong><small>Conta compartilhada</small></div><button type="button" onClick={logout} title="Sair">↪</button></div>
+      <div className="operator-sidebar-bottom"><span className="operator-avatar">{initials(employee.name)}</span><div><strong>{employee.name}</strong><small>Conta compartilhada</small></div><button type="button" onClick={switchEmployee} title="Trocar operador" aria-label="Trocar operador"><Users size={14} aria-hidden="true" /></button><button type="button" onClick={logout} title="Sair">↪</button></div>
     </aside>
     <main className="operator-main">
-      {dialog === 'info' && selected ? <OperatorProjectInformation order={selected} events={events} now={now} onBack={() => setDialog(null)} statusLabels={statusLabels} eventLabels={eventLabels} formatDuration={formatDuration} /> : <>
+      {dialog === 'info' && selected ? <OperatorProjectInformation order={selected} token={token} events={events} now={now} onBack={() => setDialog(null)} statusLabels={statusLabels} eventLabels={eventLabels} formatDuration={formatDuration} /> : <>
       {error && <p className="operator-error" role="alert">{error}</p>}
-      <div className={`operator-layout ${listCollapsed ? 'operator-layout--focused' : ''}`}>
-        <div className={`operator-projects ${listCollapsed ? 'operator-projects--collapsed' : ''}`}>
-          <button className="operator-projects-toggle" type="button" disabled={!selected} aria-label={listCollapsed ? 'Mostrar projetos' : 'Recolher projetos'} title={listCollapsed ? 'Mostrar projetos' : 'Recolher projetos'} aria-expanded={!listCollapsed} aria-controls="operator-projects-panel" onClick={() => setProjectsCollapsed((current) => !current)}>{listCollapsed ? <PanelLeftOpen size={20} aria-hidden="true" /> : <PanelLeftClose size={20} aria-hidden="true" />}{listCollapsed && <span>Projetos</span>}</button>
-          {listCollapsed && <span className="operator-projects-count" aria-label={`${activeCount} projetos ativos`} title={`${activeCount} projetos ativos`}>{activeCount}</span>}
-          <div id="operator-projects-panel" hidden={listCollapsed}>
-          <header className="operator-header"><div><h1>Projetos em andamento</h1><p>Acompanhe os projetos ativos e registre o trabalho realizado.</p></div><label className="operator-search">⌕ <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por projeto, cliente ou código..." /></label></header>
-          <div className="operator-filters">{[['all', 'Todos'], ['waiting', 'Aguardando'], ['running', 'Em execução'], ['paused', 'Pausado'], ['finalizing', 'Finalizando']].map(([key, label]) => <button className={filter === key ? 'active' : ''} type="button" key={key} onClick={() => setFilter(key)}><span className={`operator-dot operator-dot--${key}`} />{label}</button>)}</div>
+      {!selected ? <>
+        <header className="operator-header"><div><h1>Selecione uma OS</h1><p>Toque na OS em que você vai trabalhar.</p></div><label className="operator-search">⌕ <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por projeto, cliente ou código..." /></label></header>
+        <div className="operator-filters">{[['all', 'Todos'], ['waiting', 'Aguardando'], ['running', 'Em execução'], ['paused', 'Pausado'], ['finalizing', 'Finalizando']].map(([key, label]) => <button className={filter === key ? 'active' : ''} type="button" key={key} onClick={() => setFilter(key)}><span className={`operator-dot operator-dot--${key}`} />{label}</button>)}</div>
         <section className="operator-project-list" aria-label="Projetos abertos">
-          {visible.length ? visible.map((order) => <button className={`operator-project ${selectedCode === order.code ? 'operator-project--selected' : ''}`} type="button" key={order.code} onClick={() => { setSelectedCode(order.code); setSelectedWorker(null); setProjectsCollapsed(true) }}><div className="operator-project-visual">⚙</div><div className="operator-project-content"><div className="operator-project-top"><strong>{order.service}</strong><span className={`operator-status operator-status--${order.operation.status}`}>{statusLabels[order.operation.status]}</span></div><span>{order.company}</span><small>{order.code} · Etiqueta {order.labelNumber}</small><div className="operator-project-bottom"><div><span>Etapa atual</span><strong>{currentStage(order)}</strong></div><div><span>Prazo</span><strong>{formatDate(order.deadline)}</strong></div><div><span>Produzido/total</span><strong>{currentPieceProgress(order.operation, order.quantity).completedPieces}/{order.quantity}</strong></div><div><span>Progresso</span><strong>{order.operation.progress}%</strong><i><b style={{ width: `${order.operation.progress}%` }} /></i></div></div></div></button>) : <div className="operator-empty">Nenhuma OS encontrada para este filtro.</div>}
+          {mine.length > 0 && <div className="operator-project-group operator-project-group--mine" role="group" aria-label="OS em que você está trabalhando"><h2>Você está trabalhando nesta OS</h2>{mine.map(projectCard)}</div>}
+          {others.length ? <div className="operator-project-group">{mine.length > 0 && <h2>Outras OS</h2>}{others.map(projectCard)}</div> : !mine.length && <div className="operator-empty">{orders.length ? 'Nenhuma OS encontrada para este filtro.' : 'Nenhuma OS aberta. As ordens aceitas pelo admin aparecerão aqui.'}</div>}
         </section>
-          </div>
-        </div>
-        <section className="operator-detail" aria-label="Detalhes do projeto">
-          {selected ? <>
-            <div className="operator-detail-heading"><div><h2 ref={detailHeading} tabIndex={-1}>{selected.service}</h2><p><strong>{selected.code}</strong> · {selected.company}</p></div><span className={`operator-status operator-status--${operation.status}`}>{statusLabels[operation.status]}</span></div>
-            <div className="operator-detail-facts"><div><span>▱ Material</span><strong>{selected.resources?.materials?.map((item) => item.name).join(', ') || 'Não informado'}</strong></div><div><span>♙ {sessions.length > 1 ? 'Responsáveis' : 'Responsável'}</span><strong>{activeEmployeeNames(operation) || 'Aguardando identificação'}</strong></div><div><span>▣ Previsão de entrega</span><strong>{formatDate(selected.deadline)}</strong></div><div><span>⚑ Etapa atual</span><strong>{currentStage(selected)}</strong></div><div><span>◷ Tempo do projeto</span><strong>{formatDuration(operationElapsed(operation, now))}</strong></div><div><span>◷ Sessão atual</span><strong>{currentSessionStart ? formatDuration(now - Date.parse(currentSessionStart)) : '00:00:00'}</strong></div><div><span>◇ Quantidade</span><strong>{selected.quantity} peças</strong></div><div><span>▤ OS vinculada</span><strong>{selected.code}</strong></div><div><span>▥ Cliente</span><strong>{selected.company}</strong></div></div>
-            <div className="operator-stages-heading"><h3>Etapas do projeto</h3><strong>{operation.stages.length ? `${operation.stages.reduce((sum, stage) => sum + Number(operation.stageCounts[stage.key] || 0), 0)}/${operation.stages.length * selected.quantity} passagens` : 'Etapas pendentes'}</strong></div>
-            {operation.stages.length ? <div className="operator-stage-groups">{stageGroups.map((group) => <section className="operator-stage-group" key={group.stages[0].stage.key} aria-label={`Etapas de ${group.name}`}>
-              <div className="operator-stage-group-heading"><h4>{group.name}</h4><span>{group.stages.reduce((sum, { stage }) => sum + Number(operation.stageCounts[stage.key] || 0), 0)}/{group.stages.length * selected.quantity} passagens</span></div>
-              <div className="operator-stages">{group.stages.map(({ stage, index }) => {
-                const count = Number(operation.stageCounts[stage.key] || 0)
-                const previous = selected.resources?.strictProcess === false || index === 0 ? selected.quantity : Number(operation.stageCounts[operation.stages[index - 1].key] || 0)
-                const available = Math.min(selected.quantity - count, previous - count)
-                return <div className="operator-stage" key={stage.key}>
-                  <span className={`operator-stage-number ${count === selected.quantity ? 'done' : ''}`}>{index + 1}</span>
-                  <strong>{stage.name}</strong><small>{count}/{selected.quantity} peças</small>
-                  {ownedSessions.length > 0 && operation.status !== 'completed' && <div className="operator-stage-action"><input type="number" min="1" max={available} step="1" value={stageQuantity[stage.key] || 1} onChange={(event) => setStageQuantity((current) => ({ ...current, [stage.key]: event.target.value }))} aria-label={`Quantidade concluída em ${stage.name}`} /><button type="button" disabled={busy || available < 1} onClick={() => registerStage(stage)}>Registrar</button></div>}
-                </div>
-              })}</div>
-            </section>)}</div> : <p className="operator-empty">Esta OS ainda não tem etapas definidas. Peça ao administrador para selecioná-las nos detalhes da oferta ou configurá-las na OS.</p>}
-            <div className="operator-time-banner"><span>◷</span><div><small>Tempo em andamento do projeto</small><strong>{formatDuration(operationElapsed(operation, now))}</strong></div><div><small>Sessão atual</small><strong>{currentSessionStart ? formatDuration(now - Date.parse(currentSessionStart)) : '00:00:00'}</strong><em>{sessions.length === 1 ? `Iniciada por ${sessions[0].employeeName} em ${formatMoment(sessions[0].startedAt)}` : sessions.length > 1 ? `${sessions.length} funcionários trabalhando desde ${formatMoment(currentSessionStart)}` : operation.lastPauseReason ? `Última pausa: ${operation.lastPauseReason}` : 'Aguardando início'}</em></div></div>
-            <div className="operator-actions"><button className="operator-outline" type="button" onClick={() => setDialog('info')}>Visualizar informações do projeto</button>{operation.status !== 'completed' && <button className="operator-primary" type="button" disabled={busy || !operation.stages.length} onClick={openStart}>Trabalhar neste projeto</button>}<button className="operator-outline operator-finish" type="button" disabled={!ownedSessions.length || operation.progress < 100 || busy} onClick={() => setDialog('complete')}>Concluir serviço</button></div>
-            <section className="operator-workers" aria-labelledby="operator-workers-title">
-              <div className="operator-workers-heading"><h3 id="operator-workers-title">Funcionários trabalhando neste serviço</h3><span>{sessions.length} {sessions.length === 1 ? 'funcionário' : 'funcionários'}</span></div>
-              {sessions.length ? <ul className="operator-worker-list">{sessions.map((session) => {
-                const open = selectedWorker === session.id
-                const owned = Boolean(credentials[session.id])
-                return <li key={session.id} className={`operator-worker${open ? ' operator-worker--open' : ''}`}>
-                  <button className="operator-worker-toggle" type="button" aria-expanded={open} aria-controls={`operator-worker-actions-${session.id}`} onClick={() => setSelectedWorker(open ? null : session.id)}>
-                    <span className="operator-worker-name"><strong>{session.employeeName}</strong><small>{resourceDescription(session)}</small></span>
-                    <span className="operator-worker-time"><strong>{formatDuration(now - Date.parse(session.startedAt))}</strong><small>Desde {formatMoment(session.startedAt)}</small></span>
-                    <ChevronDown size={18} aria-hidden="true" />
-                  </button>
-                  {open && <div className="operator-worker-actions" id={`operator-worker-actions-${session.id}`}>
-                    <button className="operator-primary" type="button" disabled={busy || !owned} onClick={() => openPause(session)}>Pausar trabalho</button>
-                    <button className="operator-outline operator-machine-change" type="button" disabled={busy || !owned} onClick={() => openResourceChange(session)}><ArrowLeftRight size={15} aria-hidden="true" />Troca de máquina ou serviço</button>
-                    {!owned && <p className="operator-session-note">Este trabalho foi iniciado em outro dispositivo. Pause ou troque o recurso no dispositivo em que {session.employeeName} iniciou a sessão.</p>}
-                  </div>}
-                </li>
-              })}</ul> : <p className="operator-workers-empty">Nenhum funcionário trabalhando neste serviço no momento.</p>}
-            </section>
-            <details className="operator-history"><summary>Histórico de atividades ({events.length})</summary>{events.length ? <ol>{[...events].reverse().map((event) => <li key={event.id}><strong>{eventLabels[event.type] || event.type}</strong><span>{event.employeeName || 'Admin'} · {formatMoment(event.at)}{event.stageName ? ` · ${event.stageName}: +${event.quantity} (${event.stageTotal} no total)` : ''}{event.registeredByEmployeeName ? ` · Registrado por ${event.registeredByEmployeeName}` : ''}{event.reason ? ` · ${event.reason}` : ''}{['machine_changed', 'labor_service_changed', 'resource_changed'].includes(event.type) ? ` · ${event.details}` : ''}</span></li>)}</ol> : <p>Nenhuma atividade registrada.</p>}</details>
-          </> : <div className="operator-empty">Nenhuma OS aberta. As ordens aceitas pelo admin aparecerão aqui.</div>}
+        <section className="operator-stats"><div><span>▣</span><strong>{activeCount}</strong><small>Projetos ativos</small></div><div><span>▶</span><strong>{runningCount}</strong><small>Em execução agora</small></div><div><span>◷</span><strong>{formatDuration(totalMs)}</strong><small>Tempo ativo registrado</small></div><div><span>▣</span><strong>{soonCount}</strong><small>Com prazo em até 3 dias</small></div></section>
+      </> : picking ? <section className="operator-picker" aria-labelledby="operator-picker-title">
+        <button className="operator-back" type="button" onClick={() => { setPicking(false); setError('') }}>← Voltar para a OS</button>
+        <h2 id="operator-picker-title" ref={detailHeading} tabIndex={-1}>Selecione a máquina ou o serviço</h2>
+        <p>{selected.code} · {selected.service}</p>
+        {[['machine', 'Máquina', machines, 'Nenhuma máquina cadastrada.'], ['labor-service', 'Serviço', laborServices, 'Nenhum serviço cadastrado.']].map(([type, title, items, empty]) => <section className="operator-picker-group" key={type} aria-label={title}>
+          <h3>{title}</h3>
+          {/* Machines come by sector: the same name (Bancada, Prensa) can exist in more than one. */}
+          {items.length ? (type === 'machine' ? bySector(items) : [['', items]]).map(([sector, group], _index, groups) => <div className="operator-picker-sector" key={sector || 'all'} role={groups.length > 1 ? 'group' : undefined} aria-label={groups.length > 1 ? sector : undefined}>{groups.length > 1 && <h4 aria-hidden="true">{sector}</h4>}<div className="operator-picker-grid">{group.map((item) => {
+            const current = currentResource.type === type && currentResource.id === String(item.id)
+            // A machine is one person at a time: taken by someone else, it cannot be chosen (labor services are shared).
+            const holder = type === 'machine' && !current ? item.inUseBy?.find((user) => String(user.employeeId) !== String(employee?.id)) : null
+            return <button className={['operator-picker-option', current && 'operator-picker-option--current', holder && 'operator-picker-option--taken'].filter(Boolean).join(' ')} type="button" key={item.id} disabled={busy || Boolean(holder)} aria-pressed={current} onClick={() => pickResource(type, item.id)}>{item.name}{holder && <small>Em uso por {holder.employeeName} · {holder.orderCode}</small>}</button>
+          })}</div></div>) : <p className="operator-empty">{empty}</p>}
+        </section>)}
+      </section> : <section className="operator-detail" aria-label="Detalhes do projeto">
+        <div className="operator-detail-top"><button className="operator-back" type="button" onClick={() => openOrder(null)}>← Voltar para as OS</button><button className="operator-outline" type="button" onClick={() => setDialog('info')}>Visualizar informações do projeto</button></div>
+        <div className="operator-detail-heading"><div><h2 ref={detailHeading} tabIndex={-1}>{selected.service}</h2><p><strong>{selected.code}</strong> · {selected.company}</p></div><span className={`operator-status operator-status--${operation.status}`}>{statusLabels[operation.status]}</span></div>
+        <div className="operator-detail-facts"><div><span>▱ Material</span><strong>{selected.resources?.materials?.map((item) => item.name).join(', ') || 'Não informado'}</strong></div><div><span>♙ {sessions.length > 1 ? 'Responsáveis' : 'Responsável'}</span><strong>{activeEmployeeNames(operation) || 'Aguardando início'}</strong></div><div><span>▣ Previsão de entrega</span><strong>{formatDate(selected.deadline)}</strong></div><div><span>⚑ Etapa atual</span><strong>{currentStage(selected)}</strong></div><div><span>◷ Tempo do projeto</span><strong>{formatDuration(operationElapsed(operation, now))}</strong></div><div><span>◇ Quantidade</span><strong>{selected.quantity} peças</strong></div></div>
+        {operation.status !== 'completed' && <div className="operator-steps" aria-label="Passos do trabalho">
+          <button className="operator-step operator-step--resource" type="button" disabled={busy || !operation.stages.length || Boolean(mySession && !myCredential)} onClick={openPicker}><strong>Selecionar máquina / serviço</strong><small>{mySession ? resourceDescription(mySession) : chosenResource ? `${resourceType === 'machine' ? 'Máquina' : 'Serviço'}: ${chosenResource.name}` : 'Toque para escolher'}</small></button>
+          {mySession ? <button className="operator-step operator-step--work operator-step--running" type="button" disabled={busy || !myCredential} onClick={() => openPause(mySession)}><strong>Pausar trabalho</strong><small>{myCredential ? `Trabalhando há ${formatDuration(now - Date.parse(mySession.startedAt))}` : 'Iniciado em outro dispositivo'}</small></button>
+            : <button className="operator-step operator-step--work" type="button" disabled={busy || !resourceId || !operation.stages.length} onClick={() => begin()}><strong>Iniciar trabalho</strong><small>{!operation.stages.length ? 'OS sem etapas definidas' : resourceId ? `Começar em ${operation.stages.find((stage) => stage.key === chosenStage)?.name || 'primeira etapa'}` : 'Escolha a máquina ou o serviço primeiro'}</small></button>}
+          <button className="operator-step operator-step--finish" type="button" disabled={busy || !ownedSessions.length || operation.progress < 100} onClick={() => setDialog('complete')}><strong>Concluir serviço</strong><small>{operation.progress < 100 ? `${operation.progress}% das etapas concluídas` : ownedSessions.length ? 'Todas as peças prontas' : 'Inicie o trabalho para concluir'}</small></button>
+        </div>}
+        <div className="operator-stages-heading"><h3>Etapas do projeto</h3><strong>{operation.stages.length ? `${operation.stages.reduce((sum, stage) => sum + Number(operation.stageCounts[stage.key] || 0), 0)}/${operation.stages.length * selected.quantity} passagens` : 'Etapas pendentes'}</strong></div>
+        {operation.stages.length ? <div className="operator-stage-groups">{stageGroups.map((group) => <section className={`operator-stage-group stage-tone--${stageGroupTone(group.name)}`} key={group.stages[0].stage.key} aria-label={`Etapas de ${group.name}`}>
+          <StageGroupHeading className="operator-stage-group-heading" group={group} stageCounts={operation.stageCounts} quantity={selected.quantity} />
+          <div className="operator-stages">{group.stages.map(({ stage, index }) => {
+            const count = Number(operation.stageCounts[stage.key] || 0)
+            const previous = selected.resources?.strictProcess === false || index === 0 ? selected.quantity : Number(operation.stageCounts[operation.stages[index - 1].key] || 0)
+            const available = Math.min(selected.quantity - count, previous - count)
+            // Target of the stage for the whole OS; at 80% of it the pieces bar turns a discreet red for the operator.
+            const target = Number(selected.resources?.stageTimes?.[stageCode(stage)] || 0), elapsed = stageElapsedMs(operation, stage.key, now)
+            const alert = target > 0 && count < selected.quantity && elapsed >= target * 60000 * 0.8
+            return <div className="operator-stage" key={stage.key}>
+              <span className={`operator-stage-number ${count === selected.quantity ? 'done' : ''}`}>{index + 1}</span>
+              <strong>{stage.name}</strong><small>{count}/{selected.quantity} peças</small><PieceTrack count={count} quantity={selected.quantity} working={workingStageKeys(operation, selected.quantity).has(stage.key)} alert={alert} label={stage.name} className="operator-stage-pieces" />
+              {target > 0 && <small className={`operator-stage-target${alert ? ' operator-stage-target--alert' : ''}`}>Meta {minutesLabel(target)} · {minutesLabel(elapsed / 60000)} feitos</small>}
+              {operation.status !== 'completed' && employee && (!mySession || myCredential) && (chosenStage === stage.key ? <span className="operator-stage-here">{mySession ? 'Você está nesta etapa' : 'Etapa escolhida para começar'}</span> : <button type="button" className="operator-stage-pick" disabled={busy || count >= selected.quantity} onClick={() => pickStage(stage.key)}>Trabalhar nesta etapa</button>)}
+              {ownedSessions.length > 0 && operation.status !== 'completed' && <div className="operator-stage-action"><input type="number" min="1" max={available} step="1" value={stageQuantity[stage.key] || 1} onChange={(event) => setStageQuantity((current) => ({ ...current, [stage.key]: event.target.value }))} aria-label={`Quantidade concluída em ${stage.name}`} /><button type="button" disabled={busy || available < 1} onClick={() => registerStage(stage)}>Registrar</button></div>}
+            </div>
+          })}</div>
+        </section>)}</div> : <p className="operator-empty">Esta OS ainda não tem etapas definidas. Peça ao administrador para selecioná-las nos detalhes da oferta ou configurá-las na OS.</p>}
+        <div className="operator-time-banner"><span>◷</span><div><small>Tempo em andamento do projeto</small><strong>{formatDuration(operationElapsed(operation, now))}</strong></div><div><small>Sessão atual</small><strong>{currentSessionStart ? formatDuration(now - Date.parse(currentSessionStart)) : '00:00:00'}</strong><em>{sessions.length === 1 ? `Iniciada por ${sessions[0].employeeName} em ${formatMoment(sessions[0].startedAt)}` : sessions.length > 1 ? `${sessions.length} funcionários trabalhando desde ${formatMoment(currentSessionStart)}` : operation.lastPauseReason ? `Última pausa: ${operation.lastPauseReason}` : 'Aguardando início'}</em></div></div>
+        <section className="operator-workers" aria-labelledby="operator-workers-title">
+          <div className="operator-workers-heading"><h3 id="operator-workers-title">Funcionários trabalhando neste serviço</h3><span>{sessions.length} {sessions.length === 1 ? 'funcionário' : 'funcionários'}</span></div>
+          {sessions.length ? <ul className="operator-worker-list">{sessions.map((session) => {
+            return <li key={session.id} className="operator-worker">
+              <div className="operator-worker-row">
+                <span className="operator-worker-name"><strong>{session.employeeName}</strong><small>{resourceDescription(session)}</small></span>
+                <span className="operator-worker-time"><strong>{formatDuration(now - Date.parse(session.startedAt))}</strong><small>Desde {formatMoment(session.startedAt)}</small></span>
+              </div>
+            </li>
+          })}</ul> : <p className="operator-workers-empty">Nenhum funcionário trabalhando neste serviço no momento.</p>}
         </section>
-      </div>
-      <section className="operator-stats"><div><span>▣</span><strong>{activeCount}</strong><small>Projetos ativos</small></div><div><span>▶</span><strong>{runningCount}</strong><small>Em execução agora</small></div><div><span>◷</span><strong>{formatDuration(totalMs)}</strong><small>Tempo ativo registrado</small></div><div><span>▣</span><strong>{soonCount}</strong><small>Com prazo em até 3 dias</small></div></section>
+        <details className="operator-history"><summary>Histórico de atividades ({events.length})</summary>{events.length ? <ol>{[...events].reverse().map((event) => <li key={event.id}><strong>{eventLabels[event.type] || event.type}</strong><span>{event.employeeName || 'Admin'} · {formatMoment(event.at)}{event.stageName ? ` · ${event.stageName}: +${event.quantity} (${event.stageTotal} no total)` : ''}{event.registeredByEmployeeName ? ` · Registrado por ${event.registeredByEmployeeName}` : ''}{event.reason ? ` · ${event.reason}` : ''}{['machine_changed', 'labor_service_changed', 'resource_changed'].includes(event.type) ? ` · ${event.details}` : ''}</span></li>)}</ol> : <p>Nenhuma atividade registrada.</p>}</details>
+      </section>}
       </>}
     </main>
     {dialog === 'pending-materials' && pendingStart && <PendingMaterialsModal orderCode={pendingStart.code} materials={pendingStart.materials} busy={busy} error={error} onConfirm={() => begin(pendingStart)} onClose={() => setDialog(null)} />}
     {dialog && !['info', 'pending-materials'].includes(dialog) && <div className="operator-dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setDialog(null) }}><section className="operator-dialog" role="dialog" aria-modal="true">
       <button className="operator-dialog-close" type="button" onClick={() => setDialog(null)} aria-label="Fechar">×</button>{error && <p className="operator-error" role="alert">{error}</p>}
-      {dialog === 'start' && <><h2>Quem vai trabalhar nesta OS?</h2><p>{selected?.code}</p>
-        <label>Funcionário<select aria-label="Funcionário" value={employeeId} onChange={(event) => setEmployeeId(event.target.value)}><option value="">Selecione seu nome</option>{employees.map((employee) => <option key={employee.id} value={employee.id} disabled={workingEmployeeIds.has(String(employee.id))}>{employee.identification} · {employee.name}{workingEmployeeIds.has(String(employee.id)) ? ' (já trabalhando)' : ''}</option>)}</select></label>
-        {resourceFields('start')}
-        {!employees.length && <p>Nenhum funcionário cadastrado. Solicite o cadastro ao administrador.</p>}<button className="operator-primary" type="button" disabled={busy || !employees.length || !employeeId || !resourceId} onClick={() => begin()}>{busy ? 'Iniciando...' : 'Iniciar trabalho'}</button>
-      </>}
       {dialog === 'pause' && <><h2>Pausar trabalho</h2><p>{dialogSession ? <>Funcionário: <strong>{dialogSession.employeeName}</strong>. </> : null}Escolha a justificativa. O horário e o responsável ficarão registrados na OS.</p><label>Justificativa<select value={pauseReason} onChange={(event) => setPauseReason(event.target.value)}><option value="">Selecione...</option>{pauseReasons.map((reason) => <option key={reason} value={reason}>{reason}</option>)}</select></label><button className="operator-primary" type="button" disabled={busy || !dialogSession} onClick={pause}>{busy ? 'Salvando...' : 'Confirmar pausa'}</button></>}
-      {dialog === 'resource' && <><h2>Troca de máquina ou serviço</h2><p>{selected?.code}{dialogSession ? ` · ${dialogSession.employeeName}` : ''}</p><p>Recurso atual: <strong>{resourceDescription(dialogSession)}</strong></p>
-        {resourceFields('new')}
-        <button className="operator-primary" type="button" disabled={busy || !dialogSession || !credentials[dialogSession?.id] || !resourceId || sameResource} onClick={changeResource}>{busy ? 'Salvando...' : 'Confirmar troca'}</button></>}
       {dialog === 'completed-by' && <><h2>Quem concluiu esta etapa?</h2><p>{pendingStage ? `${pendingStage.stage.name}: ${pendingStage.quantity} ${pendingStage.quantity === 1 ? 'peça' : 'peças'}. ` : ''}Mais de um funcionário está trabalhando nesta OS.</p>
         <fieldset className="operator-completed-by" disabled={busy}><legend>Funcionário</legend>{sessions.map((session) => <label key={session.id}><input type="radio" name="operator-completed-by" value={session.id} checked={completedBy === session.id} onChange={() => { setCompletedBy(session.id); setError('') }} /><span>{session.employeeName}<small>{resourceDescription(session)}</small></span></label>)}</fieldset>
         <button className="operator-primary" type="button" disabled={busy || !completedBy || !pendingStage} onClick={confirmCompletedBy}>{busy ? 'Registrando...' : 'Registrar etapa'}</button></>}
-      {dialog === 'complete' && <><h2>Concluir serviço</h2><p>Confirme que todas as {selected?.quantity} peças passaram por cada etapa desta OS.</p>{sessions.length > 1 && <p>As sessões de {sessions.map((session) => session.employeeName).join(', ')} serão encerradas com a conclusão.</p>}<button className="operator-primary" type="button" disabled={busy} onClick={complete}>{busy ? 'Concluindo...' : 'Confirmar conclusão'}</button></>}
+      {dialog === 'switch-order' && switchStart && <><h2>Trocar de OS?</h2><p>Você já está trabalhando na OS <strong>{switchStart.fromCode}</strong>{switchStart.fromService ? ` (${switchStart.fromService})` : ''}. Deseja alterar para a OS <strong>{switchStart.code}</strong>?</p><p>O trabalho na OS {switchStart.fromCode} será pausado com a justificativa “Troca de serviço”.</p><button className="operator-primary" type="button" disabled={busy} onClick={() => begin({ code: switchStart.code, switchFrom: switchStart.fromCode })}>{busy ? 'Trocando...' : 'Sim, trocar para esta OS'}</button> <button className="operator-outline operator-dialog-later" type="button" disabled={busy} onClick={() => setDialog(null)}>Continuar na OS atual</button></>}
+      {dialog === 'complete' && <><h2>Concluir serviço</h2><p>Confirme que todas as {selected?.quantity} peças passaram por cada etapa desta OS.</p>{sessions.length > 1 && <p>As sessões de {sessions.map((session) => session.employeeName).join(', ')} serão encerradas com a conclusão.</p>}<button className="operator-primary" type="button" disabled={busy} onClick={complete}>{busy ? 'Concluindo...' : 'Confirmar conclusão'}</button> <button className="operator-outline operator-dialog-later" type="button" disabled={busy} onClick={() => setDialog(null)}>Agora não</button></>}
     </section></div>}
   </div>
 }

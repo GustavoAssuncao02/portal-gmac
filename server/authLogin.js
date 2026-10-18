@@ -29,10 +29,18 @@ export default function createLoginRouter(accounts, env = process.env) {
     try {
       let user
       if (testing) {
-        const admins = await accounts.admins()
-        const preferredCpf = String(env.DEMO_ADMIN_CPF || '').replace(/\D/g, '')
-        user = admins.find((item) => item.cpf === preferredCpf) || admins[0]
-        if (!user) return response.status(503).json({ message: 'Cadastre um administrador antes de usar o acesso de teste.' })
+        const typedCpf = String(cpf ?? '').replace(/\D/g, '')
+        if (typedCpf) {
+          // Without password, the CPF chooses the profile: 00000000000 is the administrator, 11111111111 the administrative
+          // employee of tests; any other registered CPF enters its own account.
+          user = await accounts.accountByCpf(typedCpf)
+          if (!user) return response.status(401).json({ message: 'Nenhum administrador ou funcionário administrativo com este CPF.' })
+        } else {
+          const admins = await accounts.admins()
+          const preferredCpf = String(env.DEMO_ADMIN_CPF || '').replace(/\D/g, '')
+          user = admins.find((item) => item.cpf === preferredCpf) || admins[0]
+          if (!user) return response.status(503).json({ message: 'Cadastre um administrador antes de usar o acesso de teste.' })
+        }
       } else {
         user = await accounts.authenticate(cpf, password)
       }

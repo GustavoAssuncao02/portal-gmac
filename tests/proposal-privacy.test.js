@@ -25,19 +25,19 @@ test('the customer proposal never shows margin, profit, costs or unit prices', (
 test('the proposal PDF is always built from the saved proposal, so old stored files are never sent', async (t) => {
   const fixture = await createWorkflowFixture()
   t.after(() => fixture.close())
-  const created = (await fixture.request('/offers', 'POST', offerDraft)).data.item
-  await fixture.request(`/offers/${created.id}/resources`, 'PUT', { materials: [], laborEntries: [], stages: ['cutting'], kind: 'service' })
-  const generated = await fixture.request(`/offers/${created.id}/proposal`, 'POST', { layout: 'executive', proposal: { key: 'A', title: 'Opção A', deadline: offerDraft.deadline, serviceValue: 100, margin: 37.77, profit: 4510.55 } })
+  const created = (await fixture.adminRequest('/offers', 'POST', offerDraft)).data.item
+  await fixture.adminRequest(`/offers/${created.id}/resources`, 'PUT', { materials: [], laborEntries: [], stages: ['cutting'], kind: 'service' })
+  const generated = await fixture.adminRequest(`/offers/${created.id}/proposal`, 'POST', { layout: 'executive', proposal: { key: 'A', title: 'Opção A', deadline: offerDraft.deadline, serviceValue: 100, margin: 37.77, profit: 4510.55 } })
   assert.equal(generated.status, 200)
   assert.equal(generated.data.item.proposal.pdfId, undefined, 'no PDF file is stored')
   // A file stored by an earlier version (with the margin) is ignored even if it is still referenced.
   await fixture.mutateStore((store) => { store.offers[0].proposal.pdfId = 'legacy-file-with-margin' })
-  const first = await fetch(`${fixture.url}/api/offers/${created.id}/proposal.pdf`)
+  const first = await fetch(`${fixture.url}/api/offers/${created.id}/proposal.pdf`, { headers: fixture.admin })
   assert.equal(first.status, 200)
   assert.equal(first.headers.get('content-type'), 'application/pdf')
   const bytes = Buffer.from(await first.arrayBuffer())
   assert.equal(bytes.subarray(0, 4).toString(), '%PDF')
   // Downloading again gives the same document (the issue date is the proposal generation date).
-  const second = Buffer.from(await (await fetch(`${fixture.url}/api/offers/${created.id}/proposal.pdf`)).arrayBuffer())
+  const second = Buffer.from(await (await fetch(`${fixture.url}/api/offers/${created.id}/proposal.pdf`, { headers: fixture.admin })).arrayBuffer())
   assert.equal(second.length, bytes.length)
 })

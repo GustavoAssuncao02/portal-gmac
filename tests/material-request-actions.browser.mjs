@@ -8,11 +8,11 @@ const fixture = await createWorkflowFixture({ accountsEnv: env })
 const browser = await chromium.launch()
 await mkdir('test-results', { recursive: true })
 try {
-  const offer = (await fixture.request('/offers', 'POST', offerDraft)).data.item
+  const offer = (await fixture.adminRequest('/offers', 'POST', offerDraft)).data.item
   const materials = [{ id: 'inox', name: 'Aco Inox 304', detail: 'Chapa inoxidavel', quantity: 10, unitPrice: 38.4, stockStatus: 'unknown', purchaseQuantity: 10 }, { id: 'ferro', name: 'Ferro', detail: 'Barra redonda', quantity: 2, unitPrice: 20, stockStatus: 'unknown', purchaseQuantity: 2 }]
-  await fixture.request(`/offers/${offer.id}/resources`, 'PUT', { materials, laborEntries: [], stages: ['painting'], kind: 'service' })
-  await fixture.request(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', serviceValue: 500, deadline: offer.deadline } })
-  const order = (await fixture.request(`/offers/${offer.id}/accept`, 'POST')).data.item
+  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials, laborEntries: [], stages: ['painting'], kind: 'service' })
+  await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', serviceValue: 500, deadline: offer.deadline } })
+  const order = (await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')).data.item
   for (const viewport of [{ width: 1920, height: 1080 }, { width: 1440, height: 900 }, { width: 393, height: 852 }, { width: 430, height: 932 }, { width: 1440, height: 900, theme: 'dark' }]) {
     await fixture.mutateStore((store) => {
       store.offers.find((item) => item.id === offer.id).resources.materials = structuredClone(materials)

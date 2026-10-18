@@ -32,7 +32,10 @@ export function inventorySignal(store, row, previousLow) {
 }
 
 export function recordWorkflowNotifications(before, store) {
-  for (const request of requests(store)) if (!before.requests.has(request.id)) addNotification(store, { ...request, id: randomUUID(), requestId: request.id, type: 'material-request', title: 'Novo pedido de material', description: `${request.materialName} · ${request.quantity.toLocaleString('pt-BR')} kg` })
+  // Requests that only came back (an acceptance undone clears its decisions) are not new: no notice for them.
+  const silent = new Set(store.silentMaterialRequestIds || [])
+  delete store.silentMaterialRequestIds
+  for (const request of requests(store)) if (!before.requests.has(request.id) && !silent.has(request.id)) addNotification(store, { ...request, id: randomUUID(), requestId: request.id, type: 'material-request', title: 'Novo pedido de material', description: `${request.materialName} · ${request.quantity.toLocaleString('pt-BR')} kg` })
   for (const order of store.orders || []) {
     if (!before.orders.has(order.code)) addNotification(store, { id: `service-added:${order.code}`, type: 'service-added', at: order.createdAt || new Date().toISOString(), orderCode: order.code, title: 'Novo serviço em andamento', description: `${order.code} · ${order.service}` })
     for (const event of order.operationEvents || []) if (event.type === 'completed' && !before.completions.has(event.id)) addNotification(store, completedServiceNotice(order, event))

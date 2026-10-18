@@ -20,10 +20,10 @@ page.on('pageerror', (error) => errors.push(error.message))
 try {
   const token = (await fixture.request('/auth/login', 'POST', { cpf: env.DEMO_ADMIN_CPF, password: env.DEMO_ADMIN_PASSWORD })).data.token
   const api = (route, method, body) => fixture.request(route, method, body, { Authorization: `Bearer ${token}` })
-  const offer = (await fixture.request('/offers', 'POST', offerDraft)).data.item
-  await fixture.request(`/offers/${offer.id}/resources`, 'PUT', { stages: ['painting'], materials: [], laborEntries: [], kind: 'service' })
-  await fixture.request(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', deadline: offer.deadline, serviceValue: 1250.5 } })
-  const order = (await fixture.request(`/offers/${offer.id}/accept`, 'POST')).data.item
+  const offer = (await fixture.adminRequest('/offers', 'POST', offerDraft)).data.item
+  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { stages: ['painting'], materials: [], laborEntries: [], kind: 'service' })
+  await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', deadline: offer.deadline, serviceValue: 1250.5 } })
+  const order = (await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')).data.item
   await fixture.mutateStore((store) => { const row = store.orders.find((item) => item.code === order.code); row.proposal.discount = 10; row.operation = { status: 'completed', completedAt: '2026-10-06T15:00:00Z', completionAcknowledgedAt: null, accumulatedMs: 3600000, activeSession: null, stages: [{ key: 'stage-0', name: stageLabel('painting') }], stageCounts: { 'stage-0': 10 } } })
   const category = (await api('/classifications', 'POST', { name: 'Beneficios' })).data.item
   const sodexo = (await api('/suppliers', 'POST', { name: 'Sodexo Pass do Brasil', document: '49930514000135' })).data.item
@@ -35,7 +35,12 @@ try {
   await page.getByLabel('Senha', { exact: true }).fill(env.DEMO_ADMIN_PASSWORD)
   await page.getByRole('button', { name: 'Entrar', exact: true }).click()
   await page.locator('.admin-home-main').waitFor()
-  const navigate = (name) => page.locator('.sidebar').getByRole('button', { name, exact: true }).click()
+  // The financial entries live in a menu group that starts collapsed.
+  const navigate = async (name) => {
+    const item = page.locator('.sidebar').getByRole('button', { name, exact: true })
+    if (!await item.isVisible()) await page.locator('.sidebar').getByRole('button', { name: 'Gestão Financeira', exact: true }).click()
+    await item.click()
+  }
   const file = { name: 'extrato.ofx', mimeType: 'application/x-ofx', buffer: Buffer.from(sampleOfx(sampleRows), 'latin1') }
 
   await navigate('Conciliação bancária')
@@ -74,7 +79,8 @@ try {
   await navigate('Serviços em andamento')
   const row = page.locator('.admin-os-table tbody tr').filter({ hasText: order.code })
   await row.getByRole('button', { name: 'Concluído', exact: true }).click()
-  const schedule = page.getByRole('dialog', { name: 'Programar recebimento', exact: true })
+  const schedule = page.getByRole('dialog', { name: 'Recebimento do serviço', exact: true })
+  await schedule.getByRole('button', { name: /^Ainda vai receber/ }).click()
   await schedule.getByLabel('Valor a receber', { exact: true }).waitFor()
   assert.equal(await schedule.getByLabel('Valor a receber', { exact: true }).inputValue(), '1.125,45', 'Defaults to the OS value after discount')
   await schedule.getByLabel('Valor a receber', { exact: true }).fill('1100')

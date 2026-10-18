@@ -25,8 +25,8 @@ test('manual requests are authenticated, do not create OS/stock, notify administ
     assert.match(material.code, /^PM-\d{4}-\d{4}$/)
     assert.equal(material.requestedByName, 'Gustavo')
     assert.equal(material.purchaseQuantity, 12.5)
-    assert.equal((await fixture.request('/orders')).data.items.length, 0)
-    assert.equal((await fixture.request('/offers')).data.items.length, 0)
+    assert.equal((await fixture.request('/orders', 'GET', undefined, fixture.admin)).data.items.length, 0)
+    assert.equal((await fixture.adminRequest('/offers', 'GET', undefined, fixture.admin)).data.items.length, 0)
     const notifications = await fixture.request('/notifications', 'GET', undefined, gustavo)
     assert.ok(notifications.data.items.some((notice) => notice.type === 'material-request' && notice.requestId === material.id))
     assert.equal((await fixture.request(`/material-requests/${material.id}/reject`, 'POST', {}, other)).status, 200)
@@ -66,14 +66,14 @@ test('OS request history tracks the resource creator, preserves server identity 
   const fixture = await createWorkflowFixture({ accountsEnv: env })
   try {
     const auth = await login(fixture)
-    const offer = (await fixture.request('/offers', 'POST', offerDraft)).data.item
+    const offer = (await fixture.adminRequest('/offers', 'POST', offerDraft)).data.item
     const body = { materials: [{ id: 'material', name: 'Titanio', quantity: 10, purchaseQuantity: 10, requestedByName: 'Forged name' }], laborEntries: [], stages: ['painting'], kind: 'service' }
-    const saved = await fixture.request(`/offers/${offer.id}/resources`, 'PUT', body, auth)
+    const saved = await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', body, auth)
     assert.equal(saved.data.item.resources.materials[0].requestedByName, 'Gustavo')
     const id = `${offer.id}-material`
     assert.equal((await fixture.request(`/material-requests/${id}/history`, 'GET', undefined, auth)).data.items[0].userName, 'Gustavo')
     await fixture.request(`/material-requests/${id}/reject`, 'POST', {}, auth)
-    await fixture.request(`/offers/${offer.id}/resources`, 'PUT', body, auth)
+    await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', body, auth)
     const history = (await fixture.request(`/material-requests/${id}/history`, 'GET', undefined, auth)).data.items
     assert.deepEqual(history.map((event) => event.userName), ['Gustavo', 'Gustavo'])
     await fixture.mutateStore((store) => { store.offers.push({ id: 'old', resources: { materials: [{ id: 'material', name: 'Ferro', quantity: 1 }] } }) })

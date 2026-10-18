@@ -14,11 +14,11 @@ page.on('pageerror', (error) => errors.push(error.message))
 await mkdir(directory, { recursive: true })
 try {
   const headers = { Authorization: `Bearer ${fixture.adminToken}` }
-  const offer = (await fixture.request('/offers', 'POST', offerDraft, headers)).data.item
+  const offer = (await fixture.adminRequest('/offers', 'POST', offerDraft, headers)).data.item
   const seven = ['turning', 'milling', 'cnc-turning', 'painting', 'cut-bend', 'torch-cut', 'grinding']
-  await fixture.request(`/offers/${offer.id}/resources`, 'PUT', { stages: seven, materials: [], laborEntries: [], kind: 'service' }, headers)
-  await fixture.request(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', deadline: '2026-12-20', serviceValue: 500, materials: 0, labor: 0, margin: 15 } }, headers)
-  await fixture.request(`/offers/${offer.id}/accept`, 'POST', {}, headers)
+  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { stages: seven, materials: [], laborEntries: [], kind: 'service' }, headers)
+  await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', deadline: '2026-12-20', serviceValue: 500, materials: 0, labor: 0, margin: 15 } }, headers)
+  await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST', {}, headers)
   await fixture.mutateStore((store) => {
     const base = store.orders[0]
     const variants = [seven, ['painting', 'turning'], ['turning', 'cnc-turning', 'machining-center', 'torch-cut', 'structural-assembly', 'mechanical-assembly', 'disassembly', 'grinding'], serviceStageGroups.flatMap(([, group]) => group.map(([key]) => key))]
@@ -50,18 +50,21 @@ try {
       assert.ok(label.scroll <= label.width + 1, `${name}: ${JSON.stringify(label)}`)
       assert.ok(label.font >= minFont, `${name}: illegible font ${label.font}`)
     }
-    const colors = await page.locator('.admin-os-stage--done .admin-os-stage-block, .admin-os-stage--started .admin-os-stage-block').evaluateAll((blocks) => {
+    // The pieces already made keep the color of their bar (green, or dark blue while in production) in every theme and size.
+    const colors = await page.locator('.piece-track .piece-track-filled').evaluateAll((pieces) => {
       const context = document.createElement('canvas').getContext('2d')
-      return blocks.map((block) => {
-        const style = getComputedStyle(block)
-        context.fillStyle = style.backgroundColor
+      return pieces.map((piece) => {
+        context.fillStyle = getComputedStyle(piece).backgroundColor
         const actual = context.fillStyle
-        context.fillStyle = style.getPropertyValue('--stage-color').trim()
-        return { actual, expected: context.fillStyle }
+        context.fillStyle = getComputedStyle(piece.parentElement).getPropertyValue('--piece-fill').trim()
+        return { actual, expected: context.fillStyle, visible: piece.getBoundingClientRect().width > 0 && piece.getBoundingClientRect().height > 0 }
       })
     })
     assert.ok(colors.length)
-    for (const color of colors) assert.equal(color.actual, color.expected, `${name}: colored progress must remain visible`)
+    for (const color of colors) {
+      assert.equal(color.actual, color.expected, `${name}: colored progress must remain visible`)
+      assert.ok(color.visible, `${name}: piece slot has size`)
+    }
   }
   for (const [theme, fontSize, minimum] of [['light', 'default', 13], ['dark', 'default', 13], ['light', 'large', 14.9], ['dark', 'small', 11.7]]) {
     await page.evaluate(({ theme, fontSize }) => { document.documentElement.dataset.theme = theme; document.documentElement.dataset.fontSize = fontSize }, { theme, fontSize })

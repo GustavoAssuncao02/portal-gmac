@@ -81,6 +81,27 @@
 .payable-modal--form > footer { padding:10px 20px; }.payable-modal--form .admin-tool-button { min-height:32px; padding:6px 10px; font-size:12px; }
 @media(max-width:760px) { .payable-modal--form .payable-entry-form > fieldset { grid-template-columns:minmax(0,1fr); }.payable-modal--form .payable-modal-body { padding:14px; } }
 .receivable-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; margin-bottom:24px; }
+.treasury-intro { margin:-12px 0 22px; color:#5f7489; font-size:13px; line-height:1.5; }
+.treasury-add--in { border-color:#177245; background:#177245; color:#fff; }.treasury-add--out { border-color:#b3323f; background:#b3323f; color:#fff; }
+.treasury-notice { margin:0 0 18px; padding:10px 14px; border-left:3px solid #218555; border-radius:4px; background:#edf8f1; color:#14603a; font-size:13px; }
+.treasury-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; margin-bottom:24px; }
+.treasury-balance { border-top-color:#0c4c91; }.treasury-balance--positive strong { color:#0c4c91; }.treasury-balance--negative strong { color:#b42c3c; }
+.admin-tools-main .treasury-date { flex-direction:row; align-items:center; gap:8px; color:#5f7489; font-size:12px; }
+.treasury-table :is(td:first-child,th:first-child) { width:auto; }.treasury-date-cell { white-space:nowrap; font-variant-numeric:tabular-nums; }
+.treasury-table td small { display:block; margin-top:3px; color:#71859a; font-size:11px; }
+.treasury-table .treasury-value { text-align:right; }.treasury-table th.treasury-value button { margin-left:auto; }
+.treasury-type { display:inline-block; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:600; white-space:nowrap; }
+.treasury-type--in { background:#e9f7ee; color:#137b44; }.treasury-type--out { background:#fcecef; color:#b42c3c; }
+.treasury-value--in { color:#137b44; }.treasury-value--out { color:#b42c3c; }
+@media(max-width:760px) { .treasury-intro { margin-top:0; }.treasury-summary { grid-template-columns:minmax(0,1fr); gap:10px; }.treasury-table td.treasury-value { text-align:left; }.payable-toolbar.treasury-toolbar { grid-template-columns:repeat(2,minmax(0,1fr)); }.treasury-toolbar > .admin-tool-button { grid-column:1 / -1; }.treasury-date input { flex:1; } }
+.finance-choice-summary { margin:0 0 18px; font-size:14px; line-height:1.6; }
+.finance-choice { display:grid; gap:12px; }.finance-choice--pair { grid-template-columns:repeat(2,minmax(0,1fr)); margin:18px 0 4px; }
+.finance-choice button { display:flex; align-items:flex-start; gap:12px; padding:14px 16px; border:1px solid #c6d9ea; border-radius:6px; background:#fff; color:#0c4c91; font:inherit; text-align:left; cursor:pointer; }
+.finance-choice button:hover,.finance-choice button[aria-pressed=true] { border-color:#0c4c91; background:#eef5fc; }.finance-choice button[aria-pressed=true] { box-shadow:inset 0 0 0 1px #0c4c91; }
+.finance-choice button:disabled { opacity:.6; cursor:wait; }.finance-choice svg { flex-shrink:0; margin-top:1px; }
+.finance-choice strong { display:block; font-size:14px; }.finance-choice small { display:block; margin-top:4px; color:#5f7489; font-size:12px; line-height:1.45; }
+.finance-choice-question { margin:20px 0 0; color:#234768; font-size:14px; font-weight:600; }.receivable-schedule-form { margin-top:18px; }
+@media(max-width:560px) { .finance-choice--pair { grid-template-columns:minmax(0,1fr); } }
 .receivable-origin { margin:0; padding:12px 14px; border-left:3px solid #7090ad; background:#f4f8fc; font-size:13px; line-height:1.5; }
 .receivable-reconciled { display:flex; align-items:center; gap:4px; margin-top:5px; color:#137b44; font-size:11px; }
 .receivable-order-facts { margin-bottom:18px; }
@@ -101,6 +122,7 @@
 .bank-conflicts { margin-bottom:28px; padding:16px 18px; border:1px solid #f0d39a; border-radius:6px; background:#fffaf0; }
 .bank-section-title { margin:8px 0 16px; color:#284b6c; font-size:17px; }
 .admin-tools-main .bank-filter { display:flex; flex-direction:row; align-items:center; gap:8px; font-size:12px; }
+.admin-tools-main .bank-reconcile-all { margin-left:auto; }.bank-notice { margin:0 0 12px; padding:10px 14px; border-left:3px solid #2e9577; background:#e9f6f1; color:#1d6a53; font-size:13px; }
 .bank-memo { display:block; color:#24405d; font-weight:600; }.bank-transactions small { display:block; margin-top:4px; color:#71859a; font-size:11px; }
 .bank-amount { white-space:nowrap; font-weight:600; font-variant-numeric:tabular-nums; }.bank-amount svg { margin-right:4px; vertical-align:-2px; }.bank-amount--in { color:#137b44; }.bank-amount--out { color:#b42c3c; }
 .bank-linked { display:flex; flex-direction:column; align-items:flex-start; gap:4px; }.bank-transactions .admin-tool-button { min-height:30px; padding:5px 9px; font-size:12px; }
@@ -122,8 +144,8 @@
 @media(max-width:760px) { .receivable-summary { display:none; }.bank-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }.bank-tolerance { margin-left:0; }.bank-candidates > li { grid-template-columns:minmax(0,1fr); }:is(.bank-transactions,.bank-days,.finance-trend-table) td:nth-child(2) { grid-column:1 / -1; grid-row:auto; text-align:left; }:is(.bank-transactions,.bank-days,.finance-trend-table) td:nth-child(2)::before { display:block; }.admin-tools-main .bank-filter { flex:1 1 100%; } }
 .money-input { display:flex; align-items:center; min-width:0; border:1px solid #cbd9e6; border-radius:5px; background:white; }.money-input > span { padding-left:10px; color:#6b7f92; font-size:13px; }
 .payable-modal .money-input input,.money-input input { flex:1; min-width:0; border:0; outline:0; background:transparent; }.money-input:focus-within { outline:2px solid #0c4c91; outline-offset:-1px; }.money-input:has(input:disabled) { background:#f1f4f7; }
-.payable-hint { color:#6b7f92; font-size:11.5px; font-weight:400; line-height:1.4; }
-.payable-adjustments { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+.payable-hint { color:#6b7f92; font-size:11.5px; font-weight:400; line-height:1.4; }.payable-hint strong { font-weight:600; }
+.payable-adjustments { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }.payable-adjustments--three { grid-template-columns:repeat(3,minmax(0,1fr)); }
 .payable-quick-filters { display:flex; flex-wrap:wrap; align-items:center; gap:8px 18px; padding:0 0 20px; }.payable-quick-filters .payable-status-filters { padding:0; }
 .payable-due-filters { align-items:center; }.payable-status-filters .payable-quick-label { padding:0 2px 0 0; background:none; color:#5f7489; font-size:12px; font-weight:600; }
 .payable-status-filters small { color:#5f7489; font-size:11px; font-variant-numeric:tabular-nums; }.payable-status-filters button[aria-pressed=true] small { color:#0c4c91; }
@@ -143,3 +165,68 @@
 .ai-progress { display:flex; align-items:flex-start; gap:14px; padding:18px 20px; border:1px solid #cfe0f1; border-radius:6px; background:#f4f8fc; color:#173f6a; }.ai-progress p { margin:5px 0 0; color:#5c7288; font-size:13px; line-height:1.45; }
 .ai-spin { flex-shrink:0; animation:ai-spin 1s linear infinite; }@keyframes ai-spin { to { transform:rotate(360deg); } }@media(prefers-reduced-motion:reduce) { .ai-spin { animation:none; } }
 .ai-report-frame { display:block; width:100%; min-height:480px; border:1px solid #dce5ef; border-radius:6px; background:#ffffff; }
+/* Cadastros (Administradores, Funcionários, Clientes) in the Fornecedores modal style. */
+.registration-modal-form .registration-password { height:38px; margin:0; border-color:#cbd9e6; border-radius:5px; background:white; }.registration-modal-form .registration-password input { min-height:0; height:36px; border:0; }.registration-modal-form .registration-password button { height:36px; flex-basis:40px; width:40px; }
+.registration-modal-form .registration-access-code button { height:38px; margin:0; border-radius:5px; }
+.admin-tools-main .registration-message { margin:0 0 16px; }
+/* Confirmations of accepting, declining and undoing an offer. */
+.offer-decision-facts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:0; }
+.offer-decision-facts div { padding:10px; border-radius:6px; background:#f4f8fc; }
+.offer-decision-facts dt { color:#6b84a0; font-size:11px; }
+.offer-decision-facts dd { margin:2px 0 0; color:#173f6a; font-weight:700; }
+.offer-decision-list { margin:0; padding-left:18px; display:grid; gap:4px; font-size:13px; }
+@media(max-width:560px) { .offer-decision-facts { grid-template-columns:minmax(0,1fr); } }
+/* Closing of the bank reconciliation (account + month): open, closed (locked) or reopened; the closed ones are listed below. */
+.bank-closing { display:flex; flex-wrap:wrap; align-items:center; gap:12px 20px; margin:0 0 18px; padding:14px 16px; border:1px solid #d8e4ef; border-left:4px solid #8aa2b8; border-radius:6px; background:#fff; }
+.bank-closing--closed { border-left-color:#2e9577; background:#f3faf7; }.bank-closing--reopened { border-left-color:#d08a1a; background:#fffaf0; }
+.admin-tools-main .bank-closing .bank-filter { flex-direction:row; align-items:center; gap:8px; }
+.bank-closing-status { display:flex; flex:1 1 320px; flex-direction:column; gap:3px; margin:0; color:#5c7288; font-size:13px; }
+.bank-closing-status strong { display:inline-flex; align-items:center; gap:6px; color:#173f6a; font-size:14px; }
+.bank-closing-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.bank-closings { display:grid; margin:0; padding:0; list-style:none; }
+.bank-closings li { display:flex; flex-wrap:wrap; align-items:center; gap:8px 16px; padding:12px 0; border-bottom:1px solid #e2ebf3; font-size:13px; }
+.bank-closings li > div:first-child { display:flex; flex:1 1 320px; flex-direction:column; gap:2px; }.bank-closings li span { color:#5c7288; font-size:12px; }
+.bank-closings li strong { color:#173f6a; }
+.bank-closing-badge { padding:3px 9px; border-radius:999px; font-size:12px; font-weight:600; }
+.bank-closings .bank-closing-badge--closed { background:#e9f6f1; color:#1d6a53; }.bank-closings .bank-closing-badge--reopened { background:#fff3d9; color:#8a5a07; }
+.bank-closing-pending { display:grid; gap:4px; max-height:180px; margin:0; padding:0; overflow:auto; list-style:none; font-size:12px; }
+.bank-closing-pending li { display:flex; justify-content:space-between; gap:12px; padding:6px 0; border-bottom:1px solid #edf2f6; }.bank-closing-pending strong { white-space:nowrap; font-variant-numeric:tabular-nums; }
+.bank-closing-history { display:grid; gap:8px; margin:0; padding-left:18px; font-size:13px; }.bank-closing-history li { display:flex; flex-direction:column; gap:2px; }.bank-closing-history span, .bank-closing-history small { color:#5c7288; }
+.bank-closing-items td { vertical-align:top; }.bank-closing-items small { display:block; color:#71859a; font-size:11px; }
+:root[data-theme="dark"] .bank-closing { border-color:#36516f; border-left-color:#7f97ad; background:#162b43; }
+:root[data-theme="dark"] .bank-closing--closed { border-left-color:#4fbf99; background:#13302a; }:root[data-theme="dark"] .bank-closing--reopened { border-left-color:#e0a440; background:#33290f; }
+:root[data-theme="dark"] .bank-closing-status, :root[data-theme="dark"] .bank-closings li span, :root[data-theme="dark"] .bank-closing-history span, :root[data-theme="dark"] .bank-closing-history small { color:#b4c6d8; }
+:root[data-theme="dark"] .bank-closing-status strong, :root[data-theme="dark"] .bank-closings li strong { color:#e1ebf6; }
+:root[data-theme="dark"] .bank-closings .bank-closing-badge--closed { background:#1d4a3c; color:#9fe3c8; }:root[data-theme="dark"] .bank-closings .bank-closing-badge--reopened { background:#4a3a12; color:#ffd88a; }
+/* Registration lists (clients, suppliers, employees, administrators): search and count on top; the name has the room
+   (the first column is not the 36px checkbox of the accounts), short columns stay on one line, actions at the right. */
+.registry-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px; margin:0 0 14px; }
+.admin-tools-main .registry-toolbar .registry-search { flex:1 1 320px; max-width:560px; min-height:40px; }
+.registry-count { color:#5f7489; font-size:13px; font-variant-numeric:tabular-nums; }
+.registry-table tbody tr { cursor:default; }
+.registry-table td { overflow-wrap:break-word; }
+.registry-table :is(td,th):first-child { width:auto; }
+.registry-name strong { font-weight:600; color:#17385f; }
+.registry-name small { display:block; max-width:60ch; margin-top:2px; overflow:hidden; color:#6b8299; font-size:12px; text-overflow:ellipsis; white-space:nowrap; }
+.registry-document, .registry-code { font-variant-numeric:tabular-nums; }
+.registry-code { font-weight:700; letter-spacing:.04em; }
+.registry-doc-type { display:inline-block; min-width:38px; margin-right:8px; padding:1px 6px; border-radius:4px; background:#edf2f7; color:#48627d; font-size:11px; font-weight:600; text-align:center; }
+.registry-badge { display:inline-flex; padding:2px 9px; border-radius:999px; font-size:12px; font-weight:600; white-space:nowrap; }
+.registry-badge--operator { background:#e8f1fb; color:#0c4c91; }
+.registry-badge--admin { background:#efe9fb; color:#5a3d99; }
+.registry-empty { color:#9aabbc; }
+@media(min-width:761px) {
+  .registry-table th, .registry-table td { padding:10px 14px; }
+  .registry-table td { max-width:none; white-space:nowrap; }
+  .registry-table td.registry-name { width:42%; min-width:280px; white-space:normal; }
+  .registry-table--suppliers td.registry-name, .registry-table--client td.registry-name { width:48%; }
+  .registry-table .registry-col-actions, .registry-table td.registry-actions { width:1%; text-align:right; }
+  .registry-table td.registry-actions .payable-registry-actions { justify-content:flex-end; }
+}
+:root[data-theme="dark"] .registry-count { color:#a9bccf; }
+:root[data-theme="dark"] .registry-name strong { color:#e1ebf6; }
+:root[data-theme="dark"] .registry-name small { color:#a9bccf; }
+:root[data-theme="dark"] .registry-doc-type { background:#203c59; color:#c9d8e8; }
+:root[data-theme="dark"] .registry-badge--operator { background:#173a5e; color:#a9d0ff; }
+:root[data-theme="dark"] .registry-badge--admin { background:#33295a; color:#d4c4ff; }
+:root[data-theme="dark"] .registry-empty { color:#7f93a8; }

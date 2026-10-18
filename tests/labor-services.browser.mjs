@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
+import { enterOperatorCode, openOrder } from './operatorEntry.js'
 import { localDate } from '../server/reportData.js'
 
 const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Gustavo' }
@@ -77,28 +78,25 @@ try {
     operatorPage.on('pageerror', (error) => errors.push(error.message))
     await operatorPage.addInitScript((token) => sessionStorage.setItem('gmac-operator-token', token), fixture.operatorToken)
     await operatorPage.goto(fixture.url)
-    await operatorPage.locator('.operator-project').filter({ hasText: order.service }).click()
-    await operatorPage.getByRole('button', { name: 'Trabalhar neste projeto', exact: true }).click()
-    await operatorPage.getByLabel('Funcion\u00e1rio', { exact: true }).selectOption(String(employee.id))
-    assert.equal(await operatorPage.getByRole('radio', { name: 'Servi\u00e7o de hora homem', exact: true }).isChecked(), true)
-    assert.equal(await operatorPage.getByRole('combobox', { name: 'Servi\u00e7o de hora homem', exact: true }).inputValue(), service.id)
+    await enterOperatorCode(operatorPage, employee.accessCode)
+    await openOrder(operatorPage, order.service)
+    await operatorPage.getByText(`Servi\u00e7o: ${service.name}`, { exact: true }).waitFor()
     await operatorPage.screenshot({ path: `test-results/operator-labor-service-${suffix}.png` })
-    await operatorPage.getByRole('button', { name: 'Iniciar trabalho', exact: true }).click()
-    await operatorPage.getByRole('button', { name: 'Troca de m\u00e1quina ou servi\u00e7o', exact: true }).waitFor()
+    await operatorPage.getByRole('button', { name: /Iniciar trabalho/ }).click()
+    await operatorPage.getByRole('button', { name: /^Pausar trabalho/ }).waitFor()
     await fixture.mutateStore((store) => {
       const current = store.orders.find((item) => item.code === order.code)
       const start = new Date(Date.now() - 3600000).toISOString()
       current.operation.activeSessions[0].startedAt = current.operation.activeSince = start; current.operationEvents[0].at = start
     })
-    await operatorPage.getByRole('button', { name: 'Troca de m\u00e1quina ou servi\u00e7o', exact: true }).click()
-    await operatorPage.getByLabel('Novo servi\u00e7o', { exact: true }).selectOption(nextService.id)
-    await operatorPage.getByRole('button', { name: 'Confirmar troca', exact: true }).click()
-    await operatorPage.getByRole('dialog').waitFor({ state: 'hidden' })
+    await operatorPage.getByRole('button', { name: /Selecionar m\u00e1quina \/ servi\u00e7o/ }).click()
+    await operatorPage.getByRole('region', { name: 'Servi\u00e7o', exact: true }).getByRole('button', { name: nextService.name, exact: true }).click()
+    await operatorPage.locator('.operator-step--resource').getByText(`Servi\u00e7o: ${nextService.name}`, { exact: true }).waitFor()
     assert.equal((await request('/operations/orders')).data.items.find((item) => item.code === order.code).operation.activeSession.laborServiceId, nextService.id)
-    await operatorPage.getByRole('button', { name: 'Pausar trabalho', exact: true }).click()
+    await operatorPage.getByRole('button', { name: /^Pausar trabalho/ }).click()
     await operatorPage.locator('.operator-dialog select').selectOption('Descanso')
     await operatorPage.getByRole('button', { name: 'Confirmar pausa', exact: true }).click()
-    await operatorPage.getByRole('button', { name: 'Trabalhar neste projeto', exact: true }).waitFor()
+    await operatorPage.getByRole('button', { name: /Iniciar trabalho/ }).waitFor()
     await operatorPage.close()
 
     await navigate('Servi\u00e7os')

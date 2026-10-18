@@ -1201,6 +1201,35 @@ button {
   font-size: 13px;
 }
 
+/* Sectors of a machine: typed with commas or marked with one touch among the sectors already registered. */
+.machine-sector-picker { display: grid; gap: 8px; margin-top: 8px; }
+.machine-sector-picker small { color: #5f7489; font-size: 12px; }
+.machine-sector-options { display: flex; flex-wrap: wrap; gap: 6px; }
+.machine-sector-picker button { padding: 5px 12px; border: 1px solid #cfdbe7; border-radius: 999px; background: #fff; color: #31506f; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.machine-sector-picker button[aria-pressed="true"] { border-color: #0c4c91; background: #e8f1fb; color: #0c4c91; }
+:root[data-theme="dark"] .machine-sector-picker small { color: #b4c6d8; }
+:root[data-theme="dark"] .machine-sector-picker button { border-color: #36516f; background: #162b43; color: #c9d8e8; }
+:root[data-theme="dark"] .machine-sector-picker button[aria-pressed="true"] { border-color: #8cc2ff; background: #173a5e; color: #a9d0ff; }
+
+/* Idle machines: 8 lines in view, the rest by scrolling inside the card (35px line + 1px border). */
+.usage-scroll { max-height: calc(8 * 36px); overflow-y: auto; overscroll-behavior: contain; padding-right: 6px; scrollbar-width: thin; }
+.usage-scroll:focus-visible { outline: 2px solid #0c4c91; outline-offset: 2px; border-radius: 4px; }
+.usage-scroll .usage-line:last-child { border-bottom: 0; }
+:root[data-theme="dark"] .usage-scroll:focus-visible { outline-color: #8cc2ff; }
+
+/* Operators with no OS open right now, below the machine summaries. */
+.idle-employees-card { min-height: 0; margin-top: 17px; }
+.idle-employees-card h2 { display: flex; align-items: center; gap: 10px; }
+.idle-employees-card h2 span { min-width: 28px; padding: 2px 9px; border-radius: 999px; background: #edf2f7; color: #48627d; font-size: 14px; text-align: center; }
+.idle-employees-card ul { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); column-gap: 28px; margin: 0; padding: 0; list-style: none; }
+.idle-employees-card .usage-line { grid-template-columns: 12px minmax(0, 1fr); row-gap: 0; padding: 6px 0; }
+.idle-employees-card .usage-line:last-child { border-bottom: 1px solid #edf1f5; }
+.idle-employees-card .usage-line span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.idle-employees-card .usage-line small { grid-column: 2; color: #6b8299; font-size: 12px; }
+:root[data-theme="dark"] .idle-employees-card h2 span { background: #203c59; color: #c9d8e8; }
+:root[data-theme="dark"] .idle-employees-card .usage-line small { color: #a9bccf; }
+:root[data-theme="dark"] .idle-employees-card .usage-line:last-child { border-bottom-color: #36516f; }
+
 .modal-backdrop {
   position: fixed;
   z-index: 10;
@@ -2130,39 +2159,10 @@ button {
   border-top: 1px solid #e5ebf1;
 }
 
-.offer-empty-state--labor {
-  min-height: 82px;
-}
-
-.offer-labor-list {
-  overflow-x: auto;
-}
-
-.offer-labor-row {
-  display: grid;
-  grid-template-columns: 100px minmax(145px, 1fr) 65px 82px 82px 30px;
-  align-items: center;
-  gap: 7px;
-  min-width: 580px;
-  min-height: 49px;
-  padding: 0 7px;
-  border-bottom: 1px solid #e4ebf2;
-  color: #31587f;
-  font-size: 11px;
-  text-align: center;
-}
-
-.offer-labor-row--header {
-  min-height: 33px;
-  border-bottom: 0;
-  color: #7891aa;
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-}
-
-.offer-labor-row strong {
-  color: #173f6a;
+/* Labor entries reuse the material list (head, rows, icon tile, remove button); only the icon and the labels differ. */
+.offer-material-row--labor .material-visual svg {
+  width: 28px;
+  height: 28px;
 }
 
 .offer-resource-totals {
@@ -3410,6 +3410,39 @@ button {
   font-size: 13px;
 }
 
+/* The amount charged from the customer, above the gross profit it leaves. */
+.proposal-price {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 10px -16px 0;
+  padding: 10px 15px;
+  border-top: 1px solid #e5ebf1;
+  color: #1b2b3d;
+  font-size: 13px;
+}
+
+.proposal-price strong {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.proposal-price small {
+  color: #71839a;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.proposal-price b {
+  color: #172337;
+  font-size: 20px;
+  white-space: nowrap;
+}
+
+.proposal-price + .proposal-profit { margin-top: 0; }
+
 .proposal-card--blue .proposal-profit { background: #edf3ff; }
 .proposal-card--purple .proposal-profit { background: #f2edff; }
 .proposal-card--red .proposal-profit { background: #ffedef; }
@@ -4484,8 +4517,32 @@ button {
 }
 
 .registration-list--employees .registration-list-row {
-  grid-template-columns: 60px minmax(150px, 1.25fr) 130px minmax(205px, 1.35fr) 132px 200px;
-  min-width: 962px;
+  grid-template-columns: minmax(160px, 1.2fr) 150px 120px minmax(190px, 1.3fr) 100px 200px;
+  min-width: 1000px;
+}
+
+.registration-access-code {
+  display: flex;
+  gap: 8px;
+}
+
+.registration-access-code input {
+  flex: 1;
+  min-width: 0;
+}
+
+.registration-access-code button {
+  flex: none;
+  height: 46px;
+  margin-top: 8px;
+  padding: 0 14px;
+  border: 1px solid #c9d6e3;
+  border-radius: 8px;
+  background: #f4f8fc;
+  color: #0c4c91;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .registration-list-row strong {
@@ -6945,6 +7002,11 @@ button {
 .admin-os-table td:first-child strong, .admin-os-table td:first-child small { display: block; }
 .admin-os-table td:first-child small { margin-top: 4px; color: #66809b; }
 .admin-os-table .admin-os-row--material-pending, .admin-os-table .admin-os-row--material-pending > td { background: #fff8e8; }
+/* An OS that was just reopened: a soft highlight that fades away, so it is easy to find in the list. */
+.admin-os-table .admin-os-row--reopened > td { animation: admin-os-reopened 8s ease-out forwards; }
+.admin-os-table .admin-os-row--reopened > td:first-child { box-shadow: inset 3px 0 0 #0c4c91; }
+@keyframes admin-os-reopened { from { background-color: rgba(30, 120, 210, .18); } to { background-color: transparent; } }
+@media (prefers-reduced-motion: reduce) { .admin-os-table .admin-os-row--reopened > td { animation: none; background-color: rgba(30, 120, 210, .18); } }
 .admin-os-material-alert { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; margin-top: 9px; padding: 6px; border: 1px solid transparent; border-radius: 5px; background: #ffedc5; color: #965900; font-size: 11px; line-height: 1.3; cursor: pointer; }
 .admin-os-material-alert:hover { border-color: #d99523; background: #ffe4ad; }
 .admin-os-material-alert svg { flex-shrink: 0; }
@@ -7093,3 +7155,113 @@ button {
   .format-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .format-option { min-height: 96px; }
 }
+.admin-os-po { display: inline-flex; align-items: center; gap: 5px; padding: 5px 7px; border: 1px solid; border-radius: 5px; white-space: nowrap; }
+.admin-os-po::before { content: '●'; font-size: 10px; }
+.admin-os-po--yes { border-color: #c5e4cf; background: #e8f6ec; color: #188449; }
+.admin-os-po--no { border-color: #f3c7ca; background: #fdebec; color: #c52d37; }
+:root[data-theme="dark"] .admin-os-po--yes { border-color: #2f6b45; background: #15301f; color: #7fd49c; }
+:root[data-theme="dark"] .admin-os-po--no { border-color: #7a3036; background: #3a1a1d; color: #f2a1a7; }
+/* Serviços concluídos has no progress column: widths follow the content, with the purchase order last before the action. */
+.admin-os-shell--completed .admin-os-table th:nth-child(n) { width: auto; text-align: left; }
+.admin-os-shell--completed .admin-os-table th:nth-child(1) { width: 22%; }
+.admin-os-shell--completed .admin-os-table td:nth-child(9) { padding-left: 0; }
+/* Sortable headers and the filter by employee of the finished services. */
+.admin-os-sort { display: inline-flex; align-items: center; gap: 5px; padding: 0; border: 0; background: none; color: inherit; font: inherit; font-weight: inherit; text-align: left; cursor: pointer; }
+.admin-os-sort svg { flex: none; opacity: .75; }
+.admin-os-sort:focus-visible { outline: 2px solid #0c4c91; outline-offset: 2px; border-radius: 3px; }
+.admin-os-collaborator-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 0 0 14px; }
+.admin-os-collaborator-filter label { display: flex; align-items: center; gap: 8px; color: #48627d; font-size: 13px; font-weight: 600; }
+.admin-os-collaborator-filter select { min-width: 220px; max-width: 100%; height: 38px; padding: 0 10px; border: 1px solid #cfdbe7; border-radius: 8px; background: #fff; color: #163a5f; font: inherit; font-weight: 500; }
+.admin-os-collaborator-filter span { color: #5f7489; font-size: 13px; }
+:root[data-theme="dark"] .admin-os-collaborator-filter label, :root[data-theme="dark"] .admin-os-collaborator-filter span { color: #b8c9da; }
+:root[data-theme="dark"] .admin-os-collaborator-filter select { border-color: #36516f; background: #162b43; color: #e1ebf6; }
+:root[data-theme="dark"] .admin-os-sort:focus-visible { outline-color: #8cc2ff; }
+@media (max-width: 760px) { .admin-os-collaborator-filter label { flex: 1 1 100%; flex-wrap: wrap; } .admin-os-collaborator-filter select { flex: 1 1 100%; min-width: 0; } }
+/* Piece track (PieceTrack.jsx): one slot per piece; dark blue while working, green when stopped or finished. */
+.piece-track { --piece-empty: #e3e9ef; --piece-fill: #2e9e5b; --piece-divider: rgba(255, 255, 255, .28); display: flex; gap: 0; width: 100%; height: 100%; min-height: 8px; overflow: hidden; border-radius: 4px; background: transparent; }
+.piece-track--working { --piece-fill: #173f7a; }
+.piece-track > i { flex: 1 1 0; min-width: 1px; background: var(--piece-empty); }
+/* Subtle hairline between pieces: the stage still reads as one block. */
+.piece-track > i + i { box-shadow: inset 1px 0 0 var(--piece-divider); }
+.piece-track > i:not(.piece-track-filled) + i:not(.piece-track-filled) { box-shadow: inset 1px 0 0 rgba(120, 140, 160, .14); }
+.piece-track > i.piece-track-filled { background: var(--piece-fill); }
+.piece-track:has(.piece-track-bar) { background: var(--piece-empty); }
+.piece-track > i.piece-track-bar { flex: none; height: 100%; transition: width .3s ease; }
+:root[data-theme="dark"] .piece-track { --piece-empty: #2b3a4a; --piece-fill: #3fb174; --piece-divider: rgba(0, 0, 0, .22); }
+:root[data-theme="dark"] .piece-track--working { --piece-fill: #4f8fe0; }
+@media (prefers-reduced-motion: reduce) { .piece-track > i { transition: none; } }
+.admin-os-stage--pieces .admin-os-stage-block { background: transparent; padding: 0 1px; }
+.admin-os-stage--pieces + .admin-os-stage--pieces .admin-os-stage-block { border-left: 0; padding-left: 4px; }
+/* Etapas do serviço: a numbered stack read from top to bottom (ServiceStageEditor.jsx). */
+.offer-stage-hint { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 0 0 14px; color: #5b7690; font-size: 12px; }
+.offer-stage-hint svg { color: #7892ac; }
+.offer-stage-range { margin-left: auto; color: #6b84a0; font-size: 11px; font-weight: 600; }
+.offer-stage-options.offer-stage-stack { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; max-width: 420px; }
+.offer-stage-stack .offer-stage-item { gap: 6px; min-height: 34px; padding: 2px 6px 2px 0; border-radius: 6px; }
+.offer-stage-stack .offer-stage-item:hover { background: #f4f8fc; }
+.offer-stage-stack .offer-stage-item label { flex: 1; min-height: 30px; }
+/* The numbers are joined by a thin line, like the steps of a sequence. */
+.offer-stage-number { position: relative; display: inline-grid; flex: 0 0 24px; width: 24px; height: 24px; place-items: center; border: 0; border-radius: 50%; background: #e8eef4; color: #fff; font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.offer-stage-stack .offer-stage-item + .offer-stage-item .offer-stage-number::before { content: ''; position: absolute; bottom: 100%; left: 50%; width: 1.5px; height: 12px; margin-left: -0.75px; background: #d8e3ee; }
+.offer-stage-item--selected .offer-stage-number { border: 0; background: #0c4c91; }
+.offer-stage-item:not(.offer-stage-item--selected) label { color: #7b8fa3; }
+.offer-stage-item--selected label { color: #173f6a; font-weight: 600; }
+:root[data-theme="dark"] .offer-stage-number { background: #2b3a4a; }
+:root[data-theme="dark"] .offer-stage-item--selected .offer-stage-number { background: #4f8fe0; }
+:root[data-theme="dark"] .offer-stage-item--selected label { color: #e2ecf6; }
+:root[data-theme="dark"] .offer-stage-stack .offer-stage-item:hover { background: #1f2c3a; }
+/* Planned time next to a checked stage, and the hint of the piece field. */
+.offer-stage-time { display: inline-flex; align-items: center; gap: 3px; margin-left: auto; color: #6b84a0; font-size: 11px; }
+.offer-stage-time input { width: 46px; height: 28px; padding: 0 6px; border: 1px solid #cbd9e6; border-radius: 5px; color: #173f6a; font: inherit; font-size: 12px; text-align: right; }
+.offer-stage-time input:focus { border-color: #4d91ce; outline: none; box-shadow: 0 0 0 3px rgba(43, 119, 183, .11); }
+.offer-stage-options.offer-stage-stack { max-width: 520px; }
+.piece-autocomplete-hint { display: block; margin-top: 5px; color: #6b84a0; font-size: 11px; font-weight: 400; }
+.piece-history-banner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 16px; padding: 12px 14px; border-left: 3px solid #0c4c91; border-radius: 6px; background: #edf5fc; color: #284b6c; font-size: 13px; }
+.piece-history-banner div { display: grid; gap: 2px; }
+:root[data-theme="dark"] .offer-stage-time input { border-color: #3b4d61; background: #18222d; color: #e2ecf6; }
+:root[data-theme="dark"] .piece-history-banner { background: #18283a; color: #cfe0f1; }
+/* Operator: stage near its planned time (80%), in a discreet red. */
+.piece-track--alert { --piece-fill: #d77a7a; --piece-empty: #f4e4e4; }
+:root[data-theme="dark"] .piece-track--alert { --piece-fill: #c76b6b; --piece-empty: #3a2628; }
+.proposal-margin-hint { display: block; margin: -4px 0 6px; color: #7b8fa3; font-size: 11px; text-align: right; }
+.proposal-declined-note { align-self: center; padding: 6px 10px; border-radius: 6px; background: #fdebec; color: #b42318; font-size: 13px; font-weight: 600; }
+.proposal-decline-button { border-color: #f3c7ca; color: #b42318; }
+/* Emergency OS: the word in orange next to the code and a thin orange stripe on the left of the row. */
+.os-emergency-label { color: #c25a0a; font-weight: 700; }
+.admin-os-table .admin-os-row--emergency > td:first-child { box-shadow: inset 3px 0 0 #ef8a2e; }
+:root[data-theme="dark"] .os-emergency-label { color: #f5a35a; }
+/* Below 1150px the rows become cards: the stripe goes on the whole card. */
+@media (max-width: 1150px) {
+  .admin-os-table .admin-os-row--emergency > td:first-child { box-shadow: none; }
+  .admin-os-table tbody tr.admin-os-row--emergency { box-shadow: inset 3px 0 0 #ef8a2e; }
+}
+/* Time since the proposal was sent, under "Proposta gerada" in the offers list. */
+.offer-status-cell { display: grid; justify-items: center; gap: 5px; min-width: 0; }
+.offer-status-cell .offer-sent-since { display: inline-flex; align-items: center; gap: 4px; color: #6b84a0; font-size: 11px; font-weight: 400; white-space: nowrap; }
+.offer-status-cell .offer-sent-since--late { color: #c25a0a; font-weight: 700; }
+:root[data-theme="dark"] .offer-status-cell .offer-sent-since--late { color: #f5a35a; }
+/* Offer details: how long the piece took the other times. */
+.offer-lead-time { display: flex; align-items: flex-start; gap: 12px; margin: 14px 0 4px; padding: 12px 14px; border: 1px solid #dce6ef; border-radius: 8px; background: #f7fafd; color: #31587f; }
+.offer-lead-time svg { flex: none; margin-top: 2px; color: #0c4c91; }
+.offer-lead-time div { display: grid; gap: 2px; }
+.offer-lead-time small { color: #6b84a0; font-size: 12px; }
+.offer-lead-time strong { color: #173f6a; font-size: 15px; }
+.offer-lead-time span { color: #6b84a0; font-size: 12px; }
+:root[data-theme="dark"] .offer-lead-time { border-color: #2f4256; background: #18222d; color: #cfe0f1; }
+:root[data-theme="dark"] .offer-lead-time strong { color: #e2ecf6; }
+/* DownloadLink.jsx: buttons that look like the links they replaced (files are fetched with the session). */
+.download-link, .os-attachment-download, .operator-info-download { padding: 0; border: 0; background: none; color: #1f5f99; font: inherit; text-align: left; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.download-link:disabled, .os-attachment-download:disabled, .operator-info-download:disabled { cursor: progress; opacity: .6; }
+.download-link-error { display: block; margin-top: 4px; color: #b42318; font-size: 11px; }
+.proposal-generated-actions .download-link { padding: 12px; color: #0c4c91; font-weight: 700; text-decoration: none; }
+.os-attachments .os-attachment-download { display: flex; width: 100%; align-items: center; gap: 9px; padding: 12px 0; color: #245c8c; font-size: 12px; text-decoration: none; }
+.os-attachments .os-attachment-download:hover { text-decoration: underline; }
+.os-attachments .os-attachment-download span { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.operator-info-files .operator-info-download { flex-shrink: 0; color: #15508f; font-size: 12px; }
+:root[data-theme="dark"] .download-link, :root[data-theme="dark"] .proposal-generated-actions .download-link, :root[data-theme="dark"] .operator-info-files .operator-info-download { color: #e1ebf6; }
+:root[data-theme="dark"] .os-attachments .os-attachment-download { color: #a9c4da; }
+@media screen and (max-width: 760px) { .proposal-generated-actions .download-link { flex: 1 1 100%; min-height: 44px; font-size: 14px; } }
+.offers-page-notice { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.offers-page-notice-close { flex: none; padding: 0 4px; border: 0; background: none; color: inherit; font-size: 18px; line-height: 1; cursor: pointer; }
+/* Text only for screen readers (also used by the stage order and the piece field). */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

@@ -14,6 +14,8 @@ try {
   await page.getByRole('button', { name: 'Entrar', exact: true }).click()
   await page.locator('.admin-home-main').waitFor()
   const token = await page.evaluate(() => sessionStorage.getItem('gmac-admin-token'))
+  // Contas a Pagar is inside the "Gestão Financeira" group, which starts closed.
+  await page.locator('.sidebar').getByRole('button', { name: 'Gestão Financeira', exact: true }).click()
   await page.locator('.sidebar').getByRole('button', { name: 'Contas a Pagar', exact: true }).click()
   await page.getByRole('heading', { name: 'Contas a Pagar', exact: true }).waitFor()
   await page.reload()

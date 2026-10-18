@@ -28,9 +28,9 @@ test('invalid quantities and strict shortages do not write inventory', async () 
 test('registered materials cannot generate an OS without the inventory database', async (t) => {
   const fixture = await createWorkflowFixture()
   t.after(() => fixture.close())
-  const offer = (await fixture.request('/offers', 'POST', offerDraft)).data.item
-  await fixture.request(`/offers/${offer.id}/resources`, 'PUT', { materials: [{ inventoryId: 1, name: 'Inox', quantity: 1 }], laborEntries: [], stages: ['painting'], kind: 'service' })
-  await fixture.request(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', title: 'Teste', serviceValue: 100, deadline: offer.deadline } })
-  assert.equal((await fixture.request(`/offers/${offer.id}/accept`, 'POST')).status, 503)
-  assert.deepEqual((await fixture.request('/orders')).data.items, [])
+  const offer = (await fixture.adminRequest('/offers', 'POST', offerDraft)).data.item
+  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [{ inventoryId: 1, name: 'Inox', quantity: 1 }], laborEntries: [], stages: ['painting'], kind: 'service' })
+  await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', title: 'Teste', serviceValue: 100, deadline: offer.deadline } })
+  assert.equal((await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')).status, 503)
+  assert.deepEqual((await fixture.request('/orders', 'GET', undefined, fixture.admin)).data.items, [])
 })

@@ -10,7 +10,10 @@ page.on('pageerror', (error) => errors.push(error.message))
 const navigate = async (name) => {
   const opener = page.getByRole('button', { name: 'Abrir menu de navegação', exact: true })
   if (await opener.isVisible() && await opener.getAttribute('aria-expanded') === 'false') await opener.click()
-  await page.locator('.sidebar').getByRole('button', { name, exact: true }).click()
+  const item = page.locator('.sidebar').getByRole('button', { name, exact: true })
+  // Registrations and finance live in groups of the side menu that start closed.
+  for (const group of ['Cadastros', 'Gestão Financeira']) if (!await item.isVisible() && await page.locator('.sidebar').getByRole('button', { name: group, exact: true }).count()) await page.locator('.sidebar').getByRole('button', { name: group, exact: true }).click()
+  await item.click()
 }
 const left = page.getByRole('button', { name: 'Rolar abas para a esquerda', exact: true })
 const right = page.getByRole('button', { name: 'Rolar abas para a direita', exact: true })

@@ -6,7 +6,8 @@ import express from 'express'
 import mysql from 'mysql2/promise'
 import createOffersRouter, { mutateStore } from './offers.js'
 import createOperationsRouter from './operations.js'
-import { createAccountService, createAccountsRouter, requireAdmin } from './accounts.js'
+import { createAccountService, createAccountsRouter, requireAdmin, restrictStaffFinance } from './accounts.js'
+import { ensureEmployeeAccess } from './employeeAccess.js'
 import createLoginRouter, { testLoginEnabled } from './authLogin.js'
 import createMachinesRouter from './machines.js'
 import createLaborServicesRouter, { ensureLaborServices } from './laborServices.js'
@@ -14,7 +15,6 @@ import createReportsRouter from './reports.js'
 import createPayablesRouter from './payables.js'
 import createReceivablesRouter from './receivables.js'
 import createBankStatementsRouter from './bankStatements.js'
-import createAiReconciliationRouter from './aiReconciliation.js'
 import createFiscalRouter, { startFiscalCatalogSchedule } from './fiscalCatalog.js'
 import createProposalDocumentsRouter from './proposalDocuments.js'
 import createInventoryImportRouter from './inventoryImport.js'
@@ -25,6 +25,8 @@ import { allocateReceivedMaterial } from './orderMaterials.js'
 import { createApiRateLimiter } from './rateLimit.js'
 import { ensureInventoryAppearance, inventoryAppearance } from './inventoryAppearance.js'
 import { configureWeb, serveInterface, trustProxySetting } from './webServer.js'
+import { startDataBackups } from './dataBackup.js'
+import { dataDirectory } from './dataDirectory.js'
 
 const app = express()
 const port = Number(process.env.PORT || 3002)
@@ -55,7 +57,9 @@ if (process.env.DB_HOST && process.env.DB_USER && process.env.DB_NAME) {
   await ensureInventoryAppearance(pool)
 }
 
+await ensureEmployeeAccess(pool)
 await ensureLaborServices()
+app.use('/api', restrictStaffFinance)
 app.use('/api', createOffersRouter(pool, requireAdmin))
 app.use('/api', createOperationsRouter(pool))
 const accounts = createAccountService(pool)
@@ -68,10 +72,9 @@ app.use('/api', createInventoryImportRouter(pool, requireAdmin))
 app.use('/api', createMaterialRequestsRouter(requireAdmin, pool, accounts))
 const payablesRouter = createPayablesRouter(accounts, requireAdmin)
 app.use('/api', payablesRouter)
-const receivablesRouter = createReceivablesRouter(accounts, requireAdmin)
+const receivablesRouter = createReceivablesRouter(accounts, requireAdmin, pool)
 app.use('/api', receivablesRouter)
 app.use('/api', createBankStatementsRouter(accounts, requireAdmin))
-app.use('/api', createAiReconciliationRouter(accounts, requireAdmin))
 app.use('/api', createFiscalRouter(requireAdmin))
 app.use('/api', createProposalDocumentsRouter(requireAdmin))
 const notificationsRouter = createNotificationsRouter({ requireAdmin, payables: payablesRouter, receivables: receivablesRouter, loadInventory: async () => {
@@ -85,6 +88,7 @@ const recordInventoryNotification = (row, previousLow) => mutateStore((store) =>
 await refreshInventoryNotifications()
 setInterval(refreshInventoryNotifications, 10000).unref()
 setInterval(() => payablesRouter.sweep().catch((error) => console.error('Falha ao verificar vencimentos:', error.message)), 60000).unref()
+startDataBackups(dataDirectory)
 setInterval(() => receivablesRouter.sweep().catch((error) => console.error('Falha ao verificar recebimentos:', error.message)), 60000).unref()
 // CNAE, NCM, NBS and the companies' registered activities are refreshed every Sunday at midnight.
 if (process.env.FISCAL_CATALOG_SYNC !== 'off') startFiscalCatalogSchedule()
@@ -98,7 +102,8 @@ app.get('/api/health', async (_request, response) => {
   }
 })
 
-app.get('/api/inventory', async (_request, response) => {
+// Stock (quantities and prices) is for the administrative portal only.
+app.get('/api/inventory', requireAdmin, async (_request, response) => {
   if (!pool) {
     return response.status(503).json({ message: 'O banco de dados ainda não está configurado.' })
   }
@@ -206,7 +211,7 @@ app.patch('/api/inventory/:materialId', requireAdmin, async (request, response) 
   }
 })
 
-app.delete('/api/inventory/:materialId', async (request, response) => {
+app.delete('/api/inventory/:materialId', requireAdmin, async (request, response) => {
   if (!pool) {
     return response.status(503).json({ message: 'O banco de dados ainda não está configurado.' })
   }
@@ -221,7 +226,7 @@ app.delete('/api/inventory/:materialId', async (request, response) => {
   }
 })
 
-app.get('/api/inventory/:materialId/history', async (request, response) => {
+app.get('/api/inventory/:materialId/history', requireAdmin, async (request, response) => {
   if (!pool) {
     return response.status(503).json({ message: 'O banco de dados ainda não está configurado.' })
   }
@@ -243,7 +248,7 @@ app.get('/api/inventory/:materialId/history', async (request, response) => {
   }
 })
 
-app.post('/api/inventory/:materialId/movements', (request, response, next) => request.body?.materialRequestId != null ? requireAdmin(request, response, next) : next(), async (request, response) => {
+app.post('/api/inventory/:materialId/movements', requireAdmin, async (request, response) => {
   if (!pool) {
     return response.status(503).json({ message: 'O banco de dados ainda não está configurado.' })
   }

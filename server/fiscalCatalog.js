@@ -2,10 +2,9 @@ import https from 'node:https'
 import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { dataDirectory } from './dataDirectory.js'
 import express from 'express'
 
-const dataDirectory = path.join(path.dirname(fileURLToPath(import.meta.url)), 'data')
 const catalogPath = path.join(dataDirectory, 'fiscal-catalog.json')
 const WEEK = 7 * 86400000
 const RETRY_AFTER_FAILURE = 6 * 3600000
@@ -203,10 +202,10 @@ export function searchFiscal(catalog, kind, query, { cnpj, limit = 30 } = {}) {
 
 export default function createFiscalRouter(requireAdmin) {
   const router = express.Router()
-  router.get('/fiscal/status', async (_request, response, next) => {
+  router.get('/fiscal/status', requireAdmin, async (_request, response, next) => {
     try { response.set('Cache-Control', 'no-store').json(fiscalStatus(await readFiscalCatalog())) } catch (error) { next(error) }
   })
-  router.get('/fiscal/search', async (request, response, next) => {
+  router.get('/fiscal/search', requireAdmin, async (request, response, next) => {
     const kind = String(request.query.kind || '')
     if (!['cnae', 'ncm', 'nbs'].includes(kind)) return response.status(400).json({ message: 'Informe o tipo de código: CNAE, NCM ou NBS.' })
     try { response.json({ items: searchFiscal(await readFiscalCatalog(), kind, String(request.query.q || '').slice(0, 120), { cnpj: request.query.cnpj }) }) } catch (error) { next(error) }

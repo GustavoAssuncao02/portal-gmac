@@ -9,6 +9,7 @@
     "prebuild": "npm run theme:build",
     "dev": "concurrently --kill-others --names FRONTEND,BACKEND --prefix-colors cyan,green \"vite\" \"node server/index.js\"",
     "build": "vite build",
+    "prestart": "node scripts/ensure-build.mjs",
     "start": "node server/index.js",
     "db:setup": "node scripts/setup-local-database.mjs",
     "db:optimize": "node scripts/optimize-sql.mjs",
@@ -20,10 +21,10 @@
     "test:payables": "node --test tests/payables.test.js && node tests/payables.browser.mjs"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.132.1",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
+    "@vitejs/plugin-react": "^4.3.4",
     "bcryptjs": "^3.0.3",
     "chart.js": "^4.5.1",
     "compression": "^1.8.2",
@@ -35,16 +36,15 @@
     "lucide-react": "^1.50.0",
     "mysql2": "^3.12.0",
     "pdfkit": "^0.20.2",
+    "postcss": "^8.5.28",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "sharp": "^0.35.5"
+    "sharp": "^0.35.5",
+    "vite": "^6.0.5"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^9.1.2",
-    "playwright": "^1.63.0",
-    "postcss": "^8.5.28",
-    "vite": "^6.0.5"
+    "playwright": "^1.63.0"
   },
   "overrides": {
     "exceljs": {

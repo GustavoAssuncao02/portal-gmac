@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
+import { enterOperatorCode, openOrder, startWork } from './operatorEntry.js'
 
 const fixture = await createWorkflowFixture()
 const browser = await chromium.launch({ headless: true })
@@ -12,35 +13,39 @@ try {
   await fixture.mutateStore((store) => { store.machines = [{ id: 'torno', name: 'Torno 01' }] })
   const employees = []
   for (const [index, name] of ['Ana Teste', 'Bruno Teste', 'Carla Teste'].entries()) {
-    employees.push((await fixture.request('/employees', 'POST', { name, birthDate: '1990-01-01', cpf: `0000000000${index + 1}`, email: `operador${index}@example.invalid`, identification: `00${index + 1}` })).data.item)
+    employees.push((await fixture.adminRequest('/employees', 'POST', { name, birthDate: '1990-01-01', cpf: `0000000000${index + 1}`, email: `operador${index}@example.invalid`, identification: `00${index + 1}` }, fixture.admin)).data.item)
   }
   const [ana, bruno, carla] = employees
-  const offer = (await fixture.request('/offers', 'POST', offerDraft)).data.item
-  await fixture.request(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], kind: 'service', stages: ['turning', 'painting'] })
-  await fixture.request(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', deadline: offerDraft.deadline, serviceValue: 100 } })
-  const order = (await fixture.request(`/offers/${offer.id}/accept`, 'POST')).data.item
-  const service = (await fixture.request('/labor-services')).data.items[0]
+  const offer = (await fixture.adminRequest('/offers', 'POST', offerDraft)).data.item
+  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], kind: 'service', stages: ['turning', 'painting'] })
+  await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', deadline: offerDraft.deadline, serviceValue: 100 } })
+  const order = (await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')).data.item
+  const service = (await fixture.adminRequest('/labor-services')).data.items[0]
   // Carla started on another device: this browser has no credential for her session.
   const remote = await fixture.request(`/operations/orders/${order.code}/start`, 'POST', { employeeId: carla.id, laborServiceId: service.id }, { Authorization: `Bearer ${fixture.operatorToken}` })
   assert.equal(remote.status, 200)
   await context.addInitScript((token) => sessionStorage.setItem('gmac-operator-token', token), fixture.operatorToken)
   await page.goto(fixture.url)
 
-  const startWork = async (employee, type, value) => {
-    await page.getByRole('button', { name: 'Trabalhar neste projeto', exact: true }).click()
-    const dialog = page.getByRole('dialog')
-    await page.getByLabel('Funcionário', { exact: true }).selectOption(String(employee.id))
-    await dialog.getByRole('radio', { name: type, exact: true }).check()
-    await dialog.getByRole('combobox', { name: type, exact: true }).selectOption(value)
-    await page.getByRole('button', { name: 'Iniciar trabalho', exact: true }).click()
-    await dialog.waitFor({ state: 'hidden' })
+  // Each employee takes the shared tablet, identifies with their own code and starts on the OS.
+  const identify = async (employee) => {
+    if (!await page.locator('.operator-entry').isVisible()) await page.getByRole('button', { name: 'Trocar operador', exact: true }).click()
+    await enterOperatorCode(page, employee.accessCode)
   }
-  assert.equal(await page.getByRole('button', { name: 'Trabalhar neste projeto', exact: true }).isEnabled(), true, 'start stays available while someone is working')
-  await startWork(ana, 'Máquina', 'torno')
-  await startWork(bruno, 'Serviço de hora homem', String(service.id))
-  await page.getByRole('button', { name: 'Trabalhar neste projeto', exact: true }).click()
-  assert.equal(await page.locator('option', { hasText: 'Ana Teste (já trabalhando)' }).evaluate((option) => option.disabled), true)
-  await page.getByRole('button', { name: 'Fechar', exact: true }).click()
+  const work = async (employee, group, name) => {
+    await identify(employee)
+    await openOrder(page, order.service)
+    await startWork(page, group, name)
+    await page.locator('.operator-worker').filter({ hasText: employee.name }).waitFor()
+  }
+  await page.locator('.operator-entry').waitFor()
+  assert.equal(await page.locator('.operator-project').count(), 0, 'the OS list appears only after the code')
+  await work(ana, 'Máquina', 'Torno 01')
+  await work(bruno, 'Serviço', service.name)
+  await identify(ana)
+  await openOrder(page, order.service)
+  assert.equal(await page.getByRole('button', { name: /Iniciar trabalho/ }).count(), 0, 'someone already working sees Pausar instead of Iniciar')
+  await page.getByRole('button', { name: /^Pausar trabalho/ }).waitFor()
 
   const workers = page.locator('.operator-worker')
   assert.equal(await workers.count(), 3)
@@ -49,16 +54,9 @@ try {
   assert.ok(workersBox.y > (await page.locator('.operator-stage-groups').boundingBox()).y, 'workers are listed below the stages')
   assert.ok(workersBox.y < (await page.locator('.operator-history').boundingBox()).y, 'workers are listed above the activity history')
 
-  // Actions appear after clicking an employee name; another device's session cannot be controlled here.
-  await page.locator('.operator-worker-toggle').filter({ hasText: 'Ana Teste' }).click()
-  const anaActions = workers.filter({ hasText: 'Ana Teste' }).locator('.operator-worker-actions')
-  await anaActions.waitFor()
-  assert.deepEqual(await anaActions.getByRole('button').allTextContents(), ['Pausar trabalho', 'Troca de máquina ou serviço'])
-  assert.equal(await anaActions.getByRole('button', { name: 'Pausar trabalho' }).isEnabled(), true)
-  await page.locator('.operator-worker-toggle').filter({ hasText: 'Carla Teste' }).click()
-  const carlaActions = workers.filter({ hasText: 'Carla Teste' }).locator('.operator-worker-actions')
-  assert.equal(await carlaActions.getByRole('button', { name: 'Pausar trabalho' }).isDisabled(), true)
-  assert.match(await carlaActions.innerText(), /outro dispositivo/)
+  // The list only shows who is working; pausing and changing are done on the step cards above.
+  assert.equal(await workers.getByRole('button').count(), 0)
+  assert.match(await workers.filter({ hasText: 'Carla Teste' }).innerText(), /Serviço:/)
   await page.screenshot({ path: 'test-results/concurrent-operators-desktop.png', fullPage: true })
 
   // With more than one employee working, the stage record asks who completed it.
@@ -72,7 +70,7 @@ try {
   await ask.getByRole('radio', { name: /Carla Teste/ }).check()
   await ask.getByRole('button', { name: 'Registrar etapa', exact: true }).click()
   await ask.waitFor({ state: 'hidden' })
-  const events = (await fixture.request(`/operations/orders/${order.code}/events`)).data.items
+  const events = (await fixture.adminRequest(`/operations/orders/${order.code}/events`)).data.items
   const progress = events.find((event) => event.type === 'stage_progress')
   assert.equal(progress.employeeName, 'Carla Teste')
   assert.equal(progress.quantity, 2)
@@ -80,13 +78,14 @@ try {
   assert.match(await page.locator('.operator-history').innerText(), /Carla Teste · .*Tornearia: \+2 \(2 no total\) · Registrado por Ana Teste/)
 
   // Pausing one employee keeps the others working.
-  await page.locator('.operator-worker-toggle').filter({ hasText: 'Bruno Teste' }).click()
-  await workers.filter({ hasText: 'Bruno Teste' }).getByRole('button', { name: 'Pausar trabalho' }).click()
+  await identify(bruno)
+  await openOrder(page, order.service)
+  await page.getByRole('button', { name: /^Pausar trabalho/ }).click()
   await page.getByRole('dialog').locator('select').selectOption('Descanso')
   await page.getByRole('button', { name: 'Confirmar pausa', exact: true }).click()
   await page.getByRole('dialog').waitFor({ state: 'hidden' })
   await page.waitForFunction(() => document.querySelectorAll('.operator-worker').length === 2)
-  const operation = (await fixture.request('/operations/orders')).data.items[0].operation
+  const operation = (await fixture.request('/operations/orders', 'GET', undefined, fixture.admin)).data.items[0].operation
   assert.deepEqual(operation.activeSessions.map((session) => session.employeeName), ['Carla Teste', 'Ana Teste'])
   assert.equal(operation.status, 'running')
 

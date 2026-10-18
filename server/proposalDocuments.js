@@ -5,6 +5,7 @@ import { adminIdentity } from './accounts.js'
 import { readFiscalCatalog, plain } from './fiscalCatalog.js'
 import { defaultIssuers, nestleLabor, nestleMaterials, etiquetaLabor, etiquetaMaterials } from './proposalDefaults.js'
 import { renderProposalDocument, tableTotals, letterTotal, round2 } from './proposalPdf.js'
+import { proposalCosts, proposalPricing, hoursText } from './proposalMath.js'
 import { todayBahia } from './payableRules.js'
 
 export const documentModels = ['model-a', 'model-b', 'nestle', 'etiqueta']
@@ -159,6 +160,9 @@ function suggestedActivity(offer, catalog, cnpj) {
   return { code, description: activity?.description || knownActivities[code], registered: true }
 }
 
+// A contract may have several CNAE, NBS and NCM codes; the first CNAE is the main one.
+const asList = (value) => (Array.isArray(value) ? value : value ? [value] : []).filter((entry) => entry?.code)
+
 function lastFiscal(store, offer) {
   const service = plain(offer?.service).trim()
   return store.offers.filter((item) => item.proposal?.document?.fiscal && plain(item.service).trim() === service).sort((a, b) => String(b.proposal.generatedAt).localeCompare(String(a.proposal.generatedAt)))[0]?.proposal.document.fiscal
@@ -186,7 +190,7 @@ export async function buildDraft({ model, store, offer, value, deadline }) {
       scope: String(source?.description || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
       items: [{ description: source?.service || 'Serviço', quantity: quantityValue, unit: 'Un', unitPrice: round2(total / quantityValue) }],
       deliveryTerm: /^\d{4}-\d{2}-\d{2}$/.test(String(deadline || '').trim()) ? String(deadline).trim().split('-').reverse().join('/') : String(deadline || '').trim(), payment: '', validityDays: settings.validityDays, important: settings.important,
-      fiscal: { cnae: previous?.cnae || suggestedActivity(source, catalog, issuer.cnpj), nbs: previous?.nbs || null, ncm: previous?.ncm || null },
+      fiscal: { cnae: asList(previous?.cnae).length ? asList(previous.cnae) : asList(suggestedActivity(source, catalog, issuer.cnpj)), nbs: asList(previous?.nbs), ncm: asList(previous?.ncm) },
       technician: issuerTechnician(issuer),
     }
   }
@@ -248,13 +252,19 @@ export async function normalizeDocument(model, input, store) {
     const found = (catalog[kind] || []).find((row) => row.code === code)
     return { code, description: found?.description || text(entry.description, 300, `a descrição do ${label}`) }
   }
-  const cnae = fiscalEntry(input.fiscal?.cnae, 'cnae', /^\d{4}-\d\/\d{2}$/, 'CNAE')
-  if (!cnae) fail('Informe o CNAE (código de atividade) da proposta.')
+  // Each kind is a list without repeated codes; the order is kept (the first CNAE is the main one).
+  const fiscalList = (value, kind, pattern, label) => {
+    const entries = asList(value).map((entry) => fiscalEntry(entry, kind, pattern, label)).filter(Boolean).filter((entry, index, list) => list.findIndex((other) => other.code === entry.code) === index)
+    if (entries.length > 10) fail(`Informe no máximo 10 códigos ${label}.`)
+    return entries
+  }
+  const cnae = fiscalList(input.fiscal?.cnae, 'cnae', /^\d{4}-\d\/\d{2}$/, 'CNAE')
+  if (!cnae.length) fail('Informe o CNAE (código de atividade) da proposta.')
   const activities = catalog.companies?.[issuer.cnpj.replace(/\D/g, '')]?.activities
-  cnae.registered = activities ? activities.some((row) => row.code === cnae.code) : Object.hasOwn(knownActivities, cnae.code)
-  const nbs = fiscalEntry(input.fiscal?.nbs, 'nbs', /^\d\.\d{4}\.\d{2}\.\d{2}$/, 'NBS')
-  const ncm = fiscalEntry(input.fiscal?.ncm, 'ncm', /^\d{4}\.\d{2}\.\d{2}$/, 'NCM')
-  if (!nbs && !ncm) fail('Informe o NBS (serviço) ou o NCM (produto) da proposta.')
+  for (const entry of cnae) entry.registered = activities ? activities.some((row) => row.code === entry.code) : Object.hasOwn(knownActivities, entry.code)
+  const nbs = fiscalList(input.fiscal?.nbs, 'nbs', /^\d\.\d{4}\.\d{2}\.\d{2}$/, 'NBS')
+  const ncm = fiscalList(input.fiscal?.ncm, 'ncm', /^\d{4}\.\d{2}\.\d{2}$/, 'NCM')
+  if (!nbs.length && !ncm.length) fail('Informe o NBS (serviço) ou o NCM (produto) da proposta.')
   const scope = (Array.isArray(input.scope) ? input.scope : []).map((line) => text(line, 600, 'linha do escopo')).filter(Boolean)
   if (!scope.length) fail('Descreva o escopo da proposta.')
   if (scope.length > 40) fail('O escopo aceita no máximo 40 linhas.')
@@ -304,12 +314,30 @@ function remember(store, model, document, assignments) {
   }
 }
 
+// The proposal saved with a generated document. Costs and hours come from the planned resources of the offer, not from the
+// form: they cannot be edited in the proposal. The OS value is the total of the generated document, which is what the
+// customer receives.
+export function documentProposal({ item, option = {}, document, model, stages, generatedBy = null }) {
+  const key = ['A', 'B', 'C', 'D'].includes(option.key) ? option.key : 'A'
+  const costs = proposalCosts(item.resources), margin = Math.min(1000, Math.max(0, Number(option.margin) || 0)), discount = Math.min(100, Math.max(0, Number(option.discount) || 0))
+  const pricing = proposalPricing({ ...costs, margin, discount })
+  // The margin and discount chosen in the card describe the document only while it charges the OS value they produce;
+  // a price list (Nestlé, Etiqueta) or an edited price states its own, so the real margin on the cost is kept instead.
+  const asChosen = Math.abs(document.total - pricing.osValue) <= Math.max(0.05, (Number(item.quantity) || 1) * 0.005)
+  const realMargin = pricing.serviceValue > 0 ? Math.round((document.total - pricing.serviceValue) / pricing.serviceValue * 1000) / 10 : margin
+  return {
+    key, title: text(option.title, 80, 'o título') || `Opção ${key}`, deadline: text(option.deadline, 80, 'o prazo'),
+    serviceValue: pricing.serviceValue, osValue: document.total, discount: asChosen ? discount : 0, margin: asChosen ? margin : realMargin, profit: round2(document.total - pricing.serviceValue),
+    machine: hoursText(costs.machineHours), serviceTime: hoursText(costs.serviceHours), totalTime: hoursText(costs.totalHours), materials: costs.materials, labor: costs.labor,
+    stages, kind: item.resources?.kind ?? 'service', layout: model, document, generatedAt: new Date().toISOString(), generatedBy,
+  }
+}
 export default function createProposalDocumentsRouter(requireAdmin) {
   const router = express.Router()
   router.use((request, _response, next) => { const actor = adminIdentity(request); if (actor) { request.adminId = actor.id; request.adminName = actor.name } next() })
   const handle = (task) => async (request, response, next) => { try { await task(request, response) } catch (error) { if (error.status) return response.status(error.status).json({ message: error.message }); next(error) } }
 
-  router.get('/proposal-settings', handle(async (_request, response) => {
+  router.get('/proposal-settings', requireAdmin, handle(async (_request, response) => {
     const store = await readStore()
     const settings = proposalSettings(store)
     response.set('Cache-Control', 'no-store').json({ settings, nextQuoteNumber: nextQuoteNumber(store, settings) })
@@ -324,7 +352,7 @@ export default function createProposalDocumentsRouter(requireAdmin) {
     response.json({ settings })
   }))
 
-  router.get('/offers/:id/proposal-draft', handle(async (request, response) => {
+  router.get('/offers/:id/proposal-draft', requireAdmin, handle(async (request, response) => {
     const store = await readStore()
     const offer = store.offers.find((item) => item.id === request.params.id) || fail('Oferta não encontrada.', 404)
     const model = String(request.query.model || '')
@@ -333,7 +361,7 @@ export default function createProposalDocumentsRouter(requireAdmin) {
     response.set('Cache-Control', 'no-store').json({ draft, settings: proposalSettings(store) })
   }))
 
-  router.post('/offers/:id/proposal-document', handle(async (request, response) => {
+  router.post('/offers/:id/proposal-document', requireAdmin, handle(async (request, response) => {
     const { model, document: input, option = {}, assignments } = request.body || {}
     const before = await readStore()
     const offer = before.offers.find((item) => item.id === request.params.id)
@@ -345,12 +373,7 @@ export default function createProposalDocumentsRouter(requireAdmin) {
     const updated = await mutateStore((store) => {
       const item = store.offers.find((entry) => entry.id === request.params.id)
       if (!item || item.orderCode || item.status === 'rejected') fail('Oferta não encontrada, já aceita ou recusada.', 404)
-      const key = ['A', 'B', 'C', 'D'].includes(option.key) ? option.key : 'A'
-      item.proposal = {
-        key, title: text(option.title, 80, 'o título') || `Opção ${key}`, deadline: text(option.deadline, 80, 'o prazo'), serviceValue: document.total, discount: 0, margin: Number(option.margin) || 0,
-        machine: text(option.machine, 80, 'o tempo de máquina'), serviceTime: text(option.serviceTime, 80, 'o tempo de serviço'), materials: Number(option.materials) || 0, labor: Number(option.labor) || 0,
-        stages, kind: item.resources?.kind ?? 'service', layout: model, document, generatedAt: new Date().toISOString(), generatedBy: request.adminName || null,
-      }
+      item.proposal = documentProposal({ item, option, document, model, stages, generatedBy: request.adminName || null })
       item.status = 'proposed'
       remember(store, model, document, assignments)
       return item

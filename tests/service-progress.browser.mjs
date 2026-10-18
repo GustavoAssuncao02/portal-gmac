@@ -17,7 +17,7 @@ const samples = [
 ]
 function order(code, createdAt, deadline, counts, active = true) {
   const stages = counts.map((_, index) => ({ key: `stage-${index}`, name: names[index] }))
-  return { code, service: `Projeto ${code}`, company: 'Cliente de teste', labelNumber: code, createdAt, deadline, quantity: 10, operation: { status: active ? 'running' : 'waiting', progress: counts.length ? Math.round(counts.reduce((a, b) => a + b, 0) / counts.length * 10) : 0, accumulatedMs: 3600000, activeSession: active ? { employeeName: 'Operador de teste', startedAt: createdAt } : null, stages, stageCounts: Object.fromEntries(stages.map((stage, index) => [stage.key, counts[index]])) } }
+  return { code, service: `Projeto ${code}`, company: 'Cliente de teste', labelNumber: code, createdAt, deadline, quantity: 10, operation: { status: active ? 'running' : 'waiting', progress: counts.length ? Math.round(counts.reduce((a, b) => a + b, 0) / counts.length * 10) : 0, accumulatedMs: 3600000, activeSession: active ? { employeeName: 'Operador de teste', startedAt: createdAt } : null, activeSessions: active ? [{ id: `session-${code}`, employeeName: 'Operador de teste', startedAt: createdAt }] : [], stages, stageCounts: Object.fromEntries(stages.map((stage, index) => [stage.key, counts[index]])) } }
 }
 const orders = samples.map(([code, start, due]) => order(code, start, due, [10, 10, 4, 0, 0]))
 orders.push(order('single', samples[0][1], samples[0][2], [0], false))
@@ -57,17 +57,18 @@ try {
     assert.equal(await rowFor(code).locator('td').nth(3).innerText(), group)
   }
   assert.equal(await rowFor('machining').locator('.admin-os-stage-label').innerText(), '1. Freza')
-  for (const [code, , , color] of samples) {
+  // Each stage is a bar with one slot per piece (10 pieces): finished stages are green, the stage in production (the
+  // first unfinished one while someone works) is dark blue, and the pieces still missing are gray.
+  const filledPerStage = (row) => row.locator('.piece-track').evaluateAll((tracks) => tracks.map((track) => track.querySelectorAll('.piece-track-filled').length))
+  const tonesOf = (row) => row.locator('.piece-track').evaluateAll((tracks) => tracks.map((track) => [...track.classList].find((name) => name.startsWith('piece-track--')).replace('piece-track--', '')))
+  for (const [code] of samples) {
     const row = rowFor(code)
     assert.equal(await row.locator('.admin-os-stage').count(), 5)
-    assert.equal(await row.locator('.admin-os-stage-check').count(), 2)
     assert.equal(await row.locator('.admin-os-progress').count(), 0)
     assert.deepEqual(await row.locator('.admin-os-stage-label').allTextContents(), names.slice(0, 5).map((name, index) => `${index + 1}. ${name}`))
-    for (const block of await row.locator('.admin-os-stage--done .admin-os-stage-block, .admin-os-stage--started .admin-os-stage-block').all()) {
-      assert.equal(await block.evaluate((element) => getComputedStyle(element).backgroundColor), color)
-    }
-    assert.match(await row.locator('.admin-os-stage--started .admin-os-stage-block').evaluate((element) => getComputedStyle(element).backgroundImage), /repeating-linear-gradient/)
-    assert.equal(await row.locator('.admin-os-stage--pending').count(), 2)
+    assert.deepEqual(await row.locator('.piece-track').evaluateAll((tracks) => tracks.map((track) => track.children.length)), [10, 10, 10, 10, 10], 'one slot per piece')
+    assert.deepEqual(await filledPerStage(row), [10, 10, 4, 0, 0])
+    assert.deepEqual(await tonesOf(row), ['done', 'done', 'working', 'stopped', 'stopped'])
     const boxes = await row.locator('.admin-os-stage-block').evaluateAll((elements) => elements.map((element) => { const box = element.getBoundingClientRect(); return { left: box.left, right: box.right, top: box.top, height: box.height } }))
     for (let index = 1; index < boxes.length; index++) {
       assert.ok(Math.abs(boxes[index].left - boxes[index - 1].right) < 1)
@@ -76,36 +77,40 @@ try {
     }
     assert.ok(await row.locator('.admin-os-stage').evaluateAll((elements) => elements.every((element) => element.querySelector('.admin-os-stage-label').getBoundingClientRect().bottom <= element.querySelector('.admin-os-stage-block').getBoundingClientRect().top)))
   }
-  assert.equal(await rowFor('single').locator('.admin-os-stage--pending').count(), 1)
-  assert.equal(await rowFor('active-zero').locator('.admin-os-stage--pending').count(), 3)
-  assert.equal(await rowFor('six').locator('.admin-os-stage-check').count(), 6)
+  assert.deepEqual(await filledPerStage(rowFor('single')), [0])
+  assert.deepEqual(await tonesOf(rowFor('single')), ['stopped'], 'nobody working: no blue')
+  assert.deepEqual(await filledPerStage(rowFor('active-zero')), [0, 0, 0])
+  assert.deepEqual(await tonesOf(rowFor('six')), ['done', 'done', 'done', 'done', 'done', 'done'])
   assert.equal(await rowFor('no-stages').locator('.admin-os-stage-empty').count(), 1)
-  for (const [code, filled, checks] of [['piece-eight', 1, 0], ['piece-nine', 0, 0], ['last-piece', 1, 1], ['all-pieces', 2, 2]]) {
+  for (const [code, filled, tones] of [['piece-eight', [8, 7], ['working', 'stopped']], ['piece-nine', [8, 8], ['working', 'stopped']], ['last-piece', [10, 9], ['done', 'working']], ['all-pieces', [10, 10], ['done', 'done']]]) {
     const row = rowFor(code)
-    assert.equal(await row.locator('.admin-os-stage--done, .admin-os-stage--started').count(), filled, code)
-    assert.equal(await row.locator('.admin-os-stage--pending').count(), 2 - filled, code)
-    assert.equal(await row.locator('.admin-os-stage-check').count(), checks, code)
+    assert.deepEqual(await filledPerStage(row), filled, code)
+    assert.deepEqual(await tonesOf(row), tones, code)
     await row.locator('.admin-os-stage-track').screenshot({ path: `test-results/service-progress-${code}.png` })
   }
   await rowFor('green').locator('.admin-os-stage-track').screenshot({ path: 'test-results/service-progress-reference.png' })
   for (const [name, width, height] of [['desktop', 1600, 950], ['notebook', 1366, 768], ['mobile', 390, 844]]) {
     await page.setViewportSize({ width, height })
     assert.equal(await page.locator('.admin-os-table th').nth(6 - 1).evaluate((element) => getComputedStyle(element).textAlign), 'center', `${name} centered progress heading`)
-    const remainingWidth = await rowFor('green').locator('.admin-os-remaining').evaluate((element) => element.getBoundingClientRect().width)
-    assert.ok(remainingWidth <= 100, `${name} compact remaining-time column: ${remainingWidth}`)
-    const statusGap = await rowFor('green').evaluate((row) => {
-      const cell = row.querySelector('.admin-os-remaining')
-      const text = document.createRange()
-      text.selectNodeContents(cell)
-      return row.querySelector('.admin-os-status').getBoundingClientRect().left - text.getBoundingClientRect().right
-    })
-    assert.ok(statusGap <= 56, `${name} reduced remaining/status gap: ${statusGap}`)
+    // Column widths only exist in the table; on phones the rows become two-column cards.
+    if (width > 760) {
+      const remainingWidth = await rowFor('green').locator('.admin-os-remaining').evaluate((element) => element.getBoundingClientRect().width)
+      assert.ok(remainingWidth <= 100, `${name} compact remaining-time column: ${remainingWidth}`)
+      const statusGap = await rowFor('green').evaluate((row) => {
+        const cell = row.querySelector('.admin-os-remaining')
+        const text = document.createRange()
+        text.selectNodeContents(cell)
+        return row.querySelector('.admin-os-status').getBoundingClientRect().left - text.getBoundingClientRect().right
+      })
+      // About 58px with the piece bars at 1600px; the columns are percentages, so a couple of pixels move with the content.
+      assert.ok(statusGap <= 60, `${name} reduced remaining/status gap: ${statusGap}`)
+    }
     await page.screenshot({ path: `test-results/service-progress-${name}.png`, fullPage: true })
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), name)
     assert.ok(await page.locator('.admin-os-stage-label').evaluateAll((elements) => elements.every((element) => element.scrollWidth <= element.clientWidth)), `${name} stage labels`)
   }
   assert.deepEqual(errors, [])
-  console.log('Service progress passed: 8/7 fills one block, 8/8 clears both, 10/9 fills one, 10/10 fills both; connected blocks, deadline colors and desktop/mobile layouts remain intact.')
+  console.log('Service progress passed: one slot per piece, green finished stages, blue stage in production, gray missing pieces; connected blocks and desktop/mobile layouts.')
 } catch (error) {
   await page.screenshot({ path: 'test-results/service-progress-failure.png', fullPage: true })
   throw error

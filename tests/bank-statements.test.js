@@ -146,6 +146,11 @@ test('receivables follow OS completion, receipts, reversal reasons and duplicate
     assert.equal((await request('/receivables/REC-000001', 'DELETE')).status, 409, 'History with receipts is preserved')
     const detail = (await request('/receivables/REC-000001')).data
     assert.deepEqual(detail.history.map((row) => row.type), ['reversed', 'received', 'created'])
+    // The ISS withheld comes off what arrives, together with a discount; it cannot exceed the account nor go in a bulk receipt.
+    assert.equal((await request('/receivables/REC-000001/receive', 'POST', { date: todayBahia(), method: 'pix', iss: '1200' })).status, 400)
+    assert.equal((await request('/receivables/bulk', 'POST', { action: 'receive', ids: ['REC-000002'], date: todayBahia(), method: 'pix', iss: '1' })).status, 400)
+    const withIss = (await request('/receivables/REC-000001/receive', 'POST', { date: todayBahia(), method: 'pix', discount: '10', iss: '22' })).data.item.receipt
+    assert.deepEqual([withIss.discountCents, withIss.issCents, withIss.finalCents], [1000, 2200, 106800])
     const exported = await fetch(`${f.url}/api/receivables/export`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ format: 'xlsx', filters: { status: 'all' } }) })
     assert.equal(exported.status, 200)
   } finally { await f.close() }

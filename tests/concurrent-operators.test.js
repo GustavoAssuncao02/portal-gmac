@@ -9,16 +9,16 @@ const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DE
 async function setup(fixture, stages = ['turning', 'painting'], quantity) {
   const admin = (await fixture.request('/auth/login', 'POST', { cpf: env.DEMO_ADMIN_CPF, password: env.DEMO_ADMIN_PASSWORD })).data
   const headers = { Authorization: `Bearer ${admin.token}` }
-  const machine = (await fixture.request('/machines', 'POST', { name: 'Torno', type: 'Torno', sector: 'Usinagem', hourlyRate: 100 }, headers)).data.item
-  const service = (await fixture.request('/labor-services')).data.items[0]
+  const machine = (await fixture.adminRequest('/machines', 'POST', { name: 'Torno', type: 'Torno', sector: 'Usinagem', hourlyRate: 100 }, headers)).data.item
+  const service = (await fixture.adminRequest('/labor-services')).data.items[0]
   const employees = []
   for (const [index, name] of ['Ana', 'Bruno', 'Carla'].entries()) {
-    employees.push((await fixture.request('/employees', 'POST', { name, birthDate: '1990-01-01', cpf: `0000000000${index + 1}`, email: `${name.toLowerCase()}@example.invalid`, identification: `00${index + 1}` })).data.item)
+    employees.push((await fixture.adminRequest('/employees', 'POST', { name, birthDate: '1990-01-01', cpf: `0000000000${index + 1}`, email: `${name.toLowerCase()}@example.invalid`, identification: `00${index + 1}` }, fixture.admin)).data.item)
   }
-  const offer = (await fixture.request('/offers', 'POST', { ...offerDraft, ...(quantity ? { quantity } : {}) })).data.item
-  await fixture.request(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], kind: 'service', stages })
-  await fixture.request(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', deadline: offerDraft.deadline, serviceValue: 100 } })
-  const order = (await fixture.request(`/offers/${offer.id}/accept`, 'POST')).data.item
+  const offer = (await fixture.adminRequest('/offers', 'POST', { ...offerDraft, ...(quantity ? { quantity } : {}) })).data.item
+  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], kind: 'service', stages })
+  await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', deadline: offerDraft.deadline, serviceValue: 100 } })
+  const order = (await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')).data.item
   return { headers, machine, service, employees, order, route: `/operations/orders/${order.code}`, auth: { Authorization: `Bearer ${fixture.operatorToken}` } }
 }
 
@@ -57,7 +57,7 @@ test('several employees work on the same OS, each with a machine or a labor serv
     assert.equal(credited.data.event.employeeName, 'Bruno')
     assert.equal(credited.data.event.laborServiceId, service.id)
     assert.equal(credited.data.event.registeredByEmployeeName, 'Ana')
-    const brunoHistory = (await fixture.request(`/employees/${bruno.id}/activities?period=all`)).data.items
+    const brunoHistory = (await fixture.adminRequest(`/employees/${bruno.id}/activities?period=all`)).data.items
     assert.ok(brunoHistory.some((event) => event.type === 'stage_progress' && event.quantity === 2))
 
     // Moving from a machine to a labor service (and back) keeps a single resource per session.
@@ -146,4 +146,25 @@ test('switching between a machine and a labor service splits the hours between b
   assert.equal(hourReport(intervals, [{ id: 'torno', name: 'Torno' }], 'machineId', range).totalMs, 2 * 3600000)
   assert.equal(hourReport(intervals, [{ id: 'solda', name: 'Soldagem' }], 'laborServiceId', range).totalMs, 3600000)
   assert.equal(hourReport(intervals, [{ id: 1, name: 'Ana' }], 'employeeId', range).totalMs, 3 * 3600000)
+})
+
+test('an operator who identifies with their code on another device continues their own open work there', async () => {
+  const fixture = await createWorkflowFixture({ accountsEnv: env })
+  try {
+    const { machine, employees: [ana, bruno], route, auth, order } = await setup(fixture, ['turning'])
+    const started = (await fixture.request(`${route}/start`, 'POST', { employeeId: ana.id, machineId: machine.id }, auth)).data
+    // The tab that started the work was closed: its key is lost. A wrong key is still refused.
+    assert.equal((await fixture.request(`${route}/stages/stage-1`, 'POST', { sessionId: started.session.id, sessionToken: 'perdida', quantity: 1 }, auth)).status, 403)
+    const other = (await fixture.request('/operations/operator/identify', 'POST', { code: bruno.accessCode }, auth)).data
+    assert.deepEqual(other.sessions, [], 'another operator receives nothing of Ana')
+    const identified = (await fixture.request('/operations/operator/identify', 'POST', { code: ana.accessCode }, auth)).data
+    assert.deepEqual(identified.sessions.map((row) => [row.orderCode, row.sessionId]), [[order.code, started.session.id]])
+    const key = { sessionId: started.session.id, sessionToken: identified.sessions[0].sessionToken }
+    assert.equal((await fixture.request(`${route}/stages/stage-1`, 'POST', { ...key, quantity: 1 }, auth)).status, 200)
+    // The original device keeps working too, and no key is ever exposed.
+    assert.equal((await fixture.request(`${route}/stages/stage-1`, 'POST', { sessionId: started.session.id, sessionToken: started.sessionToken, quantity: 1 }, auth)).status, 200)
+    assert.ok(!JSON.stringify((await fixture.request('/operations/operator/orders', 'GET', undefined, auth)).data).includes('deviceTokenHashes'))
+    const listed = (await fixture.request('/operations/operator/orders', 'GET', undefined, auth)).data.items.find((item) => item.code === order.code)
+    assert.deepEqual(listed.operation.activeSessions[0].workedStages, ['stage-1'], 'the stage worked in this session is shown as in production')
+  } finally { await fixture.close() }
 })

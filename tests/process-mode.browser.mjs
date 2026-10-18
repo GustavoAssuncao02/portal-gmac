@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
 import { defaultStageLayout } from '../server/serviceStages.js'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
+import { identifiedOperator } from './operatorEntry.js'
 
 const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Teste' }
 const fixture = await createWorkflowFixture({ accountsEnv: env })
@@ -12,9 +13,9 @@ admin.on('pageerror', (error) => errors.push(error.message))
 const waitSaved = () => admin.waitForFunction(() => !document.querySelector('.offer-proposal-button')?.disabled)
 let operator
 try {
-  const offer = (await fixture.request('/offers', 'POST', { ...offerDraft, service: 'Projeto com processo livre', quantity: 20 })).data.item
+  const offer = (await fixture.adminRequest('/offers', 'POST', { ...offerDraft, service: 'Projeto com processo livre', quantity: 20 })).data.item
   const layout = defaultStageLayout()
-  await fixture.request(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], stages: ['cut-bend', 'turning', 'painting'], stageLayout: [layout[2], layout[0], layout[1]], kind: 'service' })
+  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], stages: ['cut-bend', 'turning', 'painting'], stageLayout: [layout[2], layout[0], layout[1]], kind: 'service' })
   await admin.goto(fixture.url)
   await admin.getByLabel('CPF', { exact: true }).fill('12345678901')
   await admin.getByLabel('Senha', { exact: true }).fill(env.DEMO_ADMIN_PASSWORD)
@@ -29,7 +30,7 @@ try {
   assert.ok((await description.boundingBox()).y + (await description.boundingBox()).height <= (await checkbox.boundingBox()).y)
   await checkbox.uncheck()
   await waitSaved()
-  assert.equal((await fixture.request('/offers')).data.items[0].resources.strictProcess, false)
+  assert.equal((await fixture.adminRequest('/offers', 'GET', undefined, fixture.admin)).data.items[0].resources.strictProcess, false)
   await admin.reload()
   assert.equal(await checkbox.isChecked(), false)
   for (const width of [1366, 390, 320]) {
@@ -39,8 +40,8 @@ try {
     await admin.screenshot({ path: `test-results/process-mode-offer-${width}.png` })
   }
   await admin.setViewportSize({ width: 1366, height: 900 })
-  assert.equal((await fixture.request(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', deadline: offerDraft.deadline, serviceValue: 100 } })).status, 200)
-  const accepted = await fixture.request(`/offers/${offer.id}/accept`, 'POST')
+  assert.equal((await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', deadline: offerDraft.deadline, serviceValue: 100 } })).status, 200)
+  const accepted = await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')
   assert.equal(accepted.status, 201)
   const order = accepted.data.item
   await admin.reload()
@@ -49,14 +50,15 @@ try {
   await admin.getByRole('button', { name: 'Ver OS', exact: true }).click()
   await admin.getByText('Etapas livres', { exact: true }).waitFor()
 
-  const employee = (await fixture.request('/employees', 'POST', { name: 'Ana', birthDate: '1990-01-01', cpf: '00000000001', email: 'ana@example.invalid', identification: '001' })).data.item
+  const employee = (await fixture.adminRequest('/employees', 'POST', { name: 'Ana', birthDate: '1990-01-01', cpf: '00000000001', email: 'ana@example.invalid', identification: '001' }, fixture.admin)).data.item
   const started = (await fixture.request(`/operations/orders/${order.code}/start`, 'POST', { employeeId: employee.id }, { Authorization: `Bearer ${fixture.operatorToken}` })).data
   operator = await browser.newPage({ viewport: { width: 1366, height: 900 } })
   operator.on('pageerror', (error) => errors.push(error.message))
-  await operator.addInitScript(({ token, code, session }) => {
+  await operator.addInitScript(({ token, code, session, operator }) => {
     sessionStorage.setItem('gmac-operator-token', token)
+    sessionStorage.setItem(...operator)
     sessionStorage.setItem(`gmac-operator-session-${code}`, JSON.stringify(session))
-  }, { token: fixture.operatorToken, code: order.code, session: { id: started.operation.activeSession.id, token: started.sessionToken } })
+  }, { token: fixture.operatorToken, operator: identifiedOperator(employee), code: order.code, session: { id: started.operation.activeSession.id, token: started.sessionToken } })
   await operator.goto(fixture.url)
   await operator.locator('.operator-project').click()
   const group = (name) => operator.getByRole('region', { name: `Etapas de ${name}`, exact: true })
@@ -69,9 +71,10 @@ try {
     await operator.waitForFunction((expected) => document.querySelector('.operator-stages-heading strong').textContent === expected, `${passages}/60 passagens`)
   }
   await register('Pintura', 20, 20)
-  assert.equal(await operator.getByRole('button', { name: 'Concluir servi\u00e7o', exact: true }).isDisabled(), true)
-  await operator.getByRole('button', { name: 'Mostrar projetos', exact: true }).click()
+  assert.equal(await operator.getByRole('button', { name: /Concluir servi\u00e7o/ }).isDisabled(), true)
+  await operator.getByRole('button', { name: '← Voltar para as OS', exact: true }).click()
   assert.equal(await operator.locator('.operator-project-bottom > div').nth(2).locator('strong').innerText(), '0/20')
+  await operator.locator('.operator-project').filter({ hasText: order.service }).click()
   await operator.getByRole('button', { name: 'Visualizar informa\u00e7\u00f5es do projeto', exact: true }).click()
   assert.equal(await operator.locator('.operator-info-facts > div').filter({ has: operator.locator('dt', { hasText: 'Pe\u00e7as conclu\u00eddas' }) }).locator('dd').innerText(), '0/20')
   await operator.getByRole('button', { name: 'Voltar aos projetos', exact: true }).click()
@@ -91,11 +94,17 @@ try {
   await operator.setViewportSize({ width: 1366, height: 900 })
   await register('Caldeiraria', 20, 40)
   await register('Usinagem', 5, 45)
-  assert.equal(await operator.locator('.operator-project-bottom > div').nth(2).locator('strong').innerText(), '5/20')
-  assert.equal(await operator.getByRole('button', { name: 'Concluir servi\u00e7o', exact: true }).isDisabled(), true)
+  const listedPieces = async () => {
+    await operator.getByRole('button', { name: '\u2190 Voltar para as OS', exact: true }).click()
+    const pieces = await operator.locator('.operator-project-bottom > div').nth(2).locator('strong').innerText()
+    await operator.locator('.operator-project').filter({ hasText: order.service }).click()
+    return pieces
+  }
+  assert.equal(await listedPieces(), '5/20')
+  assert.equal(await operator.getByRole('button', { name: /Concluir servi\u00e7o/ }).isDisabled(), true)
   await register('Usinagem', 15, 60)
-  assert.equal(await operator.locator('.operator-project-bottom > div').nth(2).locator('strong').innerText(), '20/20')
-  await operator.getByRole('button', { name: 'Concluir servi\u00e7o', exact: true }).click()
+  // The last piece of the last stage opens the completion question by itself.
+  await operator.getByRole('dialog').getByRole('heading', { name: 'Concluir servi\u00e7o', exact: true }).waitFor()
   await operator.getByRole('button', { name: 'Confirmar conclus\u00e3o', exact: true }).click()
   await operator.locator('.operator-detail-heading').getByText('Conclu\u00eddo', { exact: true }).waitFor()
   assert.deepEqual(errors, [])

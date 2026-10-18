@@ -6,11 +6,13 @@ import { configureWeb, serveInterface } from '../server/webServer.js'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
-export async function createWorkflowFixture({ pool, inventoryPool = pool, accountsEnv, notificationInventory, aiAnalyze } = {}) {
+export async function createWorkflowFixture({ pool, inventoryPool = pool, accountsEnv, notificationInventory } = {}) {
   const results = path.join(root, 'test-results')
   await mkdir(results, { recursive: true })
   const directory = await mkdtemp(path.join(results, 'workflow-'))
-  for (const name of ['offers.js', 'orderMaterials.js', 'pendingMaterials.js', 'operations.js', 'orderEditing.js', 'operatorAuth.js', 'employeeActivity.js', 'serviceStages.js', 'machines.js', 'laborServices.js', 'accounts.js', 'reports.js', 'reportData.js', 'documentExports.js', 'payables.js', 'payableRules.js', 'receivables.js', 'bankStatements.js', 'aiReconciliation.js', 'ofx.js', 'materialRequests.js', 'notificationRules.js', 'notificationEvents.js', 'operationSessions.js', 'materialRequestCodes.js', 'notifications.js', 'fiscalCatalog.js', 'proposalDocuments.js', 'proposalDefaults.js', 'proposalPdf.js', 'proposalBrand.js', 'proposalMath.js', 'moneyWords.js']) {
+  // The copied modules keep their data next to them; a DATA_DIR from the shell would point them at real data.
+  delete process.env.DATA_DIR
+  for (const name of ['offers.js', 'orderHistory.js', 'pieces.js', 'access.js', 'orderMaterials.js', 'pendingMaterials.js', 'operations.js', 'orderEditing.js', 'operatorAuth.js', 'employeeAccess.js', 'employeeActivity.js', 'serviceStages.js', 'machines.js', 'laborServices.js', 'accounts.js', 'reports.js', 'reportData.js', 'documentExports.js', 'payables.js', 'payableRules.js', 'receivables.js', 'bankStatements.js', 'ofx.js', 'materialRequests.js', 'notificationRules.js', 'notificationEvents.js', 'operationSessions.js', 'operationEventTime.js','materialRequestCodes.js', 'notifications.js', 'fiscalCatalog.js', 'dataDirectory.js', 'proposalDocuments.js', 'proposalDefaults.js', 'proposalPdf.js', 'proposalBrand.js', 'proposalMath.js', 'moneyWords.js']) {
     await copyFile(path.join(root, 'server', name), path.join(directory, name))
   }
   // PDFs use the bundled logo and fonts.
@@ -18,7 +20,7 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   const { default: createOffersRouter, mutateStore } = await import(pathToFileURL(path.join(directory, 'offers.js')))
   const { default: operationsRouter } = await import(pathToFileURL(path.join(directory, 'operations.js')))
   const { issueOperatorToken } = await import(pathToFileURL(path.join(directory, 'operatorAuth.js')))
-  const { createAccountService, createAccountsRouter, issueAdminToken, requireAdmin } = await import(pathToFileURL(path.join(directory, 'accounts.js')))
+  const { createAccountService, createAccountsRouter, issueAdminToken, requireAdmin, restrictStaffFinance } = await import(pathToFileURL(path.join(directory, 'accounts.js')))
   const { default: machinesRouter } = await import(pathToFileURL(path.join(directory, 'machines.js')))
   const { default: laborServicesRouter, ensureLaborServices } = await import(pathToFileURL(path.join(directory, 'laborServices.js')))
   await ensureLaborServices()
@@ -26,7 +28,6 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   const { default: payablesRouter } = await import(pathToFileURL(path.join(directory, 'payables.js')))
   const { default: receivablesRouter } = await import(pathToFileURL(path.join(directory, 'receivables.js')))
   const { default: bankStatementsRouter } = await import(pathToFileURL(path.join(directory, 'bankStatements.js')))
-  const { default: aiReconciliationRouter } = await import(pathToFileURL(path.join(directory, 'aiReconciliation.js')))
   const { default: materialRequestsRouter, saveRequestedMaterial } = await import(pathToFileURL(path.join(directory, 'materialRequests.js')))
   const { default: notificationsRouter } = await import(pathToFileURL(path.join(directory, 'notifications.js')))
   const { default: fiscalRouter } = await import(pathToFileURL(path.join(directory, 'fiscalCatalog.js')))
@@ -36,6 +37,7 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   // Same compression, cache and security headers as the published portal.
   configureWeb(app)
   app.use(express.json())
+  app.use('/api', restrictStaffFinance)
   app.use('/api', createOffersRouter(inventoryPool, requireAdmin))
   app.use('/api', operationsRouter(pool))
   app.use('/api', createAccountsRouter(accounts))
@@ -44,11 +46,10 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   app.use('/api', reportsRouter(pool, accounts, requireAdmin))
   const payables = payablesRouter(accounts, requireAdmin)
   app.use('/api', payables)
-  const receivables = receivablesRouter(accounts, requireAdmin)
+  const receivables = receivablesRouter(accounts, requireAdmin, pool)
   app.use('/api', receivables)
   app.use('/api', bankStatementsRouter(accounts, requireAdmin))
   // Tests never reach the Anthropic API; they pass a fake analysis.
-  app.use('/api', aiReconciliationRouter(accounts, requireAdmin, { analyze: aiAnalyze || (async () => { throw new Error('Análise com IA não configurada neste teste.') }) }))
   app.use('/api', fiscalRouter(requireAdmin))
   app.use('/api', proposalDocumentsRouter(requireAdmin))
   app.use('/api', notificationsRouter({ requireAdmin, payables, receivables, loadInventory: notificationInventory }))
@@ -67,16 +68,23 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   const server = app.listen(0, '127.0.0.1')
   await new Promise((resolve) => server.once('listening', resolve))
   const url = `http://127.0.0.1:${server.address().port}`
+  const adminToken = issueAdminToken({ id: 0 })
   return {
     url,
     directory,
-    adminToken: issueAdminToken({ id: 0 }),
+    adminToken,
+    admin: { Authorization: `Bearer ${adminToken}` },
     operatorToken: issueOperatorToken(),
     mutateStore,
     saveRequestedMaterial,
     async request(route, method = 'GET', body, headers = {}) {
       const response = await fetch(`${url}/api${route}`, { method, headers: { 'Content-Type': 'application/json', ...headers }, body: body === undefined ? undefined : JSON.stringify(body) })
       return { status: response.status, data: await response.json() }
+    },
+    // The same request with the administrator session (the routes of offers, OS and registrations require it).
+    // Uses `admin`, so a test that renews the session (after a password change) updates every later call.
+    async adminRequest(route, method = 'GET', body, headers = this.admin) {
+      return this.request(route, method, body, headers)
     },
     async close() {
       await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))

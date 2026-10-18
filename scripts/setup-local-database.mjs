@@ -2,8 +2,9 @@ import 'dotenv/config'
 import mysql from 'mysql2/promise'
 import bcrypt from 'bcryptjs'
 import { readFile, mkdir, copyFile } from 'node:fs/promises'
-import { fileURLToPath } from 'node:url'
+import path from 'node:path'
 import { ensureInventoryAppearance } from '../server/inventoryAppearance.js'
+import { dataDirectory } from '../server/dataDirectory.js'
 
 const root = new URL('../', import.meta.url)
 const env = process.env
@@ -21,11 +22,11 @@ try {
       const [[row]] = await connection.query(`SELECT COUNT(*) AS total FROM ${table}`)
       if (row.total) throw new Error(`A tabela ${table} ja possui dados. Importacao interrompida para nao sobrescrever registros.`)
     }
-    const source = new URL('server/data/offers.json', root)
+    const source = path.join(dataDirectory, 'offers.json')
     const store = JSON.parse(await readFile(source, 'utf8'))
-    const directory = new URL('server/data/backups/', root)
+    const directory = path.join(dataDirectory, 'backups')
     await mkdir(directory, { recursive: true })
-    const backup = new URL(`before-mysql-${Date.now()}.json`, directory)
+    const backup = path.join(directory, `before-mysql-${Date.now()}.json`)
     await copyFile(source, backup)
     await connection.query("SET SESSION sql_mode = CONCAT(@@sql_mode, ',NO_AUTO_VALUE_ON_ZERO')")
     await connection.beginTransaction()
@@ -55,7 +56,7 @@ try {
     }
     await connection.execute("INSERT INTO local_imports (name) VALUES ('json-workflow-v1')")
     await connection.commit()
-    console.log(JSON.stringify({ employees: employees.size, administrators: admins.length, orders: mapped.filter((order) => order.operation).length, events, preservedPayables: store.payables?.length || 0, backup: fileURLToPath(backup) }))
+    console.log(JSON.stringify({ employees: employees.size, administrators: admins.length, orders: mapped.filter((order) => order.operation).length, events, preservedPayables: store.payables?.length || 0, backup }))
   }
 } catch (error) {
   await connection.rollback()

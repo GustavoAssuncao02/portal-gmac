@@ -20,8 +20,8 @@ test('receipt is shared, idempotent, preserves the request and OS quantities and
     const results = await Promise.all([fixture.request(route, 'POST', body, auth), fixture.request(route, 'POST', body, auth)])
     assert.deepEqual(results.map((result) => result.status), [200, 200])
     assert.equal(results[1].data.item.alreadyReceived, true)
-    const offers = (await fixture.request('/offers')).data.items
-    const orders = (await fixture.request('/orders')).data.items
+    const offers = (await fixture.adminRequest('/offers', 'GET', undefined, fixture.admin)).data.items
+    const orders = (await fixture.request('/orders', 'GET', undefined, fixture.admin)).data.items
     const receipt = offers[0].resources.materials[0].requestReceipt
     assert.equal(receipt.quantity, 1)
     assert.equal(receipt.inventoryId, 7)
@@ -52,13 +52,13 @@ test('partial receipts keep the remainder pending and repeated receipt IDs never
     const first = { materialId: 7, quantity: 4, receiptId: 'first' }
     assert.equal((await fixture.request(route, 'POST', first, auth)).data.item.allocatedQuantity, 4)
     assert.equal((await fixture.request(route, 'POST', first, auth)).data.item.alreadyReceived, true)
-    let order = (await fixture.request('/orders')).data.items[0]
+    let order = (await fixture.request('/orders', 'GET', undefined, fixture.admin)).data.items[0]
     assert.equal(pendingOrderMaterials(order)[0].quantity, 6)
     assert.equal(order.resources.materials[0].inventoryConsumedQuantity, 4)
     const second = await fixture.request(route, 'POST', { materialId: 7, quantity: 8, receiptId: 'second' }, auth)
     assert.equal(second.data.item.allocatedQuantity, 6, 'Only the pending amount goes to the OS')
     assert.equal((await fixture.request(route, 'POST', first, auth)).data.item.alreadyReceived, true, 'Older retries remain idempotent after later receipts')
-    order = (await fixture.request('/orders')).data.items[0]
+    order = (await fixture.request('/orders', 'GET', undefined, fixture.admin)).data.items[0]
     assert.deepEqual(pendingOrderMaterials(order), [])
     assert.equal(order.resources.materials[0].inventoryConsumedQuantity, 10)
     assert.equal(order.resources.materials[0].requestReceipts.length, 2)
@@ -73,7 +73,7 @@ test('receipt and stock callbacks roll back together and concurrent retries save
     const save = async () => { writes++; return { materialId: 2, receivedQuantity: 10 } }
     await assert.rejects(fixture.saveRequestedMaterial('offer-material', 1, save, { commit: async () => { throw Error('SQL failure') }, rollback: async () => { rollbacks++ } }), /SQL failure/)
     assert.equal(rollbacks, 1)
-    assert.equal((await fixture.request('/offers')).data.items[0].resources.materials[0].requestReceipt, undefined)
+    assert.equal((await fixture.adminRequest('/offers', 'GET', undefined, fixture.admin)).data.items[0].resources.materials[0].requestReceipt, undefined)
     const results = await Promise.all([fixture.saveRequestedMaterial('offer-material', 1, save), fixture.saveRequestedMaterial('offer-material', 2, save)])
     assert.equal(writes, 2, 'One failed attempt plus exactly one successful stock write')
     assert.equal(results[1].alreadyReceived, true)

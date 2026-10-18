@@ -1,6 +1,7 @@
 /* Commercial proposal models (A, B, Nestlé, Etiqueta) and their settings. */
 .proposal-doc-modal.payable-modal--wide { width: min(1180px, calc(100vw - 24px)); }
 .proposal-model-step > p { margin: 0 0 16px; color: #48627a; font-size: 14px; line-height: 1.5; }
+.payable-modal > footer .proposal-total-differs { flex: 1 1 100%; margin: 0 0 2px; color: #9f6508; text-align: left; }
 .proposal-model-saved { padding: 10px 12px; border: 1px solid #d7e3ee; border-radius: 6px; background: #f6f9fc; }
 .proposal-model-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; }
 .proposal-model-card { display: grid; gap: 6px; align-content: start; min-height: 190px; padding: 14px; border: 1px solid #cbd9e6; border-radius: 8px; color: #29435e; background: #ffffff; font: inherit; text-align: left; cursor: pointer; }
@@ -119,3 +120,7 @@
   .proposal-doc-totals { position: static; justify-content: space-between; }
   .proposal-table-wrap { max-height: none; }
 }
+.fiscal-badge--main { margin-left: 6px; background: #e6eef8; color: #0c4c91; }
+.fiscal-make-main { margin-left: 6px; font-size: 11px; }
+.fiscal-picker .fiscal-picker-value + .fiscal-picker-value { margin-top: 6px; }
+:root[data-theme="dark"] .fiscal-badge--main { background: #1d3150; color: #cfe0f1; }

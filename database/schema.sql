@@ -1,4 +1,4 @@
-CREATE DATABASE IF NOT EXISTS portal_gmac;
+CREATE DATABASE IF NOT EXISTS portal_gmac CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 USE portal_gmac;
 
 CREATE TABLE IF NOT EXISTS users (
@@ -17,10 +17,13 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS employees (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT,
   name VARCHAR(120) NOT NULL,
-  birth_date DATE NOT NULL,
+  birth_date DATE NULL,
   cpf VARCHAR(11) NOT NULL UNIQUE,
-  email VARCHAR(160) NOT NULL UNIQUE,
-  i_identificacao CHAR(3) NOT NULL UNIQUE,
+  email VARCHAR(160) NULL UNIQUE,
+  i_identificacao CHAR(3) NULL UNIQUE,
+  employee_type ENUM('operator', 'administrative') NOT NULL DEFAULT 'operator',
+  access_code CHAR(4) NULL UNIQUE,
+  password_hash VARCHAR(255) NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id)
 );
@@ -30,7 +33,8 @@ CREATE TABLE IF NOT EXISTS clients (
   name VARCHAR(120) NOT NULL,
   document_type ENUM('cpf', 'cnpj') NOT NULL,
   document VARCHAR(14) NOT NULL UNIQUE,
-  email VARCHAR(160) NOT NULL UNIQUE,
+  email VARCHAR(160) NULL UNIQUE,
+  notes VARCHAR(1000) NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

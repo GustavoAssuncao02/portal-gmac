@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { chromium } from 'playwright'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
+import { identifiedOperator } from './operatorEntry.js'
 import { todayBahia } from '../server/payableRules.js'
 import { stageLabel } from '../server/serviceStages.js'
 
@@ -156,10 +157,11 @@ try {
       }
     }
     const operatorContext = await browser.newContext({ viewport: { width, height }, timezoneId: 'America/Bahia' })
-    await operatorContext.addInitScript((token) => sessionStorage.setItem('gmac-operator-token', token), fixture.operatorToken)
+    await operatorContext.addInitScript(({ token, operator }) => { sessionStorage.setItem('gmac-operator-token', token); sessionStorage.setItem(...operator) }, { token: fixture.operatorToken, operator: identifiedOperator(employee) })
     const operatorPage = await operatorContext.newPage()
     operatorPage.on('pageerror', (error) => errors.push({ resolution, message: error.message }))
     await operatorPage.goto(fixture.url)
+    await operatorPage.locator('.operator-project').first().click()
     await operatorPage.locator('.operator-detail').waitFor()
     await capture('Operador projeto', operatorPage)
     await operatorPage.getByRole('button', { name: 'Visualizar informações do projeto', exact: true }).click()

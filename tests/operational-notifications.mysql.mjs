@@ -21,19 +21,19 @@ try {
   const auth = { Authorization: `Bearer ${fixture.adminToken}` }
   const notices = async () => (await fixture.request('/notifications', 'GET', undefined, auth)).data.items
   assert.deepEqual(await notices(), [])
-  const offer = (await fixture.request('/offers', 'POST', offerDraft)).data.item
-  await fixture.request(`/offers/${offer.id}/resources`, 'PUT', { materials: [{ id: 'inox', inventoryId: 1, name: 'Inox', quantity: 25, stockAvailable: 24, purchaseQuantity: 1, stockStatus: 'partial' }], laborEntries: [], stages: ['painting'], kind: 'service' })
-  await fixture.request(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', deadline: offer.deadline, serviceValue: 100 } })
-  const accepted = await fixture.request(`/offers/${offer.id}/accept`, 'POST')
+  const offer = (await fixture.adminRequest('/offers', 'POST', offerDraft)).data.item
+  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [{ id: 'inox', inventoryId: 1, name: 'Inox', quantity: 25, stockAvailable: 24, purchaseQuantity: 1, stockStatus: 'partial' }], laborEntries: [], stages: ['painting'], kind: 'service' })
+  await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', deadline: offer.deadline, serviceValue: 100 } })
+  const accepted = await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')
   assert.equal(accepted.status, 201)
   const order = accepted.data.item
   const created = await notices()
   assert.deepEqual(created.map((item) => item.type).sort(), ['low-stock', 'material-request', 'service-added'])
   assert.equal(created.find((item) => item.type === 'low-stock').quantity, 0)
   assert.equal(created.find((item) => item.type === 'material-request').quantity, 1)
-  await fixture.request(`/offers/${offer.id}/accept`, 'POST')
+  await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')
   assert.equal((await notices()).length, 3)
-  const employee = (await fixture.request('/employees', 'POST', { name: 'Ana Teste', cpf: '00000000001', birthDate: '1990-01-01', email: 'ana@example.invalid', identification: '001' })).data.item
+  const employee = (await fixture.adminRequest('/employees', 'POST', { name: 'Ana Teste', cpf: '00000000001', birthDate: '1990-01-01', email: 'ana@example.invalid', identification: '001' }, fixture.admin)).data.item
   const operatorAuth = { Authorization: `Bearer ${fixture.operatorToken}` }
   const route = `/operations/orders/${order.code}`
   const pending = (await fixture.request(`${route}/start`, 'POST', { employeeId: employee.id }, operatorAuth)).data.pendingMaterials

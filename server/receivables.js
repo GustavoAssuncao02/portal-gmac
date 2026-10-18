@@ -2,13 +2,15 @@ import express from 'express'
 import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { dataDirectory } from './dataDirectory.js'
 import { readStore, mutateStore } from './offers.js'
 import { exportPdf, exportWorkbook } from './reports.js'
-import { cents, validDate, todayBahia, daysUntil, makeInstallments, shiftMonth, matchesSearch } from './payableRules.js'
+import { cents, validDate, todayBahia, daysUntil, makeInstallments, shiftMonth, matchesSearch, treasuryEntry } from './payableRules.js'
 import { notificationSettings } from './accounts.js'
 import { assertNotReconciled, reconciledTransaction } from './bankStatements.js'
 import { normalizeText } from './ofx.js'
+import { osValueOf } from './proposalMath.js'
+import { operationStates } from './reportData.js'
 
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), { status }) }
 const clean = (value, limit = 1000) => String(value ?? '').trim().slice(0, limit)
@@ -16,7 +18,7 @@ const money = (value) => (value / 100).toLocaleString('pt-BR', { style: 'currenc
 export const receiptMethods = { pix: 'Pix', boleto: 'Boleto', transfer: 'Transferência', card: 'Cartão', cash: 'Dinheiro' }
 const statusLabel = { pending: 'Pendente', overdue: 'Vencido', received: 'Recebido' }
 const actionLabel = { created: 'Conta criada', edited: 'Conta editada', received: 'Recebimento baixado', reversed: 'Recebimento estornado', deleted: 'Conta excluída', status_changed: 'Status alterado', attachment_added: 'Anexo adicionado', attachment_removed: 'Anexo removido' }
-const directory = path.join(path.dirname(fileURLToPath(import.meta.url)), 'data', 'receivable-files')
+const directory = path.join(dataDirectory, 'receivable-files')
 const init = (store) => { store.receivables ||= []; store.receivableEvents ||= []; store.orders ||= []; store.receivableNotifications ||= []; store.receivableUploads ||= [] }
 export const receivableStatus = (row, today = todayBahia()) => row.receipt ? 'received' : row.dueDate < today ? 'overdue' : 'pending'
 function event(store, actor, type, accountId, details = {}) { store.receivableEvents.push({ id: randomUUID(), at: new Date().toISOString(), type, accountId, userId: actor?.id ?? null, userName: actor?.name || 'Sistema', ...details }) }
@@ -33,6 +35,23 @@ function claimFiles(store, ids, actor) {
 const dateLabel = (value) => value.split('-').reverse().join('/')
 const groupOf = (store, row) => row.groupId ? store.receivables.filter((item) => item.groupId === row.groupId).sort((a, b) => a.installmentNumber - b.installmentNumber) : [row]
 const hasReceiptHistory = (store, row) => Boolean(row.receipt) || store.receivableEvents.some((e) => e.accountId === row.id && ['received', 'reversed'].includes(e.type))
+// Why an account (with its whole installment plan) cannot be deleted, or null when it can: a receipt history has to be
+// preserved (a Tesouraria entry posted by mistake is the exception) and a bank reconciliation has to be undone first.
+function deletionBlock(store, row, group = groupOf(store, row)) {
+  if (!row.treasury && group.some((item) => hasReceiptHistory(store, item))) return { message: row.groupId ? 'Há parcela com recebimento: preserve o histórico do parcelamento.' : 'Conta com recebimento: preserve o histórico.', status: 409 }
+  for (const item of group) { try { assertNotReconciled(store, 'receivable', item.id, 'excluir') } catch (error) { return { message: error.message, status: error.status || 409 } } }
+  return null
+}
+const linkedReceivables = (store, orderCode) => store.receivables.filter((row) => row.orderCode === orderCode && !row.inactive)
+// Reopening an OS may take the accounts posted for it along (the user decides); the history keeps what was deleted.
+export function removeOrderReceivables(store, actor, orderCode) {
+  init(store)
+  const rows = linkedReceivables(store, orderCode), removed = [...new Set(rows.flatMap((row) => groupOf(store, row)))]
+  for (const row of rows) { const block = deletionBlock(store, row); if (block) fail(`Não foi possível excluir ${row.id}. ${block.message}`, block.status) }
+  for (const item of removed) event(store, actor, 'deleted', item.id, { details: { account: item, text: `Excluída ao reabrir a ${orderCode}` } })
+  store.receivables = store.receivables.filter((item) => !removed.includes(item))
+  return removed.map((item) => item.id)
+}
 // No expected receipt date (installments included) can come before the document's issue date.
 function assertDueDates(parts, issueDate) {
   for (const part of parts) {
@@ -57,14 +76,15 @@ function partsOf(body, common, creating = false) {
   return rows
 }
 
-// The OS price is the accepted proposal: service value with the proposal discount applied.
+// The OS price is the OS value of the accepted proposal: what the customer pays, already with margin and discount.
 export function orderValue(order) {
   const proposal = order?.proposal || {}
-  // A proposal made with the commercial models states the amount agreed with the customer.
-  if (Number(proposal.document?.total) > 0) {
-    const valueCents = Math.round(Number(proposal.document.total) * 100)
+  // A proposal made with the commercial models states the amount agreed with the customer; newer ones carry the OS value.
+  if (Number(proposal.document?.total) > 0 || proposal.osValue != null) {
+    const valueCents = Math.round(osValueOf(proposal) * 100)
     return { serviceCents: valueCents, discount: 0, valueCents }
   }
+  // Proposals saved before the OS value existed: the service value was the price, with the discount applied.
   const serviceCents = Math.round(Number(proposal.serviceValue || 0) * 100)
   const discount = Math.min(100, Math.max(0, Number(proposal.discount || 0)))
   return { serviceCents, discount, valueCents: Math.round(serviceCents * (100 - discount) / 100) }
@@ -102,18 +122,32 @@ async function fields(store, body, accounts, current) {
 }
 function duplicates(store, proposed, ignored = []) {
   const key = (row) => JSON.stringify([normalizeText(row.customerName), row.valueCents, row.dueDate])
-  if (store.receivables.some((row) => !ignored.includes(row.id) && !row.inactive && key(row) === key(proposed))) fail('Conta duplicada: cliente, valor e vencimento já cadastrados.', 409)
+  // Tesouraria entries are not checked: two equal sales on the same day are legitimate.
+  if (store.receivables.some((row) => !ignored.includes(row.id) && !row.inactive && !row.treasury && key(row) === key(proposed))) fail('Conta duplicada: cliente, valor e vencimento já cadastrados.', 409)
 }
 function receipt(body, valueCents, bulk = false) {
   if (!validDate(body.date) || body.date > todayBahia()) fail('Data de recebimento inválida ou futura.')
   if (!Object.hasOwn(receiptMethods, body.method)) fail('Selecione a forma de recebimento.')
-  let interestCents = 0, discountCents = 0
-  try { interestCents = cents(body.interest || '0'); discountCents = cents(body.discount || '0') } catch (error) { fail(error.message) }
+  // The ISS withheld by the customer is subtracted from what arrives, like the discount, and may come with interest or discount.
+  let interestCents = 0, discountCents = 0, issCents = 0
+  try { interestCents = cents(body.interest || '0'); discountCents = cents(body.discount || '0'); issCents = cents(body.iss || '0') } catch (error) { fail(error.message) }
   if (interestCents && discountCents) fail('Juros e desconto são exclusivos.')
-  if (bulk && (interestCents || discountCents || body.fileIds?.length)) fail('A baixa em massa não aceita juros, desconto ou comprovante; faça a baixa individual.')
-  const finalCents = valueCents + interestCents - discountCents
-  if (finalCents < 0) fail('O desconto não pode ultrapassar o valor da conta.')
-  return { date: body.date, method: body.method, interestCents, discountCents, finalCents, note: clean(body.note, 5000), receipts: [] }
+  if (bulk && (interestCents || discountCents || issCents || body.fileIds?.length)) fail('A baixa em massa não aceita juros, desconto, ISS ou comprovante; faça a baixa individual.')
+  const finalCents = valueCents + interestCents - discountCents - issCents
+  if (finalCents < 0) fail('O desconto e o ISS não podem ultrapassar o valor da conta.')
+  return { date: body.date, method: body.method, interestCents, discountCents, issCents, finalCents, note: clean(body.note, 5000), receipts: [] }
+}
+// Tesouraria posts money already received: a single account, issued, due and received on the same date.
+const treasuryBody = (body) => ({ ...body, kind: 'single', issueDate: body.date, dueDate: body.date, ahead: 0, count: 1, installments: undefined })
+// When the amount received (`received`) differs from the value of the account, the difference is interest (more) or discount (less).
+function treasuryReceipt(body, valueCents) {
+  const base = { date: body.date, method: body.method, note: body.note }
+  if (body.received === undefined || body.received === null || body.received === '') return receipt(base, valueCents)
+  let receivedCents
+  try { receivedCents = cents(body.received) } catch (error) { fail(error.message) }
+  if (!receivedCents) fail('O valor recebido deve ser maior que zero.')
+  const difference = receivedCents - valueCents
+  return receipt({ ...base, interest: difference > 0 ? (difference / 100).toFixed(2) : '', discount: difference < 0 ? (-difference / 100).toFixed(2) : '' }, valueCents)
 }
 // Reminders mirror Contas a Pagar (N days before and on the day) plus one notice once the date has passed.
 export function activeReceivableNotices(store, userId) {
@@ -128,14 +162,22 @@ export function receivableNotificationItems(store, userId) {
   return activeReceivableNotices(store, userId).map(({ readBy, ...notice }) => ({ ...notice, readAt: readBy?.find((entry) => String(entry.userId) === String(userId))?.at || null, account: view(store.receivables.find((row) => row.id === notice.accountId), store) })).reverse()
 }
 function report(rows, filters = {}, individual = false) {
-  const columns = ['ID', 'Cliente', 'CPF/CNPJ', 'Descrição', 'Origem', 'Documento', 'Parcela', 'Emissão', 'Valor (R$)', 'Vencimento', 'Status', 'Recebimento', 'Forma', 'Juros (R$)', 'Desconto (R$)', 'Recebido (R$)', 'Observação']
-  return { title: individual ? `Conta ${rows[0]?.id || ''}` : 'Contas a receber', eyebrow: 'Financeiro', generatedAt: new Date().toISOString(), start: filters.start, end: filters.end, summary: [['Contas', rows.length], ['Valor original', money(rows.reduce((sum, row) => sum + row.valueCents, 0))]], notes: [`Situação: ${{ all: 'Todas', ...statusLabel }[filters.status] || 'Pendentes e vencidas'}`, ...(filters.search ? [`Busca: ${filters.search}`] : [])], sections: [{ name: 'Contas a receber', columns, rows: rows.map((row) => { const r = row.receipt; return [row.id, row.customerName, row.customerDocument, row.description, row.orderCode || 'Manual', row.documentNumber, row.groupId ? `${row.installmentNumber} de ${row.installmentCount}` : '', row.issueDate, row.valueCents / 100, row.dueDate, statusLabel[receivableStatus(row)], r?.date, receiptMethods[r?.method] || '', (r?.interestCents || 0) / 100, (r?.discountCents || 0) / 100, r ? r.finalCents / 100 : '', r?.note] }) }] }
+  const columns = ['ID', 'Cliente', 'CPF/CNPJ', 'Descrição', 'Origem', 'Documento', 'Parcela', 'Emissão', 'Valor (R$)', 'Vencimento', 'Status', 'Recebimento', 'Forma', 'Juros (R$)', 'Desconto (R$)', 'ISS (R$)', 'Recebido (R$)', 'Observação']
+  return { title: individual ? `Conta ${rows[0]?.id || ''}` : 'Contas a receber', eyebrow: 'Financeiro', generatedAt: new Date().toISOString(), start: filters.start, end: filters.end, summary: [['Contas', rows.length], ['Valor original', money(rows.reduce((sum, row) => sum + row.valueCents, 0))]], notes: [`Situação: ${{ all: 'Todas', ...statusLabel }[filters.status] || 'Pendentes e vencidas'}`, ...(filters.search ? [`Busca: ${filters.search}`] : [])], sections: [{ name: 'Contas a receber', columns, rows: rows.map((row) => { const r = row.receipt; return [row.id, row.customerName, row.customerDocument, row.description, row.orderCode || 'Manual', row.documentNumber, row.groupId ? `${row.installmentNumber} de ${row.installmentCount}` : '', row.issueDate, row.valueCents / 100, row.dueDate, statusLabel[receivableStatus(row)], r?.date, receiptMethods[r?.method] || '', (r?.interestCents || 0) / 100, (r?.discountCents || 0) / 100, (r?.issCents || 0) / 100, r ? r.finalCents / 100 : '', r?.note] }) }] }
 }
 
-export default function createReceivablesRouter(accounts, requireAdmin) {
+export default function createReceivablesRouter(accounts, requireAdmin, pool = null) {
   const router = express.Router()
-  router.use('/receivables', requireAdmin, async (request, _response, next) => { try { request.actor = (await accounts.admins()).find((item) => String(item.id) === String(request.adminId)); if (!request.actor) fail('Administrador não encontrado.', 401); next() } catch (error) { next(error) } })
+  router.use('/receivables', requireAdmin, async (request, _response, next) => { try { request.actor = await accounts.account(request.adminId); if (!request.actor) fail('Administrador não encontrado.', 401); next() } catch (error) { next(error) } })
   const handle = (fn) => async (req, res, next) => { try { await fn(req, res) } catch (error) { next(error) } }
+  // With the database, the state of the operation (and so whether the OS is finished) lives in order_operations, not in the saved order.
+  async function operationStatus(order) {
+    if (pool) {
+      const [row] = await operationStates([order], pool)
+      if (row) return (typeof row.data === 'string' ? JSON.parse(row.data) : row.data)?.status
+    }
+    return order.operation?.status
+  }
   async function sweep(userId) {
     const today = todayBahia(), snapshot = await readStore(); init(snapshot)
     const noticeDay = (store, row) => {
@@ -172,44 +214,52 @@ export default function createReceivablesRouter(accounts, requireAdmin) {
     const store = await readStore(); init(store)
     const order = store.orders.find((item) => item.code === req.params.code)
     if (!order) fail('OS não encontrada.', 404)
-    const existing = store.receivables.filter((row) => row.orderCode === order.code && !row.inactive).sort((a, b) => (a.installmentNumber || 1) - (b.installmentNumber || 1))
-    res.json({ order: { code: order.code, company: order.company, cnpj: String(order.cnpj || '').replace(/\D/g, ''), service: order.service, completed: order.operation?.status === 'completed', ...orderValue(order) }, item: existing.length ? view(existing[0], store) : null, items: existing.map((row) => view(row, store)) })
+    const existing = linkedReceivables(store, order.code).sort((a, b) => (a.installmentNumber || 1) - (b.installmentNumber || 1))
+    // `deleteBlock` tells why the accounts cannot be removed (when reopening the OS, for instance).
+    const deleteBlock = existing.map((row) => deletionBlock(store, row)).find(Boolean)?.message || null
+    res.json({ order: { code: order.code, company: order.company, cnpj: String(order.cnpj || '').replace(/\D/g, ''), service: order.service, completed: await operationStatus(order) === 'completed', ...orderValue(order) }, item: existing.length ? view(existing[0], store) : null, items: existing.map((row) => view(row, store)), deleteBlock })
   }))
   router.get('/receivables/:id', handle(async (req, res) => {
     const store = await readStore(); init(store); const row = find(store, req.params.id), group = groupOf(store, row)
-    res.json({ item: view(row, store), siblings: row.groupId ? group.map((item) => view(item, store)) : [], structureLocked: group.some((item) => item.receipt), canDelete: group.every((item) => !hasReceiptHistory(store, item) && !reconciledTransaction(store, 'receivable', item.id)), history: store.receivableEvents.filter((e) => e.accountId === row.id).reverse() })
+    res.json({ item: view(row, store), siblings: row.groupId ? group.map((item) => view(item, store)) : [], structureLocked: group.some((item) => item.receipt), canDelete: row.treasury ? !reconciledTransaction(store, 'receivable', row.id) : group.every((item) => !hasReceiptHistory(store, item) && !reconciledTransaction(store, 'receivable', item.id)), history: store.receivableEvents.filter((e) => e.accountId === row.id).reverse() })
   }))
   router.post('/receivables', handle(async (req, res) => {
-    const draft = req.body.orderCode ? null : await fields(null, req.body, accounts)
+    const treasury = req.body.treasury === true
+    // The date and the way of receiving are checked before the account fields that derive from them.
+    if (treasury) treasuryReceipt(req.body, 0)
+    const body = treasury ? treasuryBody(req.body) : req.body
+    const draft = body.orderCode ? null : await fields(null, body, accounts)
     const item = await mutateStore(async (store) => {
       init(store)
       let common = draft, origin = 'manual', order = null
-      if (req.body.orderCode) {
-        order = store.orders.find((row) => row.code === req.body.orderCode)
+      if (body.orderCode) {
+        order = store.orders.find((row) => row.code === body.orderCode)
         if (!order) fail('OS não encontrada.', 404)
-        if (order.operation?.status !== 'completed') fail('A OS precisa estar concluída para programar o recebimento.', 409)
+        if (await operationStatus(order) !== 'completed') fail('A OS precisa estar concluída para programar o recebimento.', 409)
         const existing = store.receivables.find((row) => row.orderCode === order.code && !row.inactive)
         if (existing) fail(`Esta OS já possui a conta a receber ${existing.id}.`, 409)
         const document = String(order.cnpj || '').replace(/\D/g, '')
-        common = await fields(store, { customerName: order.company, customerDocument: [11, 14].includes(document.length) ? document : '', description: req.body.description || `${order.code} · ${order.service}`, documentNumber: order.code, value: req.body.value, dueDate: req.body.dueDate, kind: req.body.kind }, accounts)
+        common = await fields(store, { customerName: order.company, customerDocument: [11, 14].includes(document.length) ? document : '', description: body.description || `${order.code} · ${order.service}`, documentNumber: order.code, value: body.value, issueDate: treasury ? body.issueDate : undefined, dueDate: body.dueDate, kind: body.kind }, accounts)
         origin = 'order'
       }
-      const parts = partsOf(req.body, common, true)
+      const parts = partsOf(body, common, true)
       assertDueDates(parts, common.issueDate)
       const recurring = common.kind === 'recurring'
       const groupId = parts.length > 1 && !recurring ? randomUUID() : null, seriesId = recurring && parts.length > 1 ? randomUUID() : null, createdAt = new Date().toISOString()
       const rows = parts.map((part, index) => ({ origin, orderCode: order?.code || null, offerId: order?.offerId || null, ...common, ...part, kind: recurring ? 'recurring' : groupId ? 'installment' : 'single', groupId, installmentNumber: groupId ? index + 1 : 1, installmentCount: groupId ? parts.length : 1, seriesId, seriesIndex: seriesId ? index + 1 : null, seriesCount: seriesId ? parts.length : null, originalTotalCents: groupId ? common.valueCents : part.valueCents, receipt: null, inactive: false, createdAt }))
       // An OS is unique by its code; equal client/value/date across different OSs is legitimate.
-      if (origin === 'manual') for (const row of rows) duplicates(store, row)
+      if (origin === 'manual' && !treasury) for (const row of rows) duplicates(store, row)
       const attachments = claimFiles(store, req.body.fileIds || [], req.actor)
       for (const [index, row] of rows.entries()) {
         // Installments share the document's files; a recurring contract keeps them on its first occurrence.
         row.attachments = common.kind === 'recurring' && index > 0 ? [] : [...attachments]
+        if (treasury) Object.assign(row, { treasury: true, receipt: treasuryReceipt(req.body, row.valueCents) })
         store.receivableSequence = (store.receivableSequence || 0) + 1
         row.id = `REC-${String(store.receivableSequence).padStart(6, '0')}`
         row.lastStatus = receivableStatus(row)
         store.receivables.push(row)
-        event(store, req.actor, 'created', row.id, { details: { valueCents: row.valueCents, dueDate: row.dueDate, text: [order ? `Programada na conclusão da ${order.code}` : '', groupId ? `Parcela ${row.installmentNumber} de ${rows.length} de ${money(common.valueCents)}` : '', seriesId ? `Contrato recorrente: ocorrência ${row.seriesIndex} de ${rows.length}` : ''].filter(Boolean).join(' · ') } })
+        event(store, req.actor, 'created', row.id, { details: { valueCents: row.valueCents, dueDate: row.dueDate, text: [treasury ? `Entrada lançada na Tesouraria, já recebida${order ? `, na conclusão da ${order.code}` : ''}` : order ? `Programada na conclusão da ${order.code}` : '', groupId ? `Parcela ${row.installmentNumber} de ${rows.length} de ${money(common.valueCents)}` : '', seriesId ? `Contrato recorrente: ocorrência ${row.seriesIndex} de ${rows.length}` : ''].filter(Boolean).join(' · ') } })
+        if (treasury) event(store, req.actor, 'received', row.id, { details: { ...row.receipt, treasury: true } })
         for (const file of row.attachments) event(store, req.actor, 'attachment_added', row.id, { details: { name: file.name } })
       }
       return rows.map((row) => view(row, store))
@@ -219,6 +269,17 @@ export default function createReceivablesRouter(accounts, requireAdmin) {
   router.put('/receivables/:id', handle(async (req, res) => {
     const item = await mutateStore(async (store) => {
       init(store); const row = find(store, req.params.id), group = groupOf(store, row)
+      // A Tesouraria entry is corrected in place and stays received.
+      if (treasuryEntry(row) && req.body.treasury === true) {
+        assertNotReconciled(store, 'receivable', row.id, 'editar')
+        treasuryReceipt(req.body, 0)
+        const body = treasuryBody(req.body)
+        const common = await fields(store, row.origin === 'order' ? { ...body, clientId: undefined, customerName: row.customerName, customerDocument: row.customerDocument ?? '' } : body, accounts, row)
+        const before = { ...row }
+        Object.assign(row, common, { originalTotalCents: common.valueCents, receipt: { ...treasuryReceipt(req.body, common.valueCents), receipts: row.receipt.receipts || [] }, lastStatus: 'received' })
+        event(store, req.actor, 'edited', row.id, { changes: { before, after: { ...row } } })
+        return [view(row, store)]
+      }
       if (row.receipt) fail('Estorne o recebimento antes de editar esta conta.', 409)
       assertNotReconciled(store, 'receivable', row.id, 'editar')
       // The payer of an OS receivable comes from the OS and stays fixed.
@@ -294,7 +355,7 @@ export default function createReceivablesRouter(accounts, requireAdmin) {
     if (!file.name) fail('Nome de arquivo inválido.')
     await mutateStore(async (store) => {
       init(store); const row = find(store, req.params.id)
-      if (row.receipt) fail('Estorne o recebimento antes de alterar os anexos.', 409)
+      if (row.receipt && !treasuryEntry(row)) fail('Estorne o recebimento antes de alterar os anexos.', 409)
       await mkdir(directory, { recursive: true }); await writeFile(path.join(directory, file.id), req.body)
       row.attachments = [...(row.attachments || []), file]; event(store, req.actor, 'attachment_added', row.id, { details: { name: file.name } })
     })
@@ -310,7 +371,7 @@ export default function createReceivablesRouter(accounts, requireAdmin) {
   router.delete('/receivables/:id/files/:fileId', handle(async (req, res) => {
     await mutateStore((store) => {
       init(store); const row = find(store, req.params.id)
-      if (row.receipt) fail('Estorne o recebimento antes de alterar os anexos.', 409)
+      if (row.receipt && !treasuryEntry(row)) fail('Estorne o recebimento antes de alterar os anexos.', 409)
       const file = (row.attachments || []).find((item) => item.id === req.params.fileId)
       if (!file) fail('Arquivo não encontrado.', 404)
       row.attachments = row.attachments.filter((item) => item.id !== file.id); event(store, req.actor, 'attachment_removed', row.id, { details: { name: file.name } })
@@ -331,8 +392,8 @@ export default function createReceivablesRouter(accounts, requireAdmin) {
   router.delete('/receivables/:id', handle(async (req, res) => {
     await mutateStore((store) => {
       init(store); const row = find(store, req.params.id), group = groupOf(store, row)
-      if (group.some((item) => hasReceiptHistory(store, item))) fail(row.groupId ? 'Há parcela com recebimento: preserve o histórico do parcelamento.' : 'Conta com recebimento: preserve o histórico.', 409)
-      for (const item of group) assertNotReconciled(store, 'receivable', item.id, 'excluir')
+      const block = deletionBlock(store, row, group)
+      if (block) fail(block.message, block.status)
       for (const item of group) event(store, req.actor, 'deleted', item.id, { details: { account: item, text: row.groupId ? `Parcelamento excluído (${group.length} parcelas)` : '' } })
       store.receivables = store.receivables.filter((item) => !group.includes(item))
       return group.map((item) => item.id)

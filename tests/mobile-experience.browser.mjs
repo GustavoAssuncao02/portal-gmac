@@ -40,7 +40,7 @@ try {
   const offer = (await request('/offers', { ...offerDraft, service: 'Estrutura metalica industrial', company: 'Industria de Estruturas Metalicas Teste' })).item
   const material = { id: 'material-mobile', name: 'Chapa de aco galvanizado', detail: 'Espessura 3 mm', quantity: 12, unitPrice: 20 }
   const resources = { materials: [material], laborEntries: [{ id: 'labor-mobile', type: 'machine', resource: 'Centro de Usinagem CNC 01', hours: 5, hourlyRate: 80 }], stages: ['turning', 'milling', 'cnc-turning', 'painting', 'cut-bend', 'torch-cut', 'structural-assembly'], kind: 'service' }
-  assert.ok((await fixture.request(`/offers/${offer.id}/resources`, 'PUT', resources, headers)).status < 300)
+  assert.ok((await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', resources, headers)).status < 300)
   await request(`/offers/${offer.id}/proposal`, { layout: 'classic', proposal: { key: 'A', deadline: '2026-12-20', serviceValue: 640, stages: resources.stages, kind: 'service' } })
   await request(`/offers/${offer.id}/accept`, {})
   await fixture.mutateStore((store) => {
@@ -52,7 +52,7 @@ try {
     order.operation.stageCounts = Object.fromEntries(order.operation.stages.map((stage, index) => [stage.key, index < 3 ? 7 : 4]))
   })
   const review = (await request('/offers', { ...offerDraft, service: 'Reforma de conjunto mecanico', company: 'Industria de Estruturas Metalicas Teste' })).item
-  await fixture.request(`/offers/${review.id}/resources`, 'PUT', resources, headers)
+  await fixture.adminRequest(`/offers/${review.id}/resources`, 'PUT', resources, headers)
   assert.ok((await fixture.request(`/material-requests/${encodeURIComponent(`${review.id}-${material.id}`)}/approve`, 'POST', {}, headers)).status < 300)
 
   for (const deviceName of ['iPhone 15', 'iPhone 15 Pro Max']) {
@@ -194,13 +194,13 @@ try {
         await dialog().getByLabel('Estoque mínimo (kg)', { exact: true }).fill('5')
         await dialog().getByLabel('Valor por kg', { exact: true }).fill('20')
         await dialog().getByRole('button', { name: 'Adicionar material', exact: true }).click()
+        // The purchase is offered to the financial module; here it is left for later.
+        await page.getByRole('dialog', { name: 'Lançar esta compra no financeiro?', exact: true }).getByRole('button', { name: 'Não lançar agora', exact: true }).click()
         await page.locator('.inventory-row').filter({ hasText: `Aco mobile ${width}` }).waitFor()
         await page.getByRole('button', { name: `Ver histórico de Aco mobile ${width}`, exact: true }).click()
         await capture('Historico estoque')
         await dialog().getByRole('button', { name: 'Fechar', exact: true }).click()
-        await page.getByRole('button', { name: 'Abrir solicitação de compra', exact: true }).first().click()
-        await capture('Solicitacao de compra')
-        await dialog().getByRole('button', { name: 'Cancelar', exact: true }).click()
+        // Missing materials are requested in Pedidos de material; Estoque no longer has its own request window.
       }
       if (!before && name === 'Calculadora de pesos e medidas') {
         await page.locator('.calculator-mobile-choices').getByLabel('Material', { exact: true }).selectOption('carbon')
@@ -214,25 +214,29 @@ try {
         assert.equal(await page.locator('.conversion-controls select').last().inputValue(), '0')
       }
       if (!before && ['Administradores', 'Funcionários', 'Clientes'].includes(name)) {
-        const form = page.locator('.registration-card form')
+        // Same pattern as Fornecedores: the list on screen, adding and editing in a modal.
+        const singular = { Administradores: 'administrador', 'Funcionários': 'funcionário', Clientes: 'cliente' }[name]
+        const nameLabel = name === 'Clientes' ? 'Nome / razão social' : 'Nome completo'
         const title = `Cadastro mobile ${name} ${width}`
-        await form.getByLabel(name === 'Clientes' ? 'Nome / Razão social *' : 'Nome completo *', { exact: true }).fill(title)
-        await form.getByLabel('E-mail *', { exact: true }).fill(`mobile.${slug(name)}.${width}@example.invalid`)
-        if (name === 'Clientes') await form.getByRole('textbox', { name: 'CNPJ *', exact: true }).fill(`11111111000${width}`)
+        await page.getByRole('button', { name: `Novo ${singular}`, exact: true }).click()
+        const form = page.getByRole('dialog', { name: `Novo ${singular}` })
+        await form.getByLabel(nameLabel, { exact: true }).fill(title)
+        await form.getByLabel('E-mail', { exact: true }).fill(`mobile.${slug(name)}.${width}@example.invalid`)
+        if (name === 'Clientes') await form.getByRole('textbox', { name: 'CNPJ', exact: true }).fill(`11111111000${width}`)
         else {
-          await form.getByLabel('Data de nascimento *', { exact: true }).fill('1990-01-01')
-          await form.getByRole('textbox', { name: 'CPF *', exact: true }).fill(`11111111${width}`)
-          if (name === 'Funcionários') await form.getByLabel(/^Identificação/).fill(String(width))
+          await form.getByLabel('Data de nascimento', { exact: true }).fill('1990-01-01')
+          await form.getByRole('textbox', { name: 'CPF', exact: true }).fill(`11111111${width}`)
+          if (name === 'Funcionários') await form.getByLabel(/^Código de acesso/).fill(String(width).padStart(4, '0'))
           else await form.getByPlaceholder('Crie uma senha de acesso', { exact: true }).fill('mobile123')
         }
-        await form.getByRole('button', { name: /Cadastrar/ }).click()
-        await page.locator('.registration-list-row').filter({ hasText: title }).waitFor()
-        await page.getByRole('button', { name: /^Ver cadastros/ }).click()
-        const listTop = await page.locator('.registration-list-card').evaluate((el) => el.getBoundingClientRect().top)
-        assert.ok(listTop >= 103, 'Registration shortcut clears the fixed header')
-        await page.locator('.registration-list-row').filter({ hasText: title }).getByRole('button', { name: 'Editar', exact: true }).click()
-        assert.equal(await form.getByLabel(name === 'Clientes' ? 'Nome / Razão social *' : 'Nome completo *', { exact: true }).inputValue(), title)
-        await form.getByRole('button', { name: 'Cancelar', exact: true }).click()
+        await form.getByRole('button', { name: 'Salvar', exact: true }).click()
+        await form.waitFor({ state: 'detached' })
+        const created = page.locator('.registration-table tbody tr').filter({ hasText: title })
+        await created.waitFor()
+        await created.getByRole('button', { name: `Editar ${title}`, exact: true }).click()
+        const editing = page.getByRole('dialog', { name: `Editar ${singular}` })
+        assert.equal(await editing.getByLabel(nameLabel, { exact: true }).inputValue(), title)
+        await editing.getByRole('button', { name: 'Cancelar', exact: true }).click()
       }
       if (!before && name === 'Contas a Pagar') {
         await page.getByLabel('Ordenar por', { exact: true }).selectOption('valueCents')

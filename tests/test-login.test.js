@@ -9,7 +9,8 @@ async function fixture(t, env, users = [{ id: 7, name: 'Gustavo', cpf: '12345678
   const app = express()
   app.use(express.json())
   app.use('/api', createLoginRouter({
-    admins: async () => users,
+    admins: async () => users.filter((user) => user.role !== 'staff'),
+    accountByCpf: async (cpf) => users.find((user) => user.cpf === cpf) || null,
     authenticate: async (cpf, password) => password === 'correct-password' ? users.find((user) => user.cpf === cpf) : null,
   }, env))
   app.get('/api/admin-only', requireAdmin, (request, response) => response.json({ id: request.adminId, name: request.adminName }))
@@ -49,6 +50,21 @@ test('empty credentials issue genuine sessions for the correct role in test mode
   assert.equal((await request('/operator-only', undefined, operator.data.token)).status, 200)
   assert.equal((await request('/admin-only', undefined, operator.data.token)).status, 401)
   assert.equal((await request('/admin-only')).status, 401)
+})
+
+test('in test mode the CPF chooses the profile without password: administrator or administrative employee', async (t) => {
+  const request = await fixture(t, { TEST_LOGIN_ENABLED: 'true' }, [
+    { id: 0, name: 'GMAC', cpf: '00000000000', role: 'admin' },
+    { id: 'employee-21', name: 'Teste Administrativo', cpf: '11111111111', role: 'staff' },
+  ])
+  const admin = await request('/auth/login', { cpf: '00000000000', password: '' })
+  assert.deepEqual([admin.status, admin.data.user.name, admin.data.user.role], [200, 'GMAC', 'admin'])
+  const staff = await request('/auth/login', { cpf: '111.111.111-11', password: '' })
+  assert.deepEqual([staff.status, staff.data.user.name, staff.data.user.role], [200, 'Teste Administrativo', 'staff'])
+  assert.equal((await request('/admin-only', undefined, staff.data.token)).data.id, 'employee-21')
+  const unknown = await request('/auth/login', { cpf: '22222222222', password: '' })
+  assert.equal(unknown.status, 401)
+  assert.match(unknown.data.message, /Nenhum administrador ou funcionário administrativo com este CPF/)
 })
 
 test('disabling test mode restores credential checks, including in production', async (t) => {

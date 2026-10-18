@@ -22,6 +22,13 @@ export async function downloadPayables(body) {
   if (!response.ok) throw new Error((await response.json()).message || 'Falha ao exportar.')
   downloadBlob(await response.blob(), `gmac-${body.id || 'contas-a-pagar'}.${body.format}`)
 }
+// The name the server gives to the file (for example "Etiqueta-5319.pdf"), when it sends one.
+export function fileNameOf(response) {
+  const header = response.headers.get('Content-Disposition') || ''
+  const encoded = header.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
+  if (encoded) { try { return decodeURIComponent(encoded.trim()) } catch { /* nome malformado: usa o padrão */ } }
+  return header.match(/filename="?([^";]+)"?/i)?.[1]?.trim() || ''
+}
 export function downloadBlob(blob, name) {
   const url = URL.createObjectURL(blob), link = document.createElement('a')
   link.href = url; link.download = name; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000)
@@ -43,8 +50,9 @@ export async function uploadFiles(base, files, accountId) {
   }
   return ids
 }
-export async function downloadFile(url, name) {
-  const response = await fetch(url, { headers: authHeader() })
-  if (!response.ok) throw new Error('Não foi possível baixar o arquivo.')
-  downloadBlob(await response.blob(), name)
+// `token` is the operator session; without it, the administrator session is used.
+export async function downloadFile(url, name, token) {
+  const response = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : authHeader() })
+  if (!response.ok) throw new Error(response.status === 401 ? 'Sua sessão expirou. Entre novamente para baixar o arquivo.' : 'Não foi possível baixar o arquivo.')
+  downloadBlob(await response.blob(), fileNameOf(response) || name)
 }

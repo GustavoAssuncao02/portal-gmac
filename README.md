@@ -42,15 +42,6 @@ A conciliação sugere candidatos apenas com valor exato, ordenados por evidênc
 
 Validação isolada: `node --test tests/bank-statements.test.js tests/receivables-installments.test.js tests/receivables-features.test.js` e, após `npm run build`, `node tests/finance-receivables.browser.mjs`, `node tests/receivables-installments.browser.mjs` e `node tests/receivables-features.browser.mjs`.
 
-**Conciliação bancária com IA** envia o extrato OFX (já interpretado), todas as contas a pagar e a receber ativas e as sugestões do motor de conciliação ao Claude (`claude-opus-5-5`) pela API da Anthropic. O Claude devolve uma página HTML com resumo, gráficos, a classificação de cada movimentação e os próximos passos. Nada é alterado no sistema. O prompt está em `server/aiReconciliation.js` (`SYSTEM_PROMPT`).
-
-- Configure `ANTHROPIC_API_KEY` no `.env` e reinicie o servidor. A chave é criada em [platform.claude.com](https://platform.claude.com) e o uso é cobrado por token, à parte da assinatura do claude.ai. Cada análise mostra os tokens gastos e uma estimativa em dólares.
-- A análise roda em segundo plano no servidor (costuma levar alguns minutos) e a tela acompanha o progresso. Enquanto uma análise está em andamento, outra não pode ser iniciada.
-- A página gerada roda num iframe isolado (`sandbox="allow-scripts"`, sem acesso à sessão do portal) e com CSP que bloqueia qualquer acesso à rede. O servidor injeta nela os dados (`window.GMAC_DADOS`) e o Chart.js local, assim os gráficos são calculados a partir dos números reais, sem depender de CDN.
-- As análises ficam em `server/data/ai-reconciliations/`, fora do Git.
-
-Validação isolada, sem chamar a API: `node --test tests/ai-reconciliation.test.js` e, após `npm run build`, `node tests/ai-reconciliation.browser.mjs`.
-
 ## Modelos de proposta
 
 Ao clicar em **Gerar proposta em PDF**, o usuário escolhe um dos quatro modelos usados pelo comercial. Os dados do sistema já vêm preenchidos:
@@ -149,24 +140,34 @@ Em produção, um único processo Node atende a interface e a API no mesmo ender
 
 ```bash
 npm install
-npm run build
 npm start
 ```
 
-O build precisa das dependências de desenvolvimento (Vite). Se a hospedagem instalar só as de produção, gere o `dist/` antes e envie a pasta junto.
+`dist/` não vai para o GitHub. Com `NODE_ENV=production` (ou `BUILD_ON_START=true`), `npm start` (e o `server.js` da raiz, usado por pm2 e forever) gera a interface antes de subir o servidor sempre que algum arquivo da interface for mais novo que o último build (`scripts/ensure-build.mjs`). Por isso Vite, o plugin do React e o PostCSS ficam em `dependencies`: a hospedagem instala só elas em produção. Fora de produção nada muda: o desenvolvimento segue com Vite e os testes geram o próprio build.
 
 Variáveis de ambiente no servidor, além das do banco e das credenciais:
 
 | Variável | Valor na hospedagem | Para quê |
 | --- | --- | --- |
 | `API_HOST` | `0.0.0.0` | Aceitar conexões de fora do contêiner. O padrão `127.0.0.1` só atende a própria máquina. |
-| `PORT` | a porta que a hospedagem encaminha | Porta do processo Node. |
-| `NODE_ENV` | `production` | Bloqueia o acesso de teste sem senha e deixa a API fechada para outros sites. |
+| `PORT` | a porta que a hospedagem encaminha (`8080` no SaveInCloud) | Porta do processo Node. |
+| `NODE_ENV` | `production` | Gera a interface no start, bloqueia o acesso de teste sem senha e deixa a API fechada para outros sites. |
+| `BUILD_ON_START` | `true` num ambiente de teste sem `NODE_ENV=production` | Gera a interface no start, como em produção. Serve para publicar um ambiente de teste com `TEST_LOGIN_ENABLED=true`, que produção sempre bloqueia. |
+| `DATA_DIR` | uma pasta fora do código, ex.: `/home/jelastic/portal-data` | Onde ficam ofertas, OS, financeiro, anexos e extratos (padrão `server/data/`). Um deploy do GitHub substitui o código; fora dele, os dados continuam. |
 | `TRUST_PROXY` | `1` com um balanceador na frente | Faz o servidor enxergar o IP real de cada usuário. Com o padrão `loopback`, atrás de um balanceador todos os usuários contam como um só IP no limite de requisições. |
 | `API_RATE_LIMIT` | `200` ou mais | Requisições por minuto por IP. Usuários da mesma rede saem para a internet com o mesmo IP público e dividem esse limite; aumente se aparecer o erro 429. |
 | `CORS_ORIGIN` | vazio | Lista de outros sites autorizados a chamar a API. Vazio, em produção, só o próprio portal chama. |
 
 Confirme no painel da hospedagem a porta encaminhada e quantos proxies ficam à frente do contêiner.
+
+**SaveInCloud (Jelastic)**
+
+- Servidor de aplicação Node.js com deploy pelo repositório do GitHub; `PROCESS_MANAGER=npm` faz o contêiner usar `npm start`. Com pm2, o arquivo iniciado é o `server.js` da raiz, que faz o mesmo.
+- Banco: MySQL no mesmo ambiente. Em `DB_HOST`, use o endereço interno do nó do banco (IP da rede local do ambiente ou `nodeXXXX-env-XXXX...`), porta `3306`. Crie o banco importando `database/schema.sql` (ou um dump do banco local) pelo phpMyAdmin.
+- Sem um administrador na tabela `users`, ninguém entra no portal: leve ao menos o administrador junto com o dump do banco local.
+- Copie `server/data/offers.json` local para a pasta de `DATA_DIR` se quiser levar máquinas, fornecedores, classificações e serviços já cadastrados. O catálogo fiscal é baixado sozinho no primeiro start.
+- Ambiente de teste igual ao local (login sem senha): não defina `NODE_ENV`, use `TEST_LOGIN_ENABLED=true` e `BUILD_ON_START=true`. Qualquer pessoa com o endereço entra como administrador: não use assim com o portal em uso real.
+- Uma reimplantação do contêiner (troca de versão do Node) mantém só as pastas declaradas como volume: inclua a pasta de `DATA_DIR` nos volumes do nó.
 
 **Desempenho no navegador**
 
@@ -185,9 +186,14 @@ Confirme no painel da hospedagem a porta encaminhada e quantos proxies ficam à 
 
 **Antes de abrir o portal para a internet**
 
-- Parte das rotas da API (ofertas, OS, estoque, funcionários, máquinas e serviços de mão de obra) ainda não exige sessão, como no uso em rede local. Restrinja o acesso na hospedagem (VPN ou lista de IPs) ou adicione autenticação a essas rotas.
+- Todas as rotas que alteram ou mostram dados internos exigem sessão. A conta do operador alcança só o que o painel de produção usa: arquivos e histórico da OS, máquinas e serviços de mão de obra. Ficam abertos apenas o login, a configuração do login e `/api/health`. O teste `tests/access-control.test.js` confere isso.
 - Sessões e o limite de requisições ficam na memória do processo: use uma única instância. Reiniciar o servidor exige novo login.
-- `server/data/` guarda ofertas, OS, contas, anexos e extratos. A pasta precisa sobreviver a cada deploy e entrar no backup, junto com o MySQL.
+- `server/data/` (ou a pasta de `DATA_DIR`) guarda ofertas, OS, contas, anexos e extratos. A pasta precisa sobreviver a cada deploy e entrar no backup, junto com o MySQL.
+
+**Backup**
+
+- O servidor guarda sozinho uma cópia diária de `server/data/offers.json` em `server/data/backups/auto-AAAA-MM-DD.json` e mantém os últimos 30 dias. Ela ajuda a desfazer uma alteração errada, mas fica no mesmo disco.
+- Na hospedagem, programe também uma cópia **fora do servidor**: a pasta `server/data/` inteira (com os anexos) e um dump do MySQL (`mysqldump`), pelo menos uma vez por dia.
 
 ## Cadastros e Conta
 

@@ -5,7 +5,7 @@ import { createWorkflowFixture } from './workflowFixture.js'
 
 const modulePath = process.env.PLAYWRIGHT_MODULE
 const { chromium } = await import(modulePath ? pathToFileURL(modulePath).href : 'playwright')
-const fixture = await createWorkflowFixture()
+const fixture = await createWorkflowFixture({ accountsEnv: { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste', DEMO_ADMIN_NAME: 'Gustavo' } })
 const browser = await chromium.launch({ headless: true })
 const page = await browser.newPage({ viewport: { width: 1366, height: 900 }, timezoneId: 'America/Bahia' })
 const errors = []
@@ -42,11 +42,13 @@ try {
   await page.getByRole('button', { name: 'Entrar', exact: true }).click()
   await page.locator('.sidebar').getByRole('button', { name: 'Serviços em andamento', exact: true }).click()
   await page.getByRole('heading', { name: 'Painel de serviços em andamento' }).waitFor()
-  await page.locator('.sidebar').getByRole('button', { name: 'Funcionários', exact: true }).click()
+  const employees = page.locator('.sidebar').getByRole('button', { name: 'Funcionários', exact: true })
+  if (!await employees.isVisible()) await page.locator('.sidebar').getByRole('button', { name: 'Cadastros', exact: true }).click()
+  await employees.click()
   const ana = page.getByRole('button', { name: 'Ver histórico de Ana Teste', exact: true })
   await ana.waitFor()
-  const row = page.locator('.registration-list-row').filter({ has: ana })
-  const deleteBox = await row.getByRole('button', { name: 'Excluir', exact: true }).boundingBox()
+  const row = page.locator('.registration-table tbody tr').filter({ has: ana })
+  const deleteBox = await row.getByRole('button', { name: 'Excluir Ana Teste', exact: true }).boundingBox()
   const infoBox = await ana.boundingBox()
   assert.ok(infoBox.x >= deleteBox.x + deleteBox.width)
   await page.screenshot({ path: 'test-results/employee-history-actions.png', fullPage: true })

@@ -111,11 +111,12 @@ try {
     assert.ok(metadata.width <= 256 && metadata.height <= 256 && thumbnail.length < fixtureImage.length)
     // An older client editing metadata must not erase a stored photo or icon.
     assert.equal((await send('/inventory/1', details)).status, 200)
-    const stored = (await (await fetch(`${apiUrl}/api/inventory`)).json()).items[0]
+    const stored = (await (await fetch(`${apiUrl}/api/inventory`, { headers: { Authorization: `Bearer ${token}` } })).json()).items[0]
     assert.equal(stored.photo, rows[0].photo)
     assert.equal(stored.icon, 'tube')
     const secondContext = await browser.newContext()
-    const shared = await secondContext.request.get(`${apiUrl}/api/inventory`)
+    // Another computer, with its own administrator session, sees the same photo.
+    const shared = await secondContext.request.get(`${apiUrl}/api/inventory`, { headers: { Authorization: `Bearer ${token}` } })
     assert.equal((await shared.json()).items[0].photo, stored.photo)
     await secondContext.close()
     await page.reload()
@@ -130,7 +131,7 @@ try {
     await dialog.getByRole('button', { name: 'Salvar alterações', exact: true }).click()
     await dialog.waitFor({ state: 'hidden' })
     await page.locator('.inventory-material-name svg').waitFor()
-    assert.equal((await (await fetch(`${apiUrl}/api/inventory`)).json()).items[0].photo, null)
+    assert.equal((await (await fetch(`${apiUrl}/api/inventory`, { headers: { Authorization: `Bearer ${token}` } })).json()).items[0].photo, null)
     await page.screenshot({ path: path.join(screenshotDirectory, `${device || 'desktop'}-inventory.png`), fullPage: true })
     await browser.close()
     browser = null

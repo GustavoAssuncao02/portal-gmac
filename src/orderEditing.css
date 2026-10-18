@@ -2,6 +2,19 @@
 .os-action-modal { width: min(520px, calc(100% - 24px)); }
 .os-action-content { padding: 20px 24px 24px; }
 .os-action-content > p { margin: 0 0 24px; font-size: 14px; line-height: 1.6; }
+/* Reopening an OS that has accounts receivable: what is linked and what to do with it. */
+.os-action-receivables { margin: 0 0 24px; padding: 14px 16px; border: 1px solid #dce6ed; border-radius: 6px; background: #f7f9fb; }
+.os-action-receivables h3 { margin: 0 0 8px; color: #234768; font-size: 13px; font-weight: 600; }
+.os-action-receivables ul { display: grid; gap: 4px; margin: 0 0 14px; padding: 0; list-style: none; color: #3d5166; font-size: 13px; font-variant-numeric: tabular-nums; }
+.os-action-choice { display: grid; gap: 8px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.os-action-choice legend { margin-bottom: 8px; padding: 0; color: #234768; font-size: 13px; font-weight: 600; }
+.os-action-choice label { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid #cbd9e6; border-radius: 5px; background: #fff; font-size: 13px; line-height: 1.45; cursor: pointer; }
+.os-action-choice label:has(input:checked) { border-color: #0c4c91; background: #eef5fc; }
+.os-action-choice input { margin-top: 3px; }
+.os-action-choice strong { display: block; font-size: 13.5px; }
+.os-action-choice small { display: block; margin-top: 2px; color: #5f7489; font-size: 12px; }
+.os-action-note { margin: 0; color: #5f7489; font-size: 12.5px; line-height: 1.5; }
+.os-action-content > p.os-action-note--standalone { margin: -8px 0 20px; font-size: 12.5px; }
 .os-edit-modal { width: min(980px, calc(100% - 24px)); }
 .os-edit-modal[open] { display: flex; flex-direction: column; overflow: hidden; }
 .os-edit-modal > .os-history-heading { flex: 0 0 auto; }
@@ -50,3 +63,4 @@
   .os-edit-actions > button:last-child { flex: 1.35; }
   .os-edit-field :is(input, select, textarea) { min-height: 44px; font-size: 16px; }
 }
+.os-deadline-reason textarea { width:100%; resize:vertical; font:inherit; }

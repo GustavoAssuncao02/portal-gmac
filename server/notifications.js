@@ -34,25 +34,27 @@ export default function createNotificationsRouter({ requireAdmin, payables, rece
     const settings = notificationSettings(store, userId)
     return (store.operationalNotifications || []).filter((item) => settings[notificationPreference[item.type]])
   }
-  const items = (store, userId) => [
-    ...notificationItems(store, userId).map((item) => ({ ...item, type: 'payable' })),
-    ...receivableNotificationItems(store, userId).map((item) => ({ ...item, type: 'receivable' })),
+  // Administrative employees have no access to the finance screens, so they get no payable or receivable notices.
+  const items = (store, userId, finance) => [
+    ...(finance ? notificationItems(store, userId).map((item) => ({ ...item, type: 'payable' })) : []),
+    ...(finance ? receivableNotificationItems(store, userId).map((item) => ({ ...item, type: 'receivable' })) : []),
     ...operational(store, userId).map(({ readBy, ...item }) => ({ ...item, readAt: readBy?.find((entry) => String(entry.userId) === String(userId))?.at || null })),
   ].sort((left, right) => Date.parse(right.at) - Date.parse(left.at))
   for (const [method, route, reading] of [['get', '/notifications', false], ['post', '/notifications/read-all', true]]) router[method](route, async (request, response, next) => {
     try {
+      const finance = request.adminRole !== 'staff'
       await sweepInventory()
-      await receivables?.sweep(request.adminId)
-      let store = await payables.sweep(request.adminId)
-      if (reading && items(store, request.adminId).some((item) => !item.readAt)) store = await mutateStore((current) => {
+      if (finance) await receivables?.sweep(request.adminId)
+      let store = finance ? await payables.sweep(request.adminId) : await readStore()
+      if (reading && items(store, request.adminId, finance).some((item) => !item.readAt)) store = await mutateStore((current) => {
         const at = new Date().toISOString()
-        for (const notice of [...activeNotifications(current, request.adminId), ...activeReceivableNotices(current, request.adminId), ...operational(current, request.adminId)]) {
+        for (const notice of [...(finance ? [...activeNotifications(current, request.adminId), ...activeReceivableNotices(current, request.adminId)] : []), ...operational(current, request.adminId)]) {
           notice.readBy ||= []
           if (!notice.readBy.some((entry) => String(entry.userId) === String(request.adminId))) notice.readBy.push({ userId: request.adminId, at })
         }
         return current
       })
-      response.set('Cache-Control', 'no-store').json({ items: items(store, request.adminId) })
+      response.set('Cache-Control', 'no-store').json({ items: items(store, request.adminId, finance) })
     } catch (error) { next(error) }
   })
   router.sweepInventory = sweepInventory

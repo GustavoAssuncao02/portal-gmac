@@ -29,30 +29,30 @@ test('custom stage order persists across reload, proposal, PDF and OS without ch
   const fixture = await createWorkflowFixture()
   t.after(() => fixture.close())
   await fixture.mutateStore((store) => store.orders.push({ code: 'OS-EXISTING', quantity: 10, operation: { status: 'waiting', stages: [{ key: 'original', name: 'Original' }], stageCounts: { original: 0 }, activeSession: null, accumulatedMs: 0 } }))
-  const { data } = await fixture.request('/offers', 'POST', offerDraft)
+  const { data } = await fixture.adminRequest('/offers', 'POST', offerDraft)
   const route = `/offers/${data.item.id}`
   const layout = defaultStageLayout()
   const stageLayout = [layout[1], layout[2], { ...layout[0], stages: [...layout[0].stages].reverse() }]
   const stages = orderedStageSelection(stageLayout, ['turning', 'assembly', 'painting', 'plasma-cut'])
   const resources = { materials: [], laborEntries: [], stageLayout, stages, kind: 'service' }
-  const saved = await fixture.request(`${route}/resources`, 'PUT', resources)
+  const saved = await fixture.adminRequest(`${route}/resources`, 'PUT', resources)
   assert.equal(saved.status, 200)
-  const reloaded = (await fixture.request('/offers')).data.items.find((row) => row.id === data.item.id)
+  const reloaded = (await fixture.adminRequest('/offers', 'GET', undefined, fixture.admin)).data.items.find((row) => row.id === data.item.id)
   assert.deepEqual(reloaded.resources.stageLayout, stageLayout)
   assert.deepEqual(reloaded.resources.stages, stages)
   // Older clients can update resources without erasing the saved group layout.
-  await fixture.request(`${route}/resources`, 'PUT', { materials: [], laborEntries: [], kind: 'product' })
-  assert.deepEqual((await fixture.request('/offers')).data.items[0].resources.stageLayout, stageLayout)
+  await fixture.adminRequest(`${route}/resources`, 'PUT', { materials: [], laborEntries: [], kind: 'product' })
+  assert.deepEqual((await fixture.adminRequest('/offers', 'GET', undefined, fixture.admin)).data.items[0].resources.stageLayout, stageLayout)
   const proposal = { key: 'A', title: 'Teste', deadline: '2026-12-20', serviceValue: 600, materials: 0, labor: 600, machine: '2 horas', serviceTime: '2 horas', margin: 0, discount: 0, profit: 0 }
-  const generated = await fixture.request(`${route}/proposal`, 'POST', { proposal, layout: 'classic' })
+  const generated = await fixture.adminRequest(`${route}/proposal`, 'POST', { proposal, layout: 'classic' })
   assert.equal(generated.status, 200)
   assert.deepEqual(generated.data.item.proposal.stages, stages)
-  const pdf = await fetch(`${fixture.url}/api${route}/proposal.pdf`)
+  const pdf = await fetch(`${fixture.url}/api${route}/proposal.pdf`, { headers: fixture.admin })
   assert.equal(Buffer.from(await pdf.arrayBuffer()).subarray(0, 4).toString(), '%PDF')
-  const accepted = await fixture.request(`${route}/accept`, 'POST')
+  const accepted = await fixture.adminRequest(`${route}/accept`, 'POST')
   assert.equal(accepted.status, 201)
   assert.deepEqual(accepted.data.item.resources.stageLayout, stageLayout)
-  const orders = (await fixture.request('/operations/orders')).data.items
+  const orders = (await fixture.request('/operations/orders', 'GET', undefined, fixture.admin)).data.items
   assert.deepEqual(orders.find((row) => row.code === accepted.data.item.code).operation.stages.map((stage) => stage.name), ['Pintura', 'Corte a plasma', 'Montagem', 'Tornearia'])
   assert.deepEqual(orders.find((row) => row.code === 'OS-EXISTING').operation.stages, [{ key: 'original', name: 'Original' }])
 })
@@ -60,11 +60,11 @@ test('custom stage order persists across reload, proposal, PDF and OS without ch
 test('resource API rejects invalid group orders and deduplicates selected stages without sorting them', async (t) => {
   const fixture = await createWorkflowFixture()
   t.after(() => fixture.close())
-  const { data } = await fixture.request('/offers', 'POST', offerDraft)
+  const { data } = await fixture.adminRequest('/offers', 'POST', offerDraft)
   const route = `/offers/${data.item.id}/resources`
   const resources = { materials: [], laborEntries: [], stages: ['painting', 'turning', 'painting'], kind: 'service' }
-  assert.equal((await fixture.request(route, 'PUT', { ...resources, stageLayout: [] })).status, 400)
-  assert.equal((await fixture.request(route, 'PUT', { ...resources, stageLayout: [null, null, null] })).status, 400)
-  const saved = await fixture.request(route, 'PUT', resources)
+  assert.equal((await fixture.adminRequest(route, 'PUT', { ...resources, stageLayout: [] })).status, 400)
+  assert.equal((await fixture.adminRequest(route, 'PUT', { ...resources, stageLayout: [null, null, null] })).status, 400)
+  const saved = await fixture.adminRequest(route, 'PUT', resources)
   assert.deepEqual(saved.data.item.resources.stages, ['painting', 'turning'])
 })

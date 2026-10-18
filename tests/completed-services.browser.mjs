@@ -10,10 +10,10 @@ const browser = await chromium.launch()
 const stages = ['turning', 'milling', 'cnc-turning', 'painting', 'cut-bend', 'torch-cut', 'grinding']
 await mkdir('test-results', { recursive: true })
 try {
-  const offer = (await fixture.request('/offers', 'POST', offerDraft)).data.item
-  await fixture.request(`/offers/${offer.id}/resources`, 'PUT', { stages, materials: [], laborEntries: [], kind: 'service' })
-  await fixture.request(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', deadline: offer.deadline, serviceValue: 100 } })
-  const base = (await fixture.request(`/offers/${offer.id}/accept`, 'POST')).data.item
+  const offer = (await fixture.adminRequest('/offers', 'POST', offerDraft)).data.item
+  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { stages, materials: [], laborEntries: [], kind: 'service' })
+  await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', deadline: offer.deadline, serviceValue: 100 } })
+  const base = (await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')).data.item
   const oldCode = 'OS-2026-0001', newCode = 'OS-2026-0002', pendingCode = 'OS-2026-0003', activeCode = 'OS-2026-0004'
   for (const viewport of [{ width: 1920, height: 1080 }, { width: 393, height: 852 }, { width: 430, height: 932 }]) {
     await fixture.mutateStore((store) => {
@@ -22,7 +22,7 @@ try {
         [activeCode, 'Projeto ativo', null, null],
         [newCode, 'Estrutura recente', '2026-10-03T15:00:00Z', '2026-10-03T16:00:00Z'],
         [pendingCode, 'Aguardando conferencia', '2026-10-04T15:00:00Z', null],
-      ].map(([code, service, completedAt, completionAcknowledgedAt]) => ({ ...base, code, service, operation: {
+      ].map(([code, service, completedAt, completionAcknowledgedAt]) => ({ ...base, code, service, ...(code === oldCode ? { purchaseOrders: [{ id: 'po', name: 'pedido.pdf' }] } : {}), operationEvents: { [oldCode]: [['ana', 'Ana Teste']], [newCode]: [['bruno', 'Bruno Teste'], ['ana', 'Ana Teste']] }[code]?.map(([employeeId, employeeName], index) => ({ id: `${code}-${index}`, type: index ? 'resumed' : 'started', at: '2026-10-01T12:00:00Z', employeeId, employeeName, sessionId: `${code}-${index}` })) || [], operation: {
         status: completedAt ? 'completed' : 'paused', completedAt, completionAcknowledgedAt, accumulatedMs: 3600000, activeSession: null,
         stages: stages.map((key, i) => ({ key: `stage-${i}`, name: stageLabel(key) })),
         stageCounts: Object.fromEntries(stages.map((_, i) => [`stage-${i}`, completedAt ? 10 : 0])),
@@ -47,7 +47,27 @@ try {
     await navigate('Servi\u00e7os conclu\u00eddos')
     assert.deepEqual(await codes(), [newCode, oldCode])
     assert.equal(await page.locator('.admin-os-table').getByRole('button', { name: 'Conclu\u00eddo', exact: true }).count(), 0)
-    assert.equal(await page.locator('.admin-os-stage-label').count(), 14)
+    // Finished services show whether the purchase order is attached instead of the stage progress.
+    assert.equal(await page.locator('.admin-os-stage-label').count(), 0)
+    assert.deepEqual(await page.locator('.admin-os-table .admin-os-po').allTextContents(), ['Não possui', 'Possui (1)'])
+    // Everyone who worked on the OS, the filter by employee and the sortable headers (numbers from the largest, text A→Z).
+    assert.deepEqual(await page.locator('.admin-os-table tbody td[data-label="Colaboradores"]').allTextContents(), ['Bruno Teste, Ana Teste', 'Ana Teste'])
+    const collaborator = page.getByRole('combobox', { name: 'Filtrar por colaborador', exact: true })
+    assert.deepEqual(await collaborator.locator('option').allTextContents(), ['Todos', 'Ana Teste', 'Bruno Teste'])
+    await collaborator.selectOption({ label: 'Bruno Teste' })
+    assert.deepEqual(await codes(), [newCode])
+    await collaborator.selectOption({ label: 'Todos' })
+    if (viewport.width === 1920) {
+      const sortBy = async (name) => { await page.locator('.admin-os-table thead').getByRole('button', { name, exact: true }).click(); return codes() }
+      assert.deepEqual(await sortBy('Conclusão'), [newCode, oldCode], 'most recent completion first')
+      assert.equal(await page.locator('.admin-os-table thead th', { hasText: 'Conclusão' }).getAttribute('aria-sort'), 'descending')
+      assert.deepEqual(await sortBy('Conclusão'), [oldCode, newCode], 'a second click inverts')
+      assert.deepEqual(await sortBy('Pedido de compra'), [oldCode, newCode])
+      assert.deepEqual(await sortBy('OS / Serviço'), [newCode, oldCode])
+      assert.deepEqual(await sortBy('Colaboradores'), [oldCode, newCode], 'text from A to Z')
+      assert.equal(await page.locator('.admin-os-table thead th', { hasText: 'Colaboradores' }).getAttribute('aria-sort'), 'ascending')
+      await sortBy('Conclusão')
+    }
     assert.ok((await page.locator('.admin-os-table tbody tr').first().innerText()).includes('10/10'))
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false)
     const searchGap = await page.evaluate(() => document.querySelector('.admin-os-table-wrap').getBoundingClientRect().top - document.querySelector('.global-search').getBoundingClientRect().bottom)
@@ -61,11 +81,11 @@ try {
     await navigate('Servi\u00e7os em andamento')
     assert.deepEqual(await codes(), [activeCode, pendingCode])
     const pendingRow = page.locator('.admin-os-table tbody tr').filter({ hasText: pendingCode })
-    const schedule = page.getByRole('dialog', { name: 'Programar recebimento', exact: true })
+    const schedule = page.getByRole('dialog', { name: 'Recebimento do serviço', exact: true })
     if (viewport.width === 1920) {
       await page.route('**/acknowledge-completion', (route) => route.fulfill({ status: 409, json: { message: 'Teste de falha de confirmacao' } }))
       await pendingRow.getByRole('button', { name: 'Conclu\u00eddo', exact: true }).click()
-      await schedule.getByRole('button', { name: 'Concluir sem programar', exact: true }).click()
+      await schedule.getByRole('button', { name: 'Concluir sem lançar', exact: true }).click()
       await schedule.getByRole('alert').filter({ hasText: 'Teste de falha' }).waitFor()
       assert.ok((await codes()).includes(pendingCode))
       await page.unroute('**/acknowledge-completion')
@@ -73,7 +93,7 @@ try {
       await schedule.waitFor({ state: 'hidden' })
     }
     await pendingRow.getByRole('button', { name: 'Conclu\u00eddo', exact: true }).click()
-    await schedule.getByRole('button', { name: 'Concluir sem programar', exact: true }).click()
+    await schedule.getByRole('button', { name: 'Concluir sem lançar', exact: true }).click()
     await pendingRow.waitFor({ state: 'detached' })
     await navigate('Servi\u00e7os conclu\u00eddos')
     assert.deepEqual(await codes(), [pendingCode, newCode, oldCode])

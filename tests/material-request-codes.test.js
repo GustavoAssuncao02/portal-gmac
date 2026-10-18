@@ -29,7 +29,7 @@ test('the material requests API returns a code for offer/OS requests and keeps t
   try {
     const login = (await fixture.request('/auth/login', 'POST', { cpf: env.DEMO_ADMIN_CPF, password: env.DEMO_ADMIN_PASSWORD })).data
     const headers = { Authorization: `Bearer ${login.token}` }
-    const offer = (await fixture.request('/offers', 'POST', offerDraft)).data.item
+    const offer = (await fixture.adminRequest('/offers', 'POST', offerDraft)).data.item
     await fixture.mutateStore((store) => { store.offers[0].resources = { materials: [{ id: 'inox', name: 'Inox 304', quantity: 10, purchaseQuantity: 10 }] } })
     const listed = await fixture.request('/material-requests', 'GET', undefined, headers)
     assert.equal(listed.status, 200)

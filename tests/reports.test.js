@@ -52,16 +52,16 @@ test('accounts and registries persist; protected reports export actual PDF/XLSX 
     assert.equal((await fixture.request('/reports/catalog')).status, 401)
     const login = await fixture.request('/auth/login', 'POST', { cpf: env.DEMO_ADMIN_CPF, password: env.DEMO_ADMIN_PASSWORD })
     let headers = { Authorization: `Bearer ${login.data.token}` }
-    const employee = (await fixture.request('/employees', 'POST', { name: 'Ana Teste', birthDate: '1990-01-01', cpf: '00000000001', email: 'ana@example.invalid', identification: '001' })).data.item
+    const employee = (await fixture.adminRequest('/employees', 'POST', { name: 'Ana Teste', birthDate: '1990-01-01', cpf: '00000000001', email: 'ana@example.invalid', identification: '001' }, fixture.admin)).data.item
     const client = (await fixture.request('/clients', 'POST', { name: '=SUM(1,2)', documentType: 'cnpj', document: '12345678000190', email: 'client@example.invalid' }, headers)).data.item
     const admin = (await fixture.request('/admins', 'POST', { name: 'Admin Teste', birthDate: '1990-01-01', cpf: '00000000002', email: 'admin@example.invalid', password: 'senha123' }, headers)).data.item
     assert.equal(admin.passwordHash, undefined)
-    const machine = (await fixture.request('/machines', 'POST', { name: 'Torno teste', type: 'Torno', sector: 'Usinagem', hourlyRate: 150 }, headers)).data.item
-    const offer = (await fixture.request('/offers', 'POST', offerDraft)).data.item
+    const machine = (await fixture.adminRequest('/machines', 'POST', { name: 'Torno teste', type: 'Torno', sector: 'Usinagem', hourlyRate: 150 }, headers)).data.item
+    const offer = (await fixture.adminRequest('/offers', 'POST', offerDraft)).data.item
     const resources = { materials: [], laborEntries: [], stages: ['turning', 'painting', 'plasma-cut'], kind: 'product', manufacturedFrom: 'drawing', tempering: true, paintColor: 'Azul epoxi', serviceDescription: 'Acabamento conforme desenho.' }
-    assert.equal((await fixture.request(`/offers/${offer.id}/resources`, 'PUT', resources)).status, 200)
-    await fixture.request(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', title: 'A', deadline: '2026-12-20', serviceValue: 100 } })
-    const order = (await fixture.request(`/offers/${offer.id}/accept`, 'POST')).data.item
+    assert.equal((await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', resources)).status, 200)
+    await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', title: 'A', deadline: '2026-12-20', serviceValue: 100 } })
+    const order = (await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')).data.item
     const operatorHeaders = { Authorization: `Bearer ${fixture.operatorToken}` }
     assert.equal((await fixture.request(`/operations/orders/${order.code}/start`, 'POST', { employeeId: employee.id, machineId: 'nonexistent' }, operatorHeaders)).status, 400)
     const started = (await fixture.request(`/operations/orders/${order.code}/start`, 'POST', { employeeId: employee.id, machineId: machine.id }, operatorHeaders)).data

@@ -616,11 +616,14 @@ export async function renderLetter(document) {
   }
   y = Math.max(left, y - 4 + cardHeight) + 10
 
-  // Fiscal identification, compact: one line per code.
+  // Fiscal identification, compact: one line per code. The first CNAE is the main one, the others are secondary.
   const fiscal = document.fiscal || {}
-  const codes = [['CNAE – Código de atividade', fiscal.cnae], ['NBS', fiscal.nbs], ['NCM', fiscal.ncm]].filter(([, entry]) => entry?.code)
+  const list = (value) => (Array.isArray(value) ? value : value ? [value] : []).filter((entry) => entry?.code)
+  const cnaes = list(fiscal.cnae)
+  const codes = [...cnaes.map((entry, index) => [cnaes.length === 1 ? 'CNAE – Código de atividade' : index === 0 ? 'CNAE principal' : 'CNAE secundário', entry]), ...list(fiscal.nbs).map((entry) => ['NBS', entry]), ...list(fiscal.ncm).map((entry) => ['NCM', entry])]
   if (codes.length) {
     const boxHeight = 20 + codes.length * 12.5
+    ensure(boxHeight)
     doc.save().roundedRect(LETTER.left, y, width, boxHeight, 5).fill(INK.fiscal).restore()
     doc.save().rect(LETTER.left, y, 3.5, boxHeight).fill(INK.orange).restore()
     doc.font(f.calibriBold).fontSize(7.8).fillColor('#9a4f00').text('IDENTIFICAÇÃO FISCAL', LETTER.left + 12, y + 6, { lineBreak: false, characterSpacing: 0.8 })

@@ -35,4 +35,4 @@ export function orderedStageSelection(layout, selected) {
   const keys = layout.flatMap((entry) => entry.stages)
   return [...keys.filter((key) => selected.includes(key)), ...selected.filter((key) => !keys.includes(key))]
 }
-export const serviceDetails = (resources = {}) => ({ manufacturedFrom: resources.manufacturedFrom ?? null, tempering: resources.tempering ?? null, paintColor: resources.paintColor || '', serviceDescription: resources.serviceDescription || '', strictProcess: resources.strictProcess !== false })
+export const serviceDetails = (resources = {}) => ({ manufacturedFrom: resources.manufacturedFrom ?? null, tempering: resources.tempering ?? null, urgency: resources.urgency === 'emergency' ? 'emergency' : 'normal', paintColor: resources.paintColor || '', serviceDescription: resources.serviceDescription || '', strictProcess: resources.strictProcess !== false })

@@ -1,0 +1,75 @@
+import bcrypt from 'bcryptjs'
+import { randomInt } from 'node:crypto'
+import { mutateStore, readStore } from './offers.js'
+
+export const employeeTypes = ['operator', 'administrative']
+const fail = (status, message) => { throw Object.assign(new Error(message), { status }) }
+
+// Administrative employees sign in like administrators; the prefix keeps their sessions and preferences apart from administrator ids.
+export const staffAccountId = (employeeId) => `employee-${employeeId}`
+
+export async function employeeRecords(pool) {
+  if (!pool) return ((await readStore()).employees || []).map((item) => ({ ...item, type: item.type || 'operator' }))
+  const [rows] = await pool.execute("SELECT id, name, DATE_FORMAT(birth_date, '%Y-%m-%d') AS birthDate, cpf, email, i_identificacao AS identification, employee_type AS type, access_code AS accessCode, password_hash AS passwordHash FROM employees ORDER BY name")
+  return rows
+}
+
+export function publicEmployee({ accessCode, passwordHash, ...employee }, { withCode = false } = {}) {
+  return withCode && employee.type === 'operator' ? { ...employee, accessCode: accessCode || null } : employee
+}
+
+export function newAccessCode(taken) {
+  let code
+  do code = String(randomInt(10000)).padStart(4, '0'); while (taken.has(code))
+  return code
+}
+
+// Operators get a unique 4-digit code; administrative employees get a password and no code.
+export async function accessFields(body, current, employees) {
+  const type = body?.type ?? current?.type ?? 'operator'
+  if (!employeeTypes.includes(type)) fail(400, 'Escolha se o funcionário é operador ou administrativo.')
+  if (type === 'administrative') {
+    const password = body?.password
+    if (!password && current?.passwordHash) return { type, accessCode: null, passwordHash: current.passwordHash }
+    if (typeof password !== 'string' || password.length < 6 || password.length > 72) fail(400, 'A senha do funcionário administrativo deve ter entre 6 e 72 caracteres.')
+    return { type, accessCode: null, passwordHash: await bcrypt.hash(password, 12) }
+  }
+  const taken = new Set(employees.filter((item) => String(item.id) !== String(current?.id)).map((item) => item.accessCode).filter(Boolean))
+  const accessCode = String(body?.accessCode ?? '').trim() || current?.accessCode || null
+  if (accessCode && !/^\d{4}$/.test(accessCode)) fail(400, 'O código do operador deve ter exatamente 4 dígitos.')
+  if (accessCode && taken.has(accessCode)) fail(409, 'Este código já está em uso por outro operador.')
+  return { type, accessCode: accessCode || newAccessCode(taken), passwordHash: null }
+}
+
+// Adds the access columns to an existing database and gives every operator already registered a code.
+export async function ensureEmployeeAccess(pool) {
+  if (!pool) {
+    const pending = (store) => (store.employees || []).filter((item) => !item.type || item.type === 'operator' && !item.accessCode)
+    if (!pending(await readStore()).length) return
+    return mutateStore((store) => {
+      const taken = new Set(store.employees.map((item) => item.accessCode).filter(Boolean))
+      for (const item of pending(store)) {
+        item.type ||= 'operator'
+        if (item.type === 'operator' && !item.accessCode) taken.add(item.accessCode = newAccessCode(taken))
+      }
+    })
+  }
+  const [columns] = await pool.execute("SELECT COLUMN_NAME AS name FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'employees'")
+  const names = new Set(columns.map((column) => column.name))
+  for (const [name, definition] of [['employee_type', "ENUM('operator', 'administrative') NOT NULL DEFAULT 'operator'"], ['access_code', 'CHAR(4) NULL UNIQUE'], ['password_hash', 'VARCHAR(255) NULL']]) {
+    if (names.has(name)) continue
+    try { await pool.execute(`ALTER TABLE employees ADD COLUMN ${name} ${definition}`) }
+    catch (error) { if (error.code !== 'ER_DUP_FIELDNAME') throw error }
+  }
+  // Administrative employees have no 3-digit identification; birth date and e-mail are optional (the payroll list has neither).
+  const [nullable] = await pool.execute("SELECT COLUMN_NAME AS name FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'employees' AND IS_NULLABLE = 'NO'")
+  const required = new Set(nullable.map((column) => column.name))
+  for (const [name, definition] of [['i_identificacao', 'CHAR(3) NULL'], ['birth_date', 'DATE NULL'], ['email', 'VARCHAR(160) NULL']]) if (required.has(name)) await pool.execute(`ALTER TABLE employees MODIFY ${name} ${definition}`)
+  const [rows] = await pool.execute("SELECT id, access_code AS accessCode FROM employees WHERE employee_type = 'operator'")
+  const taken = new Set(rows.map((row) => row.accessCode).filter(Boolean))
+  for (const row of rows.filter((item) => !item.accessCode)) {
+    const code = newAccessCode(taken)
+    taken.add(code)
+    await pool.execute('UPDATE employees SET access_code = ? WHERE id = ? AND access_code IS NULL', [code, row.id])
+  }
+}

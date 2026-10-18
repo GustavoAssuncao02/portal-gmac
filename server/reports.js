@@ -2,10 +2,12 @@ import express from 'express'
 import { readStore } from './offers.js'
 import { machineRows } from './machines.js'
 import { laborServiceRows, laborServiceHistory } from './laborServices.js'
+import { osValueOf } from './proposalMath.js'
 import { stageLabel } from './serviceStages.js'
 import { activeEmployeeNames, activeSessions, operationElapsed } from './operationSessions.js'
 import { duration, hourReport, machineUtilization, ordersWithOperations, reportRange, workIntervals } from './reportData.js'
 import { exportPdf, exportWorkbook } from './documentExports.js'
+import { publicEmployee } from './employeeAccess.js'
 export { exportPdf, exportWorkbook } from './documentExports.js'
 
 const titles = { employees: 'Funcionários', clients: 'Clientes', admins: 'Administradores', 'employee-hours': 'Horas trabalhadas', 'machine-hours': 'Horas de máquinas', 'service-hours': 'Serviços', orders: 'Ordens de serviço' }
@@ -19,7 +21,7 @@ export default function createReportsRouter(pool, accounts, requireAdmin) {
   const router = express.Router()
   router.use('/reports', requireAdmin)
   async function employees() {
-    if (!pool) return (await readStore()).employees || []
+    if (!pool) return ((await readStore()).employees || []).map((item) => publicEmployee(item))
     const [rows] = await pool.execute("SELECT id, name, DATE_FORMAT(birth_date, '%Y-%m-%d') AS birthDate, cpf, email, i_identificacao AS identification, created_at AS createdAt FROM employees ORDER BY name")
     return rows
   }
@@ -75,9 +77,9 @@ export default function createReportsRouter(pool, accounts, requireAdmin) {
     const selected = orders.filter((order) => { const time = Date.parse(order.createdAt); return time >= range.start && time < range.end }).sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt))
     report.summary.push(['OS no período', selected.length])
     report.notes.push('Período baseado na data de criação da OS. Os dados operacionais refletem o momento da emissão.')
-    report.sections.push(section('Ordens de serviço', ['OS', 'Oferta', 'Serviço', 'Cliente', 'CNPJ', 'Etiqueta', 'Quantidade', 'Solicitação', 'Criação da OS', 'Prazo solicitado', 'Prazo acordado', 'Status', 'Descrição', 'Tipo', 'Fabricado a partir de', 'Têmpera', 'Cor/Tipo', 'Detalhes do serviço', 'Tempo real ativo', 'Operador atual', 'Máquina atual', 'Concluído em', 'Conclusão confirmada em', 'Última pausa', 'Proposta', 'Valor do serviço', 'Materiais (R$)', 'Mão de obra (R$)', 'Desconto (%)', 'Margem (%)', 'Lucro estimado (R$)', 'Horas de máquina previstas', 'Horas de serviço previstas'], selected.map((order) => {
+    report.sections.push(section('Ordens de serviço', ['OS', 'Oferta', 'Serviço', 'Cliente', 'CNPJ', 'Etiqueta', 'Quantidade', 'Solicitação', 'Criação da OS', 'Prazo solicitado', 'Prazo acordado', 'Status', 'Descrição', 'Tipo', 'Fabricado a partir de', 'Têmpera', 'Cor/Tipo', 'Detalhes do serviço', 'Tempo real ativo', 'Operador atual', 'Máquina atual', 'Concluído em', 'Conclusão confirmada em', 'Última pausa', 'Proposta', 'Valor do serviço', 'Materiais (R$)', 'Mão de obra (R$)', 'Desconto (%)', 'Margem (%)', 'Lucro estimado (R$)', 'Horas de máquina previstas', 'Horas de serviço previstas', 'Valor da OS', 'Horas totais previstas'], selected.map((order) => {
       const r = order.resources || {}, p = order.proposal || {}, o = order.operation || {}
-      return [order.code, order.offerId, order.service, order.company, order.cnpj, order.labelNumber, order.quantity, moment(order.requestedAt), moment(order.createdAt), date(order.deadline), date(p.deadline), status[o.status] || order.status, order.description, (r.kind || p.kind) === 'product' ? 'Produto' : 'Serviço', r.manufacturedFrom === 'sample' ? 'Amostra' : r.manufacturedFrom === 'drawing' ? 'Desenho' : '', r.tempering === true ? 'Sim' : r.tempering === false ? 'Não' : '', r.paintColor || '', r.serviceDescription || '', duration(operationElapsed(o, Date.parse(report.generatedAt))), activeEmployeeNames(o), [...new Set(activeSessions(o).map((session) => session.machineName).filter(Boolean))].join(', '), moment(o.completedAt), moment(o.completionAcknowledgedAt), o.lastPauseReason || '', p.title || p.key, p.serviceValue, p.materials, p.labor, p.discount, p.margin, p.profit, p.machine, p.serviceTime]
+      return [order.code, order.offerId, order.service, order.company, order.cnpj, order.labelNumber, order.quantity, moment(order.requestedAt), moment(order.createdAt), date(order.deadline), date(p.deadline), status[o.status] || order.status, order.description, (r.kind || p.kind) === 'product' ? 'Produto' : 'Serviço', r.manufacturedFrom === 'sample' ? 'Amostra' : r.manufacturedFrom === 'drawing' ? 'Desenho' : '', r.tempering === true ? 'Sim' : r.tempering === false ? 'Não' : '', r.paintColor || '', r.serviceDescription || '', duration(operationElapsed(o, Date.parse(report.generatedAt))), activeEmployeeNames(o), [...new Set(activeSessions(o).map((session) => session.machineName).filter(Boolean))].join(', '), moment(o.completedAt), moment(o.completionAcknowledgedAt), o.lastPauseReason || '', p.title || p.key, p.serviceValue, p.materials, p.labor, p.discount, p.margin, p.profit, p.machine, p.serviceTime, osValueOf(p), p.totalTime || '']
     })))
     report.sections.push(section('Materiais', ['OS', 'Material', 'Especificação', 'Quantidade (kg)', 'Valor/kg', 'Estoque', 'Disponível (kg)', 'Compra necessária (kg)'], selected.flatMap((order) => (order.resources?.materials || []).map((row) => [order.code, row.name, row.detail, row.quantity, row.unitPrice, row.stockStatus, row.stockAvailable, row.purchaseQuantity]))))
     report.sections.push(section('Mão de obra prevista', ['OS', 'Tipo', 'Recurso', 'Horas previstas', 'Valor/hora'], selected.flatMap((order) => (order.resources?.laborEntries || []).map((row) => [order.code, row.type === 'machine' ? 'Máquina' : 'Profissional', row.resource, row.hours, row.hourlyRate]))))

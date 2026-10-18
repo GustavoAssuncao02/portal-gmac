@@ -106,5 +106,5 @@ test('failed workflow commits roll back notifications together with the OS', asy
   }, { commit: async () => { throw new Error('Commit failed') }, rollback: async () => {} }), /Commit failed/)
   const response = await fixture.request('/notifications', 'GET', undefined, { Authorization: `Bearer ${fixture.adminToken}` })
   assert.deepEqual(response.data.items, [])
-  assert.deepEqual((await fixture.request('/orders')).data.items, [])
+  assert.deepEqual((await fixture.request('/orders', 'GET', undefined, fixture.admin)).data.items, [])
 })

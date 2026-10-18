@@ -37,6 +37,10 @@ export function matchesSearch(row, search) {
   return /^[\d.\-/\s]+$/.test(query) && digits.length >= 4 && String(row.supplierDocument || '').includes(digits)
 }
 export const payableStatus = (account, today = todayBahia()) => account.payment ? 'paid' : account.dueDate < today ? 'overdue' : 'pending'
+// Ways the money actually moved. Tesouraria accepts all of them for money in and out.
+export const settlementMethods = { pix: 'Pix', boleto: 'Boleto', transfer: 'Transferência', card: 'Cartão', cash: 'Dinheiro' }
+// Posted in Tesouraria: an account that is born settled, without going through "dar baixa".
+export const treasuryEntry = (row) => row?.treasury === true && Boolean(row.payment || row.receipt) && !row.inactive
 export function filterPayables(rows, filters = {}, today = todayBahia(), useStatus = true) {
   return rows.filter((row) => {
     if (filters.supplierId && String(row.supplierId) !== String(filters.supplierId)) return false

@@ -23,8 +23,8 @@ try {
   const company = { razao_social: 'GMAC USINAGEM LTDA', estabelecimento: { nome_fantasia: 'GMAC USINAGEM', atividade_principal: { subclasse: '2512-8/00', descricao: 'Fabricação de esquadrias de metal' }, atividades_secundarias: [{ subclasse: '2539-0/01', descricao: 'Serviços de usinagem, torneiria e solda' }] } }
   await syncFiscalCatalog({ fetcher: async (url) => ({ status: 200, body: Buffer.from(url === fiscalSources.cnae ? JSON.stringify(cnae) : url === fiscalSources.ncm ? JSON.stringify(ncm) : url === fiscalSources.nbs ? nbs : JSON.stringify(company), url === fiscalSources.nbs ? 'latin1' : 'utf8') }) })
 
-  const offer = (await fixture.request('/offers', 'POST', { ...offerDraft, company: 'Nestlé Brasil Ltda', service: 'Tampa graxadeira', description: 'Fabricação de 20 unidades, conforme amostra', quantity: 20, labelNumber: '5319' })).data.item
-  await fixture.request(`/offers/${offer.id}/resources`, 'PUT', { materials: [{ id: 'm1', name: 'Aço SAE 1020', detail: 'redondo', quantity: 4, unitPrice: 10 }], laborEntries: [{ id: 'l1', type: 'machine', resource: 'Torno CNC 01', hours: 25, hourlyRate: 120 }, { id: 'l2', type: 'labor', resource: 'Ajustagem', hours: 2, hourlyRate: 50 }], stages: ['machining'] })
+  const offer = (await fixture.adminRequest('/offers', 'POST', { ...offerDraft, company: 'Nestlé Brasil Ltda', service: 'Tampa graxadeira', description: 'Fabricação de 20 unidades, conforme amostra', quantity: 20, labelNumber: '5319' })).data.item
+  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [{ id: 'm1', name: 'Aço SAE 1020', detail: 'redondo', quantity: 4, unitPrice: 10 }], laborEntries: [{ id: 'l1', type: 'machine', resource: 'Torno CNC 01', hours: 25, hourlyRate: 120 }, { id: 'l2', type: 'labor', resource: 'Ajustagem', hours: 2, hourlyRate: 50 }], stages: ['machining'] })
 
   await page.goto(fixture.url)
   await page.getByLabel('CPF', { exact: true }).fill(env.DEMO_ADMIN_CPF)
@@ -58,9 +58,9 @@ try {
   await etiqueta.getByRole('button', { name: 'Gerar PDF', exact: true }).click()
   assert.equal((await download).suggestedFilename(), 'Etiqueta-5319.pdf')
   await etiqueta.waitFor({ state: 'hidden' })
-  let saved = (await fixture.request('/offers')).data.items.find((item) => item.id === offer.id).proposal
+  let saved = (await fixture.adminRequest('/offers', 'GET', undefined, fixture.admin)).data.items.find((item) => item.id === offer.id).proposal
   assert.deepEqual([saved.layout, saved.document.total, saved.document.requester], ['etiqueta', 5585.88, 'Joaci'])
-  await page.getByRole('link', { name: /Baixar PDF da proposta · Etiqueta 5319/ }).waitFor()
+  await page.getByRole('button', { name: /Baixar PDF da proposta · Etiqueta 5319/ }).waitFor()
 
   // Model A: fiscal codes picked from the official catalog and highlighted.
   await page.getByRole('button', { name: 'Gerar proposta em PDF', exact: true }).click()
@@ -89,8 +89,8 @@ try {
   assert.equal(letterFile.suggestedFilename(), 'Proposta-13483.pdf')
   const pdfText = (await readFile(await letterFile.path())).toString('latin1')
   assert.ok(pdfText.startsWith('%PDF'))
-  saved = (await fixture.request('/offers')).data.items.find((item) => item.id === offer.id).proposal
-  assert.deepEqual([saved.document.fiscal.cnae.code, saved.document.fiscal.nbs.code, saved.serviceValue, saved.document.technician.name], ['2539-0/01', '1.2001.50.00', 5170, 'Maria Souza'])
+  saved = (await fixture.adminRequest('/offers', 'GET', undefined, fixture.admin)).data.items.find((item) => item.id === offer.id).proposal
+  assert.deepEqual([saved.document.fiscal.cnae[0].code, saved.document.fiscal.nbs[0].code, saved.osValue, saved.document.technician.name], ['2539-0/01', '1.2001.50.00', 5170, 'Maria Souza'])
 
   // Settings: price lists, companies and the catalog status.
   await page.getByRole('button', { name: 'Gerar proposta em PDF', exact: true }).click()
@@ -105,7 +105,7 @@ try {
   await page.screenshot({ path: 'test-results/proposal-settings.png' })
   await settings.getByRole('button', { name: 'Salvar configurações', exact: true }).click()
   await settings.getByText('Configurações salvas.').waitFor()
-  assert.equal((await fixture.request('/proposal-settings')).data.settings.tables.etiqueta.labor[5].normal, 75.2)
+  assert.equal((await fixture.adminRequest('/proposal-settings')).data.settings.tables.etiqueta.labor[5].normal, 75.2)
   await settings.getByRole('button', { name: 'Fechar', exact: true }).click()
   await page.getByRole('dialog', { name: 'Escolha o modelo da proposta', exact: true }).getByRole('button', { name: 'Cancelar', exact: true }).click()
 

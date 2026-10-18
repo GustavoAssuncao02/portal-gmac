@@ -138,17 +138,39 @@ const OPERATIONS = [
   ['IOF', 'iof', 'IOF', false],
   ['DA', 'automatic-debit', 'Débito automático', true],
 ]
-export const operationLabels = Object.fromEntries([...OPERATIONS.map(([, key, label]) => [key, label]), ['other', 'Outros']])
+// Sicoob (Banco Cooperativo do Brasil, 756) writes short abbreviated memos ("CRÉD.TED-STR", "PIX EMITIDO OUTRA IF") and puts
+// the counterparty, when there is one, in <NAME>.
+const ABBREVIATED_OPERATIONS = [
+  [/^CRED\.?\s*TED/, 'ted-received'], [/^(DEB\.?\s*TED|TED EMITIDA)/, 'ted-sent'],
+  [/^(CRED\.?\s*PIX|PIX RECEBIDO)/, 'pix-received'], [/^(DEB\.?\s*PIX|PIX EMITIDO)/, 'pix-sent'],
+  [/^DEB\.?\s*CONV/, 'automatic-debit'], [/^(DEB\.?\s*TIT|PAGAMENTO DE TITULO|PAGTO\.? TITULO)/, 'bill-paid'],
+  [/^RESGATE RDC/, 'investment-redemption'], [/^(APLIC\.?\s*)?RDC\b/, 'investment'],
+  [/^DEB\.?\s*REPACTUACAO/, 'loan-payment'], [/^(TARIFA|TAR\.)/, 'fee'],
+]
+// Money moved between the account and the company's own investment: not a payable nor a receivable.
+export const INTERNAL_OPERATIONS = new Set(['investment', 'investment-redemption'])
+export const operationLabels = Object.fromEntries([...OPERATIONS.map(([, key, label]) => [key, label]), ['investment', 'Aplicação automática (RDC)'], ['investment-redemption', 'Resgate de aplicação (RDC)'], ['loan-payment', 'Parcela de empréstimo'], ['fee', 'Tarifa bancária'], ['other', 'Outros']])
 
-// Suggests the operation and counterparty from the memo. It never invents a payee for generic memos.
-export function describeMemo(memo) {
+// <NAME> like "Pagamento Pix ***.519.435-**" only has a masked document: it is kept as a reference, never as a payee.
+function describeName(name) {
+  const text = collapse(name).replace(/^(PAGAMENTO|RECEBIMENTO|TRANSFERENCIA)\s+PIX\s*/i, '')
+  if (!text) return {}
+  if (/^[*\d.\/-]+$/.test(text)) return { counterpartyReference: text }
+  return { counterpartyName: text }
+}
+
+// Suggests the operation and counterparty from the memo (and the <NAME> of the record, when the bank sends it). It never
+// invents a payee for generic memos.
+export function describeMemo(memo, name = null) {
   const original = String(memo ?? '')
   const normalized = normalizeText(original)
-  const document = extractDocument(original)
+  const document = extractDocument(original) || (name ? extractDocument(name) : null)
   const operation = OPERATIONS.find(([prefix]) => normalized === prefix || normalized.startsWith(`${prefix} `))
-  const result = { operationType: operation?.[1] || 'other', counterpartyName: null, counterpartyReference: null, counterpartyDocument: document?.digits || null, documentType: document?.type || null, documentFormatted: document?.formatted || null }
+  const abbreviated = operation ? null : ABBREVIATED_OPERATIONS.find(([pattern]) => pattern.test(normalized))?.[1]
+  const result = { operationType: operation?.[1] || abbreviated || 'other', counterpartyName: null, counterpartyReference: null, counterpartyDocument: document?.digits || null, documentType: document?.type || null, documentFormatted: document?.formatted || null }
   if (operation?.[1] === 'federal-tax') result.counterpartyName = 'RECEITA FEDERAL'
-  if (!operation?.[3]) return result
+  // The memo names nobody: the payee is the <NAME>, if any.
+  if (!operation?.[3]) return name && !result.counterpartyName ? { ...result, ...describeName(name) } : result
   const prefixWords = operation[0].split(' ').length
   let rest = collapse(original).split(' ').slice(prefixWords).join(' ')
   if (document) rest = rest.replace(document.formatted, '')
@@ -161,7 +183,7 @@ export function describeMemo(memo) {
     const reference = rest.match(/^(.*?\d{2}\/\d{2})\s+(.+)$/)
     if (reference) { result.counterpartyReference = reference[1]; rest = reference[2] }
   }
-  result.counterpartyName = rest || null
+  result.counterpartyName = rest || (name ? describeName(name).counterpartyName : null) || null
   return result
 }
 
@@ -196,7 +218,7 @@ export function parseOfx(input) {
   const balances = valid.filter((row) => row.balanceKind).map((row) => ({ ...row, kind: row.balanceKind }))
   const transactions = valid.filter((row) => !row.balanceKind).map((row) => {
     const consistency = typeConsistency(row.trnType, row.amountCents)
-    return { ...row, direction: row.amountCents > 0 ? 'in' : row.amountCents < 0 ? 'out' : 'zero', consistency, ...describeMemo(row.memo) }
+    return { ...row, direction: row.amountCents > 0 ? 'in' : row.amountCents < 0 ? 'out' : 'zero', consistency, ...describeMemo(row.memo, row.raw.MEMO != null ? row.raw.NAME : null) }
   })
   for (const row of transactions.filter((item) => !['ok', 'unchecked'].includes(item.consistency))) warnings.push({ code: 'type-sign-mismatch', message: `FITID ${row.fitId}: TRNTYPE ${row.trnType} com valor ${row.amountCents < 0 ? 'negativo' : row.amountCents > 0 ? 'positivo' : 'zero'}. O sinal original foi mantido.`, fitId: row.fitId })
   const statementInfo = {

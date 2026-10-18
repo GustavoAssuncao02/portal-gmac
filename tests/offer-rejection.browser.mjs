@@ -8,7 +8,7 @@ const fixture = await createWorkflowFixture({ accountsEnv: env })
 const browser = await chromium.launch()
 await mkdir('test-results', { recursive: true })
 try {
-  const online = (await fixture.request('/offers', 'POST', { ...offerDraft, service: 'Oferta do cliente' })).data.item
+  const online = (await fixture.adminRequest('/offers', 'POST', { ...offerDraft, service: 'Oferta do cliente' })).data.item
   await fixture.mutateStore((store) => { store.offers.find((row) => row.id === online.id).origin = 'Portal do cliente' })
   for (const viewport of [{ width: 1920, height: 1080 }, { width: 1440, height: 900 }, { width: 393, height: 852 }]) {
     const page = await browser.newPage({ viewport })
@@ -30,7 +30,7 @@ try {
     await form.getByLabel('Prazo solicitado *', { exact: true }).fill('2026-12-20')
     await form.getByLabel('Pe\u00e7a/Servi\u00e7o *', { exact: true }).fill(service)
     await form.getByLabel('Quantidade *', { exact: true }).fill('10')
-    await form.getByLabel('N\u00famero da etiqueta *', { exact: true }).fill('TESTE')
+    await form.getByLabel('N\u00famero da etiqueta', { exact: true }).fill('TESTE')
     await form.getByLabel('Descri\u00e7\u00e3o do servi\u00e7o *', { exact: true }).fill('Teste de recusa')
     await form.getByRole('button', { name: 'Adicionar solicita\u00e7\u00e3o', exact: true }).click()
     await form.waitFor({ state: 'detached' })

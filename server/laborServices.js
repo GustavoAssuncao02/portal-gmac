@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { readStore, mutateStore } from './offers.js'
 import { activityDateRange } from './employeeActivity.js'
 import { activeSessions } from './operationSessions.js'
+import { requireAdminOrOperator } from './access.js'
 import { duration, hourReport, ordersWithOperations, workIntervals } from './reportData.js'
 
 const defaults = [
@@ -31,7 +32,8 @@ export function laborServiceHistory(id, orders, range = null, now = Date.now()) 
 
 export default function createLaborServicesRouter(requireAdmin, pool) {
   const router = express.Router()
-  router.get('/labor-services', async (_request, response, next) => {
+  // The operator account chooses the labor service when it starts the work.
+  router.get('/labor-services', requireAdminOrOperator, async (_request, response, next) => {
     try {
       const store = await readStore()
       const intervals = workIntervals(await ordersWithOperations(store.orders, pool))

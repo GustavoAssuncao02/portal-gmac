@@ -1,9 +1,10 @@
 import { StrictMode, createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import OperatorDashboard from './OperatorDashboard.jsx'
+import OperatorDashboard, { operatorEmployeeKey } from './OperatorDashboard.jsx'
 import EmployeeActivityModal from './EmployeeActivityModal.jsx'
 import OrderDetails from './OrderDetails.jsx'
 import RejectOfferModal from './RejectOfferModal.jsx'
+import DeclineProposalModal, { UndoDeclineModal, AcceptOfferModal, UndoAcceptModal } from './DeclineProposalModal.jsx'
 import RejectMaterialRequestModal from './RejectMaterialRequestModal.jsx'
 import { MaterialRequestModal, MaterialRequestHistoryModal } from './MaterialRequestModals.jsx'
 import PendingMaterialsModal from './PendingMaterialsModal.jsx'
@@ -13,9 +14,19 @@ import ReportsScreen from './ReportsScreen.jsx'
 import LaborServicesScreen from './LaborServicesScreen.jsx'
 import AccountSettings from './AccountSettings.jsx'
 import PayablesScreen from './PayablesScreen.jsx'
+import AdminWorkspace from './AdminWorkspace.jsx'
+import { RegistryToolbar, SortHeader, documentLabel, useRegistryList } from './RegistryList.jsx'
+import { bySector, parseSectors, sectorsOf } from './machineSectors.js'
+import PieceTrack, { workingStageKeys } from './PieceTrack.jsx'
+import PieceNameInput from './PieceNameInput.jsx'
+import DownloadLink from './DownloadLink.jsx'
+import { downloadFile } from './payablesApi.js'
+import { PayableModal } from './PayableModal.jsx'
+import BatchSettlementScreen from './BatchSettlementScreen.jsx'
 import ReceivablesScreen from './ReceivablesScreen.jsx'
+import TreasuryScreen from './TreasuryScreen.jsx'
+import StockPurchaseFinance, { purchasedQuantity } from './StockPurchaseFinance.jsx'
 import BankStatementsScreen from './BankStatementsScreen.jsx'
-import AiReconciliationScreen from './AiReconciliationScreen.jsx'
 import ReceivableScheduleModal from './ReceivableScheduleModal.jsx'
 import ProposalDocumentModal, { modelLabel } from './ProposalDocumentModal.jsx'
 import LoginBrandPanel from './LoginBrandPanel.jsx'
@@ -25,11 +36,13 @@ import MachineHistoryModal from './MachineHistoryModal.jsx'
 import { useMobileModal } from './useMobileModal.js'
 import { ThemeContext, useAccountTheme } from './accountTheme.js'
 import { pollWhileVisible } from './polling.js'
-import { Monitor, Minimize2, CreditCard, HandCoins, Landmark, Sparkles, ChartColumn, Tags, Truck, WalletCards, ChevronLeft, ChevronRight, ChevronDown, UsersRound, Menu, X, Info, ArrowLeft, ListChecks, TriangleAlert, CircleCheck, CircleX } from 'lucide-react'
+import { newId } from './newId.js'
+import { Monitor, Minimize2, Plus, Pencil, Trash2, Clock3, CreditCard, HandCoins, Banknote, Landmark, ChartColumn, Tags, Truck, WalletCards, ChevronLeft, ChevronRight, ChevronDown, UsersRound, Menu, X, Info, ArrowLeft, ListChecks, Layers, TriangleAlert, CircleCheck, CircleX, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
+import { proposalCosts, proposalPricing, hoursText, marginLimits, PROPOSAL_MARGIN_GAP } from '../server/proposalMath.js'
 import { stageLabel, stageGroupLabel, serviceDetails, readStageLayout, orderedStageSelection } from '../server/serviceStages.js'
 import { findInventoryMaterial, materialsStock, normalizeSearch, purchaseMaterialRequests } from './offerResources.js'
 import { deadlineCategories, serviceDeadline } from './serviceDeadline.js'
-import { currentPieceProgress } from './serviceProgress.js'
+import { currentPieceProgress, isEmergency, emergenciesFirst } from './serviceProgress.js'
 import { servicePanelOrders } from './servicePanels.js'
 import { pendingOrderMaterials } from '../server/pendingMaterials.js'
 import { activeEmployeeNames, operationElapsed } from '../server/operationSessions.js'
@@ -136,8 +149,9 @@ const navigation = [
   ['Clientes', 'clients'],
   ['Contas a Pagar', 'payables'],
   ['Contas a Receber', 'receivables'],
+  ['Tesouraria', 'treasury'],
+  ['Baixa em Lote', 'batch'],
   ['Conciliação bancária', 'bank'],
-  ['Conciliação bancária com IA', 'bank-ai'],
   ['Business Intelligence', 'bi'],
   ['Classificações', 'classifications'],
   ['Fornecedores', 'suppliers'],
@@ -147,7 +161,7 @@ const navigation = [
 
 const registrationNavigation = ['Fornecedores', 'Administradores', 'Funcionários', 'Clientes'].map((label) => navigation.find(([name]) => name === label))
 const isRegistrationPage = (label) => registrationNavigation.some(([name]) => name === label)
-const financialNavigation = ['Contas a Pagar', 'Contas a Receber', 'Conciliação bancária', 'Conciliação bancária com IA', 'Business Intelligence', 'Classificações'].map((label) => navigation.find(([name]) => name === label))
+const financialNavigation = ['Contas a Pagar', 'Contas a Receber', 'Tesouraria', 'Baixa em Lote', 'Conciliação bancária', 'Business Intelligence', 'Classificações'].map((label) => navigation.find(([name]) => name === label))
 const isFinancialPage = (label) => financialNavigation.some(([name]) => name === label)
 
 const AdminIdentityContext = createContext(null)
@@ -189,8 +203,9 @@ function Sidebar({ collapsed, onToggle, activeNav, onNavigate, onLogout }) {
     if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
     else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
   }
-  const [registrationsOpen, setRegistrationsOpen] = useState(() => isRegistrationPage(activeNav) || window.sessionStorage.getItem('gmac-cadastros-open') !== 'false')
-  const [financialOpen, setFinancialOpen] = useState(() => isFinancialPage(activeNav) || window.sessionStorage.getItem('gmac-finance-open') !== 'false')
+  // A page of a group opens it from the first frame (each screen mounts its own menu), without flashing closed.
+  const [registrationsOpen, setRegistrationsOpen] = useState(() => isRegistrationPage(activeNav) || window.sessionStorage.getItem('gmac-cadastros-open') === 'true')
+  const [financialOpen, setFinancialOpen] = useState(() => isFinancialPage(activeNav) || window.sessionStorage.getItem('gmac-finance-open') === 'true')
   const navRef = useRef(null), revealGroup = useRef(null), anchorGroup = useRef(null), spacerRef = useRef(null)
   const [navEdges, setNavEdges] = useState({ above: false, below: false })
   // A spacer keeps a just-closed group under the pointer, shrinking as the list scrolls back up.
@@ -275,7 +290,7 @@ function Sidebar({ collapsed, onToggle, activeNav, onNavigate, onLogout }) {
   }
   function navigationItem([label, icon]) {
     return <button className={`nav-item ${activeNav === label ? 'nav-item--active' : ''}`} key={label} type="button" title={pageLabel(label)} aria-label={pageLabel(label)} onClick={() => { setMobileOpen(false); onNavigate(label) }}>
-      {['payables', 'receivables', 'bank', 'bank-ai', 'bi', 'classifications', 'suppliers', 'completed-services'].includes(icon) ? (() => { const NavIcon = { payables: CreditCard, receivables: HandCoins, bank: Landmark, 'bank-ai': Sparkles, bi: ChartColumn, classifications: Tags, suppliers: Truck, 'completed-services': ListChecks }[icon]; return <NavIcon className="icon nav-icon" size={20} /> })() : <Icon name={icon} className="nav-icon" />}
+      {['payables', 'receivables', 'treasury', 'batch', 'bank', 'bi', 'classifications', 'suppliers', 'completed-services'].includes(icon) ? (() => { const NavIcon = { payables: CreditCard, receivables: HandCoins, treasury: Banknote, batch: Layers, bank: Landmark, bi: ChartColumn, classifications: Tags, suppliers: Truck, 'completed-services': ListChecks }[icon]; return <NavIcon className="icon nav-icon" size={20} /> })() : <Icon name={icon} className="nav-icon" />}
       <span>{pageLabel(label)}</span>
     </button>
   }
@@ -302,7 +317,7 @@ function Sidebar({ collapsed, onToggle, activeNav, onNavigate, onLogout }) {
             </button>
             <div className="sidebar-submenu" id="sidebar-cadastros-menu" hidden={!registrationsOpen}>{registrationNavigation.map(navigationItem)}</div>
           </div>]
-          if (item[0] === 'Contas a Pagar') return [<div className="sidebar-nav-group" key="finance">
+          if (item[0] === 'Contas a Pagar') return user?.role === 'staff' ? [] : [<div className="sidebar-nav-group" key="finance">
             <button className={`nav-item sidebar-nav-group-toggle ${!financialOpen && isFinancialPage(activeNav) ? 'nav-item--active' : ''}`} type="button" title="Gestão Financeira" aria-label="Gestão Financeira" aria-expanded={financialOpen} aria-controls="sidebar-finance-menu" onClick={toggleFinancial}>
               <WalletCards className="icon nav-icon" size={20} aria-hidden="true" /><span>Gestão Financeira</span>{financialOpen ? <ChevronDown className="sidebar-group-chevron" size={15} aria-hidden="true" /> : <ChevronRight className="sidebar-group-chevron" size={15} aria-hidden="true" />}
             </button>
@@ -312,7 +327,7 @@ function Sidebar({ collapsed, onToggle, activeNav, onNavigate, onLogout }) {
         })}
         <div ref={spacerRef} className="sidebar-nav-spacer" aria-hidden="true" />
       </nav>
-      <div className="sidebar-account"><div className="account-avatar">{initials}</div><div className="account-copy"><strong title={name}>{name}</strong><span>Administrador</span></div></div>
+      <div className="sidebar-account"><div className="account-avatar">{initials}</div><div className="account-copy"><strong title={name}>{name}</strong><span>{user?.role === 'staff' ? 'Administrativo' : 'Administrador'}</span></div></div>
       <button className="logout-button" type="button" onClick={onLogout} title="Sair" aria-label="Sair"><span className="logout-icon" aria-hidden="true">↪</span><span>Sair</span></button>
     </aside>
     </>
@@ -481,9 +496,11 @@ async function importLocalInventory() {
   if (!window.sessionStorage.getItem('gmac-admin-token')) return
   if (!inventoryImport) inventoryImport = (async () => {
     const previous = window.localStorage.getItem('gmac-inventory')
-    if (previous && !window.localStorage.getItem('gmac-inventory-before-mysql')) window.localStorage.setItem('gmac-inventory-before-mysql', previous)
+    // A browser without a stock of its own has nothing to bring: it must never fill an emptied stock with the sample materials.
+    if (!previous) { window.localStorage.setItem('gmac-inventory-migrated-v1', 'true'); return }
+    if (!window.localStorage.getItem('gmac-inventory-before-mysql')) window.localStorage.setItem('gmac-inventory-before-mysql', previous)
     try {
-      await apiRequest('/api/inventory/import', jsonOptions('POST', { items: readInventory(), onlyIfEmpty: !previous }))
+      await apiRequest('/api/inventory/import', jsonOptions('POST', { items: readInventory(), onlyIfEmpty: false }))
       window.localStorage.setItem('gmac-inventory-migrated-v1', 'true')
     } catch (error) {
       if (error.status !== 503 && error.status !== 404) throw error
@@ -496,7 +513,7 @@ const loadOverviewPayables = (signal) => apiRequest('/api/payables', { signal, c
 
 async function loadOverviewInventory(signal) {
   await importLocalInventory()
-  const response = await fetch('/api/inventory', { signal })
+  const response = await fetch('/api/inventory', { signal, headers: { Authorization: `Bearer ${window.sessionStorage.getItem('gmac-admin-token') || ''}` } })
   if (response.status === 503) return { items: readInventory(), source: 'local' }
   if (!response.ok) throw new Error('Não foi possível carregar o estoque.')
   const data = await response.json()
@@ -506,15 +523,19 @@ async function loadOverviewInventory(signal) {
   return { items, source: 'server' }
 }
 
-function MachineModal({ machine, onClose, onSave }) {
+// `knownSectors`: the sectors already in use, to mark with one touch. A machine can belong to more than one sector.
+function MachineModal({ machine, knownSectors = [], onClose, onSave }) {
   useMobileModal(true, '.machine-modal', onClose)
-  const [draft, setDraft] = useState(machine ? { ...machine, hourlyRate: machine.hourlyRate ?? '' } : { name: '', type: '', sector: '', hourlyRate: '', status: 'idle', operator: '—', started: '—', usage: '0h 00min' })
+  const [draft, setDraft] = useState(machine ? { ...machine, type: machine.type || '', sectorsText: (machine.sectors?.length ? machine.sectors : [machine.sector].filter(Boolean)).join(', '), hourlyRate: machine.hourlyRate ?? '' } : { name: '', type: '', sectorsText: '', hourlyRate: '', status: 'idle', operator: '—', started: '—', usage: '0h 00min' })
   const isEditing = Boolean(machine)
   const update = (field, value) => setDraft((current) => ({ ...current, [field]: value }))
+  const chosen = parseSectors(draft.sectorsText)
+  const toggleSector = (sector) => update('sectorsText', (chosen.includes(sector) ? chosen.filter((item) => item !== sector) : [...chosen, sector]).join(', '))
 
   function submit(event) {
     event.preventDefault()
-    onSave({ ...draft, name: draft.name.trim(), type: draft.type.trim(), sector: draft.sector.trim(), hourlyRate: Number(draft.hourlyRate) })
+    const { sectorsText, ...fields } = draft
+    onSave({ ...fields, name: draft.name.trim(), type: draft.type.trim(), sectors: chosen, sector: chosen.join(', '), hourlyRate: Number(draft.hourlyRate) })
   }
 
   return (
@@ -523,7 +544,8 @@ function MachineModal({ machine, onClose, onSave }) {
         <div className="modal-heading"><div><h2 id="machine-modal-title">{isEditing ? 'Editar máquina' : 'Adicionar máquina'}</h2><p>Preencha os dados da máquina.</p></div><button type="button" className="modal-close" onClick={onClose} aria-label="Fechar">×</button></div>
         <form onSubmit={submit}>
           <label>Nome da máquina<input value={draft.name} onChange={(event) => update('name', event.target.value)} required /></label>
-          <div className="modal-fields"><label>Tipo<input value={draft.type} onChange={(event) => update('type', event.target.value)} required /></label><label>Setor<input value={draft.sector} onChange={(event) => update('sector', event.target.value)} required /></label></div>
+          <div className="modal-fields"><label>Tipo<input value={draft.type} onChange={(event) => update('type', event.target.value)} placeholder="Opcional" /></label><label>Setor<input aria-label="Setor" aria-describedby="machine-sectors-hint" value={draft.sectorsText} onChange={(event) => update('sectorsText', event.target.value)} placeholder="Ex.: Usinagem" required /></label></div>
+          <div className="machine-sector-picker"><small id="machine-sectors-hint">Uma máquina pode servir a mais de um setor: separe por vírgula ou marque abaixo.</small>{knownSectors.length > 0 && <div className="machine-sector-options">{knownSectors.map((sector) => <button key={sector} type="button" aria-pressed={chosen.includes(sector)} onClick={() => toggleSector(sector)}>{sector}</button>)}</div>}</div>
           <label>Valor da hora (R$)<input type="number" min="0" step="0.01" value={draft.hourlyRate} onChange={(event) => update('hourlyRate', event.target.value)} required /></label>
           <label>Status atual<input value={machine?.status === 'working' ? 'Em funcionamento' : 'Ociosa'} readOnly /></label>
           <div className="modal-actions"><button className="modal-cancel" type="button" onClick={onClose}>Cancelar</button><button className="modal-save" type="submit">Salvar máquina</button></div>
@@ -541,6 +563,7 @@ function Machines({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, 
   const [modalMachine, setModalMachine] = useState(undefined)
   const [historyMachine, setHistoryMachine] = useState(null)
   const [machineError, setMachineError] = useState('')
+  const [idleEmployees, setIdleEmployees] = useState(null)
   useEffect(() => {
     let active = true, pending = false
     const controller = new AbortController()
@@ -548,8 +571,10 @@ function Machines({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, 
       if (pending) return
       pending = true
       try {
-        const data = await apiRequest('/api/machines', { signal: controller.signal, cache: 'no-store' })
+        // Idle employees help to decide who takes a stopped machine; their list failing does not hide the machines.
+        const [data, idle] = await Promise.all([apiRequest('/api/machines', { signal: controller.signal, cache: 'no-store' }), apiRequest('/api/operations/idle-employees', { signal: controller.signal, cache: 'no-store' }).catch(() => null)])
         if (!active) return
+        if (idle) setIdleEmployees(idle.items)
         setMachines(data.items)
         setSelectedId((current) => data.items.some((item) => item.id === current) ? current : data.items[0]?.id ?? null)
         setMachineError('')
@@ -614,12 +639,20 @@ function Machines({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, 
         <div className="machine-toolbar"><div className="machine-filters"><button className={`machine-filter ${filter === 'all' ? 'machine-filter--selected' : ''}`} type="button" onClick={() => setFilter('all')}>Todas</button><button className={`machine-filter ${filter === 'working' ? 'machine-filter--selected' : ''}`} type="button" onClick={() => setFilter('working')}><span className="status-dot status-dot--green" />Em funcionamento</button><button className={`machine-filter ${filter === 'idle' ? 'machine-filter--selected' : ''}`} type="button" onClick={() => setFilter('idle')}><span className="status-dot status-dot--gray" />Ociosas</button></div><div className="machine-actions"><button className="machine-action machine-action--primary" type="button" onClick={() => setModalMachine(null)}><Icon name="plus" />Adicionar máquina</button><button className="machine-action" type="button" disabled={!selectedMachine} onClick={() => setModalMachine(selectedMachine)}><Icon name="edit" />Editar máquina</button><button className="machine-action machine-action--danger" type="button" disabled={!selectedMachine} onClick={() => removeSelected()}><Icon name="trash" />Remover máquina</button></div></div>
         <div className="machine-metrics"><div className="machine-metric"><span className="metric-icon metric-icon--blue"><Icon name="machines" /></span><div><span>Máquinas totais</span><strong>{machines.length}</strong><small>Parque de máquinas</small></div></div><div className="machine-metric"><span className="metric-icon metric-icon--green">▷</span><div><span>Em funcionamento</span><strong>{workingCount}</strong><small>{percentage(workingCount)} do total</small></div></div><div className="machine-metric"><span className="metric-icon metric-icon--blue">Ⅱ</span><div><span>Ociosas</span><strong>{idleCount}</strong><small>{percentage(idleCount)} do total</small></div></div></div>
         <section className="machine-list-card"><h2>Lista de máquinas</h2><div className="machine-table-scroll"><div className="machine-table"><div className="machine-row machine-row--header"><span>Máquina</span><span>Tipo</span><span>Setor</span><span>Status</span><span>Operador atual</span><span>Início de uso</span><span>Tempo de uso<br />Total hoje</span><span>Ações</span></div>{filteredMachines.map((machine) => <div className={`machine-row ${selectedId === machine.id ? 'machine-row--selected' : ''}`} key={machine.id} onClick={() => setSelectedId(machine.id)}><div className="machine-name"><Icon name="machines" /><strong>{machine.name}</strong></div><span>{machine.type}</span><span>{machine.sector}</span><span><span className={`machine-status machine-status--${machine.status}`}><i />{machine.status === 'working' ? 'Em funcionamento' : 'Ociosa'}</span></span><span>{machine.operator}</span><span><span className="machine-started-content"><span>{machine.started}</span><button className="machine-history-button" type="button" title="Histórico de uso" aria-label={`Ver histórico de uso de ${machine.name}`} onClick={(event) => { event.stopPropagation(); event.currentTarget.focus({ preventScroll: true }); setHistoryMachine(machine) }}><Info size={16} aria-hidden="true" /></button></span></span><span>{machine.usage}</span><div className="row-actions"><button type="button" onClick={(event) => { event.stopPropagation(); setSelectedId(machine.id) }} aria-label={`Visualizar ${machine.name}`}><Icon name="eye" /></button><button type="button" onClick={(event) => { event.stopPropagation(); setModalMachine(machine) }} aria-label={`Editar ${machine.name}`}><Icon name="edit" /></button><button className="row-delete" type="button" onClick={(event) => { event.stopPropagation(); removeSelected(machine) }} aria-label={`Remover ${machine.name}`}><Icon name="trash" /></button></div></div>)}</div></div></section>
-        <div className="machine-summary-grid"><section className="machine-summary-card availability-card"><h2>Visão de disponibilidade</h2><div className="availability-content"><div className="availability-donut" style={{ '--working-share': `${machines.length ? (workingCount / machines.length) * 100 : 0}%` }}><strong>{machines.length}</strong><span>máquinas</span></div><div className="availability-legend"><div><i className="dot-green" />Em funcionamento <strong>{workingCount}</strong><span>{percentage(workingCount)}</span></div><div><i className="dot-gray" />Ociosas <strong>{idleCount}</strong><span>{percentage(idleCount)}</span></div></div></div></section><section className="machine-summary-card"><h2>Tempo de uso (hoje)</h2>{usedToday.map((machine) => <div className="usage-line" key={machine.id}><i className={machine.status === 'working' ? 'dot-green' : 'dot-gray'} title={machine.status === 'working' ? 'Em funcionamento' : 'Parada agora'} /><span>{machine.name}</span><strong>{machine.usage}</strong></div>)}{!usedToday.length && <p className="usage-empty">Nenhuma máquina foi usada hoje.</p>}</section><section className="machine-summary-card"><h2>Máquinas ociosas (hoje)</h2>{machines.filter((machine) => machine.status === 'idle').map((machine) => <div className="usage-line" key={machine.id}><i className="dot-gray" /><span>{machine.name}</span><strong>{machine.idle}</strong></div>)}{machines.length > 0 && !idleCount && <p className="usage-empty">Todas as máquinas estão em funcionamento.</p>}</section></div>
+        <div className="machine-summary-grid"><section className="machine-summary-card availability-card"><h2>Visão de disponibilidade</h2><div className="availability-content"><div className="availability-donut" style={{ '--working-share': `${machines.length ? (workingCount / machines.length) * 100 : 0}%` }}><strong>{machines.length}</strong><span>máquinas</span></div><div className="availability-legend"><div><i className="dot-green" />Em funcionamento <strong>{workingCount}</strong><span>{percentage(workingCount)}</span></div><div><i className="dot-gray" />Ociosas <strong>{idleCount}</strong><span>{percentage(idleCount)}</span></div></div></div></section><section className="machine-summary-card"><h2>Tempo de uso (hoje)</h2>{usedToday.map((machine) => <div className="usage-line" key={machine.id}><i className={machine.status === 'working' ? 'dot-green' : 'dot-gray'} title={machine.status === 'working' ? 'Em funcionamento' : 'Parada agora'} /><span>{machine.name}</span><strong>{machine.usage}</strong></div>)}{!usedToday.length && <p className="usage-empty">Nenhuma máquina foi usada hoje.</p>}</section><section className="machine-summary-card"><h2>Máquinas ociosas (hoje)</h2>{idleCount > 0 && <div className="usage-scroll" role="region" aria-label="Máquinas ociosas (hoje)" tabIndex={0}>{machines.filter((machine) => machine.status === 'idle').map((machine) => <div className="usage-line" key={machine.id}><i className="dot-gray" /><span>{machine.name}</span><strong>{machine.idle}</strong></div>)}</div>}{machines.length > 0 && !idleCount && <p className="usage-empty">Todas as máquinas estão em funcionamento.</p>}</section></div>
+        {idleEmployees && <section className="machine-summary-card idle-employees-card" aria-labelledby="idle-employees-title"><h2 id="idle-employees-title">Funcionários ociosos (agora) <span>{idleEmployees.length}</span></h2>{idleEmployees.length ? <ul>{idleEmployees.map((person) => <li className="usage-line" key={person.id}><i className="dot-gray" /><span>{person.name}</span><small>{person.idleSince ? `Parado desde ${new Date(person.idleSince).toLocaleTimeString('pt-BR', { timeZone: 'America/Bahia', hour: '2-digit', minute: '2-digit' })}${person.reason ? ` · ${person.reason}` : ''}${person.orderCode ? ` · ${person.orderCode}` : ''}` : 'Sem trabalho hoje'}</small></li>)}</ul> : <p className="usage-empty">Todos os operadores estão trabalhando em alguma OS.</p>}</section>}
       </main>
-      {modalMachine !== undefined && <MachineModal machine={modalMachine == null ? modalMachine : machines.find((machine) => machine.id === modalMachine.id) || modalMachine} onClose={() => setModalMachine(undefined)} onSave={saveMachine} />}
+      {modalMachine !== undefined && <MachineModal machine={modalMachine == null ? modalMachine : machines.find((machine) => machine.id === modalMachine.id) || modalMachine} knownSectors={[...new Set(machines.flatMap(sectorsOf))].filter((sector) => sector !== 'Sem setor')} onClose={() => setModalMachine(undefined)} onSave={saveMachine} />}
       {historyMachine && <MachineHistoryModal machine={historyMachine} loadHistory={loadMachineHistory} onClose={() => setHistoryMachine(null)} />}
     </div>
   )
+}
+
+// Purchase to offer to the financial module once the material is in stock; only an administrator can post it.
+// It is not linked to an OS: material planned in a proposal is already part of that OS cost.
+function stockPurchase(item) {
+  const quantity = purchasedQuantity(item)
+  return quantity > 0 && window.sessionStorage.getItem('gmac-admin-token') ? { name: item.name, detail: item.detail, quantity, unitPrice: item.unitPrice } : null
 }
 
 async function saveInventoryMaterial(item, items, source, materialRequestId, materialReceiptId) {
@@ -666,6 +699,7 @@ function InventoryScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout,
   const [source, setSource] = useState(null)
   const [error, setError] = useState('')
   const [savingInventory, setSavingInventory] = useState(false)
+  const [purchase, setPurchase] = useState(null)
   const filteredItems = items.filter((item) => `${item.name} ${item.detail}`.toLowerCase().includes(search.trim().toLowerCase()))
   const totalWeight = items.reduce((total, item) => total + Number(item.quantity || 0), 0)
   const lowStock = items.filter((item) => Number(item.quantity) <= Number(item.minimum)).length
@@ -692,6 +726,7 @@ function InventoryScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout,
     try {
       const nextItems = await saveInventoryMaterial(item, items, source)
       setModalItem(undefined)
+      setPurchase(stockPurchase(item))
       setItems(nextItems || (await loadOverviewInventory()).items)
     } catch (failure) { setError(failure.message) }
     finally { setSavingInventory(false) }
@@ -719,7 +754,7 @@ function InventoryScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout,
   async function openHistory(item) {
     setHistoryItem(item)
     try {
-      const response = await fetch(`/api/inventory/${item.id}/history`)
+      const response = await fetch(`/api/inventory/${item.id}/history`, { headers: { Authorization: `Bearer ${window.sessionStorage.getItem('gmac-admin-token') || ''}` } })
       if (!response.ok) return
       const payload = await response.json()
       if (Array.isArray(payload.history) && payload.history.length) setHistoryItem({ ...item, history: payload.history })
@@ -740,6 +775,7 @@ function InventoryScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout,
       </main>
       {modalItem !== undefined && <InventoryModal item={modalItem} inventoryItems={items} saving={savingInventory || !source} error={error} onClose={() => { if (!savingInventory) setModalItem(undefined) }} onSave={saveItem} />}
       {historyItem && <InventoryHistoryModal item={historyItem} onClose={() => setHistoryItem(null)} onSelectOrder={(code) => { setHistoryItem(null); onSelectOrder(code) }} />}
+      {purchase && <StockPurchaseFinance purchase={purchase} onClose={() => setPurchase(null)} />}
     </div>
   )
 }
@@ -977,17 +1013,31 @@ function Calculator({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs
   )
 }
 
+// A piece made before: the new offer comes with the materials, stages and times of its history (see server/pieces.js).
+// Returns false when the piece is new.
+async function applyPieceSuggestion(offer) {
+  const query = new URLSearchParams({ name: offer.service, quantity: String(offer.quantity), offerId: offer.id })
+  const { item } = await apiRequest(`/api/pieces/suggestion?${query}`)
+  if (!item) return false
+  await apiRequest(`/api/offers/${offer.id}/resources`, jsonOptions('PUT', item.resources))
+  return item
+}
+
 function RegistrationScreen({ kind, collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs }) {
   const isEmployee = kind === 'employee'
   const isClient = kind === 'client'
   const [records, setRecords] = useState([])
   const endpoint = isEmployee ? '/api/employees' : isClient ? '/api/clients' : '/api/admins'
-  const [form, setForm] = useState(isClient ? { name: '', documentType: 'cnpj', document: '', email: '' } : { name: '', birthDate: '', cpf: '', email: '', password: '', identification: '' })
+  const emptyForm = () => isClient ? { name: '', documentType: 'cnpj', document: '', email: '', notes: '' } : { name: '', birthDate: '', cpf: '', email: '', password: '', identification: '', ...(isEmployee ? { type: 'operator', accessCode: '' } : {}) }
+  const [form, setForm] = useState(emptyForm)
   const [showPassword, setShowPassword] = useState(false)
   const [message, setMessage] = useState('')
   const [editingId, setEditingId] = useState(null)
   const [activityEmployee, setActivityEmployee] = useState(null)
-  const recordsRef = useRef(null)
+  const [formOpen, setFormOpen] = useState(false)
+  const [formError, setFormError] = useState('')
+  const [saving, setSaving] = useState(false)
+  const formId = `registration-form-${kind}`
 
   useEffect(() => {
     apiRequest(endpoint).then((data) => setRecords(data.items)).catch((error) => setMessage(error.message))
@@ -1003,10 +1053,18 @@ function RegistrationScreen({ kind, collapsed, onToggle, activeNav, onNavigate, 
     setForm((current) => ({ ...current, [field]: value }))
   }
 
+  // The form lives in a modal: errors stay inside it, success closes it and shows the notice above the list.
   async function handleSubmit(event) {
     event.preventDefault()
-    if (isEmployee && !/^\d{3}$/.test(form.identification)) {
-      setMessage('Informe o código de identificação com 3 dígitos.')
+    setFormError('')
+    setSaving(true)
+    try { await submitForm() } finally { setSaving(false) }
+  }
+
+  async function submitForm() {
+    const setMessage = (text) => text.includes('sucesso') ? setNotice(text) : setFormError(text)
+    if (isEmployee && form.type === 'operator' && !/^\d{4}$/.test(form.accessCode)) {
+      setMessage('Informe o código de acesso do operador com 4 dígitos.')
       return
     }
     if (isEmployee) {
@@ -1037,16 +1095,27 @@ function RegistrationScreen({ kind, collapsed, onToggle, activeNav, onNavigate, 
   }
 
   function clearForm() {
-    setForm(isClient ? { name: '', documentType: 'cnpj', document: '', email: '' } : { name: '', birthDate: '', cpf: '', email: '', password: '', identification: '' })
+    setForm(emptyForm())
     setEditingId(null)
     setShowPassword(false)
+    setFormError('')
+    setFormOpen(false)
+  }
+  const setNotice = (text) => setMessage(text)
+
+  function newRecord() {
+    clearForm()
+    setMessage('')
+    setFormOpen(true)
   }
 
   function editRecord(record) {
-    setForm({ ...record, password: '' })
+    setForm({ ...record, password: '', ...(isEmployee ? { accessCode: record.accessCode || '' } : {}) })
     setEditingId(record.id)
+    setShowPassword(false)
+    setFormError('')
     setMessage('')
-    window.scrollTo({ top: 0, behavior: window.matchMedia('(max-width: 760px)').matches ? 'auto' : 'smooth' })
+    setFormOpen(true)
   }
 
   async function deleteRecord(id) {
@@ -1069,41 +1138,87 @@ function RegistrationScreen({ kind, collapsed, onToggle, activeNav, onNavigate, 
     } catch (error) { setMessage(error.message) }
   }
 
-  return (
-    <div className="dashboard-shell registration-shell">
-      <Sidebar collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} />
-      <main className="registration-main">
-        <WorkspaceTabs tabs={tabs} activeNav={activeNav} onNavigate={onNavigate} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} />
-        <div className="registration-header"><div><span className="registration-kicker">{isClient ? 'Relacionamento' : 'Administração'}</span><h1>Cadastro de {isEmployee ? 'funcionário' : isClient ? 'cliente' : 'administrador'}</h1><p>{isClient ? 'Cadastre empresas e pessoas físicas para acompanhar suas solicitações e serviços.' : 'Informe apenas os dados necessários para criar o acesso ao sistema.'}</p></div><div className="registration-badge"><Icon name={isClient ? 'clients' : isEmployee ? 'employees' : 'admins'} /><span>{isClient ? 'Novo cliente' : isEmployee ? 'Novo funcionário' : 'Novo administrador'}</span></div></div>
-        <button className="mobile-registration-jump" type="button" onClick={() => recordsRef.current?.scrollIntoView({ block: 'start', behavior: 'auto' })}>Ver cadastros ({records.length})<ChevronDown size={18} aria-hidden="true" /></button>
-        <div className="registration-layout">
-          <section className="registration-card">
-            <div className="registration-card-heading"><div><h2>{editingId !== null ? 'Editar cadastro' : isClient ? 'Dados do cliente' : 'Dados de acesso'}</h2><p>Os campos marcados com <b>*</b> são obrigatórios.</p></div><span className="required-note">Cadastro {isEmployee ? 'de funcionário' : isClient ? 'de cliente' : 'de ADM'}</span></div>
-            <form onSubmit={handleSubmit}>
-              <div className="registration-fields">
-                <label className="registration-field registration-field--wide">{isClient ? 'Nome / Razão social *' : 'Nome completo *'}<input value={form.name} onChange={(event) => update('name', event.target.value)} placeholder={isClient ? 'Digite o nome ou a razão social' : 'Digite o nome completo'} required /></label>
-                {isClient ? <><label className="registration-field">Tipo de documento *<select value={form.documentType} onChange={(event) => { const documentType = event.target.value; update('documentType', documentType); update('document', formatClientDocument(form.document, documentType)) }}><option value="cnpj">CNPJ</option><option value="cpf">CPF</option></select></label><label className="registration-field">{form.documentType === 'cnpj' ? 'CNPJ' : 'CPF'} *<input value={form.document} onChange={(event) => update('document', formatClientDocument(event.target.value))} inputMode="numeric" placeholder={form.documentType === 'cnpj' ? '00.000.000/0000-00' : '000.000.000-00'} required /></label><label className="registration-field registration-field--wide">E-mail *<input type="email" value={form.email} onChange={(event) => update('email', event.target.value)} placeholder="contato@empresa.com" required /></label></> : <><>{isEmployee && <label className="registration-field">Identificação *<input value={form.identification} onChange={(event) => update('identification', event.target.value.replace(/\D/g, '').slice(0, 3))} inputMode="numeric" maxLength={3} pattern="[0-9]{3}" placeholder="Ex.: 001" required /><small>Use exatamente 3 dígitos.</small></label>}</><label className="registration-field">Data de nascimento *<input type="date" value={form.birthDate} onChange={(event) => update('birthDate', event.target.value)} required /></label><label className="registration-field">CPF *<input value={form.cpf} onChange={(event) => update('cpf', event.target.value.replace(/\D/g, '').slice(0, 11).replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2'))} inputMode="numeric" placeholder="000.000.000-00" required /></label><label className="registration-field registration-field--wide">E-mail *<input type="email" value={form.email} onChange={(event) => update('email', event.target.value)} placeholder="nome@empresa.com" required /></label>{!isEmployee && <label className="registration-field registration-field--wide">Senha {editingId === null && '*'}<span className="registration-password"><input type={showPassword ? 'text' : 'password'} value={form.password} onChange={(event) => update('password', event.target.value)} placeholder={editingId !== null ? 'Deixe em branco para manter a senha atual' : 'Crie uma senha de acesso'} minLength={6} required={editingId === null} /><button type="button" onClick={() => setShowPassword((current) => !current)} aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}><EyeIcon crossed={!showPassword} /></button></span><small>{editingId !== null ? 'Preencha somente se quiser trocar a senha.' : 'Mínimo de 6 caracteres.'}</small></label>}</>}
-              </div>
-              {message && <p className={`registration-message ${message.includes('sucesso') ? 'registration-message--success' : 'registration-message--error'}`} role="status">{message}</p>}
-              <div className="registration-actions"><button className="registration-clear" type="button" onClick={clearForm}>{editingId !== null ? 'Cancelar' : 'Limpar'}</button><button className="registration-submit" type="submit">{editingId !== null ? 'Salvar alterações' : `Cadastrar ${isEmployee ? 'funcionário' : isClient ? 'cliente' : 'administrador'}`}</button></div>
-            </form>
-          </section>
-          <aside className="registration-help"><div className="registration-help-icon"><Icon name={isClient ? 'clients' : isEmployee ? 'employees' : 'admins'} /></div><h2>{isClient ? 'Cadastro do cliente' : isEmployee ? 'Acesso do funcionário' : 'Acesso administrativo'}</h2><p>{isClient ? 'Use CNPJ para empresas e CPF para pessoas físicas. O documento será usado para identificar o cliente.' : isEmployee ? 'Os funcionários usam uma conta compartilhada e se identificam antes de iniciar uma OS.' : 'Administradores poderão acessar as áreas de gestão do sistema.'}</p>{isEmployee && <div className="identification-example"><span>Campo no banco</span><strong>i_identificacao</strong><small>Exemplo: 001</small></div>}{isClient && <div className="identification-example"><span>Documentos aceitos</span><strong>CPF ou CNPJ</strong><small>Selecione o tipo no cadastro.</small></div>}<div className="registration-future"><span>Modo atual</span><strong>{isEmployee ? 'Cadastro persistido' : 'Dados demonstrativos'}</strong><small>{isEmployee ? 'Estes funcionários aparecem na seleção ao iniciar uma OS.' : 'A gravação definitiva será conectada ao MySQL.'}</small></div></aside>
-        </div>
-        <section ref={recordsRef} className="registration-list-card">
-          <div className="registration-list-heading"><div><span className="registration-kicker">Cadastros existentes</span><h2>{isEmployee ? 'Funcionários cadastrados' : isClient ? 'Clientes cadastrados' : 'Administradores cadastrados'}</h2></div><strong>{records.length} {records.length === 1 ? 'registro' : 'registros'}</strong></div>
-          <div className={`registration-list${isEmployee ? ' registration-list--employees' : ''}`}>
-            <div className="registration-list-row registration-list-row--header"><span>{isClient ? 'Tipo' : isEmployee ? 'Código' : 'ID'}</span><span>{isClient ? 'Nome / Razão social' : 'Nome'}</span><span>{isClient ? 'CPF / CNPJ' : 'CPF'}</span><span>E-mail</span><span>{isClient ? 'Cadastro' : 'Data de nascimento'}</span><span>Ações</span></div>
-            {records.map((record) => <div className="registration-list-row" key={record.id}>
-              <span className="registration-identification" data-label={isClient ? 'Tipo de documento' : isEmployee ? 'Código' : 'Identificação'}>{isClient ? record.documentType.toUpperCase() : isEmployee ? record.identification : `ADM-${String(record.id).padStart(3, '0')}`}</span><strong>{record.name}</strong><span data-label={isClient ? 'CPF / CNPJ' : 'CPF'}>{isClient ? record.document : record.cpf}</span><span data-label="E-mail">{record.email || '—'}</span><span data-label={isClient ? 'Cadastro' : 'Data de nascimento'}>{isClient ? 'Cliente ativo' : record.birthDate ? record.birthDate.split('-').reverse().join('/') : '—'}</span>
-              <div className="registration-row-actions"><button className="registration-edit" type="button" onClick={() => !isEmployee && !isClient && Number(record.id) === 0 ? onNavigate('Configurações') : editRecord(record)}><Icon name="edit" />Editar</button><button className="registration-delete" type="button" onClick={() => deleteRecord(record.id)}><Icon name="trash" />Excluir</button>{isEmployee && <button className="registration-info" type="button" onClick={() => setActivityEmployee(record)} aria-label={`Ver histórico de ${record.name}`} title="Histórico de atividades"><Icon name="info" /></button>}</div>
-            </div>)}
-          </div>
-        </section>
-      </main>
-      {activityEmployee && <EmployeeActivityModal employee={activityEmployee} onClose={() => setActivityEmployee(null)} />}
-    </div>
-  )
+  const passwordRequired = editingId === null || isEmployee && records.find((item) => item.id === editingId)?.type !== 'administrative'
+  function generateAccessCode() {
+    const taken = new Set(records.filter((item) => item.id !== editingId).map((item) => item.accessCode))
+    let code
+    do code = String(Math.floor(Math.random() * 10000)).padStart(4, '0'); while (taken.has(code))
+    update('accessCode', code)
+  }
+
+  const singular = isEmployee ? 'funcionário' : isClient ? 'cliente' : 'administrador'
+  const title = isEmployee ? 'Funcionários' : isClient ? 'Clientes' : 'Administradores'
+  const cpfMask = (value) => value.replace(/\D/g, '').slice(0, 11).replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2')
+  // The name has the room; documents are formatted; the actions stay at the right. Headers sort, the search finds any field.
+  const listColumns = isClient
+    ? [{ key: 'name', label: 'Nome / razão social', value: (row) => row.name, search: true }, { key: 'notes', value: (row) => row.notes, search: true, hidden: true }, { key: 'document', label: 'CPF / CNPJ', value: (row) => row.document, search: true }, { key: 'email', label: 'E-mail', value: (row) => row.email || '', search: true }]
+    : [...(isEmployee ? [] : [{ key: 'id', label: 'ID', value: (row) => Number(row.id), numeric: true }]), { key: 'name', label: 'Nome', value: (row) => row.name, search: true },
+      ...(isEmployee ? [{ key: 'type', label: 'Tipo', value: (row) => row.type === 'administrative' ? 'Administrativo' : 'Operador' }, { key: 'accessCode', label: 'Código', value: (row) => row.accessCode || '', search: true }] : []),
+      { key: 'cpf', label: 'CPF', value: (row) => row.cpf, search: true }, { key: 'email', label: 'E-mail', value: (row) => row.email || '', search: true }, { key: 'birthDate', label: 'Nascimento', value: (row) => row.birthDate || '' }]
+  const list = useRegistryList(records, listColumns, 'name')
+  const shownColumns = listColumns.filter((column) => !column.hidden)
+  const navigationProps = { collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs }
+  // Same pattern as Fornecedores: only the list on screen; adding and editing happen in a modal.
+  return <AdminWorkspace Sidebar={Sidebar} WorkspaceTabs={WorkspaceTabs} navigationProps={navigationProps} title={title}>
+    <div className="payable-heading-actions"><button className="admin-tool-button admin-tool-button--primary" type="button" onClick={newRecord}><Plus size={17} />Novo {singular}</button></div>
+    {message && <p className={`registration-message ${message.includes('sucesso') ? 'registration-message--success' : 'registration-message--error'}`} role="status">{message}</p>}
+    <RegistryToolbar list={list} total={records.length} singular={singular} plural={title.toLowerCase()} placeholder={isClient ? 'Nome, nome fantasia, CPF/CNPJ ou e-mail' : isEmployee ? 'Nome, código, CPF ou e-mail' : 'Nome, CPF ou e-mail'} />
+    <div className="payable-table-scroll"><table className={`payable-table payable-registry-table registration-table registry-table registry-table--${kind}`}><thead><tr>{shownColumns.map((column) => <SortHeader key={column.key} column={column} list={list} className={`registry-col-${column.key}`} />)}<th className="registry-col-actions">Ações</th></tr></thead><tbody>
+      {list.rows.map((record) => <tr key={record.id}>
+        {!isEmployee && !isClient && <td data-label="ID" className="payable-id">{`ADM-${String(record.id).padStart(3, '0')}`}</td>}
+        <td className="registry-name"><strong>{record.name}</strong>{isClient && record.notes && <small title={record.notes}>{record.notes}</small>}</td>
+        {isEmployee && <><td data-label="Tipo"><span className={`registry-badge registry-badge--${record.type === 'administrative' ? 'admin' : 'operator'}`}>{record.type === 'administrative' ? 'Administrativo' : 'Operador'}</span></td><td data-label="Código" className="registry-code">{record.type === 'administrative' ? <span className="registry-empty">—</span> : record.accessCode || <span className="registry-empty">—</span>}</td></>}
+        <td data-label={isClient ? 'CPF / CNPJ' : 'CPF'} className="registry-document"><span>{isClient && <span className="registry-doc-type">{record.documentType === 'cpf' ? 'CPF' : 'CNPJ'}</span>}{documentLabel(isClient ? record.document : record.cpf)}</span></td>
+        <td data-label="E-mail">{record.email || <span className="registry-empty">—</span>}</td>
+        {!isClient && <td data-label="Nascimento">{record.birthDate ? record.birthDate.split('-').reverse().join('/') : <span className="registry-empty">—</span>}</td>}
+        <td className="registry-actions"><div className="payable-registry-actions">
+          <button className="payable-icon" type="button" title="Editar" aria-label={`Editar ${record.name}`} onClick={() => !isEmployee && !isClient && Number(record.id) === 0 ? onNavigate('Configurações') : editRecord(record)}><Pencil size={16} /></button>
+          <button className="payable-icon payable-danger" type="button" title="Excluir" aria-label={`Excluir ${record.name}`} onClick={() => deleteRecord(record.id)}><Trash2 size={16} /></button>
+          {isEmployee && <button className="payable-icon" type="button" title="Histórico de atividades" aria-label={`Ver histórico de ${record.name}`} onClick={() => setActivityEmployee(record)}><Info size={16} /></button>}
+        </div></td>
+      </tr>)}
+      {!list.rows.length && <tr><td colSpan={shownColumns.length + 1} className="payable-empty">{records.length ? 'Nenhum cadastro encontrado para a busca.' : 'Nenhum cadastro.'}</td></tr>}
+    </tbody></table></div>
+    {formOpen && <PayableModal title={`${editingId !== null ? 'Editar' : 'Novo'} ${singular}`} busy={saving} onClose={clearForm} footer={<><button className="admin-tool-button" type="button" disabled={saving} onClick={clearForm}>Cancelar</button><button className="admin-tool-button admin-tool-button--primary" type="submit" form={formId} disabled={saving}>Salvar</button></>}>
+      <form id={formId} className="payable-form registration-modal-form" onSubmit={handleSubmit}><fieldset disabled={saving}>
+        <label>{isClient ? 'Nome / razão social' : 'Nome completo'}<input value={form.name} maxLength={160} onChange={(event) => update('name', event.target.value)} required /></label>
+        {isClient ? <>
+          <label>Tipo de documento<select value={form.documentType} onChange={(event) => { const documentType = event.target.value; update('documentType', documentType); update('document', formatClientDocument(form.document, documentType)) }}><option value="cnpj">CNPJ</option><option value="cpf">CPF</option></select></label>
+          <label>{form.documentType === 'cnpj' ? 'CNPJ' : 'CPF'}<input value={form.document} onChange={(event) => update('document', formatClientDocument(event.target.value))} inputMode="numeric" placeholder={form.documentType === 'cnpj' ? '00.000.000/0000-00' : '000.000.000-00'} required /></label>
+          <label>E-mail<input type="email" value={form.email || ''} onChange={(event) => update('email', event.target.value)} placeholder="Opcional" /></label>
+          <label>Observação<textarea rows={3} maxLength={1000} value={form.notes || ''} onChange={(event) => update('notes', event.target.value)} placeholder="Opcional" /></label>
+        </> : <>
+          {isEmployee && <label>Tipo de funcionário<select value={form.type} onChange={(event) => update('type', event.target.value)}><option value="operator">Operador</option><option value="administrative">Administrativo</option></select><small className="payable-hint">{form.type === 'operator' ? 'Entra na conta do operador com o código de 4 dígitos.' : 'Entra no sistema com CPF e senha, sem a Gestão Financeira.'}</small></label>}
+          {/* Employees may be registered without birth date and e-mail; administrators still need both. */}
+          <label>Data de nascimento<input type="date" aria-label="Data de nascimento" value={form.birthDate || ''} onChange={(event) => update('birthDate', event.target.value)} required={!isEmployee} />{isEmployee && <small className="payable-hint">Opcional.</small>}</label>
+          <label>CPF<input value={form.cpf} onChange={(event) => update('cpf', cpfMask(event.target.value))} inputMode="numeric" placeholder="000.000.000-00" required /></label>
+          <label>E-mail<input type="email" value={form.email || ''} onChange={(event) => update('email', event.target.value)} required={!isEmployee} placeholder={isEmployee ? 'Opcional' : undefined} /></label>
+          {isEmployee && form.type === 'operator' && <label>Código de acesso<span className="registration-access-code"><input value={form.accessCode} onChange={(event) => update('accessCode', event.target.value.replace(/\D/g, '').slice(0, 4))} inputMode="numeric" maxLength={4} pattern="[0-9]{4}" placeholder="Ex.: 4827" autoComplete="off" required /><button type="button" onClick={generateAccessCode}>Gerar código</button></span><small className="payable-hint">4 dígitos, diferente para cada operador.</small></label>}
+          {(!isEmployee || form.type === 'administrative') && <label>Senha<span className="registration-password"><input type={showPassword ? 'text' : 'password'} value={form.password} onChange={(event) => update('password', event.target.value)} placeholder={passwordRequired ? 'Crie uma senha de acesso' : 'Deixe em branco para manter a senha atual'} minLength={6} required={passwordRequired} autoComplete="new-password" /><button type="button" onClick={() => setShowPassword((current) => !current)} aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}><EyeIcon crossed={!showPassword} /></button></span><small className="payable-hint">{passwordRequired ? 'Mínimo de 6 caracteres.' : 'Preencha somente se quiser trocar a senha.'}</small></label>}
+        </>}
+        {formError && <p className="admin-tool-error" role="alert">{formError}</p>}
+      </fieldset></form>
+    </PayableModal>}
+    {activityEmployee && <EmployeeActivityModal employee={activityEmployee} onClose={() => setActivityEmployee(null)} />}
+  </AdminWorkspace>
+}
+
+// Time since the proposal was sent (its PDF was generated); after 7 days without an answer it turns orange.
+const PROPOSAL_FOLLOW_UP_DAYS = 7
+function sentSinceText(at, now = Date.now()) {
+  const minutes = Math.max(0, Math.floor((now - Date.parse(at)) / 60000))
+  if (minutes < 1) return 'Enviada agora há pouco'
+  if (minutes < 60) return `Enviada há ${minutes} ${minutes === 1 ? 'minuto' : 'minutos'}`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `Enviada há ${hours} ${hours === 1 ? 'hora' : 'horas'}`
+  const days = Math.floor(hours / 24)
+  return `Enviada há ${days} ${days === 1 ? 'dia' : 'dias'}`
+}
+function ProposalSentSince({ at }) {
+  const [now, setNow] = useState(Date.now)
+  useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 60000); return () => clearInterval(timer) }, [])
+  const late = now - Date.parse(at) >= PROPOSAL_FOLLOW_UP_DAYS * 86400000
+  return <span className={`offer-sent-since${late ? ' offer-sent-since--late' : ''}`} title={`Proposta enviada em ${new Date(at).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })}${late ? ' · sem resposta há mais de 7 dias' : ''}`}><Clock3 size={12} aria-hidden="true" />{sentSinceText(at, now)}</span>
 }
 
 const offerFilters = [
@@ -1119,11 +1234,19 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
   const [date, setDate] = useState('')
   const [manualOpen, setManualOpen] = useState(false)
   const [rejectingOffer, setRejectingOffer] = useState(null)
+  const [decliningOffer, setDecliningOffer] = useState(null)
+  const [undoingOffer, setUndoingOffer] = useState(null)
+  const [acceptingOffer, setAcceptingOffer] = useState(null)
+  const [unacceptingOffer, setUnacceptingOffer] = useState(null)
   useMobileModal(manualOpen, '.offer-manual-modal', () => setManualOpen(false))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const emptyForm = { cnpj: '', company: '', deadline: '', service: '', quantity: '', description: '', labelNumber: '', attachment: null }
   const [manualForm, setManualForm] = useState(emptyForm)
+  const [pieces, setPieces] = useState([])
+  // Shown on the list itself: the creation modal is already closed when something after the creation fails.
+  const [pageNotice, setPageNotice] = useState('')
+  useEffect(() => { if (manualOpen) apiRequest('/api/pieces').then((data) => setPieces(data.items || [])).catch(() => setPieces([])) }, [manualOpen])
   const filteredOffers = offers.filter((offer) => {
     const query = search.trim().toLocaleLowerCase()
     return (activeFilter === 'all' || offer.status === activeFilter)
@@ -1143,19 +1266,22 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
     event.preventDefault()
     setSaving(true)
     setError('')
+    setPageNotice('')
     let created = false
     try {
       const { attachment, ...fields } = manualForm
       const { item } = await apiRequest('/api/offers', jsonOptions('POST', fields))
       created = true
       if (attachment) await uploadOfferAttachment(item.id, attachment)
+      try { await applyPieceSuggestion(item) } catch (caught) { setPageNotice(`A oferta ${item.code} foi criada, mas não foi possível preencher com o histórico da peça (${caught.message}). Abra a oferta e use "Preencher com o histórico".`) }
       await onRefresh()
       setManualForm(emptyForm)
       setManualOpen(false)
       setActiveFilter('all')
       setDate('')
     } catch (caught) {
-      setError(created ? `Solicitação cadastrada, mas não foi possível salvar o anexo ou atualizar a lista: ${caught.message}` : caught.message)
+      if (created) setPageNotice(`Solicitação cadastrada, mas não foi possível salvar o anexo ou atualizar a lista: ${caught.message}`)
+      else setError(caught.message)
       if (created) {
         setManualForm(emptyForm)
         setManualOpen(false)
@@ -1168,18 +1294,13 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
     }
   }
 
-  async function acceptOffer(offer) {
-    setError('')
-    try {
-      await apiRequest(`/api/offers/${offer.id}/accept`, { method: 'POST' })
-      await onRefresh()
-    } catch (caught) {
-      setError(caught.message)
-    }
-  }
-
   async function rejectOffer(offer) {
     await apiRequest(`/api/offers/${encodeURIComponent(offer.id)}/reject`, jsonOptions('POST', {}))
+    await onRefresh()
+  }
+
+  async function declineProposal(offer, decline) {
+    await apiRequest(`/api/offers/${encodeURIComponent(offer.id)}/decline`, jsonOptions('POST', decline))
     await onRefresh()
   }
 
@@ -1189,6 +1310,7 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
       <main className="offers-main">
         <WorkspaceTabs tabs={tabs} activeNav={activeNav} onNavigate={onNavigate} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} />
         <div className="offers-header"><div><h1>Ofertas de serviços</h1><p>Solicitações cadastradas para análise e retorno comercial.</p></div></div>
+        {pageNotice && <p className="workflow-error offers-page-notice" role="alert">{pageNotice}<button type="button" className="offers-page-notice-close" aria-label="Fechar aviso" onClick={() => setPageNotice('')}>×</button></p>}
         {(error || workflowError) && <p className="workflow-error" role="alert">{error || workflowError}</p>}
         <section className="offers-board">
           <div className="offers-board-toolbar">
@@ -1203,19 +1325,23 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
             <div className="offers-table-row offers-table-header"><span>Peça / Serviço</span><span>Cliente</span><span>Etiqueta</span><span>Quantidade</span><span>Data de solicitação</span><span>Prazo solicitado</span><span>Status</span><span>Origem</span><span>Ações</span></div>
             {filteredOffers.map((offer) => <div className="offers-table-row" key={offer.id}>
               <div className="offer-piece"><strong>{offer.service}</strong><span>{offer.code}</span></div>
-              <span data-label="Cliente">{offer.company}</span><span data-label="Etiqueta">{offer.labelNumber}</span><span data-label="Quantidade">{offer.quantity} un</span><span data-label="Solicitação">{displayDate(offer.requestedAt)}</span><span data-label="Prazo">{displayDate(offer.deadline)}</span>
-              <div className={`offer-table-status offer-table-status--${offer.status}`}><strong>{offer.status === 'review' ? 'Em análise' : offer.status === 'proposed' ? 'Proposta gerada' : offer.status === 'rejected' ? 'Recusada' : 'Aceita'}</strong>{offer.orderCode && <span>{offer.orderCode}</span>}</div>
+              <span data-label="Cliente">{offer.company}</span><span data-label="Etiqueta">{offer.labelNumber || "—"}</span><span data-label="Quantidade">{offer.quantity} un</span><span data-label="Solicitação">{displayDate(offer.requestedAt)}</span><span data-label="Prazo">{displayDate(offer.deadline)}</span>
+              <div className="offer-status-cell"><div className={`offer-table-status offer-table-status--${offer.status}`}><strong>{offer.status === 'review' ? 'Em análise' : offer.status === 'proposed' ? 'Proposta gerada' : offer.status === 'rejected' ? offer.proposalDecline ? `Proposta ${offer.proposalDecline.key} recusada` : 'Recusada' : 'Aceita'}</strong>{offer.orderCode && <span>{offer.orderCode}</span>}{offer.proposalDecline?.reason && <span>{offer.proposalDecline.reason}</span>}</div>{offer.status === 'proposed' && offer.proposal?.generatedAt && <ProposalSentSince at={offer.proposal.generatedAt} />}</div>
               <span data-label="Origem">{offer.origin}</span>
               <div className="offer-table-actions">
-                {offer.status === 'rejected' ? <span>Recusada</span> : offer.status === 'accepted'
-                  ? <button className="offer-review-button" type="button" onClick={() => onSelectOrder(offer.orderCode)}>Ver OS</button>
-                  : <><button className="offer-review-button" type="button" onClick={() => onSelectOffer(offer.id)}>{offer.status === 'review' ? 'Em análise' : 'Ver proposta'}</button>{offer.status === 'review' && offer.origin === 'Inserida Manualmente' && !offer.orderCode && <button className="offer-reject-button" type="button" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setRejectingOffer(offer) }}><X size={15} aria-hidden="true" />Recusar</button>}{offer.proposal && <button className="offer-accept-button" type="button" onClick={() => acceptOffer(offer)}>✓ Aceitar Oferta</button>}</>}
+                {offer.status === 'rejected' ? offer.proposalDecline ? <button className="offer-review-button" type="button" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setUndoingOffer(offer) }}>Desfazer recusa</button> : <span>Recusada</span> : offer.status === 'accepted'
+                  ? <><button className="offer-review-button" type="button" onClick={() => onSelectOrder(offer.orderCode)}>Ver OS</button><button className="offer-reject-button" type="button" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setUnacceptingOffer(offer) }}>Desfazer aceite</button></>
+                  : <><button className="offer-review-button" type="button" onClick={() => onSelectOffer(offer.id)}>{offer.status === 'review' ? 'Em análise' : 'Ver proposta'}</button>{offer.status === 'review' && offer.origin === 'Inserida Manualmente' && !offer.orderCode && <button className="offer-reject-button" type="button" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setRejectingOffer(offer) }}><X size={15} aria-hidden="true" />Recusar</button>}{offer.proposal && <button className="offer-accept-button" type="button" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setAcceptingOffer(offer) }}>✓ Aceitar Oferta</button>}{offer.proposal && !offer.orderCode && <button className="offer-reject-button" type="button" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setDecliningOffer(offer) }}><X size={15} aria-hidden="true" />Cliente recusou</button>}</>}
               </div>
             </div>)}
           </div>{filteredOffers.length === 0 && <div className="offers-empty">Nenhuma oferta cadastrada para os filtros informados.</div>}</div>
         </section>
       </main>
       {rejectingOffer && <RejectOfferModal offer={rejectingOffer} onConfirm={rejectOffer} onClose={() => setRejectingOffer(null)} />}
+      {decliningOffer && <DeclineProposalModal offer={decliningOffer} onConfirm={(decline) => declineProposal(decliningOffer, decline)} onClose={() => setDecliningOffer(null)} />}
+      {acceptingOffer && <AcceptOfferModal offer={acceptingOffer} onConfirm={async () => { await apiRequest(`/api/offers/${acceptingOffer.id}/accept`, { method: 'POST' }); await onRefresh() }} onClose={() => setAcceptingOffer(null)} />}
+      {unacceptingOffer && <UndoAcceptModal offer={unacceptingOffer} orderCode={unacceptingOffer.orderCode} onConfirm={async () => { await apiRequest(`/api/offers/${encodeURIComponent(unacceptingOffer.id)}/unaccept`, jsonOptions('POST', {})); await onRefresh() }} onClose={() => setUnacceptingOffer(null)} />}
+      {undoingOffer && <UndoDeclineModal offer={undoingOffer} onConfirm={async () => { await apiRequest(`/api/offers/${encodeURIComponent(undoingOffer.id)}/undecline`, jsonOptions('POST', {})); await onRefresh() }} onClose={() => setUndoingOffer(null)} />}
       {manualOpen && <div className="modal-backdrop offer-modal-layer" onMouseDown={(event) => { if (event.target === event.currentTarget) setManualOpen(false) }}>
         <section className="offer-manual-modal" role="dialog" aria-modal="true" aria-labelledby="manual-offer-title" onMouseDown={(event) => event.stopPropagation()}>
           <div className="offer-modal-header"><div><span className="offers-kicker">Nova solicitação</span><h2 id="manual-offer-title">Inserir oferta manualmente</h2><p>Preencha os dados da solicitação de serviço.</p></div><button className="offer-modal-close" type="button" onClick={() => setManualOpen(false)} aria-label="Fechar formulário">×</button></div>
@@ -1223,9 +1349,9 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
             <label>CNPJ *<input value={manualForm.cnpj} onChange={(event) => updateManualForm('cnpj', formatCnpj(event.target.value))} inputMode="numeric" placeholder="00.000.000/0000-00" required /></label>
             <label>Empresa *<input value={manualForm.company} onChange={(event) => updateManualForm('company', event.target.value)} placeholder="Nome da empresa" required /></label>
             <label>Prazo solicitado *<input type="date" value={manualForm.deadline} onChange={(event) => updateManualForm('deadline', event.target.value)} required /></label>
-            <label>Peça/Serviço *<input value={manualForm.service} onChange={(event) => updateManualForm('service', event.target.value)} required /></label>
+            <label>Peça/Serviço *<PieceNameInput label="Peça/Serviço *" value={manualForm.service} onChange={(value) => updateManualForm('service', value)} pieces={pieces} required /></label>
             <label>Quantidade *<input type="number" min="1" step="1" value={manualForm.quantity} onChange={(event) => updateManualForm('quantity', event.target.value)} required /></label>
-            <label>Número da etiqueta *<input value={manualForm.labelNumber} onChange={(event) => updateManualForm('labelNumber', event.target.value)} required /></label>
+            <label>Número da etiqueta<input value={manualForm.labelNumber} onChange={(event) => updateManualForm('labelNumber', event.target.value)} placeholder="Opcional" /></label>
             <label className="offer-form-field--full">Descrição do serviço *<textarea value={manualForm.description} onChange={(event) => updateManualForm('description', event.target.value)} rows="4" required /></label>
             <label className="offer-form-field--full offer-attachment-field">Anexo<span className="offer-file-picker"><input type="file" onChange={(event) => updateManualForm('attachment', event.target.files?.[0] || null)} /><span>Escolher arquivo</span><strong>{manualForm.attachment?.name || 'Nenhum arquivo selecionado'}</strong></span></label>
           </div>{error && <p className="workflow-error" role="alert">{error}</p>}<div className="offer-modal-actions"><button className="offer-modal-cancel" type="button" onClick={() => setManualOpen(false)}>Cancelar</button><button className="manual-offer-button" type="submit" disabled={saving}>{saving ? 'Salvando...' : 'Adicionar solicitação'}</button></div></form>
@@ -1234,6 +1360,21 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
     </div>
   )
 }
+// How long this piece took the other times, from the OS to its completion (average and last time). New pieces show nothing.
+const daysText = (days) => days < 1 ? `${Math.max(1, Math.round(days * 24))} ${Math.round(days * 24) <= 1 ? 'hora' : 'horas'}` : `${String(Math.round(days * 10) / 10).replace('.', ',')} ${Math.round(days * 10) / 10 === 1 ? 'dia' : 'dias'}`
+function PieceLeadTime({ offer }) {
+  const [item, setItem] = useState(null)
+  useEffect(() => {
+    let active = true
+    setItem(null)
+    const query = new URLSearchParams({ name: offer.service, offerId: offer.id })
+    apiRequest(`/api/pieces/lead-time?${query}`).then((data) => { if (active) setItem(data.item) }).catch(() => {})
+    return () => { active = false }
+  }, [offer.id, offer.service])
+  if (!item) return null
+  return <div className="offer-lead-time"><Clock3 size={18} aria-hidden="true" /><div><small>Tempo para ficar pronta</small><strong>Em média {daysText(item.averageDays)}</strong><span>{item.count === 1 ? `Feita 1 vez · ${item.lastCode}` : `Média de ${item.count} vezes · última: ${daysText(item.lastDays)} (${item.lastCode})`}</span></div></div>
+}
+
 function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, offer, onRefresh, onSelectOrder }) {
   const [laborServices, setLaborServices] = useState([])
   const [laborCatalogError, setLaborCatalogError] = useState('')
@@ -1244,6 +1385,8 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
   const [stageLayout, setStageLayout] = useState(() => readStageLayout({ ...offer?.resources, stages: offer?.resources?.stages ?? offer?.proposal?.stages ?? [] }))
   const [kind, setKind] = useState(offer?.resources?.kind ?? offer?.proposal?.kind ?? 'service')
   const [details, setDetails] = useState(() => serviceDetails(offer?.resources))
+  const [stageTimes, setStageTimes] = useState(offer?.resources?.stageTimes || {})
+  const [pieceHistory, setPieceHistory] = useState(null)
   const [materialFormOpen, setMaterialFormOpen] = useState(false)
   const [materialForm, setMaterialForm] = useState({ name: '', detail: '', quantity: '', unitPrice: '' })
   const [laborEntries, setLaborEntries] = useState(offer?.resources?.laborEntries || [])
@@ -1252,7 +1395,7 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
   const [materialSuggestionsOpen, setMaterialSuggestionsOpen] = useState(false)
   const [attachmentError, setAttachmentError] = useState('')
   const [saving, setSaving] = useState(false)
-  const resourceDraft = useRef({ materials, laborEntries, stages, stageLayout, kind, ...details })
+  const resourceDraft = useRef({ materials, laborEntries, stages, stageLayout, kind, ...details, stageTimes })
   const persistedResources = useRef(resourceDraft.current)
   const saveQueue = useRef(Promise.resolve())
   const pendingSaves = useRef(0)
@@ -1266,6 +1409,7 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
     setStageLayout(readStageLayout({ ...offer?.resources, stages: offer?.resources?.stages ?? offer?.proposal?.stages ?? [] }))
     setKind(offer?.resources?.kind ?? offer?.proposal?.kind ?? 'service')
     setDetails(serviceDetails(offer?.resources))
+    setStageTimes(offer?.resources?.stageTimes || {})
     resourceDraft.current = {
       materials: offer?.resources?.materials || [],
       laborEntries: offer?.resources?.laborEntries || [],
@@ -1273,9 +1417,21 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
       stageLayout: readStageLayout({ ...offer?.resources, stages: offer?.resources?.stages ?? offer?.proposal?.stages ?? [] }),
       kind: offer?.resources?.kind ?? offer?.proposal?.kind ?? 'service',
       ...serviceDetails(offer?.resources),
+      stageTimes: offer?.resources?.stageTimes || {},
     }
     persistedResources.current = resourceDraft.current
   }, [offer?.id])
+
+  // An offer that arrives empty (for example, from the website) of a piece made before can be filled with its history.
+  const emptyResources = !offer?.orderCode && !(offer?.resources?.materials?.length) && !(offer?.resources?.stages?.length)
+  useEffect(() => {
+    setPieceHistory(null)
+    if (!offer || !emptyResources) return undefined
+    let active = true
+    const query = new URLSearchParams({ name: offer.service, quantity: String(offer.quantity), offerId: offer.id })
+    apiRequest(`/api/pieces/suggestion?${query}`).then(({ item }) => { if (active) setPieceHistory(item) }).catch(() => {})
+    return () => { active = false }
+  }, [offer?.id, emptyResources])
 
   useEffect(() => {
     let active = true
@@ -1299,6 +1455,8 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
   const materialsTotal = materials.reduce((total, material) => total + material.quantity * material.unitPrice, 0)
   const checkedMaterials = materialsStock(materials, inventory)
   const laborTotal = laborEntries.reduce((total, entry) => total + entry.hours * entry.hourlyRate, 0)
+  // Sector of the machine or service as registered today; entries keep only its id.
+  const laborSector = (entry) => (entry.type === 'machine' ? machines.find((item) => String(item.id) === String(entry.machineId)) : laborServices.find((item) => String(item.id) === String(entry.laborServiceId)))?.sector || '—'
 
   async function saveResources(changes = {}) {
     if (!offer || offer.orderCode) return false
@@ -1323,6 +1481,7 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
           setStageLayout(readStageLayout(item.resources))
           setKind(item.resources.kind)
           setDetails(serviceDetails(item.resources))
+          setStageTimes(item.resources.stageTimes || {})
         }
         await onRefresh()
         return true
@@ -1335,6 +1494,7 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
           setStageLayout(readStageLayout(persistedResources.current))
           setKind(persistedResources.current.kind)
           setDetails(serviceDetails(persistedResources.current))
+          setStageTimes(persistedResources.current.stageTimes || {})
         }
         if (activeOfferId.current === offerId) setAttachmentError(error.message)
         return false
@@ -1367,7 +1527,7 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
     const quantity = toNumber(materialForm.quantity)
     const unitPrice = toNumber(materialForm.unitPrice)
     if (!materialForm.name.trim() || quantity <= 0) return
-    const material = { ...materialForm, name: materialForm.name.trim(), id: crypto.randomUUID(), quantity, unitPrice, icon: '▰', requestedAt: new Date().toISOString() }
+    const material = { ...materialForm, name: materialForm.name.trim(), id: newId(), quantity, unitPrice, icon: '▰', requestedAt: new Date().toISOString() }
     if (!await saveResources({ materials: [...materials, material] })) return
     setMaterialForm({ name: '', detail: '', quantity: '', unitPrice: '' })
     setMaterialFormOpen(false)
@@ -1399,6 +1559,15 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
     saveResources({ stages: nextStages })
   }
 
+  // Planned time of a stage for the whole OS, in minutes; empty removes the target.
+  function changeStageTime(code, minutes) {
+    const next = { ...resourceDraft.current.stageTimes }
+    if (minutes) next[code] = minutes
+    else delete next[code]
+    setStageTimes(next)
+    saveResources({ stageTimes: next })
+  }
+
   function reorderStageLayout(nextLayout) {
     const nextStages = orderedStageSelection(nextLayout, resourceDraft.current.stages)
     setStageLayout(nextLayout)
@@ -1422,7 +1591,7 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
     const hours = toNumber(laborForm.hours)
     const hourlyRate = toNumber(laborForm.hourlyRate)
     if (!laborForm.resource.trim() || hours <= 0 || hourlyRate < 0 || laborForm.hourlyRate === '') return
-    if (!await saveResources({ laborEntries: [...laborEntries, { ...laborForm, resource: laborForm.resource.trim(), id: crypto.randomUUID(), hours, hourlyRate }] })) return
+    if (!await saveResources({ laborEntries: [...laborEntries, { ...laborForm, resource: laborForm.resource.trim(), id: newId(), hours, hourlyRate }] })) return
     setLaborForm({ type: laborForm.type, resource: '', hours: '', hourlyRate: '' })
     setLaborFormOpen(false)
   }
@@ -1462,7 +1631,7 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
         <WorkspaceTabs tabs={tabs} activeNav={activeNav} onNavigate={onNavigate} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} />
         <div className="offer-details-header"><button className="offer-back-button" type="button" onClick={() => onNavigate('Ofertas e serviços')} aria-label="Voltar para ofertas"><ArrowLeft size={24} aria-hidden="true" /></button><h1>Detalhes da oferta {offer.code}</h1></div>
         <div className="offer-details-grid">
-          <section className="offer-information-card"><span className="offer-details-section-title">Informações do serviço</span><h2>{offer.service}</h2><p className="offer-details-description">{offer.description}</p><div className="offer-detail-facts"><div><span>▥</span><small>Cliente solicitante</small><strong>{offer.company}</strong><em>CNPJ: {offer.cnpj}</em></div><div><span>▣</span><small>Data da solicitação</small><strong>{displayDate(offer.requestedAt)}</strong></div><div><span>◇</span><small>Quantidade solicitada</small><strong>{offer.quantity} unidades</strong></div><div><span>◷</span><small>Prazo solicitado pelo cliente</small><strong>{displayDate(offer.deadline)}</strong></div></div><div className="offer-detail-text"><h3>Número da etiqueta</h3><p>{offer.labelNumber}</p></div><div className="offer-detail-text"><h3>Anexos da solicitação</h3>{offer.attachments?.length ? <ul>{offer.attachments.map((attachment) => <li key={attachment.id}><a href={attachmentUrl(offer.id, attachment.id)}>{attachment.name}</a></li>)}</ul> : <p>Nenhum anexo adicionado.</p>}</div>{offer.proposal && <div className="offer-detail-text"><h3>Proposta gerada</h3><p><a href={`/api/offers/${offer.id}/proposal.pdf`}>Baixar PDF da proposta</a></p></div>}</section>
+          <section className="offer-information-card"><span className="offer-details-section-title">Informações do serviço</span><h2>{offer.service}</h2><p className="offer-details-description">{offer.description}</p><div className="offer-detail-facts"><div><span>▥</span><small>Cliente solicitante</small><strong>{offer.company}</strong><em>CNPJ: {offer.cnpj}</em></div><div><span>▣</span><small>Data da solicitação</small><strong>{displayDate(offer.requestedAt)}</strong></div><div><span>◇</span><small>Quantidade solicitada</small><strong>{offer.quantity} unidades</strong></div><div><span>◷</span><small>Prazo solicitado pelo cliente</small><strong>{displayDate(offer.deadline)}</strong></div></div><PieceLeadTime offer={offer} /><div className="offer-detail-text"><h3>Número da etiqueta</h3><p>{offer.labelNumber || 'Não informado'}</p></div><div className="offer-detail-text"><h3>Anexos da solicitação</h3>{offer.attachments?.length ? <ul>{offer.attachments.map((attachment) => <li key={attachment.id}><DownloadLink url={attachmentUrl(offer.id, attachment.id)} name={attachment.name}>{attachment.name}</DownloadLink></li>)}</ul> : <p>Nenhum anexo adicionado.</p>}</div>{offer.proposal && <div className="offer-detail-text"><h3>Proposta gerada</h3><p><DownloadLink url={`/api/offers/${offer.id}/proposal.pdf`} name={`proposta-${offer.code}.pdf`}>Baixar PDF da proposta</DownloadLink></p></div>}</section>
           <section className="offer-materials-card offer-resources-card">
             <fieldset className="offer-resource-fields" disabled={Boolean(offer.orderCode)}>
             <div className="offer-resource-heading"><div><span className="offer-details-section-title">Materiais necessários</span><p>Adicione os materiais e informe a quantidade em kg.</p></div><button className="offer-add-resource-button" type="button" onClick={() => setMaterialFormOpen((current) => !current)}><Icon name="plus" />Adicionar material</button></div>
@@ -1481,19 +1650,21 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
             <div className="offer-resource-subsection"><div className="offer-resource-heading"><div><span className="offer-details-section-title">Mão de obra</span><p>Adicione horas de máquina ou de profissionais.</p></div><button className="offer-add-resource-button" type="button" onClick={() => setLaborFormOpen((current) => !current)}><Icon name="plus" />Adicionar mão de obra</button></div>
               {laborFormOpen && <form className="offer-inline-form offer-labor-form" onSubmit={addLabor}>
                 <label>Tipo<select aria-label="Tipo" value={laborForm.type} onChange={(event) => selectLaborType(event.target.value)}><option value="machine">Hora máquina</option><option value="person">Hora homem</option></select></label>
-                <label>{laborForm.type === 'machine' ? 'Máquina' : 'Serviço do profissional'}{laborForm.type === 'machine' ? <select aria-label="Máquina" value={laborForm.machineId || ''} onChange={(event) => selectMachine(event.target.value)} required><option value="">Selecionar máquina</option>{machines.map((machine) => <option key={machine.id} value={machine.id}>{machine.name}{machine.hourlyRate != null ? ` · ${formatMoney(machine.hourlyRate)}/h` : ''}</option>)}</select> : <select aria-label="Serviço do profissional" value={laborForm.laborServiceId || ''} onChange={(event) => selectLaborService(event.target.value)} required><option value="">Selecionar serviço</option>{laborServices.map((service) => <option key={service.id} value={service.id}>{service.name} · {formatMoney(service.hourlyRate)}/h</option>)}</select>}</label>
+                <label>{laborForm.type === 'machine' ? 'Máquina' : 'Serviço do profissional'}{laborForm.type === 'machine' ? <select aria-label="Máquina" value={laborForm.machineId || ''} onChange={(event) => selectMachine(event.target.value)} required><option value="">Selecionar máquina</option>{bySector(machines).map(([sector, group], _index, groups) => { const options = group.map((machine) => <option key={machine.id} value={machine.id}>{machine.name}{machine.hourlyRate != null ? ` · ${formatMoney(machine.hourlyRate)}/h` : ''}</option>); return groups.length > 1 ? <optgroup key={sector} label={sector}>{options}</optgroup> : options })}</select> : <select aria-label="Serviço do profissional" value={laborForm.laborServiceId || ''} onChange={(event) => selectLaborService(event.target.value)} required><option value="">Selecionar serviço</option>{laborServices.map((service) => <option key={service.id} value={service.id}>{service.name} · {formatMoney(service.hourlyRate)}/h</option>)}</select>}</label>
                 {laborForm.type === 'person' && laborCatalogError && <p className="admin-tool-error" role="alert">{laborCatalogError}</p>}
                 <label>Tempo (horas)<input type="number" min="0.01" step="0.01" value={laborForm.hours} onChange={(event) => setLaborForm((current) => ({ ...current, hours: event.target.value }))} placeholder="0,00" required /></label>
                 <label>Valor da hora<input type="number" min="0" step="0.01" value={laborForm.hourlyRate} onChange={(event) => setLaborForm((current) => ({ ...current, hourlyRate: event.target.value }))} placeholder="0,00" required /></label>
                 <div className="offer-inline-actions"><button className="offer-modal-cancel" type="button" onClick={() => setLaborFormOpen(false)}>Cancelar</button><button className="offer-add-resource-button" type="submit" disabled={saving}>Adicionar mão de obra</button></div>
               </form>}
-              {laborEntries.length > 0 ? <div className="offer-labor-list"><div className="offer-labor-row offer-labor-row--header"><span>Tipo</span><span>Máquina / serviço</span><span>Tempo</span><span>Valor/h</span><span>Total</span><span>Ações</span></div>{laborEntries.map((entry) => <div className="offer-labor-row" key={entry.id}><span>{entry.type === 'machine' ? 'Hora máquina' : 'Hora homem'}</span><strong>{entry.resource}</strong><span>{entry.hours.toLocaleString('pt-BR')} h</span><span>{formatMoney(entry.hourlyRate)}</span><strong>{formatMoney(entry.hours * entry.hourlyRate)}</strong><button className="offer-resource-remove" type="button" disabled={saving} onClick={() => removeLabor(entry.id)} aria-label={`Remover ${entry.resource}`}>×</button></div>)}</div> : <div className="offer-empty-state offer-empty-state--labor"><strong>Nenhuma mão de obra adicionada</strong><span>Informe a máquina ou o serviço e o tempo utilizado.</span></div>}
+              {laborEntries.length > 0 ? <><div className="offer-materials-head"><span>Tipo</span><span>Máquina / serviço</span><span>Tempo (h)</span><span>Setor</span><span>Valor/hora</span><span>Valor total</span><span>Ações</span></div><div className="offer-materials-list offer-labor-list">{laborEntries.map((entry) => <div className="offer-material-row offer-material-row--managed offer-material-row--labor" key={entry.id}><div className="material-visual"><Icon name={entry.type === 'machine' ? 'machines' : 'employees'} /></div><div className="material-name"><strong>{entry.resource}</strong><span>{entry.type === 'machine' ? 'Hora máquina' : 'Hora homem'}</span></div><span>{entry.hours.toLocaleString('pt-BR')} h</span><span>{laborSector(entry)}</span><span>{formatMoney(entry.hourlyRate)}</span><strong>{formatMoney(entry.hours * entry.hourlyRate)}</strong><button className="offer-resource-remove" type="button" disabled={saving} onClick={() => removeLabor(entry.id)} aria-label={`Remover ${entry.resource}`}>×</button></div>)}</div></> : <div className="offer-empty-state"><Icon name="plus" /><strong>Nenhuma mão de obra adicionada</strong><span>Use o botão acima para informar a máquina ou o serviço e o tempo utilizado.</span></div>}
             </div>
             <div className="offer-resource-subsection offer-process-settings">
-              <ServiceStageEditor layout={stageLayout} stages={stages} onLayoutChange={reorderStageLayout} onToggle={toggleStage} disabled={Boolean(offer.orderCode)} />
+              {pieceHistory && emptyResources && <div className="piece-history-banner" role="status"><div><strong>Esta peça já foi feita antes.</strong><span>Dá para preencher os materiais, as etapas e os tempos com base no histórico{pieceHistory.samples ? ` (média de ${pieceHistory.samples} ${pieceHistory.samples === 1 ? 'registro' : 'registros'})` : ` (última vez: ${pieceHistory.source || 'oferta anterior'})`}.</span></div><button type="button" className="offer-add-resource-button" disabled={saving} onClick={async () => { if (await saveResources(pieceHistory.resources)) setPieceHistory(null) }}>Preencher com o histórico</button></div>}
+              <ServiceStageEditor layout={stageLayout} stages={stages} onLayoutChange={reorderStageLayout} onToggle={toggleStage} disabled={Boolean(offer.orderCode)} stageTimes={stageTimes} onStageTime={changeStageTime} />
               <fieldset><legend>Tipo</legend><div className="offer-kind-options"><label><input type="radio" name="offer-kind" checked={kind === 'service'} onChange={() => selectKind('service')} />Serviço</label><label><input type="radio" name="offer-kind" checked={kind === 'product'} onChange={() => selectKind('product')} />Produto</label></div></fieldset>
               <fieldset><legend>Fabricado a partir de</legend><div className="offer-kind-options">{[['sample', 'Amostra'], ['drawing', 'Desenho']].map(([key, label]) => <label key={key}><input type="radio" name="manufactured-from" checked={details.manufacturedFrom === key} onChange={() => updateDetails('manufacturedFrom', key)} />{label}</label>)}</div></fieldset>
               <fieldset><legend>Têmpera</legend><div className="offer-kind-options">{[[true, 'Sim'], [false, 'Não']].map(([key, label]) => <label key={label}><input type="radio" name="tempering" checked={details.tempering === key} onChange={() => updateDetails('tempering', key)} />{label}</label>)}</div></fieldset>
+              <fieldset><legend>Tipo de proposta</legend><div className="offer-kind-options">{[['normal', 'Normal'], ['emergency', 'Emergencial']].map(([key, label]) => <label key={key}><input type="radio" name="offer-urgency" checked={details.urgency === key} onChange={() => updateDetails('urgency', key)} />{label}</label>)}</div></fieldset>
               {stages.includes('painting') && <label className="offer-service-field">Cor/Tipo<input value={details.paintColor} maxLength={160} onChange={(event) => updateDetails('paintColor', event.target.value, false)} onBlur={() => saveResources()} /></label>}
               <label className="offer-service-field">Descrição do serviço<textarea aria-label="Descrição do serviço" value={details.serviceDescription} maxLength={5000} rows={4} onChange={(event) => updateDetails('serviceDescription', event.target.value, false)} onBlur={() => saveResources()} /></label>
               <div className="offer-kind-options offer-strict-process"><label><input type="checkbox" checked={details.strictProcess} onChange={(event) => updateDetails('strictProcess', event.target.checked)} />Processo Injessado</label></div>
@@ -1517,27 +1688,62 @@ function ProposalBuilder({ collapsed, onToggle, activeNav, onNavigate, onLogout,
   const [error, setError] = useState('')
   const resourceData = offer?.resources || { materials: [], laborEntries: [] }
   const formatMoney = (value) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-  const materialCost = resourceData.materials.reduce((total, item) => total + Number(item.quantity) * Number(item.unitPrice), 0)
-  const laborCost = resourceData.laborEntries.reduce((total, item) => total + Number(item.hours) * Number(item.hourlyRate), 0)
-  const defaultProposal = { deadline: offer?.deadline || '', serviceValue: materialCost + laborCost, materials: materialCost, labor: laborCost, machine: `${resourceData.laborEntries.filter((item) => item.type === 'machine').reduce((total, item) => total + Number(item.hours), 0)} horas`, serviceTime: `${resourceData.laborEntries.reduce((total, item) => total + Number(item.hours), 0)} horas`, margin: 0, discount: 0, kind: resourceData.kind ?? offer?.proposal?.kind ?? 'service', stages: resourceData.stages ?? offer?.proposal?.stages ?? [] }
+  // Materials, labor and hours come from the offer and cannot be edited here; only the delivery term, the gross profit
+  // percentage and the discount are chosen in each option. The OS value is what the customer pays.
+  const costs = proposalCosts(resourceData)
+  const materialCost = costs.materials
+  const defaultProposal = { deadline: offer?.deadline || '', margin: 0, discount: 0, kind: resourceData.kind ?? offer?.proposal?.kind ?? 'service', stages: resourceData.stages ?? offer?.proposal?.stages ?? [] }
   const [proposals, setProposals] = useState(() => [
     { ...defaultProposal, key: 'A', margin: 15, tone: 'green', icon: '♢', title: 'Opção A', tag: 'Personalizável', description: 'Defina os valores e o prazo desta opção.' },
     { ...defaultProposal, key: 'B', margin: 20, tone: 'blue', icon: '◎', title: 'Opção B', tag: 'Personalizável', description: 'Defina os valores e o prazo desta opção.' },
     { ...defaultProposal, key: 'C', margin: 25, tone: 'purple', icon: '✧', title: 'Opção C', tag: 'Personalizável', description: 'Defina os valores e o prazo desta opção.' },
     { ...defaultProposal, key: 'D', margin: 30, tone: 'red', icon: 'ϟ', title: 'Opção D', tag: 'Personalizável', description: 'Defina os valores e o prazo desta opção.' },
   ].map((proposal) => offer?.proposal?.key === proposal.key ? { ...proposal, ...offer.proposal, kind: defaultProposal.kind, stages: defaultProposal.stages } : proposal))
-  const calculateProfit = (proposal) => proposal.serviceValue * (1 - proposal.discount / 100) * (proposal.margin / 100)
-  const visibleProposals = proposals.map((proposal) => ({ ...proposal, profit: calculateProfit(proposal) }))
+  // Each option starts from the average of the proposals accepted with it; an option already saved in the offer keeps its
+  // value and the others give way so the order A < B < C < D, with the minimum gap, holds.
+  const [marginStats, setMarginStats] = useState(null)
+  const [declining, setDeclining] = useState(false)
+  const [undoing, setUndoing] = useState(false)
+  const [accepting, setAccepting] = useState(false)
+  const [unaccepting, setUnaccepting] = useState(false)
+  useEffect(() => {
+    let active = true
+    apiRequest('/api/proposal-margins').then(({ items }) => {
+      if (!active) return
+      setMarginStats(items)
+      setProposals((current) => {
+        const fixed = current.findIndex((proposal) => proposal.key === offer?.proposal?.key)
+        const margins = current.map((proposal, index) => index === fixed ? Number(proposal.margin) : items.find((item) => item.key === proposal.key)?.margin ?? Number(proposal.margin))
+        for (let index = fixed + 1; index < margins.length; index++) if (index > 0) margins[index] = Math.max(margins[index], margins[index - 1] + PROPOSAL_MARGIN_GAP)
+        for (let index = fixed - 1; index >= 0; index--) margins[index] = Math.max(0, Math.min(margins[index], margins[index + 1] - PROPOSAL_MARGIN_GAP))
+        return current.map((proposal, index) => ({ ...proposal, margin: Math.round(margins[index] * 10) / 10 }))
+      })
+    }).catch(() => {})
+    return () => { active = false }
+  }, [offer?.id])
+  const visibleProposals = proposals.map((proposal) => ({ ...proposal, materials: costs.materials, labor: costs.labor, machine: hoursText(costs.machineHours), serviceTime: hoursText(costs.serviceHours), totalTime: hoursText(costs.totalHours), ...proposalPricing({ materials: costs.materials, labor: costs.labor, margin: proposal.margin, discount: proposal.discount }) }))
   const selectedProposal = visibleProposals.find((proposal) => proposal.key === selectedKey) || visibleProposals[0]
-
   function updateProposal(key, field, value) {
     setGenerated(false)
     setProposals((current) => current.map((proposal) => proposal.key === key ? { ...proposal, [field]: value } : proposal))
   }
 
   function saveEditedValue(key, field, value) {
-    const numericFields = ['serviceValue', 'materials', 'labor', 'margin', 'discount']
-    const nextValue = numericFields.includes(field) ? Number(String(value).replace(',', '.')) || 0 : value
+    const limits = { margin: 1000, discount: 100 }
+    const nextValue = field in limits ? Math.min(limits[field], Math.max(0, Number(String(value).replace(',', '.')) || 0)) : value
+    if (field === 'margin') {
+      // The options never cross: each stays at least PROPOSAL_MARGIN_GAP points away from its neighbours.
+      const index = proposals.findIndex((proposal) => proposal.key === key)
+      const { min, max } = marginLimits(proposals.map((proposal) => proposal.margin), index)
+      if (nextValue < min || nextValue > max) {
+        updateProposal(key, field, editingCell?.initial ?? proposals[index].margin)
+        setEditingCell(null)
+        const previous = proposals[index - 1], next = proposals[index + 1]
+        setError(`A opção ${key} precisa ficar ${[previous && `pelo menos ${PROPOSAL_MARGIN_GAP} pontos acima da ${previous.key} (${String(previous.margin).replace('.', ',')}%)`, next && `pelo menos ${PROPOSAL_MARGIN_GAP} pontos abaixo da ${next.key} (${String(next.margin).replace('.', ',')}%)`].filter(Boolean).join(' e ')}: use de ${String(min).replace('.', ',')}% a ${String(max).replace('.', ',')}%.`)
+        return
+      }
+      setError('')
+    }
     updateProposal(key, field, nextValue)
     setEditingCell(null)
   }
@@ -1545,7 +1751,7 @@ function ProposalBuilder({ collapsed, onToggle, activeNav, onNavigate, onLogout,
   function renderEditable(proposal, field, displayValue, inputType = 'text') {
     const isEditing = editingCell?.key === proposal.key && editingCell.field === field
     if (isEditing) return <input className="proposal-inline-edit" type={inputType} value={proposal[field]} autoFocus onClick={(event) => event.stopPropagation()} onChange={(event) => updateProposal(proposal.key, field, event.target.value)} onBlur={(event) => saveEditedValue(proposal.key, field, event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') saveEditedValue(proposal.key, field, event.currentTarget.value); if (event.key === 'Escape') setEditingCell(null) }} />
-    return <><strong>{displayValue}</strong><button className="proposal-edit-button" type="button" onClick={(event) => { event.stopPropagation(); setEditingCell({ key: proposal.key, field }) }} aria-label={`Editar ${field}`}><Icon name="edit" /></button></>
+    return <><strong>{displayValue}</strong><button className="proposal-edit-button" type="button" onClick={(event) => { event.stopPropagation(); setEditingCell({ key: proposal.key, field, initial: proposal[field] }) }} aria-label={`Editar ${field}`}><Icon name="edit" /></button></>
   }
 
   // The commercial models (A, B, Nestlé and Etiqueta) are chosen and filled in the next window.
@@ -1563,23 +1769,15 @@ function ProposalBuilder({ collapsed, onToggle, activeNav, onNavigate, onLogout,
     await onRefresh()
     setGenerated(true)
     setLayoutOpen(false)
-    const link = document.createElement('a')
-    link.href = `/api/offers/${offer.id}/proposal.pdf`
-    link.click()
+    // The PDF needs the session, so it is fetched and saved instead of opened by a plain link.
+    downloadFile(`/api/offers/${offer.id}/proposal.pdf`, `proposta-${offer.code}.pdf`).catch((caught) => setError(caught.message))
   }
 
+  // Confirmed in AcceptOfferModal; the error stays in the modal.
   async function acceptOffer() {
-    setSaving(true)
-    setError('')
-    try {
-      const { item } = await apiRequest(`/api/offers/${offer.id}/accept`, { method: 'POST' })
-      await onRefresh()
-      onSelectOrder(item.code)
-    } catch (caught) {
-      setError(caught.message)
-    } finally {
-      setSaving(false)
-    }
+    const { item } = await apiRequest(`/api/offers/${offer.id}/accept`, { method: 'POST' })
+    await onRefresh()
+    onSelectOrder(item.code)
   }
 
   if (!offer) return <div className="dashboard-shell proposal-shell"><Sidebar collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} /><main className="proposal-main"><WorkspaceTabs tabs={tabs} activeNav={activeNav} onNavigate={onNavigate} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} /><p>Selecione uma oferta para fazer a proposta.</p><button type="button" onClick={() => onNavigate('Ofertas e serviços')}>Voltar às ofertas</button></main></div>
@@ -1590,13 +1788,17 @@ function ProposalBuilder({ collapsed, onToggle, activeNav, onNavigate, onLogout,
       <main className="proposal-main">
         <WorkspaceTabs tabs={tabs} activeNav={activeNav} onNavigate={onNavigate} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} />
         <div className="proposal-header"><div><button className="proposal-back-button" type="button" onClick={() => onNavigate('Detalhes da oferta')} aria-label="Voltar para detalhes"><ArrowLeft size={24} aria-hidden="true" /></button><div><h1>Fazer proposta</h1><p>Escolha uma das quatro opções e ajuste os valores para esta solicitação.</p></div></div></div>
-        <section className="proposal-service-summary"><div className="proposal-service-image">▰</div><div className="proposal-service-client"><h2>{offer.service}</h2><span>Cliente solicitante</span><strong>{offer.company}</strong><small>CNPJ: {offer.cnpj}</small><small>Etiqueta: {offer.labelNumber}</small></div><div className="proposal-service-fact"><span>▣</span><div><small>Prazo solicitado</small><strong>{displayDate(offer.deadline)}</strong></div><span>◇</span><div><small>Quantidade</small><strong>{offer.quantity} unidades</strong></div></div><div className="proposal-service-summary-copy"><strong>Resumo do serviço</strong><p>{offer.description}</p></div><div className="proposal-material-summary"><span>Materiais informados</span><strong>{formatMoney(materialCost)}</strong><button type="button" onClick={() => onNavigate('Detalhes da oferta')}>Ver detalhamento <span>›</span></button></div></section>
+        <section className="proposal-service-summary"><div className="proposal-service-image">▰</div><div className="proposal-service-client"><h2>{offer.service}</h2><span>Cliente solicitante</span><strong>{offer.company}</strong><small>CNPJ: {offer.cnpj}</small><small>Etiqueta: {offer.labelNumber || 'não informada'}</small></div><div className="proposal-service-fact"><span>▣</span><div><small>Prazo solicitado</small><strong>{displayDate(offer.deadline)}</strong></div><span>◇</span><div><small>Quantidade</small><strong>{offer.quantity} unidades</strong></div></div><div className="proposal-service-summary-copy"><strong>Resumo do serviço</strong><p>{offer.description}</p></div><div className="proposal-material-summary"><span>Materiais informados</span><strong>{formatMoney(materialCost)}</strong><button type="button" onClick={() => onNavigate('Detalhes da oferta')}>Ver detalhamento <span>›</span></button></div></section>
         <h2 className="proposal-section-heading">Escolha uma das propostas abaixo ou personalize os valores</h2>
-        <div className="proposal-card-grid">{visibleProposals.map((proposal) => <article className={`proposal-card proposal-card--${proposal.tone} ${selectedKey === proposal.key ? 'proposal-card--selected' : ''}`} key={proposal.key} onClick={() => { setSelectedKey(proposal.key); if (proposal.key !== selectedKey) setGenerated(false) }}><div className="proposal-card-heading"><div><span className="proposal-card-label">PROPOSTA {proposal.key}</span><div className="proposal-card-intro"><span className="proposal-card-icon">{proposal.icon}</span><div><strong>{proposal.title}</strong><p>{proposal.description}</p></div></div></div><span className="proposal-card-tag">{proposal.tag}</span></div><div className="proposal-card-content"><div className="proposal-card-column"><div><span>◷</span><label>Prazo de entrega</label>{renderEditable(proposal, 'deadline', proposal.deadline)}</div><div><span>＄</span><label>Valor do serviço</label>{renderEditable(proposal, 'serviceValue', formatMoney(Number(proposal.serviceValue)), 'number')}</div><div><span>◇</span><label>Materiais</label>{renderEditable(proposal, 'materials', formatMoney(Number(proposal.materials)), 'number')}</div><div><span>♧</span><label>Mão de obra</label>{renderEditable(proposal, 'labor', formatMoney(Number(proposal.labor)), 'number')}</div></div><div className="proposal-card-column"><div><span>⚙</span><label>Tempo de máquina</label>{renderEditable(proposal, 'machine', proposal.machine)}</div><div><span>◷</span><label>Tempo de serviço</label>{renderEditable(proposal, 'serviceTime', proposal.serviceTime)}</div><div><span>▥</span><label>% de lucro bruto</label>{renderEditable(proposal, 'margin', `${Number(proposal.margin).toFixed(1).replace('.', ',')}%`, 'number')}</div><div><span>◇</span><label>Desconto</label>{renderEditable(proposal, 'discount', `${Number(proposal.discount).toFixed(1).replace('.', ',')}%`, 'number')}</div></div></div><div className="proposal-profit"><strong>Lucro bruto esperado</strong><b>{formatMoney(proposal.profit)}</b></div></article>)}</div>
-        <div className="proposal-bottom"><div className="proposal-notice"><span>ⓘ</span><div><strong>Confira os valores</strong><p>Os valores e prazos são definidos por você antes da geração do PDF.</p></div></div><div className="proposal-actions"><button className="proposal-cancel-button" type="button" onClick={() => onNavigate('Detalhes da oferta')}>× <strong>Cancelar</strong></button><button className="proposal-send-button" type="button" onClick={openModels}><Icon name="send" /><strong>Gerar proposta em PDF</strong></button></div></div>
+        <div className="proposal-card-grid">{visibleProposals.map((proposal) => <article className={`proposal-card proposal-card--${proposal.tone} ${selectedKey === proposal.key ? 'proposal-card--selected' : ''}`} key={proposal.key} onClick={() => { setSelectedKey(proposal.key); if (proposal.key !== selectedKey) setGenerated(false) }}><div className="proposal-card-heading"><div><span className="proposal-card-label">PROPOSTA {proposal.key}</span><div className="proposal-card-intro"><span className="proposal-card-icon">{proposal.icon}</span><div><strong>{proposal.title}</strong><p>{proposal.description}</p></div></div></div><span className="proposal-card-tag">{proposal.tag}</span></div><div className="proposal-card-content"><div className="proposal-card-column"><div><span>◇</span><label>Materiais</label><strong>{formatMoney(proposal.materials)}</strong></div><div><span>♧</span><label>Mão de obra</label><strong>{formatMoney(proposal.labor)}</strong></div><div><span>＄</span><label>Valor do serviço</label><strong>{formatMoney(proposal.serviceValue)}</strong></div><div><span>▥</span><label>% de lucro bruto</label>{renderEditable(proposal, 'margin', `${Number(proposal.margin).toFixed(1).replace('.', ',')}%`, 'number')}</div>{marginStats && (() => { const stat = marginStats.find((item) => item.key === proposal.key); return stat && <small className="proposal-margin-hint">{stat.accepted ? `Média de ${stat.accepted} ${stat.accepted === 1 ? 'proposta aceita' : 'propostas aceitas'}` : 'Ainda sem propostas aceitas'}{stat.rate != null ? ` · ${stat.rate}% de aceite (${stat.won} de ${stat.won + stat.declined})` : ''}</small> })()}<div><span>◇</span><label>Desconto</label>{renderEditable(proposal, 'discount', `${Number(proposal.discount).toFixed(1).replace('.', ',')}%`, 'number')}</div></div><div className="proposal-card-column"><div><span>◷</span><label>Prazo de entrega</label>{renderEditable(proposal, 'deadline', proposal.deadline)}</div><div><span>⚙</span><label>Tempo de máquina</label><strong>{proposal.machine}</strong></div><div><span>◷</span><label>Tempo de serviço</label><strong>{proposal.serviceTime}</strong></div><div><span>◔</span><label>Horas totais</label><strong>{proposal.totalTime}</strong></div></div></div><div className="proposal-price"><strong>Valor da OS<small>valor cobrado do cliente</small></strong><b>{formatMoney(proposal.osValue)}</b></div><div className="proposal-profit"><strong>Lucro bruto esperado</strong><b>{formatMoney(proposal.profit)}</b></div></article>)}</div>
+        <div className="proposal-bottom"><div className="proposal-notice"><span>ⓘ</span><div><strong>Confira os valores</strong><p>Materiais, mão de obra e horas vêm dos detalhes da oferta. Ajuste o prazo, o % de lucro bruto e o desconto: o Valor da OS é o que será cobrado do cliente no PDF.</p></div></div><div className="proposal-actions"><button className="proposal-cancel-button" type="button" onClick={() => onNavigate('Detalhes da oferta')}>× <strong>Cancelar</strong></button><button className="proposal-send-button" type="button" onClick={openModels}><Icon name="send" /><strong>Gerar proposta em PDF</strong></button></div></div>
         {error && <p className="workflow-error" role="alert">{error}</p>}
-        {generated && <div className="proposal-generated-actions"><a href={`/api/offers/${offer.id}/proposal.pdf`}>Baixar PDF da proposta{offer.proposal?.document ? ` · ${modelLabel(offer.proposal.document)}` : ''}</a><button className="proposal-cancel-button" type="button" onClick={() => onNavigate('Ofertas e serviços')}>Retornar às ofertas</button><button className="proposal-send-button" type="button" disabled={saving || Boolean(offer.orderCode)} onClick={acceptOffer}>{offer.orderCode ? `OS ${offer.orderCode} gerada` : saving ? 'Aceitando...' : 'Aceitar Oferta'}</button>{offer.orderCode && <button className="proposal-cancel-button" type="button" onClick={() => onSelectOrder(offer.orderCode)}>Ver OS</button>}</div>}
+        {generated && <div className="proposal-generated-actions"><DownloadLink url={`/api/offers/${offer.id}/proposal.pdf`} name={`proposta-${offer.code}.pdf`}>Baixar PDF da proposta{offer.proposal?.document ? ` · ${modelLabel(offer.proposal.document)}` : ''}</DownloadLink><button className="proposal-cancel-button" type="button" onClick={() => onNavigate('Ofertas e serviços')}>Retornar às ofertas</button>{!offer.orderCode && offer.status !== 'rejected' && <button className="proposal-cancel-button proposal-decline-button" type="button" disabled={saving} onClick={() => setDeclining(true)}>Cliente recusou a proposta</button>}{offer.status === 'rejected' ? <><span className="proposal-declined-note">Proposta {offer.proposalDecline?.key || offer.proposal?.key} recusada pelo cliente{offer.proposalDecline?.reason ? ` · ${offer.proposalDecline.reason}` : ''}</span>{offer.proposalDecline && <button className="proposal-cancel-button" type="button" onClick={() => setUndoing(true)}>Desfazer recusa</button>}</> : <button className="proposal-send-button" type="button" disabled={saving || Boolean(offer.orderCode)} onClick={() => setAccepting(true)}>{offer.orderCode ? `OS ${offer.orderCode} gerada` : 'Aceitar Oferta'}</button>}{offer.orderCode && <><button className="proposal-cancel-button" type="button" onClick={() => onSelectOrder(offer.orderCode)}>Ver OS</button><button className="proposal-cancel-button proposal-decline-button" type="button" onClick={() => setUnaccepting(true)}>Desfazer aceite</button></>}</div>}
       </main>
+      {accepting && <AcceptOfferModal offer={offer} onConfirm={acceptOffer} onClose={() => setAccepting(false)} />}
+      {unaccepting && <UndoAcceptModal offer={offer} orderCode={offer.orderCode} onConfirm={async () => { await apiRequest(`/api/offers/${encodeURIComponent(offer.id)}/unaccept`, jsonOptions('POST', {})); await onRefresh(); setGenerated(true) }} onClose={() => setUnaccepting(false)} />}
+      {undoing && <UndoDeclineModal offer={offer} onConfirm={async () => { await apiRequest(`/api/offers/${encodeURIComponent(offer.id)}/undecline`, jsonOptions('POST', {})); await onRefresh() }} onClose={() => setUndoing(false)} />}
+      {declining && <DeclineProposalModal offer={offer} onConfirm={async (decline) => { await apiRequest(`/api/offers/${encodeURIComponent(offer.id)}/decline`, jsonOptions('POST', decline)); await onRefresh() }} onClose={() => setDeclining(false)} />}
       {layoutOpen && <ProposalDocumentModal offer={offer} option={selectedProposal} onClose={() => setLayoutOpen(false)} onSaved={proposalSaved} />}
     </div>
   )
@@ -1604,8 +1806,7 @@ function ProposalBuilder({ collapsed, onToggle, activeNav, onNavigate, onLogout,
 
 const loadMaterialRequestHistory = (id, signal) => apiRequest(`/api/material-requests/${encodeURIComponent(id)}/history`, { signal })
 
-function OrdersScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, offers, orders, selectedOrderCode, onSelectOffer, onSelectOrder, onRefresh, materialRequestTarget, onRequestLocated }) {
-  const selectedOrder = orders.find((order) => order.code === selectedOrderCode)
+function OrdersScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, offers, orders, onSelectOffer, onSelectOrder, onRefresh, materialRequestTarget, onRequestLocated }) {
   const [manualRequests, setManualRequests] = useState([])
   const [requestCodes, setRequestCodes] = useState({})
   const [requestListError, setRequestListError] = useState('')
@@ -1642,7 +1843,7 @@ function OrdersScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout, ta
   const requestRows = useRef(new Map())
   const [highlightedRequests, setHighlightedRequests] = useState([])
   useLayoutEffect(() => {
-    if (!materialRequestTarget || selectedOrder) return undefined
+    if (!materialRequestTarget) return undefined
     const matches = requests.filter((request) => request.orderCode === materialRequestTarget.orderCode)
     const frame = window.requestAnimationFrame(() => {
       const firstRow = requestRows.current.get(matches[0]?.id)
@@ -1654,33 +1855,19 @@ function OrdersScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout, ta
       onRequestLocated(null)
     })
     return () => window.cancelAnimationFrame(frame)
-  }, [materialRequestTarget, requests, selectedOrder, onRequestLocated])
+  }, [materialRequestTarget, requests, onRequestLocated])
   useEffect(() => {
     if (!highlightedRequests.length) return undefined
     const timer = window.setTimeout(() => setHighlightedRequests([]), 2400)
     return () => window.clearTimeout(timer)
   }, [highlightedRequests])
-  const [stageNamesInput, setStageNamesInput] = useState('')
-  const [operationError, setOperationError] = useState('')
-  const [now, setNow] = useState(Date.now())
   const [materialEntry, setMaterialEntry] = useState(null)
   const [materialEntryError, setMaterialEntryError] = useState('')
   const [openingMaterialId, setOpeningMaterialId] = useState(null)
   const [savingMaterial, setSavingMaterial] = useState(false)
   const [rejectingRequest, setRejectingRequest] = useState(null)
-  useEffect(() => {
-    setStageNamesInput('')
-    setOperationError('')
-  }, [selectedOrderCode])
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 1000)
-    return () => window.clearInterval(timer)
-  }, [])
-  useEffect(() => pollWhileVisible(() => onRefresh().catch(() => {}), 10000), [selectedOrderCode])
-  const operation = selectedOrder?.operation
-  const activeMs = operation ? operationElapsed(operation, now) : 0
-  const seconds = Math.floor(activeMs / 1000)
-  const activeTime = [Math.floor(seconds / 3600), Math.floor((seconds % 3600) / 60), seconds % 60].map((part) => String(part).padStart(2, '0')).join(':')
+  const [purchase, setPurchase] = useState(null)
+  useEffect(() => pollWhileVisible(() => onRefresh().catch(() => {}), 10000), [])
 
   async function openMaterialEntry(request) {
     if (openingMaterialId || savingMaterial) return
@@ -1689,7 +1876,7 @@ function OrdersScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout, ta
     try {
       const inventory = await loadOverviewInventory()
       const existing = findInventoryMaterial(request, inventory.items)
-      setMaterialEntry({ ...inventory, requestId: request.id, receiptId: crypto.randomUUID(), existingId: existing?.id ?? null, form: { name: existing?.name || request.name || '', detail: request.detail || existing?.detail || '', quantity: request.quantity, minimum: existing?.minimum ?? '', unitPrice: request.unitPrice ?? existing?.unitPrice ?? '' } })
+      setMaterialEntry({ ...inventory, requestId: request.id, receiptId: newId(), existingId: existing?.id ?? null, form: { name: existing?.name || request.name || '', detail: request.detail || existing?.detail || '', quantity: request.quantity, minimum: existing?.minimum ?? '', unitPrice: request.unitPrice ?? existing?.unitPrice ?? '' } })
     } catch (error) { setMaterialEntryError(error.message) }
     finally { setOpeningMaterialId(null) }
   }
@@ -1714,6 +1901,7 @@ function OrdersScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout, ta
         }
       }
       setMaterialEntry(null)
+      setPurchase(stockPurchase(item))
       await onRefresh()
       await refreshMaterialRequests()
     } catch (error) { setMaterialEntryError(error.message) }
@@ -1724,6 +1912,42 @@ function OrdersScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout, ta
     await apiRequest(`/api/material-requests/${encodeURIComponent(request.id)}/reject`, { method: 'POST' })
     try { await onRefresh(); await refreshMaterialRequests() } catch (error) { setMaterialEntryError(error.message) }
   }
+
+  return <div className="dashboard-shell orders-shell">
+    <Sidebar collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} />
+    <main className="orders-main"><WorkspaceTabs tabs={tabs} activeNav={activeNav} onNavigate={onNavigate} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} />
+      <div className="orders-header"><h1>Pedidos de material</h1><button className="os-button os-button--primary material-request-create" type="button" disabled={openingRequest} onClick={openManualRequest}><Icon name="plus" />{openingRequest ? 'Carregando...' : 'Solicitar material'}</button></div>
+<div className="material-orders-table"><table><thead><tr><th className="material-orders-code">Código</th><th>Material solicitado</th><th>Especificação</th><th className="material-orders-quantity">Quantidade a pedir</th><th className="material-orders-quantity">Quantidade necessária</th><th className="material-orders-order">OS / Oferta relacionada</th><th className="material-orders-date">Data</th><th className="material-orders-actions">Ações</th><th className="material-orders-history">Histórico</th></tr></thead><tbody>{requests.map((request) => <tr key={request.id} ref={(node) => { if (node) requestRows.current.set(request.id, node); else requestRows.current.delete(request.id) }} className={highlightedRequests.includes(request.id) ? 'material-request--highlighted' : undefined}><td data-label="Código" className="material-orders-code"><strong>{request.code || '—'}</strong></td><td data-label="Material solicitado"><button className="material-order-link" type="button" onClick={() => onNavigate('Estoque')}><strong>{request.name}</strong></button></td><td data-label="Especificação">{request.detail || '—'}</td><td data-label="Quantidade a pedir"><strong>{Number(request.quantity).toLocaleString('pt-BR')} kg</strong></td><td data-label="Quantidade necessária">{request.requiredQuantity.toLocaleString('pt-BR')} kg</td><td data-label="OS / Oferta relacionada">{request.manual ? <span>Sem OS vinculada<small>Pedido manual</small></span> : <><button className="material-order-link" type="button" onClick={() => request.orderCode ? onSelectOrder(request.orderCode) : onSelectOffer(request.offerId)}>{request.orderCode || request.offerCode}<Icon name="eye" /></button>{!request.orderCode && <small>Aguardando OS</small>}</>}</td><td data-label="Data">{displayDate(request.requestedAt)}</td><td data-label="Ações" className="material-orders-actions">{request.rejection ? <span className="material-order-refused" role="status"><CircleX size={16} aria-hidden="true" />Pedido recusado</span> : request.receipt && request.quantity <= 0 ? <span className="material-order-received" role="status"><CircleCheck size={16} aria-hidden="true" />Material solicitado adicionado</span> : <div className="material-orders-action-group"><button className="material-order-action material-order-action--add" type="button" disabled={Boolean(openingMaterialId) || savingMaterial} onClick={() => openMaterialEntry(request)}><Icon name="plus" />{openingMaterialId === request.id ? 'Carregando...' : 'Adicionar material'}</button><button className="material-order-action material-order-action--reject" type="button" disabled={Boolean(openingMaterialId) || savingMaterial} onClick={() => setRejectingRequest(request)}><X size={15} aria-hidden="true" />Recusar pedido</button></div>}</td><td data-label="Histórico" className="material-orders-history"><button className="os-icon-button material-request-history-button" type="button" title="Histórico do pedido" aria-label={`Ver histórico do pedido de ${request.name}`} onClick={() => setHistoryRequest(request)}><Info size={17} aria-hidden="true" /></button></td></tr>)}</tbody></table>{!requests.length && <p className="material-orders-empty">Nenhum pedido de material.</p>}</div>
+      {materialEntryError && !materialEntry && <p role="alert" className="workflow-error">{materialEntryError}</p>}
+      {requestListError && <p role="alert" className="workflow-error">{requestListError}</p>}
+    </main>
+    {materialEntry && <InventoryModal item={materialEntry.form} inventoryItems={materialEntry.items} initialExistingId={materialEntry.existingId} saving={savingMaterial} error={materialEntryError} onClose={() => { if (!savingMaterial) setMaterialEntry(null) }} onSave={saveMaterialEntry} />}
+    {manualInventory && <MaterialRequestModal inventory={manualInventory} onSave={saveManualRequest} onClose={() => setManualInventory(null)} />}
+    {historyRequest && <MaterialRequestHistoryModal request={historyRequest} loadHistory={loadMaterialRequestHistory} onClose={() => setHistoryRequest(null)} />}
+    {rejectingRequest && <RejectMaterialRequestModal request={rejectingRequest} onConfirm={rejectMaterialRequest} onClose={() => setRejectingRequest(null)} />}
+    {purchase && <StockPurchaseFinance purchase={purchase} onClose={() => setPurchase(null)} />}
+  </div>
+}
+
+// The OS has its own screen, opened from the service panels, offers and material requests.
+function OrderScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, orders, selectedOrderCode, onRefresh, onBack, onReopened, workflowLoading }) {
+  const selectedOrder = orders.find((order) => order.code === selectedOrderCode)
+  const [stageNamesInput, setStageNamesInput] = useState('')
+  const [operationError, setOperationError] = useState('')
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => {
+    setStageNamesInput('')
+    setOperationError('')
+  }, [selectedOrderCode])
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+  useEffect(() => pollWhileVisible(() => onRefresh().catch(() => {}), 10000), [selectedOrderCode])
+  const operation = selectedOrder?.operation
+  const activeMs = operation ? operationElapsed(operation, now) : 0
+  const seconds = Math.floor(activeMs / 1000)
+  const activeTime = [Math.floor(seconds / 3600), Math.floor((seconds % 3600) / 60), seconds % 60].map((part) => String(part).padStart(2, '0')).join(':')
 
   async function configureStages() {
     const stages = stageNamesInput.split(',').map((name) => name.trim()).filter(Boolean)
@@ -1744,34 +1968,37 @@ function OrdersScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout, ta
     setOperationError('')
     try { await onRefresh() } catch (error) { setOperationError(error.message) }
   }
-  async function reopenOrder() {
-    await apiRequest(`/api/operations/orders/${encodeURIComponent(selectedOrderCode)}/reopen`, jsonOptions('POST', {}))
+  // `options.receivables` is what the user chose for the accounts receivable posted for the OS ('keep' or 'delete').
+  async function reopenOrder(options) {
+    await apiRequest(`/api/operations/orders/${encodeURIComponent(selectedOrderCode)}/reopen`, jsonOptions('POST', options || {}))
     setOperationError('')
     try { await onRefresh() } catch (error) { setOperationError(error.message) }
+    onReopened(selectedOrderCode)
   }
   async function uploadOrderAttachment(file) {
     await apiRequest(`/api/offers/${selectedOrder.offerId}/attachments?name=${encodeURIComponent(file.name)}&type=${encodeURIComponent(file.type)}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file })
     try { await onRefresh() } catch (error) { setOperationError(error.message) }
   }
-  return <div className={`dashboard-shell orders-shell${selectedOrder ? ' orders-shell--detail' : ''}`}>
+  async function editEventTime(eventId, at) {
+    await apiRequest(`/api/operations/orders/${encodeURIComponent(selectedOrderCode)}/events/${encodeURIComponent(eventId)}/time`, jsonOptions('PUT', { at }))
+    onRefresh().catch(() => {})
+  }
+  return <div className="dashboard-shell orders-shell orders-shell--detail">
     <Sidebar collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} />
     <main className="orders-main"><WorkspaceTabs tabs={tabs} activeNav={activeNav} onNavigate={onNavigate} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} />
-      <div className="orders-header"><h1>{selectedOrder ? 'Ordem de serviço' : 'Pedidos de material'}</h1>{!selectedOrder && <button className="os-button os-button--primary material-request-create" type="button" disabled={openingRequest} onClick={openManualRequest}><Icon name="plus" />{openingRequest ? 'Carregando...' : 'Solicitar material'}</button>}</div>
-{selectedOrder ? <OrderDetails key={selectedOrder.code} order={selectedOrder} activeTime={activeTime} stageNamesInput={stageNamesInput} onChangeStages={setStageNamesInput} onConfigureStages={configureStages} onInterrupt={interruptSession} onEdit={editOrder} onReopen={reopenOrder} onUpload={uploadOrderAttachment} operationError={operationError} onBack={() => onSelectOrder(null)} Icon={Icon} /> : <div className="material-orders-table"><table><thead><tr><th className="material-orders-code">Código</th><th>Material solicitado</th><th>Especificação</th><th className="material-orders-quantity">Quantidade a pedir</th><th className="material-orders-quantity">Quantidade necessária</th><th className="material-orders-order">OS / Oferta relacionada</th><th className="material-orders-date">Data</th><th className="material-orders-actions">Ações</th><th className="material-orders-history">Histórico</th></tr></thead><tbody>{requests.map((request) => <tr key={request.id} ref={(node) => { if (node) requestRows.current.set(request.id, node); else requestRows.current.delete(request.id) }} className={highlightedRequests.includes(request.id) ? 'material-request--highlighted' : undefined}><td data-label="Código" className="material-orders-code"><strong>{request.code || '—'}</strong></td><td data-label="Material solicitado"><button className="material-order-link" type="button" onClick={() => onNavigate('Estoque')}><strong>{request.name}</strong></button></td><td data-label="Especificação">{request.detail || '—'}</td><td data-label="Quantidade a pedir"><strong>{Number(request.quantity).toLocaleString('pt-BR')} kg</strong></td><td data-label="Quantidade necessária">{request.requiredQuantity.toLocaleString('pt-BR')} kg</td><td data-label="OS / Oferta relacionada">{request.manual ? <span>Sem OS vinculada<small>Pedido manual</small></span> : <><button className="material-order-link" type="button" onClick={() => request.orderCode ? onSelectOrder(request.orderCode) : onSelectOffer(request.offerId)}>{request.orderCode || request.offerCode}<Icon name="eye" /></button>{!request.orderCode && <small>Aguardando OS</small>}</>}</td><td data-label="Data">{displayDate(request.requestedAt)}</td><td data-label="Ações" className="material-orders-actions">{request.rejection ? <span className="material-order-refused" role="status"><CircleX size={16} aria-hidden="true" />Pedido recusado</span> : request.receipt && request.quantity <= 0 ? <span className="material-order-received" role="status"><CircleCheck size={16} aria-hidden="true" />Material solicitado adicionado</span> : <div className="material-orders-action-group"><button className="material-order-action material-order-action--add" type="button" disabled={Boolean(openingMaterialId) || savingMaterial} onClick={() => openMaterialEntry(request)}><Icon name="plus" />{openingMaterialId === request.id ? 'Carregando...' : 'Adicionar material'}</button><button className="material-order-action material-order-action--reject" type="button" disabled={Boolean(openingMaterialId) || savingMaterial} onClick={() => setRejectingRequest(request)}><X size={15} aria-hidden="true" />Recusar pedido</button></div>}</td><td data-label="Histórico" className="material-orders-history"><button className="os-icon-button material-request-history-button" type="button" title="Histórico do pedido" aria-label={`Ver histórico do pedido de ${request.name}`} onClick={() => setHistoryRequest(request)}><Info size={17} aria-hidden="true" /></button></td></tr>)}</tbody></table>{!requests.length && <p className="material-orders-empty">Nenhum pedido de material.</p>}</div>}
-      {materialEntryError && !materialEntry && <p role="alert" className="workflow-error">{materialEntryError}</p>}
-      {requestListError && <p role="alert" className="workflow-error">{requestListError}</p>}
+      <div className="orders-header"><h1>Ordem de serviço</h1></div>
+      {selectedOrder ? <OrderDetails key={selectedOrder.code} order={selectedOrder} activeTime={activeTime} stageNamesInput={stageNamesInput} onChangeStages={setStageNamesInput} onConfigureStages={configureStages} onInterrupt={interruptSession} onEdit={editOrder} onReopen={reopenOrder} onUpload={uploadOrderAttachment} onEditEventTime={editEventTime} onRefresh={onRefresh} operationError={operationError} onBack={onBack} Icon={Icon} />
+        : <div className="os-missing"><p role="status">{workflowLoading ? 'Carregando a ordem de serviço...' : 'Ordem de serviço não encontrada.'}</p>{!workflowLoading && <button className="os-button" type="button" onClick={onBack}><Icon name="collapse" />Voltar</button>}</div>}
     </main>
-    {materialEntry && <InventoryModal item={materialEntry.form} inventoryItems={materialEntry.items} initialExistingId={materialEntry.existingId} saving={savingMaterial} error={materialEntryError} onClose={() => { if (!savingMaterial) setMaterialEntry(null) }} onSave={saveMaterialEntry} />}
-    {manualInventory && <MaterialRequestModal inventory={manualInventory} onSave={saveManualRequest} onClose={() => setManualInventory(null)} />}
-    {historyRequest && <MaterialRequestHistoryModal request={historyRequest} loadHistory={loadMaterialRequestHistory} onClose={() => setHistoryRequest(null)} />}
-    {rejectingRequest && <RejectMaterialRequestModal request={rejectingRequest} onConfirm={rejectMaterialRequest} onClose={() => setRejectingRequest(null)} />}
   </div>
 }
 
-function AdminServicesView({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, orders, onSelectOrder, onRefresh, workflowError }) {
+function AdminServicesView({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, orders, onSelectOrder, onRefresh, workflowError, highlightCode }) {
   const completedView = activeNav === 'Serviços concluídos'
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
+  const [collaborator, setCollaborator] = useState('')
+  const [sort, setSort] = useState(null)
   const [now, setNow] = useState(Date.now())
   const [schedulingCode, setSchedulingCode] = useState(null)
   const displayRef = useRef(null)
@@ -1780,6 +2007,8 @@ function AdminServicesView({ collapsed, onToggle, activeNav, onNavigate, onLogou
   const [pendingInspectionCode, setPendingInspectionCode] = useState(null)
   const inspectedOrder = orders.find((order) => order.code === pendingInspectionCode)
   const inspectedMaterials = pendingOrderMaterials(inspectedOrder)
+  // An OS that was just reopened is brought into view (once, when the panel opens).
+  useEffect(() => { if (highlightCode) document.querySelector('.admin-os-row--reopened')?.scrollIntoView({ block: 'nearest' }) }, [])
   useEffect(() => {
     const panel = displayRef.current
     const sync = () => setDisplayMode(document.fullscreenElement === panel)
@@ -1809,10 +2038,22 @@ function AdminServicesView({ collapsed, onToggle, activeNav, onNavigate, onLogou
   }
   const panelOrders = servicePanelOrders(orders, completedView)
   const matchesFilter = (order, key) => key === 'all' || (key === 'completed' ? order.operation.status === 'completed' : deadlineState(order).key === key)
-  const visible = panelOrders.filter((order) => {
+  // Finished services: everyone who worked on the OS, to filter by employee.
+  const collaboratorNames = (order) => (order.collaborators || []).map((person) => person.name).join(', ')
+  const collaboratorOptions = completedView ? [...new Map(panelOrders.flatMap((order) => (order.collaborators || []).map((person) => [person.id, person.name])))].sort((left, right) => left[1].localeCompare(right[1], 'pt-BR')) : []
+  const completionTime = (order) => [order.operation.completedAt, order.operation.completionAcknowledgedAt, order.createdAt].map((value) => Date.parse(value)).find(Number.isFinite)
+  const matching = panelOrders.filter((order) => {
     const query = search.trim().toLocaleLowerCase()
-    return matchesFilter(order, filter) && (!query || [order.service, order.company, order.code, order.labelNumber].some((value) => String(value || '').toLocaleLowerCase().includes(query)))
+    return matchesFilter(order, filter) && (!completedView || !collaborator || (order.collaborators || []).some((person) => person.id === collaborator)) && (!query || [order.service, order.company, order.code, order.labelNumber].some((value) => String(value || '').toLocaleLowerCase().includes(query)))
   })
+  // Headers of the finished services sort the table: numbers and dates start from the largest, text from A to Z.
+  const sortValues = { code: (order) => order.code, company: (order) => order.company || '', collaborators: collaboratorNames, pieces: (order) => currentPieceProgress(order.operation, order.quantity).completedPieces, active: (order) => totalTime(order.operation), completion: (order) => completionTime(order) || 0, purchase: (order) => order.purchaseOrders?.length || 0 }
+  const largestFirst = new Set(['code', 'pieces', 'active', 'completion', 'purchase'])
+  const sortBy = (key) => setSort((current) => ({ key, direction: current?.key === key ? -current.direction : largestFirst.has(key) ? -1 : 1 }))
+  const sorted = sort ? [...matching].sort((left, right) => { const a = sortValues[sort.key](left), b = sortValues[sort.key](right); return sort.direction * (typeof a === 'number' ? a - b : String(a).localeCompare(String(b), 'pt-BR', { numeric: true })) || left.code.localeCompare(right.code) }) : matching
+  const header = (label, key) => completedView && key ? <th key={label} aria-sort={sort?.key === key ? sort.direction === 1 ? 'ascending' : 'descending' : 'none'}><button className="admin-os-sort" type="button" onClick={() => sortBy(key)}>{label}{sort?.key !== key ? <ArrowUpDown size={12} aria-hidden="true" /> : sort.direction === 1 ? <ArrowUp size={12} aria-hidden="true" /> : <ArrowDown size={12} aria-hidden="true" />}</button></th> : <th key={label}>{label}</th>
+  // Emergencies come first while the work is in progress; finished services keep their order unless a header is chosen.
+  const visible = completedView ? sorted : emergenciesFirst(matching)
   async function acknowledgeCompletion(code) {
     await apiRequest(`/api/operations/orders/${encodeURIComponent(code)}/acknowledge-completion`, jsonOptions('POST', {}))
     await onRefresh()
@@ -1825,7 +2066,8 @@ function AdminServicesView({ collapsed, onToggle, activeNav, onNavigate, onLogou
       {workflowError && <p className="workflow-error" role="alert">{workflowError}</p>}
       {!completedView && <div className="admin-os-filters deadline-filters">{[['all', 'Todos'], ...deadlineCategories, ['completed', 'Concluídos']].map(([key, label]) => <button className={filter === key ? 'selected' : ''} type="button" key={key} onClick={() => setFilter(key)}><span className={`admin-os-filter-icon admin-os-filter-icon--${key}`} aria-hidden="true">{key === 'all' ? '◉' : ['at-deadline', 'late'].includes(key) ? '!' : key === 'completed' ? '✓' : '●'}</span>{label}<strong>{panelOrders.filter((order) => matchesFilter(order, key)).length}</strong></button>)}</div>}
       {!completedView && <div className="admin-os-filters">{[['open', 'Abertas'], ['waiting', 'Aguardando'], ['running', 'Em execução'], ['paused', 'Pausadas'], ['finalizing', 'Finalizando'], ['completed', 'Concluídas']].map(([key, label]) => <button className={filter === key ? 'selected' : ''} type="button" key={key} onClick={() => setFilter(key)}>{label}<strong>{orders.filter((order) => key === 'open' ? order.operation.status !== 'completed' : order.operation.status === key).length}</strong></button>)}</div>}
-      <div className="admin-os-table-wrap"><table className="admin-os-table"><thead><tr><th>OS / Serviço</th><th>Cliente</th><th>Operador</th><th>Etapa atual</th><th>Peças concluídas</th><th>Progresso</th><th>Tempo ativo</th><th>{completedView ? 'Conclusão' : 'Tempo restante'}</th><th>Status</th><th></th></tr></thead><tbody>{visible.map((order) => {
+      {completedView && <div className="admin-os-collaborator-filter"><label>Colaborador<select aria-label="Filtrar por colaborador" value={collaborator} onChange={(event) => setCollaborator(event.target.value)}><option value="">Todos</option>{collaboratorOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>{collaborator && <span>{visible.length} {visible.length === 1 ? 'serviço' : 'serviços'}</span>}</div>}
+      <div className="admin-os-table-wrap"><table className="admin-os-table"><thead><tr>{header('OS / Serviço', 'code')}{header('Cliente', 'company')}{header(completedView ? 'Colaboradores' : 'Operador', 'collaborators')}{header('Etapa atual')}{header('Peças concluídas', 'pieces')}{!completedView && <th>Progresso</th>}{header('Tempo ativo', 'active')}{header(completedView ? 'Conclusão' : 'Tempo restante', 'completion')}{header('Status')}{completedView && header('Pedido de compra', 'purchase')}<th></th></tr></thead><tbody>{visible.map((order) => {
         const operation = order.operation
         const due = operation.status === 'completed' ? { key: 'completed', label: 'Concluído', remaining: '—' } : deadlineState(order)
         const pieceProgress = currentPieceProgress(operation, order.quantity)
@@ -1834,19 +2076,14 @@ function AdminServicesView({ collapsed, onToggle, activeNav, onNavigate, onLogou
         const completionAt = [operation.completedAt, operation.completionAcknowledgedAt, order.createdAt].find((value) => Number.isFinite(Date.parse(value)))
         const pendingMaterials = pendingOrderMaterials(order)
         const hasPendingMaterial = !completedView && pendingMaterials.length > 0
-        return <tr key={order.code} className={hasPendingMaterial ? 'admin-os-row--material-pending' : undefined}><td><strong>{order.service}</strong><small>{order.code} · Etiqueta {order.labelNumber}</small>{hasPendingMaterial && <button type="button" className="admin-os-material-alert" title={pendingMaterials.map((material) => `${material.name}: ${material.quantity.toLocaleString('pt-BR')} kg pendentes`).join('; ')} onClick={() => setPendingInspectionCode(order.code)}><TriangleAlert size={16} aria-hidden="true" />Material pendente</button>}</td><td data-label="Cliente">{order.company}</td><td data-label="Operador">{activeEmployeeNames(operation) || '—'}</td><td data-label="Etapa atual">{current ? stageGroupLabel(current) || 'Não definida' : operation.stages.length ? 'Etapas concluídas' : 'Não definida'}</td><td data-label="Peças concluídas">{completedPieces}/{order.quantity}</td>
-          <td data-label="Progresso">{operation.stages.length ? <div className={`admin-os-stage-track admin-os-stage-track--${due.key}${operation.stages.length > 8 ? ' admin-os-stage-track--many' : ''}`} style={{ '--stage-count': operation.stages.length, '--stage-columns': pieceProgress.stages.map((stage, index) => `${String(index + 1).length + stage.name.length + 3}fr`).join(' ') }} role="group" aria-label={`Progresso da peça ${pieceProgress.pieceNumber} de ${order.quantity}. Progresso total: ${operation.progress}%. ${due.label}`}>
-            {pieceProgress.stages.map((stage, index) => {
-              const done = stage.filled && stage.count >= Number(order.quantity)
-              const state = !stage.filled ? 'pending' : done ? 'done' : 'started'
-              const label = done ? 'Concluída em todas as peças' : stage.filled ? `Concluída na peça ${pieceProgress.pieceNumber}` : `Pendente na peça ${pieceProgress.pieceNumber}`
-              return <span className={`admin-os-stage admin-os-stage--${state}`} key={stage.key} title={`${stage.name}: ${stage.count}/${order.quantity} peças · ${label}`}>
-                <span className="admin-os-stage-label">{index + 1}. {stage.name}</span>
-                <span className="admin-os-stage-block" role="img" aria-label={`${stage.name}: ${label}, ${stage.count}/${order.quantity} peças`}>{done && <span className="admin-os-stage-check" aria-hidden="true">✓</span>}</span>
-              </span>
-            })}
-          </div> : <span className="admin-os-stage-empty">Etapas não definidas</span>}</td>
-          <td data-label="Tempo ativo">{duration(totalTime(operation))}</td><td data-label={completedView ? 'Conclusão' : 'Tempo restante'} className={`admin-os-remaining admin-os-remaining--${due.key}`}>{completedView ? completionAt ? new Date(completionAt).toLocaleString('pt-BR', { timeZone: 'America/Bahia', dateStyle: 'short', timeStyle: 'short' }) : '—' : due.remaining}</td><td data-label="Status">{completedView ? <span className="admin-os-status admin-os-status--completed">Concluído</span> : operation.status === 'completed' ? <button className="admin-os-status admin-os-status--completed" type="button" aria-label="Concluído" title="Programar o recebimento e retirar do painel" aria-haspopup="dialog" onClick={() => setSchedulingCode(order.code)}>Concluído</button> : <span className={`admin-os-status admin-os-status--deadline-${due.key}`}>{due.label}</span>}</td><td><button type="button" onClick={() => onSelectOrder(order.code)}>Ver OS</button></td></tr>
+        return <tr key={order.code} className={[hasPendingMaterial ? 'admin-os-row--material-pending' : '', order.code === highlightCode ? 'admin-os-row--reopened' : '', isEmergency(order) ? 'admin-os-row--emergency' : ''].filter(Boolean).join(' ') || undefined}><td><strong>{order.service}</strong><small>{order.code}{order.labelNumber ? ` · Etiqueta ${order.labelNumber}` : ''}{isEmergency(order) && <> · <span className="os-emergency-label">Emergencial</span></>}</small>{hasPendingMaterial && <button type="button" className="admin-os-material-alert" title={pendingMaterials.map((material) => `${material.name}: ${material.quantity.toLocaleString('pt-BR')} kg pendentes`).join('; ')} onClick={() => setPendingInspectionCode(order.code)}><TriangleAlert size={16} aria-hidden="true" />Material pendente</button>}</td><td data-label="Cliente">{order.company}</td><td data-label={completedView ? 'Colaboradores' : 'Operador'}>{(completedView ? collaboratorNames(order) : activeEmployeeNames(operation)) || '—'}</td><td data-label="Etapa atual">{current ? stageGroupLabel(current) || 'Não definida' : operation.stages.length ? 'Etapas concluídas' : 'Não definida'}</td><td data-label="Peças concluídas">{completedPieces}/{order.quantity}</td>
+          {!completedView && <td data-label="Progresso">{operation.stages.length ? <div className={`admin-os-stage-track admin-os-stage-track--${due.key}${operation.stages.length > 8 ? ' admin-os-stage-track--many' : ''}`} style={{ '--stage-count': operation.stages.length, '--stage-columns': pieceProgress.stages.map((stage, index) => `${String(index + 1).length + stage.name.length + 3}fr`).join(' ') }} role="group" aria-label={`Progresso da peça ${pieceProgress.pieceNumber} de ${order.quantity}. Progresso total: ${operation.progress}%. ${due.label}`}>
+            {pieceProgress.stages.map((stage, index) => <span className="admin-os-stage admin-os-stage--pieces" key={stage.key}>
+              <span className="admin-os-stage-label">{index + 1}. {stage.name}</span>
+              <span className="admin-os-stage-block"><PieceTrack count={stage.count} quantity={order.quantity} working={workingStageKeys(operation, order.quantity).has(stage.key)} label={stage.name} /></span>
+            </span>)}
+          </div> : <span className="admin-os-stage-empty">Etapas não definidas</span>}</td>}
+          <td data-label="Tempo ativo">{duration(totalTime(operation))}</td><td data-label={completedView ? 'Conclusão' : 'Tempo restante'} className={`admin-os-remaining admin-os-remaining--${due.key}`}>{completedView ? completionAt ? new Date(completionAt).toLocaleString('pt-BR', { timeZone: 'America/Bahia', dateStyle: 'short', timeStyle: 'short' }) : '—' : due.remaining}</td><td data-label="Status">{completedView ? <span className="admin-os-status admin-os-status--completed">Concluído</span> : operation.status === 'completed' ? <button className="admin-os-status admin-os-status--completed" type="button" aria-label="Concluído" title="Programar o recebimento e retirar do painel" aria-haspopup="dialog" onClick={() => setSchedulingCode(order.code)}>Concluído</button> : <span className={`admin-os-status admin-os-status--deadline-${due.key}`}>{due.label}</span>}</td>{completedView && <td data-label="Pedido de compra">{order.purchaseOrders?.length ? <span className="admin-os-po admin-os-po--yes">Possui ({order.purchaseOrders.length})</span> : <span className="admin-os-po admin-os-po--no">Não possui</span>}</td>}<td><button type="button" onClick={() => onSelectOrder(order.code)}>Ver OS</button></td></tr>
       })}</tbody></table>{!visible.length && <p className="admin-os-empty">{completedView ? 'Nenhum serviço concluído encontrado.' : 'Nenhuma OS real encontrada para este filtro.'}</p>}</div>
       {completedView ? <div className="admin-os-summary admin-os-summary--completed"><div><strong>{panelOrders.length}</strong><span>Serviços concluídos</span></div><div><strong>{panelOrders.reduce((total, order) => total + currentPieceProgress(order.operation, order.quantity).completedPieces, 0)}</strong><span>Peças concluídas</span></div><div><strong>{duration(panelOrders.reduce((total, order) => total + totalTime(order.operation), 0))}</strong><span>Tempo ativo somado</span></div></div> : <div className="admin-os-summary"><div><strong>{orders.filter((order) => order.operation.status !== 'completed').length}</strong><span>OS abertas</span></div><div><strong>{orders.filter((order) => order.operation.status === 'running' || order.operation.status === 'finalizing').length}</strong><span>Em execução</span></div><div><strong>{duration(orders.reduce((total, order) => total + totalTime(order.operation), 0))}</strong><span>Tempo ativo somado</span></div><div><strong>{orders.filter((order) => order.operation.status === 'completed').length}</strong><span>Concluídas</span></div></div>}
       {displayError && <p className="workflow-error" role="alert">{displayError}</p>}
@@ -1857,16 +2094,17 @@ function AdminServicesView({ collapsed, onToggle, activeNav, onNavigate, onLogou
   </div>
 }
 
-function Dashboard({ user, onUpdateUser, collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, offers, orders, selectedOfferId, selectedOrderCode, onRefresh, onSelectOffer, onSelectOrder, onOpenPayables, payableFilters, workflowError, workflowLoading, materialRequestTarget, onRequestLocated }) {
+function Dashboard({ user, onUpdateUser, collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, offers, orders, selectedOfferId, selectedOrderCode, onRefresh, onSelectOffer, onSelectOrder, onCloseOrder, onOrderReopened, reopenedCode, onOpenPayables, payableFilters, workflowError, workflowLoading, materialRequestTarget, onRequestLocated }) {
   const toolProps = { Sidebar, WorkspaceTabs, navigationProps: { collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs } }
   if (['Contas a Pagar', 'Business Intelligence', 'Classificações', 'Fornecedores'].includes(activeNav)) return <PayablesScreen {...toolProps} accountFilters={payableFilters} mode={{ 'Contas a Pagar': 'accounts', 'Business Intelligence': 'bi', 'Classificações': 'classifications', 'Fornecedores': 'suppliers' }[activeNav]} />
   if (activeNav === 'Contas a Receber') return <ReceivablesScreen {...toolProps} />
+  if (activeNav === 'Tesouraria') return <TreasuryScreen {...toolProps} />
+  if (activeNav === 'Baixa em Lote') return <BatchSettlementScreen {...toolProps} />
   if (activeNav === 'Conciliação bancária') return <BankStatementsScreen {...toolProps} />
-  if (activeNav === 'Conciliação bancária com IA') return <AiReconciliationScreen {...toolProps} />
   if (activeNav === 'Relatórios') return <ReportsScreen {...toolProps} />
   if (activeNav === 'Serviços') return <LaborServicesScreen {...toolProps} />
   if (activeNav === 'Configurações') return <AccountSettings {...toolProps} user={user} onUpdateUser={onUpdateUser} />
-  if (activeNav === 'Dashboard') return <AdminHome user={user} orders={orders} offers={offers} workflowError={workflowError} workflowLoading={workflowLoading} onRefresh={onRefresh} onNavigate={onNavigate} onSelectOrder={onSelectOrder} onOpenPayables={onOpenPayables} loadPayables={loadOverviewPayables} loadInventory={loadOverviewInventory} readInventory={readInventory} Sidebar={Sidebar} WorkspaceTabs={WorkspaceTabs} navigationProps={{ collapsed, onToggle, activeNav, onLogout, tabs, onCloseTab, onReorderTabs }} />
+  if (activeNav === 'Dashboard') return <AdminHome user={user} orders={orders} offers={offers} workflowError={workflowError} workflowLoading={workflowLoading} onRefresh={onRefresh} onNavigate={onNavigate} onSelectOrder={onSelectOrder} onOpenPayables={onOpenPayables} loadPayables={user?.role === 'staff' ? null : loadOverviewPayables} loadInventory={loadOverviewInventory} readInventory={readInventory} Sidebar={Sidebar} WorkspaceTabs={WorkspaceTabs} navigationProps={{ collapsed, onToggle, activeNav, onLogout, tabs, onCloseTab, onReorderTabs }} />
   if (activeNav === 'Máquinas') return <Machines collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} />
   if (activeNav === 'Estoque') return <InventoryScreen collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} onSelectOrder={onSelectOrder} />
   if (activeNav === 'Calculadora de pesos e medidas') return <Calculator collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} />
@@ -1876,8 +2114,9 @@ function Dashboard({ user, onUpdateUser, collapsed, onToggle, activeNav, onNavig
   if (activeNav === 'Ofertas e serviços') return <Offers collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} offers={offers} onRefresh={onRefresh} onSelectOffer={onSelectOffer} onSelectOrder={onSelectOrder} workflowError={workflowError} />
   if (activeNav === 'Detalhes da oferta') return <OfferDetailsV2 collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} offer={offers.find((item) => item.id === selectedOfferId)} onRefresh={onRefresh} onSelectOrder={onSelectOrder} />
   if (activeNav === 'Fazer proposta') return <ProposalBuilder collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} offer={offers.find((item) => item.id === selectedOfferId)} onRefresh={onRefresh} onSelectOrder={onSelectOrder} />
-  if (activeNav === 'Pedidos') return <OrdersScreen collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} offers={offers} orders={orders} selectedOrderCode={selectedOrderCode} onSelectOffer={onSelectOffer} onSelectOrder={onSelectOrder} onRefresh={onRefresh} materialRequestTarget={materialRequestTarget} onRequestLocated={onRequestLocated} />
-  return <AdminServicesView key={activeNav} collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} orders={orders} onSelectOrder={onSelectOrder} onRefresh={onRefresh} workflowError={workflowError} />
+  if (activeNav === 'Pedidos') return <OrdersScreen collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} offers={offers} orders={orders} onSelectOffer={onSelectOffer} onSelectOrder={onSelectOrder} onRefresh={onRefresh} materialRequestTarget={materialRequestTarget} onRequestLocated={onRequestLocated} />
+  if (activeNav === 'Ordem de serviço') return <OrderScreen collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} orders={orders} selectedOrderCode={selectedOrderCode} onRefresh={onRefresh} onBack={onCloseOrder} onReopened={onOrderReopened} workflowLoading={workflowLoading} />
+  return <AdminServicesView key={activeNav} highlightCode={reopenedCode} collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} orders={orders} onSelectOrder={onSelectOrder} onRefresh={onRefresh} workflowError={workflowError} />
 }
 function App() {
   const [cpf, setCpf] = useState('')
@@ -1902,6 +2141,8 @@ function App() {
   const [payableFilters, setPayableFilters] = useState(null)
   const [selectedOfferId, setSelectedOfferId] = useState(null)
   const [selectedOrderCode, setSelectedOrderCode] = useState(null)
+  const [orderOrigin, setOrderOrigin] = useState(null)
+  const [reopenedCode, setReopenedCode] = useState(null)
   const [materialRequestTarget, setMaterialRequestTarget] = useState(null)
   const [workflowError, setWorkflowError] = useState('')
   const [workflowLoading, setWorkflowLoading] = useState(true)
@@ -1962,13 +2203,14 @@ function App() {
         if (!user || user.id == null || !user.name) throw new Error('Não foi possível confirmar sua conta.')
         let workspace
         try { workspace = JSON.parse(window.sessionStorage.getItem('gmac-admin-workspace') || 'null') } catch { workspace = null }
-        const validPages = [...navigation.map(([name]) => name), 'Detalhes da oferta', 'Fazer proposta']
+        const validPages = [...navigation.map(([name]) => name), 'Detalhes da oferta', 'Fazer proposta', 'Ordem de serviço'].filter((name) => user.role !== 'staff' || !isFinancialPage(name))
         if (String(workspace?.userId) === String(user.id) && validPages.includes(workspace?.activeNav)) {
           setActiveNav(workspace.activeNav)
           setOpenTabs([...new Set([...(Array.isArray(workspace.tabs) ? workspace.tabs.filter((tab) => validPages.includes(tab)) : []), workspace.activeNav])])
           setSidebarCollapsed(Boolean(workspace.collapsed))
           setSelectedOfferId(typeof workspace.offerId === 'string' ? workspace.offerId : null)
           setSelectedOrderCode(typeof workspace.orderCode === 'string' ? workspace.orderCode : null)
+          setOrderOrigin(validPages.includes(workspace.orderOrigin) ? workspace.orderOrigin : null)
         }
         setAdminUser(user)
         setIsDashboard(true)
@@ -1983,11 +2225,12 @@ function App() {
 
   useEffect(() => {
     if (!isDashboard || !adminUser || !window.sessionStorage.getItem('gmac-admin-token')) return
-    window.sessionStorage.setItem('gmac-admin-workspace', JSON.stringify({ userId: adminUser.id, activeNav, tabs: openTabs, collapsed: sidebarCollapsed, offerId: selectedOfferId, orderCode: selectedOrderCode }))
-  }, [isDashboard, adminUser, activeNav, openTabs, sidebarCollapsed, selectedOfferId, selectedOrderCode])
+    window.sessionStorage.setItem('gmac-admin-workspace', JSON.stringify({ userId: adminUser.id, activeNav, tabs: openTabs, collapsed: sidebarCollapsed, offerId: selectedOfferId, orderCode: selectedOrderCode, orderOrigin }))
+  }, [isDashboard, adminUser, activeNav, openTabs, sidebarCollapsed, selectedOfferId, selectedOrderCode, orderOrigin])
 
   useEffect(() => {
-    if (!isDashboard || !['Serviços em andamento', 'Serviços concluídos', 'Dashboard'].includes(activeNav)) return undefined
+    // Screens of work in progress, finished services and offers refresh by themselves, as the panel does.
+    if (!isDashboard || !['Serviços em andamento', 'Serviços concluídos', 'Ofertas e serviços', 'Dashboard'].includes(activeNav)) return undefined
     return pollWhileVisible(() => refreshWorkflow().catch(() => {}), 10000)
   }, [isDashboard, activeNav])
 
@@ -1997,14 +2240,36 @@ function App() {
   }
 
   function selectOrder(code) {
-    navigateTo('Pedidos')
+    if (activeNav !== 'Ordem de serviço') setOrderOrigin(activeNav)
     setSelectedOrderCode(code)
+    navigateTo('Ordem de serviço')
+  }
+
+  // A reopened OS is back in progress: it goes to the panel of services in progress, highlighted for a few seconds.
+  function orderReopened(code) {
+    setOpenTabs((current) => { const next = current.filter((tab) => tab !== 'Ordem de serviço'); return next.includes('Serviços em andamento') ? next : [...next, 'Serviços em andamento'] })
+    setActiveNav('Serviços em andamento')
+    setSelectedOrderCode(null)
+    setReopenedCode(code)
+  }
+  useEffect(() => {
+    if (!reopenedCode) return undefined
+    const timer = window.setTimeout(() => setReopenedCode(null), 8000)
+    return () => window.clearTimeout(timer)
+  }, [reopenedCode])
+
+  // Leaves the OS screen and returns to the screen it was opened from.
+  function closeOrder() {
+    const origin = orderOrigin || 'Serviços em andamento'
+    setOpenTabs((current) => { const next = current.filter((tab) => tab !== 'Ordem de serviço'); return next.includes(origin) ? next : [...next, origin] })
+    setActiveNav(origin)
+    setSelectedOrderCode(null)
   }
 
   function navigateTo(label, requestTarget = null) {
+    if (adminUser?.role === 'staff' && isFinancialPage(label)) return
     setMaterialRequestTarget(label === 'Pedidos' ? requestTarget : null)
     if (label === 'Contas a Pagar') setPayableFilters(null)
-    if (label === 'Pedidos') setSelectedOrderCode(null)
     setActiveNav(label)
     setOpenTabs((current) => current.includes(label) ? current : [...current, label])
   }
@@ -2104,9 +2369,9 @@ function App() {
     }
   }
 
-  if (operatorToken) return <OperatorDashboard token={operatorToken} onLogout={() => { window.sessionStorage.removeItem('gmac-operator-token'); setOperatorToken(null) }} />
+  if (operatorToken) return <OperatorDashboard token={operatorToken} onLogout={() => { window.sessionStorage.removeItem('gmac-operator-token'); window.sessionStorage.removeItem(operatorEmployeeKey); setOperatorToken(null) }} />
   if (restoringSession) return <main className="session-restore"><img src="/images/gmac-logo-transparent.png" alt="GMAC Metalúrgica" />{restoreError ? <><p role="alert">{restoreError}</p><div><button type="button" className="admin-tool-button admin-tool-button--primary" onClick={() => setRestoreAttempt((value) => value + 1)}>Tentar novamente</button><button type="button" className="admin-tool-button" onClick={logoutAdmin}>Sair</button></div></> : <p role="status">Restaurando sessão...</p>}</main>
-  if (isDashboard) return <ThemeContext.Provider value={appearance}><AdminIdentityContext.Provider value={adminUser}><WorkspaceTabsContext.Provider value={closeAllTabs}><Dashboard user={adminUser} onUpdateUser={setAdminUser} collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((current) => !current)} activeNav={activeNav} onNavigate={navigateTo} onCloseTab={closeTab} onReorderTabs={reorderTabs} tabs={openTabs} onLogout={logoutAdmin} offers={offers} orders={orders} selectedOfferId={selectedOfferId} selectedOrderCode={selectedOrderCode} onRefresh={refreshWorkflow} onSelectOffer={selectOffer} onSelectOrder={selectOrder} onOpenPayables={openPayables} payableFilters={payableFilters} workflowError={workflowError} workflowLoading={workflowLoading} materialRequestTarget={materialRequestTarget} onRequestLocated={setMaterialRequestTarget} /></WorkspaceTabsContext.Provider></AdminIdentityContext.Provider></ThemeContext.Provider>
+  if (isDashboard) return <ThemeContext.Provider value={appearance}><AdminIdentityContext.Provider value={adminUser}><WorkspaceTabsContext.Provider value={closeAllTabs}><Dashboard user={adminUser} onUpdateUser={setAdminUser} collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((current) => !current)} activeNav={activeNav} onNavigate={navigateTo} onCloseTab={closeTab} onReorderTabs={reorderTabs} tabs={openTabs} onLogout={logoutAdmin} offers={offers} orders={orders} selectedOfferId={selectedOfferId} selectedOrderCode={selectedOrderCode} onRefresh={refreshWorkflow} onSelectOffer={selectOffer} onSelectOrder={selectOrder} onCloseOrder={closeOrder} onOrderReopened={orderReopened} reopenedCode={reopenedCode} onOpenPayables={openPayables} payableFilters={payableFilters} workflowError={workflowError} workflowLoading={workflowLoading} materialRequestTarget={materialRequestTarget} onRequestLocated={setMaterialRequestTarget} /></WorkspaceTabsContext.Provider></AdminIdentityContext.Provider></ThemeContext.Provider>
 
   return (
     <main className="login-page">

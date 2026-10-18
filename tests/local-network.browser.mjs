@@ -58,6 +58,9 @@ try {
   await dialog.getByLabel('Quantidade dispon\u00edvel').fill('5')
   await dialog.getByLabel('Valor por kg').fill('20')
   await dialog.getByRole('button', { name: 'Adicionar material', exact: true }).click()
+  // The purchase is offered to the financial module; this check leaves it for later.
+  const skipFinance = (page) => page.getByRole('dialog', { name: 'Lançar esta compra no financeiro?', exact: true }).getByRole('button', { name: 'Não lançar agora', exact: true }).click()
+  await skipFinance(first)
   await dialog.waitFor({ state: 'hidden' })
   const otherRow = second.locator('.inventory-row:not(.inventory-row--header)').filter({ hasText: materialName })
   await otherRow.waitFor({ timeout: 15000 })
@@ -68,6 +71,7 @@ try {
   await entry.getByLabel('Quantidade de entrada').fill('3')
   await entry.getByLabel('Valor por kg').fill('30')
   await entry.getByRole('button', { name: 'Registrar entrada' }).click()
+  await skipFinance(second)
   await entry.waitFor({ state: 'hidden' })
   const row = first.locator('.inventory-row:not(.inventory-row--header)').filter({ hasText: materialName })
   await first.waitForFunction((name) => [...document.querySelectorAll('.inventory-row')].some((row) => row.textContent.includes(name) && row.textContent.includes('8 kg')), materialName, { timeout: 15000 })
@@ -85,7 +89,7 @@ try {
   await second.screenshot({ path: 'test-results/local-network-mobile.png', fullPage: true })
   const employees = (await request('/employees')).items
   assert.ok(employees.length >= 3)
-  const orders = (await request('/operations/orders')).items
+  const orders = (await request('/operations/orders', 'GET', undefined, tokens[0])).items
   assert.ok(orders.length >= 4)
   const histories = await request(`/operations/orders/${encodeURIComponent(orders[0].code)}/events`)
   assert.ok(histories.items.length)

@@ -1,0 +1,261 @@
+import assert from 'node:assert/strict'
+import { mkdir } from 'node:fs/promises'
+import { chromium } from 'playwright'
+import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
+import { todayBahia } from '../server/payableRules.js'
+import { stageLabel } from '../server/serviceStages.js'
+
+const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Gustavo' }
+const fixture = await createWorkflowFixture({ accountsEnv: env })
+const browser = await chromium.launch()
+await mkdir('test-results/treasury', { recursive: true })
+const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } })
+const errors = []
+const today = todayBahia()
+const plain = (text) => text.replace(/\s+/g, ' ').trim()
+page.on('pageerror', (error) => errors.push(error.message))
+page.on('dialog', async (dialog) => { errors.push(`Unexpected browser dialog: ${dialog.type()}`); await dialog.dismiss() })
+try {
+  const token = (await fixture.request('/auth/login', 'POST', { cpf: env.DEMO_ADMIN_CPF, password: env.DEMO_ADMIN_PASSWORD })).data.token
+  const api = (route, method, body) => fixture.request(route, method, body, { Authorization: `Bearer ${token}` })
+  const fuel = (await api('/classifications', 'POST', { name: 'Combustível' })).data.item
+  const energy = (await api('/classifications', 'POST', { name: 'Energia elétrica' })).data.item
+  const station = (await api('/suppliers', 'POST', { name: 'Posto Avenida', document: '12345678000190' })).data.item
+  const utility = (await api('/suppliers', 'POST', { name: 'Companhia de Eletricidade do Estado da Bahia', document: '15139629000194' })).data.item
+  // Ordinary accounts settled the usual way also belong to the cash book.
+  const bill = (await api('/payables', 'POST', { supplierId: utility.id, classificationId: energy.id, description: 'Conta de energia da fábrica', issueDate: today, value: '1840.37', dueDate: today, kind: 'normal' })).data.items[0]
+  await api(`/payables/${bill.id}/pay`, 'POST', { date: today, method: 'boleto' })
+  const invoice = (await api('/receivables', 'POST', { customerName: 'Nestlé Nordeste Alimentos e Bebidas Ltda', customerDocument: '08334818000152', description: 'Manutenção de esteira', value: '5200', dueDate: today, kind: 'single' })).data.item
+  await api(`/receivables/${invoice.id}/receive`, 'POST', { date: today, method: 'transfer' })
+  await api('/payables', 'POST', { supplierId: utility.id, classificationId: energy.id, description: 'Conta ainda em aberto', issueDate: today, value: '900', dueDate: today, kind: 'normal' })
+  for (const [index, value] of ['85.50', '120', '64.90', '310', '45'].entries()) await api('/payables', 'POST', { treasury: true, supplierId: station.id, classificationId: fuel.id, description: `Abastecimento do veículo ${index + 1}`, value, date: today, method: index % 2 ? 'card' : 'pix' })
+  for (const [index, value] of ['450', '1280.40', '95'].entries()) await api('/receivables', 'POST', { treasury: true, customerName: ['Sucata Bahia', 'Oficina do Vale', 'Cliente de balcão'][index], description: ['Venda de sucata', 'Usinagem avulsa', 'Corte de chapa'][index], value, date: today, method: 'pix' })
+  // A finished OS waiting for the administrator.
+  const offer = (await fixture.adminRequest('/offers', 'POST', { ...offerDraft, service: 'Eixo recebido na entrega' })).data.item
+  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { stages: ['painting'], materials: [], laborEntries: [], kind: 'service' })
+  await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', deadline: offer.deadline, serviceValue: 2400 } })
+  const order = (await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')).data.item
+  await fixture.mutateStore((store) => { store.orders.find((item) => item.code === order.code).operation = { status: 'completed', completedAt: new Date().toISOString(), completionAcknowledgedAt: null, accumulatedMs: 3600000, activeSessions: [], stages: [{ key: 'stage-0', name: stageLabel('painting') }], stageCounts: { 'stage-0': 10 } } })
+
+  await page.goto(fixture.url)
+  await page.getByLabel('CPF', { exact: true }).fill(env.DEMO_ADMIN_CPF)
+  await page.getByLabel('Senha', { exact: true }).fill(env.DEMO_ADMIN_PASSWORD)
+  await page.getByRole('button', { name: 'Entrar', exact: true }).click()
+  await page.locator('.admin-home-main').waitFor()
+  const sidebar = page.locator('.sidebar')
+  const navigate = (name) => sidebar.getByRole('button', { name, exact: true }).click()
+  const group = sidebar.getByRole('button', { name: 'Gestão Financeira', exact: true })
+  if (await group.getAttribute('aria-expanded') === 'false') await group.click()
+  const finance = await sidebar.locator('#sidebar-finance-menu .nav-item').allTextContents()
+  assert.deepEqual(finance.slice(0, 3), ['Contas a Pagar', 'Contas a Receber', 'Tesouraria'])
+
+  await navigate('Tesouraria')
+  await page.getByRole('heading', { name: 'Tesouraria', exact: true }).waitFor()
+  const rows = page.locator('.treasury-table tbody tr')
+  const summary = page.locator('.treasury-summary')
+  await rows.filter({ hasText: 'Conta de energia da fábrica' }).waitFor()
+  assert.equal(await rows.count(), 10, 'settled accounts and Tesouraria entries; the open account is not money moved')
+  const metric = async (label) => summary.locator('.payable-metric').filter({ has: page.locator('span', { hasText: new RegExp(`^${label}$`) }) }).locator('strong').innerText()
+  assert.equal((await metric('Entradas')).replace(/\s/g, ' '), 'R$ 7.025,40')
+  assert.equal((await metric('Saídas')).replace(/\s/g, ' '), 'R$ 2.465,77')
+  assert.equal((await metric('Saldo do período')).replace(/\s/g, ' '), 'R$ 4.559,63')
+
+  // Money out, with the form of Contas a Pagar: payment date and way of paying instead of due date and type.
+  await page.getByRole('button', { name: 'Nova saída', exact: true }).click()
+  const exit = page.getByRole('dialog', { name: 'Nova saída', exact: true })
+  assert.equal(await exit.getByLabel('Vencimento', { exact: true }).count(), 0)
+  assert.equal(await exit.getByText('Tipo da conta', { exact: true }).count(), 0)
+  assert.equal(await exit.getByLabel('Data do pagamento', { exact: true }).inputValue(), today)
+  assert.deepEqual(await exit.getByLabel('Forma de pagamento', { exact: true }).locator('option').allTextContents(), ['Pix', 'Boleto', 'Transferência', 'Cartão', 'Dinheiro'])
+  await exit.getByLabel('Fornecedor', { exact: true }).selectOption({ label: 'Posto Avenida' })
+  await exit.getByLabel('Classificação', { exact: true }).selectOption({ label: 'Combustível' })
+  await exit.getByLabel('Descrição', { exact: true }).fill('Diesel do caminhão')
+  await exit.getByLabel('Valor', { exact: true }).fill('200')
+  await exit.getByLabel('Forma de pagamento', { exact: true }).selectOption({ label: 'Dinheiro' })
+  await page.screenshot({ path: 'test-results/treasury/form-saida-1920x1080.png' })
+  await exit.getByRole('button', { name: 'Salvar saída', exact: true }).click()
+  await exit.waitFor({ state: 'detached' })
+  const notice = page.locator('.treasury-notice')
+  assert.match((await notice.innerText()).replace(/\s/g, ' '), /^Saída PAG-\d{6} de R\$ 200,00 registrada\.$/)
+  const diesel = rows.filter({ hasText: 'Diesel do caminhão' })
+  assert.match((await diesel.innerText()).replace(/\s+/g, ' '), /Saída Posto Avenida Diesel do caminhão Combustível Dinheiro Tesouraria − R\$ 200,00/)
+
+  // Money in, with the form of Contas a Receber.
+  await page.getByRole('button', { name: 'Nova entrada', exact: true }).click()
+  const entry = page.getByRole('dialog', { name: 'Nova entrada', exact: true })
+  assert.equal(await entry.getByLabel('Data prevista de recebimento', { exact: true }).count(), 0)
+  assert.equal(await entry.getByText('Tipo do recebimento', { exact: true }).count(), 0)
+  await entry.getByLabel('Nome do pagador', { exact: true }).fill('Ferro Velho Central')
+  await entry.getByLabel('Descrição', { exact: true }).fill('Venda de cavaco')
+  await entry.getByLabel('Valor', { exact: true }).fill('300')
+  await entry.getByLabel('Forma de recebimento', { exact: true }).selectOption({ label: 'Dinheiro' })
+  await entry.getByRole('button', { name: 'Salvar entrada', exact: true }).click()
+  await entry.waitFor({ state: 'detached' })
+  assert.match((await notice.innerText()).replace(/\s/g, ' '), /^Entrada REC-\d{6} de R\$ 300,00 registrada\.$/)
+  assert.match((await rows.filter({ hasText: 'Venda de cavaco' }).innerText()).replace(/\s+/g, ' '), /Entrada Ferro Velho Central Venda de cavaco Dinheiro Tesouraria \+ R\$ 300,00/)
+  assert.equal((await metric('Saldo do período')).replace(/\s/g, ' '), 'R$ 4.659,63')
+
+  // Filters.
+  const type = page.getByRole('group', { name: 'Tipo', exact: true })
+  await type.getByRole('button', { name: /^Saídas/ }).click()
+  assert.equal(await rows.count(), 7)
+  assert.equal(await rows.filter({ hasText: '+ R$' }).count(), 0)
+  await type.getByRole('button', { name: 'Só lançadas aqui', exact: true }).click()
+  assert.equal(await rows.count(), 6)
+  assert.equal(await rows.filter({ hasText: 'Conta de energia' }).count(), 0)
+  await page.getByRole('button', { name: 'Limpar filtros', exact: true }).click()
+  assert.equal(await rows.count(), 12)
+  await page.getByLabel('Busca rápida', { exact: true }).fill('cavaco')
+  assert.equal(await rows.count(), 1)
+  await page.getByLabel('Busca rápida', { exact: true }).fill('')
+  await page.getByRole('group', { name: 'Período', exact: true }).getByRole('button', { name: 'Mês passado', exact: true }).click()
+  await page.getByText('Nenhuma movimentação neste período.', { exact: false }).waitFor()
+  await page.getByRole('group', { name: 'Período', exact: true }).getByRole('button', { name: 'Este mês', exact: true }).click()
+
+  // An entry is corrected without reversing it, and stays paid.
+  await diesel.click()
+  const dieselId = (await diesel.locator('.payable-id').innerText()).trim()
+  const details = page.getByRole('dialog', { name: dieselId, exact: true })
+  await details.getByText('Tesouraria · lançada já paga', { exact: true }).waitFor()
+  await details.getByRole('button', { name: 'Editar', exact: true }).click()
+  const editing = page.getByRole('dialog', { name: `Editar ${dieselId}`, exact: true })
+  assert.equal(await editing.getByLabel('Forma de pagamento', { exact: true }).inputValue(), 'cash')
+  await editing.getByLabel('Valor', { exact: true }).fill('210,50')
+  await editing.getByRole('button', { name: 'Salvar saída', exact: true }).click()
+  await editing.waitFor({ state: 'detached' })
+  assert.match((await notice.innerText()).replace(/\s/g, ' '), /de R\$ 210,50 atualizada\.$/)
+  await rows.filter({ hasText: 'Diesel do caminhão' }).getByText('− R$ 210,50').waitFor()
+  // The receivable side, from its own details window.
+  await rows.filter({ hasText: 'Venda de cavaco' }).click()
+  const cavaco = page.getByRole('dialog').filter({ hasText: 'Ferro Velho Central' })
+  await cavaco.getByText('Tesouraria · lançada já recebida', { exact: true }).waitFor()
+  await cavaco.getByRole('button', { name: 'Excluir', exact: true }).click()
+  await page.getByRole('dialog').filter({ hasText: 'Esta ação não pode ser desfeita.' }).getByRole('button', { name: 'Confirmar', exact: true }).click()
+  await rows.filter({ hasText: 'Venda de cavaco' }).waitFor({ state: 'detached' })
+  assert.equal(await rows.count(), 11)
+
+  // The screen in Full HD, Quad HD and 4K: no horizontal scroll, and the whole table in view.
+  for (const [width, height] of [[1920, 1080], [2560, 1440], [3840, 2160]]) {
+    await page.setViewportSize({ width, height })
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${width}: no page overflow`)
+    assert.ok(await page.locator('.payable-table-scroll').evaluate((element) => element.scrollWidth <= element.clientWidth), `${width}: table fits`)
+    const table = await page.locator('.treasury-table').boundingBox(), main = await page.locator('.admin-tools-main').boundingBox()
+    assert.ok(table.x >= main.x && table.x + table.width <= main.x + main.width, `${width}: table inside the content area`)
+    await page.screenshot({ path: `test-results/treasury/tela-${width}x${height}.png` })
+    await page.getByRole('button', { name: 'Nova entrada', exact: true }).click()
+    const box = await entry.boundingBox()
+    assert.ok(box.x >= 0 && box.y >= 0 && box.x + box.width <= width && box.y + box.height <= height, `${width}: form inside the window`)
+    await page.screenshot({ path: `test-results/treasury/form-entrada-${width}x${height}.png` })
+    await entry.getByRole('button', { name: 'Cancelar', exact: true }).click()
+    await entry.waitFor({ state: 'detached' })
+  }
+  await page.setViewportSize({ width: 390, height: 844 })
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'mobile: no page overflow')
+  for (const label of ['Data inicial', 'Data final']) assert.ok((await page.getByLabel(label, { exact: true }).boundingBox()).width >= 120, `mobile: ${label} shows the whole date`)
+  await page.screenshot({ path: 'test-results/treasury/tela-mobile.png' })
+  await page.setViewportSize({ width: 1920, height: 1080 })
+
+  // Entries posted here show up settled in the account screens.
+  await navigate('Contas a Receber')
+  await page.getByRole('group', { name: 'Situação', exact: true }).getByRole('button', { name: /^Recebidas/ }).click()
+  assert.match((await page.locator('.receivable-table tbody tr').filter({ hasText: 'Venda de sucata' }).innerText()).replace(/\s+/g, ' '), /Tesouraria.*Recebido/)
+
+  // Stock: once the material is in, the purchase is offered to the financial module.
+  await navigate('Estoque')
+  await page.getByRole('button', { name: 'Adicionar material', exact: true }).click()
+  const material = page.getByRole('dialog', { name: 'Adicionar material', exact: true })
+  await material.getByLabel('Nome do material').fill('Aço 1020 para teste')
+  await material.getByLabel('Especificação', { exact: true }).fill('Barra redonda 2"')
+  await material.getByLabel('Quantidade disponível').fill('10')
+  await material.getByLabel('Valor por kg').fill('12.5')
+  await material.getByRole('button', { name: 'Adicionar material', exact: true }).click()
+  const ask = page.getByRole('dialog', { name: 'Lançar esta compra no financeiro?', exact: true })
+  assert.match((await ask.locator('.finance-choice-summary').innerText()).replace(/\s/g, ' '), /Aço 1020 para teste · Barra redonda 2" entrou no estoque: 10 kg × R\$ 12,50 = R\$ 125,00\./)
+  await page.screenshot({ path: 'test-results/treasury/estoque-pergunta.png' })
+  await ask.getByRole('button', { name: /^Pagamento já realizado/ }).click()
+  await ask.waitFor({ state: 'detached' })
+  assert.equal(await exit.getByLabel('Valor', { exact: true }).inputValue(), '125,00')
+  assert.equal(await exit.getByLabel('Descrição', { exact: true }).inputValue(), 'Compra de material: Aço 1020 para teste · Barra redonda 2" (10 kg)')
+  assert.equal(await exit.getByRole('button', { name: 'Salvar e criar outra', exact: true }).count(), 0)
+  await exit.getByLabel('Fornecedor', { exact: true }).selectOption({ label: 'Posto Avenida' })
+  await exit.getByLabel('Classificação', { exact: true }).selectOption({ label: 'Combustível' })
+  await exit.getByRole('button', { name: 'Salvar saída', exact: true }).click()
+  await exit.waitFor({ state: 'detached' })
+  assert.equal(await page.getByRole('dialog').count(), 0)
+  // A stock entry of an existing material asks again; it can also become a bill or be skipped.
+  await page.getByRole('button', { name: 'Adicionar material', exact: true }).click()
+  await material.getByLabel('Nome do material').fill('Aço 1020 para')
+  await material.locator('.material-suggestions button').filter({ hasText: 'Aço 1020 para teste' }).click()
+  await material.getByLabel('Quantidade de entrada (kg)').fill('4')
+  await material.getByRole('button', { name: 'Registrar entrada', exact: true }).click()
+  await ask.getByRole('button', { name: /^Conta a pagar/ }).click()
+  const account = page.getByRole('dialog', { name: 'Nova conta a pagar', exact: true })
+  assert.equal(await account.getByLabel('Valor', { exact: true }).inputValue(), '50,00')
+  await account.getByLabel('Vencimento', { exact: true }).waitFor()
+  await account.getByRole('button', { name: 'Cancelar', exact: true }).click()
+  await account.waitFor({ state: 'detached' })
+  // Editing a material is not a purchase.
+  await page.locator('.inventory-row').filter({ hasText: 'Aço 1020 para teste' }).getByRole('button', { name: /Editar/ }).click()
+  const editMaterial = page.getByRole('dialog', { name: 'Editar material', exact: true })
+  await editMaterial.getByRole('button', { name: 'Salvar alterações', exact: true }).click()
+  await editMaterial.waitFor({ state: 'detached' })
+  assert.equal(await page.getByRole('dialog').count(), 0)
+
+  // Finishing an OS: the administrator says whether the customer still has to pay or has already paid.
+  await navigate('Serviços em andamento')
+  const service = page.locator('.admin-os-table tbody tr').filter({ hasText: order.code })
+  await service.getByRole('button', { name: 'Concluído', exact: true }).click()
+  const schedule = page.getByRole('dialog', { name: 'Recebimento do serviço', exact: true })
+  await schedule.getByText('O cliente já pagou este serviço?', { exact: true }).waitFor()
+  assert.equal(await schedule.locator('form').count(), 0, 'nothing is assumed before the answer')
+  assert.equal(await schedule.getByRole('button', { name: /e concluir$/ }).count(), 0)
+  await schedule.getByRole('button', { name: /^Ainda vai receber/ }).click()
+  await schedule.getByLabel('Data prevista de recebimento', { exact: true }).waitFor()
+  await schedule.getByRole('button', { name: 'Programar e concluir', exact: true }).waitFor()
+  // Scheduling more or less than the OS also shows the difference, as a quiet line (no highlighted box).
+  const difference = schedule.locator('.receivable-difference')
+  assert.equal(await difference.count(), 0)
+  await schedule.getByLabel('Valor a receber', { exact: true }).fill('2.450,00')
+  assert.equal(plain(await difference.innerText()), 'Juros de R$ 50,00 sobre o valor da OS (R$ 2.400,00).')
+  await schedule.getByLabel('Valor a receber', { exact: true }).fill('2.400,00')
+  assert.equal(await difference.count(), 0)
+  await schedule.getByRole('button', { name: /^Já recebido/ }).click()
+  assert.equal(await schedule.getByLabel('Data prevista de recebimento', { exact: true }).count(), 0)
+  assert.equal(await schedule.getByLabel('Valor recebido', { exact: true }).inputValue(), '2.400,00')
+  assert.equal(await schedule.getByLabel('Data do recebimento', { exact: true }).inputValue(), today)
+  await schedule.getByLabel('Forma de recebimento', { exact: true }).selectOption({ label: 'Transferência' })
+  // More or less than the value of the OS: the difference is interest or discount.
+  assert.equal(await schedule.locator('.payable-final').count(), 0, 'the difference is a quiet line, not a highlighted box')
+  assert.equal(await difference.count(), 0)
+  await schedule.getByLabel('Valor recebido', { exact: true }).fill('2.350,00')
+  assert.equal(plain(await difference.innerText()), 'Desconto de R$ 50,00 sobre o valor da OS (R$ 2.400,00).')
+  await schedule.getByLabel('Valor recebido', { exact: true }).fill('2.450,00')
+  assert.equal(plain(await difference.innerText()), 'Juros de R$ 50,00 sobre o valor da OS (R$ 2.400,00).')
+  await page.screenshot({ path: 'test-results/treasury/conclusao-os.png' })
+  await schedule.getByRole('button', { name: 'Registrar e concluir', exact: true }).click()
+  await service.waitFor({ state: 'detached' })
+  await navigate('Tesouraria')
+  assert.match((await rows.filter({ hasText: order.code }).first().innerText()).replace(/\s+/g, ' '), /Entrada Teste de fluxo .*Transferência Tesouraria .*\+ R\$ 2\.450,00/)
+  // The OS keeps its own value; the R$ 50,00 beyond it is interest.
+  const posted = (await api('/receivables')).data.items.find((item) => item.orderCode === order.code)
+  assert.deepEqual([posted.valueCents, posted.receipt.interestCents, posted.receipt.discountCents, posted.receipt.finalCents], [240000, 5000, 0, 245000])
+  await rows.filter({ hasText: order.code }).first().click()
+  const entryDetails = page.getByRole('dialog', { name: posted.id, exact: true })
+  await entryDetails.getByRole('button', { name: 'Editar', exact: true }).click()
+  const entryForm = page.getByRole('dialog', { name: `Editar ${posted.id}`, exact: true })
+  assert.deepEqual([await entryForm.getByLabel('Valor da OS', { exact: true }).inputValue(), await entryForm.getByLabel('Valor recebido', { exact: true }).inputValue()], ['2.400,00', '2.450,00'])
+  assert.equal(plain(await entryForm.locator('.payable-final').innerText()), 'R$ 2.400,00 + R$ 50,00 de juros = R$ 2.450,00')
+  await entryForm.getByLabel('Valor recebido', { exact: true }).fill('2.400,00')
+  await entryForm.getByRole('button', { name: 'Salvar entrada', exact: true }).click()
+  await entryForm.waitFor({ state: 'detached' })
+  assert.equal((await api('/receivables')).data.items.find((item) => item.id === posted.id).receipt.finalCents, 240000)
+  assert.equal(await rows.filter({ hasText: 'Compra de material: Aço 1020 para teste' }).count(), 1)
+  assert.deepEqual(errors, [])
+  console.log('Treasury passed: menu entry, cash book with settled accounts, money in/out with the account forms, filters, in-place edit, direct removal, Full HD/Quad HD/4K/mobile layout, stock purchase question and OS received on completion.')
+} catch (error) {
+  await page.screenshot({ path: 'test-results/treasury/failure.png' })
+  throw error
+} finally {
+  await browser.close()
+  await fixture.close()
+}

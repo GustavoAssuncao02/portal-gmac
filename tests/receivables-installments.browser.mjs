@@ -18,10 +18,10 @@ try {
   const token = (await fixture.request('/auth/login', 'POST', { cpf: env.DEMO_ADMIN_CPF, password: env.DEMO_ADMIN_PASSWORD })).data.token
   const api = (route, method, body) => fixture.request(route, method, body, { Authorization: `Bearer ${token}` })
   await api('/clients', 'POST', { name: 'Nestlé Nordeste Alimentos e Bebidas Ltda', documentType: 'cnpj', document: '08334818000152', email: 'compras.nestle@clientes-teste.invalid' })
-  const offer = (await fixture.request('/offers', 'POST', offerDraft)).data.item
-  await fixture.request(`/offers/${offer.id}/resources`, 'PUT', { stages: ['painting'], materials: [], laborEntries: [], kind: 'service' })
-  await fixture.request(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', deadline: offer.deadline, serviceValue: 9000 } })
-  const order = (await fixture.request(`/offers/${offer.id}/accept`, 'POST')).data.item
+  const offer = (await fixture.adminRequest('/offers', 'POST', offerDraft)).data.item
+  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { stages: ['painting'], materials: [], laborEntries: [], kind: 'service' })
+  await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', deadline: offer.deadline, serviceValue: 9000 } })
+  const order = (await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')).data.item
   await fixture.mutateStore((store) => { store.orders.find((item) => item.code === order.code).operation = { status: 'completed', completedAt: new Date().toISOString(), completionAcknowledgedAt: null, accumulatedMs: 0, activeSession: null, stages: [{ key: 'stage-0', name: stageLabel('painting') }], stageCounts: { 'stage-0': 10 } } })
 
   await page.goto(fixture.url)
@@ -29,6 +29,8 @@ try {
   await page.getByLabel('Senha', { exact: true }).fill(env.DEMO_ADMIN_PASSWORD)
   await page.getByRole('button', { name: 'Entrar', exact: true }).click()
   await page.locator('.admin-home-main').waitFor()
+  // The financial entries live in a menu group that starts collapsed.
+  await page.locator('.sidebar').getByRole('button', { name: 'Gestão Financeira', exact: true }).click()
   await page.locator('.sidebar').getByRole('button', { name: 'Contas a Receber', exact: true }).click()
   await page.getByRole('button', { name: 'Nova conta a receber', exact: true }).click()
   const form = page.getByRole('dialog', { name: 'Nova conta a receber', exact: true })
@@ -74,7 +76,8 @@ try {
   // Finishing an OS can also schedule installments.
   await page.locator('.sidebar').getByRole('button', { name: 'Serviços em andamento', exact: true }).click()
   await page.locator('.admin-os-table tbody tr').filter({ hasText: order.code }).getByRole('button', { name: 'Concluído', exact: true }).click()
-  const schedule = page.getByRole('dialog', { name: 'Programar recebimento', exact: true })
+  const schedule = page.getByRole('dialog', { name: 'Recebimento do serviço', exact: true })
+  await schedule.getByRole('button', { name: /^Ainda vai receber/ }).click()
   await schedule.getByRole('radio', { name: 'Recebimento parcelado', exact: true }).check()
   assert.equal(await schedule.getByLabel('Valor total a receber', { exact: true }).inputValue(), '9.000,00')
   await schedule.getByLabel('Data da 1ª parcela', { exact: true }).fill(first)

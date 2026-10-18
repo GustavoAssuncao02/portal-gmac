@@ -2,18 +2,18 @@ import express from 'express'
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { dataDirectory } from './dataDirectory.js'
 import { readStore, mutateStore } from './offers.js'
-import { parseOfx, normalizeText, operationLabels } from './ofx.js'
+import { parseOfx, normalizeText, operationLabels, INTERNAL_OPERATIONS } from './ofx.js'
 import { DAY } from './payableRules.js'
 
-const directory = path.join(path.dirname(fileURLToPath(import.meta.url)), 'data', 'bank-statements')
+const directory = path.join(dataDirectory, 'bank-statements')
 // The portal serves a single company; the scope keeps FITID keys from colliding if more companies are added.
 export const companyScope = () => process.env.COMPANY_SCOPE || 'gmac'
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), { status }) }
 const money = (cents) => (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }).replace(/ /g, ' ')
 const dateLabel = (value) => value ? value.split('-').reverse().join('/') : ''
-const init = (store) => { store.bankAccounts ||= []; store.bankImports ||= []; store.bankTransactions ||= []; store.bankBalances ||= []; store.bankConflicts ||= []; store.bankEvents ||= []; store.bankSettings ||= { dateToleranceDays: 3 }; store.payables ||= []; store.receivables ||= [] }
+const init = (store) => { store.bankAccounts ||= []; store.bankImports ||= []; store.bankTransactions ||= []; store.bankBalances ||= []; store.bankConflicts ||= []; store.bankEvents ||= []; store.bankClosings ||= []; store.bankSettings ||= { dateToleranceDays: 3 }; store.payables ||= []; store.receivables ||= [] }
 const transactionKey = (account, fitId) => [account.companyScope, account.bankId, account.accountId, fitId].join('|')
 const daysBetween = (a, b) => Math.round(Math.abs(Date.parse(a) - Date.parse(b)) / DAY)
 
@@ -129,7 +129,8 @@ export function applyImport(store, parsed, file, actor) {
   const warnings = parsed.warnings.map((warning) => ({ ...warning, level: 'info' }))
   const { validation } = parsed
   if (validation.differenceCents) warnings.unshift({ code: 'balance-divergence', level: 'warning', message: `Divergência de saldo do extrato: ${money(Math.abs(validation.differenceCents))}.`, detail: `Saldo informado pelo banco (LEDGERBAL) ${money(validation.ledgerCents)} − saldo calculado pelas movimentações ${money(validation.computedFinalCents)} = ${money(validation.differenceCents)}. Nenhum lançamento de ajuste foi criado.` })
-  if (validation.openingCents == null) warnings.push({ code: 'no-opening-balance', level: 'warning', message: 'O extrato não traz o registro SALDO ANTERIOR; os saldos diários não puderam ser validados.' })
+  // Some banks (Sicoob) send no balance records at all, only the final LEDGERBAL: that is the format, not a fault of the file.
+  if (validation.openingCents == null) warnings.push(parsed.balances.length ? { code: 'no-opening-balance', level: 'warning', message: 'O extrato não traz o registro SALDO ANTERIOR; os saldos diários não puderam ser validados.' } : { code: 'no-opening-balance', level: 'info', message: 'Este banco não envia saldo anterior nem saldos diários no OFX; o fechamento por dia não pode ser conferido, só o saldo final informado.' })
   for (const day of validation.days.filter((row) => row.matches === false)) warnings.push({ code: 'daily-balance-divergence', level: 'warning', message: `Saldo do dia ${dateLabel(day.date)}: calculado ${money(day.closingCents)}, informado ${money(day.reportedCents)}.` })
   if (counts.conflicts) warnings.push({ code: 'conflicts', level: 'warning', message: `${counts.conflicts} registro${counts.conflicts === 1 ? '' : 's'} com FITID já importado e dados diferentes. Nada foi substituído; confira os conflitos.` })
   const sameFile = store.bankImports.filter((row) => row.fileSha256 === file.sha256).map((row) => row.id)
@@ -144,13 +145,41 @@ function transactionView(store, row) {
   return { ...row, operationLabel: operationLabels[row.operationType] || row.operationType, reconciliation }
 }
 
+// Closing of a reconciliation: one per bank account and month. Closed, the links of that month are locked; reopening (with a
+// reason) unlocks them until it is closed again; deleting removes only the closing record, the links stay.
+export const monthOf = (date) => String(date || '').slice(0, 7)
+export const monthLabel = (month) => new Date(`${month}-15T12:00:00Z`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+const closingFor = (store, bankAccountId, month) => (store.bankClosings || []).find((row) => row.bankAccountId === bankAccountId && row.month === month) || null
+export function assertMonthOpen(store, transaction) {
+  const closing = closingFor(store, transaction.bankAccountId, monthOf(transaction.bankDate))
+  if (closing?.status === 'closed') fail(`A conciliação de ${monthLabel(closing.month)} desta conta está encerrada (${closing.id}). Reabra para alterar.`, 409)
+}
+export function closingSnapshot(store, bankAccountId, month) {
+  const rows = store.bankTransactions.filter((row) => row.bankAccountId === bankAccountId && monthOf(row.bankDate) === month).sort((a, b) => a.bankDate.localeCompare(b.bankDate) || (a.position ?? 0) - (b.position ?? 0))
+  const items = rows.map((row) => {
+    const view = transactionView(store, row)
+    return { transactionId: row.id, fitId: row.fitId, bankDate: row.bankDate, amountCents: row.amountCents, direction: row.direction, memo: row.memo, counterpartyName: row.counterpartyName, operationType: row.operationType, operationLabel: view.operationLabel, reconciliation: row.reconciliation ? { kind: row.reconciliation.kind, recordId: row.reconciliation.recordId, recordName: view.reconciliation.record?.name || null, automatic: Boolean(row.reconciliation.automatic) } : null }
+  })
+  const open = items.filter((row) => !row.reconciliation && row.direction !== 'zero')
+  const sum = (list) => list.reduce((total, row) => total + row.amountCents, 0)
+  // Applications and redemptions of the company's own investment need no link, so they do not ask for a justification.
+  const internal = open.filter((row) => INTERNAL_OPERATIONS.has(row.operationType))
+  return { items, summary: { movements: items.length, reconciled: items.filter((row) => row.reconciliation).length, pending: open.length - internal.length, internal: internal.length, creditsCents: sum(items.filter((row) => row.amountCents > 0)), debitsCents: -sum(items.filter((row) => row.amountCents < 0)), pendingCents: open.filter((row) => !internal.includes(row)).reduce((total, row) => total + Math.abs(row.amountCents), 0) } }
+}
+// Movements imported into a closed month after it was closed are pointed out on the closing.
+function closingView(store, closing) {
+  const known = new Set(closing.items.map((row) => row.transactionId))
+  const added = store.bankTransactions.filter((row) => row.bankAccountId === closing.bankAccountId && monthOf(row.bankDate) === closing.month && !known.has(row.id)).length
+  return { ...closing, monthLabel: monthLabel(closing.month), addedAfterClose: added }
+}
+
 export default function createBankStatementsRouter(accounts, requireAdmin) {
   const router = express.Router()
-  router.use('/bank-statements', requireAdmin, async (request, _response, next) => { try { request.actor = (await accounts.admins()).find((item) => String(item.id) === String(request.adminId)); if (!request.actor) fail('Administrador não encontrado.', 401); next() } catch (error) { next(error) } })
+  router.use('/bank-statements', requireAdmin, async (request, _response, next) => { try { request.actor = await accounts.account(request.adminId); if (!request.actor) fail('Administrador não encontrado.', 401); next() } catch (error) { next(error) } })
   const handle = (fn) => async (req, res, next) => { try { await fn(req, res) } catch (error) { next(error) } }
   router.get('/bank-statements', handle(async (_req, res) => {
     const store = await readStore(); init(store)
-    res.json({ accounts: store.bankAccounts, imports: [...store.bankImports].reverse().map(({ header, ...row }) => ({ ...row, warnings: visibleWarnings(row) })), transactions: store.bankTransactions.map((row) => transactionView(store, row)), balances: store.bankBalances, conflicts: store.bankConflicts, settings: store.bankSettings, operationLabels })
+    res.json({ accounts: store.bankAccounts, imports: [...store.bankImports].reverse().map(({ header, ...row }) => ({ ...row, warnings: visibleWarnings(row) })), transactions: store.bankTransactions.map((row) => transactionView(store, row)), balances: store.bankBalances, conflicts: store.bankConflicts, closings: [...store.bankClosings].sort((a, b) => b.month.localeCompare(a.month) || a.id.localeCompare(b.id)).map((row) => closingView(store, row)), settings: store.bankSettings, operationLabels })
   }))
   router.post('/bank-statements/import', express.raw({ type: 'application/octet-stream', limit: '10mb' }), handle(async (req, res) => {
     if (!Buffer.isBuffer(req.body) || !req.body.length) fail('Selecione um arquivo OFX com até 10 MB.')
@@ -184,6 +213,7 @@ export default function createBankStatementsRouter(accounts, requireAdmin) {
       const row = store.bankTransactions.find((entry) => entry.id === req.params.id)
       if (!row) fail('Movimentação não encontrada.', 404)
       if (row.reconciliation) fail('Esta movimentação já está conciliada.', 409)
+      assertMonthOpen(store, row)
       const kind = row.direction === 'out' ? 'payable' : row.direction === 'in' ? 'receivable' : null
       if (!kind || req.body.kind !== kind) fail(row.direction === 'out' ? 'Saídas só podem ser conciliadas com contas a pagar.' : 'Entradas só podem ser conciliadas com contas a receber.')
       const record = financialRecords(store, kind).find((entry) => entry.id === req.body.recordId)
@@ -198,17 +228,98 @@ export default function createBankStatementsRouter(accounts, requireAdmin) {
     })
     res.json({ item })
   }))
+  // "Conciliar tudo": every open movement is tied to a free record of the exact same value. Among several, the strongest
+  // evidence wins, then the nearest date; each record is used once, and earlier movements choose first. Applications and
+  // redemptions of the company's own investment (RDC) are left out: a same-value bill would be a coincidence.
+  router.post('/bank-statements/reconcile-all', handle(async (req, res) => {
+    const result = await mutateStore((store) => {
+      init(store)
+      const at = new Date().toISOString(), items = []
+      const taken = new Set(store.bankTransactions.filter((row) => row.reconciliation).map((row) => `${row.reconciliation.kind}:${row.reconciliation.recordId}`))
+      const records = { payable: financialRecords(store, 'payable'), receivable: financialRecords(store, 'receivable') }
+      const locked = (row) => closingFor(store, row.bankAccountId, monthOf(row.bankDate))?.status === 'closed'
+      const open = store.bankTransactions.filter((row) => !row.reconciliation && ['in', 'out'].includes(row.direction) && !INTERNAL_OPERATIONS.has(row.operationType) && !locked(row)).sort((a, b) => a.bankDate.localeCompare(b.bankDate) || (a.position ?? 0) - (b.position ?? 0))
+      for (const row of open) {
+        const kind = row.direction === 'out' ? 'payable' : 'receivable', amount = Math.abs(row.amountCents)
+        const evidence = reconciliationCandidates(store, row).candidates.find((entry) => !taken.has(`${kind}:${entry.id}`))
+        const nearest = (record) => Math.min(...record.dates.map((item) => daysBetween(item.date, row.bankDate)))
+        const record = evidence ? records[kind].find((entry) => entry.id === evidence.id) : records[kind].filter((entry) => entry.valueCents === amount && !taken.has(`${kind}:${entry.id}`)).sort((a, b) => nearest(a) - nearest(b) || a.id.localeCompare(b.id))[0]
+        if (!record) continue
+        taken.add(`${kind}:${record.id}`)
+        row.reconciliation = { kind, recordId: record.id, level: evidence?.level ?? null, reasons: evidence?.reasons || [`Valor exato: ${money(amount)}`, 'Conciliado por "Conciliar tudo" pelo valor'], at, userId: req.actor.id, userName: req.actor.name, automatic: true }
+        event(store, req.actor, 'reconciled', { transactionId: row.id, fitId: row.fitId, details: { kind, recordId: record.id, bulk: true } })
+        items.push(transactionView(store, row))
+      }
+      return items
+    })
+    res.json({ items: result })
+  }))
   router.delete('/bank-statements/transactions/:id/reconcile', handle(async (req, res) => {
     const item = await mutateStore((store) => {
       init(store)
       const row = store.bankTransactions.find((entry) => entry.id === req.params.id)
       if (!row) fail('Movimentação não encontrada.', 404)
       if (!row.reconciliation) fail('Esta movimentação não está conciliada.', 409)
+      assertMonthOpen(store, row)
       event(store, req.actor, 'unreconciled', { transactionId: row.id, fitId: row.fitId, details: { ...row.reconciliation } })
       row.reconciliation = null
       return transactionView(store, row)
     })
     res.json({ item })
+  }))
+  // Closes (or closes again, after a reopening) the reconciliation of an account in a month, keeping a picture of every movement.
+  router.post('/bank-statements/closings', handle(async (req, res) => {
+    const item = await mutateStore((store) => {
+      init(store)
+      const account = store.bankAccounts.find((row) => row.id === req.body.bankAccountId)
+      if (!account) fail('Conta bancária não encontrada.', 404)
+      const month = String(req.body.month || '')
+      if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) fail('Informe o mês da conciliação.')
+      const { items, summary } = closingSnapshot(store, account.id, month)
+      if (!items.length) fail(`Não há movimentações desta conta em ${monthLabel(month)}.`)
+      const note = String(req.body.note ?? '').trim().slice(0, 2000)
+      if (summary.pending && note.length < 10) fail(`Há ${summary.pending} movimentaç${summary.pending === 1 ? 'ão' : 'ões'} sem conciliação. Explique as pendências (mínimo de 10 caracteres) para encerrar.`)
+      const at = new Date().toISOString(), by = { userId: req.actor.id, userName: req.actor.name }
+      let closing = closingFor(store, account.id, month)
+      if (closing?.status === 'closed') fail(`A conciliação de ${monthLabel(month)} já está encerrada (${closing.id}).`, 409)
+      if (!closing) {
+        store.bankClosingSequence = (store.bankClosingSequence || 0) + 1
+        closing = { id: `CON-${String(store.bankClosingSequence).padStart(6, '0')}`, bankAccountId: account.id, month, version: 0, history: [] }
+        store.bankClosings.push(closing)
+      }
+      Object.assign(closing, { status: 'closed', version: closing.version + 1, note, summary, items, closedAt: at, ...by })
+      closing.history.push({ type: closing.version === 1 ? 'closed' : 'reclosed', at, ...by, note, summary })
+      event(store, req.actor, 'closing_closed', { closingId: closing.id, details: { month, version: closing.version, ...summary } })
+      return closingView(store, closing)
+    })
+    res.json({ item })
+  }))
+  router.post('/bank-statements/closings/:id/reopen', handle(async (req, res) => {
+    const item = await mutateStore((store) => {
+      init(store)
+      const closing = store.bankClosings.find((row) => row.id === req.params.id)
+      if (!closing) fail('Conciliação não encontrada.', 404)
+      if (closing.status !== 'closed') fail('Esta conciliação já está reaberta.', 409)
+      const reason = String(req.body.reason ?? '').trim().slice(0, 1000)
+      if (reason.length < 10) fail('Informe o motivo da reabertura (mínimo de 10 caracteres).')
+      const at = new Date().toISOString()
+      Object.assign(closing, { status: 'reopened', reopenedAt: at, reopenedBy: req.actor.name, reopenReason: reason })
+      closing.history.push({ type: 'reopened', at, userId: req.actor.id, userName: req.actor.name, reason })
+      event(store, req.actor, 'closing_reopened', { closingId: closing.id, details: { month: closing.month, reason } })
+      return closingView(store, closing)
+    })
+    res.json({ item })
+  }))
+  router.delete('/bank-statements/closings/:id', handle(async (req, res) => {
+    await mutateStore((store) => {
+      init(store)
+      const closing = store.bankClosings.find((row) => row.id === req.params.id)
+      if (!closing) fail('Conciliação não encontrada.', 404)
+      store.bankClosings = store.bankClosings.filter((row) => row.id !== closing.id)
+      // The audit keeps what was deleted; the links of the movements are not touched.
+      event(store, req.actor, 'closing_deleted', { closingId: closing.id, details: { month: closing.month, status: closing.status, version: closing.version, summary: closing.summary, history: closing.history } })
+    })
+    res.json({ ok: true })
   }))
   router.post('/bank-statements/conflicts/:id/review', handle(async (req, res) => {
     const item = await mutateStore((store) => {

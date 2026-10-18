@@ -82,6 +82,8 @@ try {
     assert.equal(await entry.getByLabel(/^Quantidade de entrada/).inputValue(), '6')
     await entry.getByRole('button', { name: 'Registrar entrada', exact: true }).click()
     await entry.waitFor({ state: 'hidden' })
+    // The purchase is offered to the financial module; here it is left for later.
+    await page.getByRole('dialog', { name: 'Lançar esta compra no financeiro?', exact: true }).getByRole('button', { name: 'Não lançar agora', exact: true }).click()
     await stockRow.getByText('Material solicitado adicionado', { exact: true }).waitFor()
     assert.equal(writes.length, 1)
     assert.equal(items[0].quantity, 7, 'Manual stock requests retain all incoming kg in stock')

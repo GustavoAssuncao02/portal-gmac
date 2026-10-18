@@ -6,11 +6,11 @@ const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DE
 const fixture = await createWorkflowFixture({ accountsEnv: env })
 const browser = await chromium.launch()
 try {
-  const offer = (await fixture.request('/offers', 'POST', offerDraft)).data.item
+  const offer = (await fixture.adminRequest('/offers', 'POST', offerDraft)).data.item
   const material = { id: 'request-test', name: 'Titanio solicitado', detail: 'Chapa 10mm', quantity: 12.5, unitPrice: 20, stockStatus: 'unknown' }
-  assert.equal((await fixture.request(`/offers/${offer.id}/resources`, 'PUT', { materials: [material], laborEntries: [], stages: ['painting'], kind: 'service' })).status, 200)
-  await fixture.request(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', title: 'Teste', serviceValue: 250, deadline: offer.deadline } })
-  const accepted = await fixture.request(`/offers/${offer.id}/accept`, 'POST')
+  assert.equal((await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [material], laborEntries: [], stages: ['painting'], kind: 'service' })).status, 200)
+  await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', title: 'Teste', serviceValue: 250, deadline: offer.deadline } })
+  const accepted = await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')
   assert.equal(accepted.status, 201)
   const order = accepted.data.item
   for (const viewport of [{ width: 1920, height: 1080 }, { width: 393, height: 852 }]) {

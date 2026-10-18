@@ -18,6 +18,9 @@ try {
   await page.getByLabel('Senha', { exact: true }).fill('test-menu')
   await page.getByRole('button', { name: 'Entrar', exact: true }).click()
   await page.getByRole('heading', { name: 'Bem-vindo, Gustavo', exact: true }).waitFor()
+  // The groups of the side menu start closed; one click opens them.
+  assert.equal(await group.getAttribute('aria-expanded'), 'false')
+  await group.click()
   assert.equal(await group.getAttribute('aria-expanded'), 'true')
   assert.deepEqual(await sidebar.locator('#sidebar-cadastros-menu .nav-item').allTextContents(), members)
   for (const name of members) {
@@ -40,7 +43,7 @@ try {
   await page.getByRole('heading', { name: 'M\u00e1quinas', exact: true }).waitFor()
   assert.equal(await group.getAttribute('aria-expanded'), 'false')
   await page.getByRole('tab', { name: 'Clientes', exact: true }).click()
-  await page.getByRole('heading', { name: 'Cadastro de cliente', exact: true }).waitFor()
+  await page.getByRole('heading', { name: 'Clientes', exact: true }).waitFor()
   assert.equal(await group.getAttribute('aria-expanded'), 'true')
   await navigate('Dashboard')
   await sidebar.getByRole('button', { name: 'Recolher menu lateral', exact: true }).click()

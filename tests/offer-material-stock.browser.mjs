@@ -17,9 +17,9 @@ await page.addInitScript((items) => {
 }, inventory)
 await mkdir('test-results', { recursive: true })
 try {
-  const offer = (await fixture.request('/offers', 'POST', offerDraft)).data.item
+  const offer = (await fixture.adminRequest('/offers', 'POST', offerDraft)).data.item
   const material = { inventoryId: 1, name: inventory[0].name, detail: inventory[0].detail, unitPrice: 38.4, stockAvailable: 24, stockStatus: 'available', purchaseQuantity: 0, icon: '\u25b0' }
-  await fixture.request(`/offers/${offer.id}/resources`, 'PUT', { materials: [{ ...material, id: 'first', quantity: 20 }, { ...material, id: 'second', quantity: 5 }], laborEntries: [], stages: ['painting'], kind: 'service' })
+  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [{ ...material, id: 'first', quantity: 20 }, { ...material, id: 'second', quantity: 5 }], laborEntries: [], stages: ['painting'], kind: 'service' })
   await page.route('**/api/inventory**', (route) => {
     if (route.request().method() !== 'GET') inventoryWrites.push(route.request().method())
     return route.fulfill({ status: 200, json: { items: inventory, movements: [] } })
@@ -44,7 +44,7 @@ try {
   await form.getByRole('button', { name: 'Adicionar material', exact: true }).click()
   await page.waitForFunction(() => document.querySelectorAll('.offer-materials-list .material-stock-status').length === 2 && !document.querySelector('.offer-proposal-button').disabled)
   assert.deepEqual(await badges.allTextContents(), ['Falta: 1 kg', 'Falta: 1 kg'])
-  const saved = (await fixture.request('/offers')).data.items[0]
+  const saved = (await fixture.adminRequest('/offers', 'GET', undefined, fixture.admin)).data.items[0]
   assert.deepEqual(saved.resources.materials.map((row) => row.purchaseQuantity), [0, 1])
   assert.equal(purchaseMaterialRequests([saved], [])[0].quantity, 1)
   await page.screenshot({ path: 'test-results/offer-material-shared-stock.png', fullPage: true })

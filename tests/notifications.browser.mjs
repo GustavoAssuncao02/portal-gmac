@@ -4,7 +4,7 @@ import { createWorkflowFixture } from './workflowFixture.js'
 
 const modulePath = process.env.PLAYWRIGHT_MODULE
 const { chromium } = await import(modulePath ? pathToFileURL(modulePath).href : 'playwright')
-const fixture = await createWorkflowFixture()
+const fixture = await createWorkflowFixture({ accountsEnv: { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste', DEMO_ADMIN_NAME: 'Gustavo' } })
 const browser = await chromium.launch({ headless: true })
 const page = await browser.newPage({ viewport: { width: 1366, height: 900 } })
 const errors = []
@@ -19,7 +19,7 @@ async function expectClosed() {
 }
 
 try {
-  await page.route('**/api/auth/login', (route) => route.fulfill({ status: 200, json: { user: { id: 1, name: 'Gustavo', cpf: '12345678901' } } }))
+  await page.route('**/api/auth/login', (route) => route.fulfill({ status: 200, json: { user: { id: 1, name: 'Gustavo', cpf: '12345678901' }, token: fixture.adminToken } }))
   await page.goto(fixture.url)
   await page.getByLabel('CPF', { exact: true }).fill('12345678901')
   await page.getByLabel('Senha', { exact: true }).fill('teste')
@@ -32,10 +32,13 @@ try {
     await page.evaluate(() => scrollTo(0, 0))
     await bell.scrollIntoViewIfNeeded()
     const triggerBox = await bell.boundingBox()
+    // On phones the clock is hidden (mobile.css); where it shows, the bell stays before it.
     const clockBox = await page.locator('.workspace-tabs-clock').boundingBox()
-    assert.ok(triggerBox.x + triggerBox.width <= clockBox.x, 'Bell stays before clock')
-    assert.ok(triggerBox.y >= 0 && triggerBox.y + triggerBox.height <= 44, 'Bell stays inside top bar')
-    assert.ok(clockBox.x + clockBox.width <= width, 'Clock fits viewport')
+    if (clockBox) assert.ok(triggerBox.x + triggerBox.width <= clockBox.x, 'Bell stays before clock')
+    // The phone header is taller and its buttons have a 44px touch target.
+    assert.ok(triggerBox.y >= 0 && triggerBox.y + triggerBox.height <= (width < 760 ? 56 : 44), 'Bell stays inside top bar')
+    if (clockBox) assert.ok(clockBox.x + clockBox.width <= width, 'Clock fits viewport')
+    else assert.ok(triggerBox.x + triggerBox.width <= width, 'Bell fits viewport')
     await bell.click()
     await popup.waitFor()
     await page.waitForFunction(() => document.querySelector('.notifications-trigger')?.getAttribute('aria-expanded') === 'true')
@@ -75,7 +78,10 @@ try {
   await page.keyboard.press('Escape')
   await page.setViewportSize({ width: 1366, height: 900 })
   for (const screen of ['Serviços em andamento', 'Estoque', 'Funcionários', 'Início']) {
-    await page.locator('.sidebar').getByRole('button', { name: screen, exact: true }).click()
+    const item = page.locator('.sidebar').getByRole('button', { name: screen, exact: true })
+    // Funcionários is inside the "Cadastros" group of the side menu.
+    if (!await item.isVisible()) await page.locator('.sidebar').getByRole('button', { name: 'Cadastros', exact: true }).click()
+    await item.click()
     await bell.click()
     await popup.waitFor()
     await page.keyboard.press('Escape')

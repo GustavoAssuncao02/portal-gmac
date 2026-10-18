@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
+import { identifiedOperator } from './operatorEntry.js'
 import { defaultStageLayout, orderedStageSelection } from '../server/serviceStages.js'
 
 const fixture = await createWorkflowFixture()
@@ -12,17 +13,17 @@ page.on('pageerror', (error) => errors.push(error.message))
 const group = (name) => page.getByRole('region', { name: `Etapas de ${name}`, exact: true })
 const groupNames = () => page.locator('.operator-stage-group-heading h4').allTextContents()
 async function createOrder(service, stages, stageLayout = defaultStageLayout()) {
-  const offer = (await fixture.request('/offers', 'POST', { ...offerDraft, service })).data.item
-  const saved = await fixture.request(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], kind: 'service', stages, stageLayout })
+  const offer = (await fixture.adminRequest('/offers', 'POST', { ...offerDraft, service })).data.item
+  const saved = await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], kind: 'service', stages, stageLayout })
   assert.equal(saved.status, 200)
-  await fixture.request(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', title: 'Teste', deadline: offerDraft.deadline, serviceValue: 100 } })
-  const accepted = await fixture.request(`/offers/${offer.id}/accept`, 'POST')
+  await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', title: 'Teste', deadline: offerDraft.deadline, serviceValue: 100 } })
+  const accepted = await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')
   assert.equal(accepted.status, 201)
   return accepted.data.item
 }
 try {
   const order = await createOrder('Projeto com sete subetapas', ['turning', 'milling', 'cnc-turning', 'painting', 'cut-bend', 'torch-cut', 'grinding'])
-  const employee = (await fixture.request('/employees', 'POST', { name: 'Carla Teste', birthDate: '1990-01-01', cpf: '00000000001', email: 'carla@example.invalid', identification: '001' })).data.item
+  const employee = (await fixture.adminRequest('/employees', 'POST', { name: 'Carla Teste', birthDate: '1990-01-01', cpf: '00000000001', email: 'carla@example.invalid', identification: '001' }, fixture.admin)).data.item
   const started = (await fixture.request(`/operations/orders/${order.code}/start`, 'POST', { employeeId: employee.id }, { Authorization: `Bearer ${fixture.operatorToken}` })).data
   const session = { id: started.operation.activeSession.id, token: started.sessionToken }
   const counts = [10, 10, 10, 3, 3, 1, 0]
@@ -34,10 +35,11 @@ try {
   const customLayout = [layout[1], { ...layout[2], stages: ['plasma-cut', ...layout[2].stages.filter((key) => key !== 'plasma-cut')] }, { ...layout[0], stages: [...layout[0].stages].reverse() }]
   const customOrder = await createOrder('Projeto com ordem personalizada', orderedStageSelection(customLayout, ['painting', 'cut-bend', 'plasma-cut', 'turning', 'assembly']), customLayout)
   const single = await createOrder('Projeto somente pintura', ['painting'])
-  await context.addInitScript(({ token, code, session }) => {
+  await context.addInitScript(({ token, code, session, operator }) => {
     sessionStorage.setItem('gmac-operator-token', token)
+    sessionStorage.setItem(...operator)
     sessionStorage.setItem(`gmac-operator-session-${code}`, JSON.stringify(session))
-  }, { token: fixture.operatorToken, code: order.code, session })
+  }, { token: fixture.operatorToken, operator: identifiedOperator(employee), code: order.code, session })
   await page.goto(fixture.url)
   await page.locator('.operator-project').filter({ hasText: order.service }).click()
   await group('Usinagem').waitFor()
@@ -60,16 +62,16 @@ try {
   await page.setViewportSize({ width: 1366, height: 900 })
   const firstBoilerButton = group('Caldeiraria').getByRole('button', { name: 'Registrar', exact: true }).first()
   assert.equal(await firstBoilerButton.isDisabled(), true)
-  const blocked = await fixture.request(`/operations/orders/${order.code}/stages/${started.operation.stages[4].key}`, 'POST', { quantity: 1, sessionId: session.id, sessionToken: session.token }, { Authorization: `Bearer ${fixture.operatorToken}` })
+  const blocked = await fixture.adminRequest(`/operations/orders/${order.code}/stages/${started.operation.stages[4].key}`, 'POST', { quantity: 1, sessionId: session.id, sessionToken: session.token }, { Authorization: `Bearer ${fixture.operatorToken}` })
   assert.equal(blocked.status, 409)
   await group('Pintura').getByRole('button', { name: 'Registrar', exact: true }).click()
   await page.waitForFunction(() => document.querySelectorAll('.operator-stage-group')[1].querySelector('.operator-stage small').textContent === '4/10 pe\u00e7as')
   assert.equal(await firstBoilerButton.isEnabled(), true)
   await firstBoilerButton.click()
   await page.waitForFunction(() => document.querySelector('.operator-stages-heading strong').textContent === '39/70 passagens')
-  const persisted = (await fixture.request('/operations/orders')).data.items.find((item) => item.code === order.code).operation
+  const persisted = (await fixture.request('/operations/orders', 'GET', undefined, fixture.admin)).data.items.find((item) => item.code === order.code).operation
   assert.deepEqual(persisted.stages.map((stage) => persisted.stageCounts[stage.key]), [10, 10, 10, 4, 4, 1, 0])
-  await page.getByRole('button', { name: 'Mostrar projetos', exact: true }).click()
+  await page.getByRole('button', { name: '← Voltar para as OS', exact: true }).click()
   await page.locator('.operator-project').filter({ hasText: customOrder.service }).click()
   await group('Pintura').waitFor()
   assert.deepEqual(await groupNames(), ['Pintura', 'Caldeiraria', 'Usinagem'])
@@ -78,7 +80,7 @@ try {
   await page.locator('.operator-project').filter({ hasText: customOrder.service }).click()
   assert.deepEqual(await groupNames(), ['Pintura', 'Caldeiraria', 'Usinagem'])
   await page.locator('.operator-stage-groups').screenshot({ path: 'test-results/operator-stage-groups-custom.png' })
-  await page.getByRole('button', { name: 'Mostrar projetos', exact: true }).click()
+  await page.getByRole('button', { name: '← Voltar para as OS', exact: true }).click()
   await page.locator('.operator-project').filter({ hasText: single.service }).click()
   assert.deepEqual(await groupNames(), ['Pintura'])
   assert.deepEqual(errors, [])

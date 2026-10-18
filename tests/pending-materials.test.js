@@ -23,20 +23,20 @@ test('pending quantities honor the OS snapshot, sum duplicate rows once and reta
 test('start and resume require acknowledgement of current pending quantities and audit the operator consent', async (t) => {
   const fixture = await createWorkflowFixture()
   t.after(() => fixture.close())
-  const offer = (await fixture.request('/offers', 'POST', offerDraft)).data.item
-  await fixture.request(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], stages: ['cutting'], kind: 'service' })
-  await fixture.request(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', serviceValue: 100, deadline: offer.deadline } })
-  const order = (await fixture.request(`/offers/${offer.id}/accept`, 'POST')).data.item
+  const offer = (await fixture.adminRequest('/offers', 'POST', offerDraft)).data.item
+  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], stages: ['cutting'], kind: 'service' })
+  await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', serviceValue: 100, deadline: offer.deadline } })
+  const order = (await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')).data.item
   await fixture.mutateStore((store) => { store.orders[0].resources.materials = [{ id: 'inox', inventoryId: 7, name: 'Inox 304', quantity: 10, purchaseQuantity: 10 }] })
-  const employee = (await fixture.request('/employees', 'POST', { name: 'Ana Teste', cpf: '00000000001', birthDate: '1990-01-01', email: 'ana@example.invalid', identification: '001' })).data.item
+  const employee = (await fixture.adminRequest('/employees', 'POST', { name: 'Ana Teste', cpf: '00000000001', birthDate: '1990-01-01', email: 'ana@example.invalid', identification: '001' }, fixture.admin)).data.item
   const headers = { Authorization: `Bearer ${fixture.operatorToken}` }
   const route = `/operations/orders/${order.code}`
   const rejected = await fixture.request(`${route}/start`, 'POST', { employeeId: employee.id }, headers)
   assert.equal(rejected.status, 409)
   assert.equal(rejected.data.code, 'PENDING_MATERIALS')
   assert.equal(rejected.data.pendingMaterials[0].quantity, 10)
-  assert.equal((await fixture.request('/operations/orders')).data.items[0].operation.activeSession, null)
-  assert.deepEqual((await fixture.request(`${route}/events`)).data.items, [])
+  assert.equal((await fixture.request('/operations/orders', 'GET', undefined, fixture.admin)).data.items[0].operation.activeSession, null)
+  assert.deepEqual((await fixture.request(`${route}/events`, 'GET', undefined, { Authorization: `Bearer ${fixture.operatorToken}` })).data.items, [])
   const stale = rejected.data.pendingMaterials.map((row) => [row.key, row.quantity])
   await fixture.mutateStore((store) => { store.orders[0].resources.materials[0].purchaseQuantity = 12 })
   const changed = await fixture.request(`${route}/start`, 'POST', { employeeId: employee.id, pendingMaterialsConfirmation: stale }, headers)

@@ -31,7 +31,7 @@ test('employee history filters across OS, excludes other employees and preserves
   })
   const route = '/employees/employee-a/activities'
   const ids = async (query = '') => {
-    const response = await fixture.request(route + query)
+    const response = await fixture.adminRequest(route + query)
     assert.equal(response.status, 200)
     return response.data.items.map((item) => item.id)
   }
@@ -42,12 +42,12 @@ test('employee history filters across OS, excludes other employees and preserves
   assert.deepEqual(await ids('?period=all'), ['tomorrow', 'interrupted', 'today', 'midnight', 'yesterday', '7', '30', 'old'])
   const date = new Date(today - day).toISOString().slice(0, 10)
   assert.deepEqual(await ids(`?period=date&date=${date}`), ['yesterday'])
-  assert.equal((await fixture.request(route + '?period=date&date=2000-01-01')).data.items.length, 0)
-  assert.equal((await fixture.request(route + '?period=date&date=2026-02-30')).status, 400)
-  assert.equal((await fixture.request(route + '?period=date')).status, 400)
-  assert.equal((await fixture.request(route + '?period=toString')).status, 400)
-  assert.equal((await fixture.request('/employees/unknown/activities')).status, 404)
-  const history = (await fixture.request(route)).data.items
+  assert.equal((await fixture.adminRequest(route + '?period=date&date=2000-01-01')).data.items.length, 0)
+  assert.equal((await fixture.adminRequest(route + '?period=date&date=2026-02-30')).status, 400)
+  assert.equal((await fixture.adminRequest(route + '?period=date')).status, 400)
+  assert.equal((await fixture.adminRequest(route + '?period=toString')).status, 400)
+  assert.equal((await fixture.adminRequest('/employees/unknown/activities')).status, 404)
+  const history = (await fixture.adminRequest(route)).data.items
   assert.equal(history.find((item) => item.id === 'today').service, 'Estrutura B')
   assert.equal(history.find((item) => item.id === 'midnight').company, 'Cliente A')
   assert.equal(history.find((item) => item.id === 'midnight').targetQuantity, 10)
@@ -56,11 +56,11 @@ test('employee history filters across OS, excludes other employees and preserves
 test('history includes actual persisted starts, progress, pauses, resumes, admin interruptions and completion', async (t) => {
   const fixture = await createWorkflowFixture()
   t.after(() => fixture.close())
-  const employee = (await fixture.request('/employees', 'POST', { name: 'Funcionario de teste', birthDate: '1990-01-01', cpf: '00000000001', email: 'teste@example.invalid', identification: '001' })).data.item
-  const offer = (await fixture.request('/offers', 'POST', offerDraft)).data.item
-  await fixture.request(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], stages: ['cutting'], kind: 'service' })
-  await fixture.request(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', title: 'Teste', deadline: offerDraft.deadline, serviceValue: 100 } })
-  const order = (await fixture.request(`/offers/${offer.id}/accept`, 'POST')).data.item
+  const employee = (await fixture.adminRequest('/employees', 'POST', { name: 'Funcionario de teste', birthDate: '1990-01-01', cpf: '00000000001', email: 'teste@example.invalid', identification: '001' }, fixture.admin)).data.item
+  const offer = (await fixture.adminRequest('/offers', 'POST', offerDraft)).data.item
+  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], stages: ['cutting'], kind: 'service' })
+  await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', title: 'Teste', deadline: offerDraft.deadline, serviceValue: 100 } })
+  const order = (await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')).data.item
   const route = `/operations/orders/${order.code}`
   const headers = { Authorization: `Bearer ${fixture.operatorToken}` }
   const start = async () => {
@@ -72,11 +72,11 @@ test('history includes actual persisted starts, progress, pauses, resumes, admin
   assert.equal((await fixture.request(`${route}/stages/stage-1`, 'POST', { ...session, quantity: 10 }, headers)).status, 200)
   assert.equal((await fixture.request(`${route}/pause`, 'POST', { ...session, reason: 'Descanso' }, headers)).status, 200)
   await start()
-  assert.equal((await fixture.request(`${route}/interrupt`, 'POST', { reason: 'Manutencao' })).status, 200)
+  assert.equal((await fixture.adminRequest(`${route}/interrupt`, 'POST', { reason: 'Manutencao' })).status, 200)
   session = await start()
   assert.equal((await fixture.request(`${route}/complete`, 'POST', session, headers)).status, 200)
-  await fixture.request(`${route}/acknowledge-completion`, 'POST')
-  const history = (await fixture.request(`/employees/${employee.id}/activities?period=all`)).data.items
+  await fixture.adminRequest(`${route}/acknowledge-completion`, 'POST')
+  const history = (await fixture.adminRequest(`/employees/${employee.id}/activities?period=all`)).data.items
   assert.equal(history.length, 7)
   assert.deepEqual(history.map((item) => item.type).sort(), ['started', 'stage_progress', 'paused', 'resumed', 'admin_interrupted', 'resumed', 'completed'].sort())
   assert.ok(history.every((item) => item.orderCode === order.code && item.service === offerDraft.service))
@@ -89,20 +89,21 @@ test('MySQL history binds employee and date parameters, and links legacy admin e
   const queries = []
   const pool = { async execute(sql, params) {
     if (sql.includes('FROM employees')) return [[{ id: 12, name: 'Ana' }]]
+    if (sql.startsWith('UPDATE')) return [{ affectedRows: 0 }]
     queries.push({ sql, params })
     return [[{ orderCode: 'OS-DB', data: JSON.stringify({ id: 'db-event', type: 'paused', at: '2026-10-03T04:00:00Z', employeeId: 12 }) }]]
   } }
   const fixture = await createWorkflowFixture({ pool })
   t.after(() => fixture.close())
   await fixture.mutateStore((store) => { store.orders = [{ code: 'OS-DB', service: 'Peca DB', quantity: 10 }] })
-  const response = await fixture.request('/employees/12/activities?period=date&date=2026-10-03')
+  const response = await fixture.adminRequest('/employees/12/activities?period=date&date=2026-10-03')
   assert.equal(response.status, 200)
   assert.equal(response.data.items[0].service, 'Peca DB')
   assert.deepEqual(queries[0].params, ['12', '12', new Date('2026-10-03T03:00:00Z'), new Date('2026-10-04T03:00:00Z')])
   assert.match(queries[0].sql, /admin_interrupted/)
   assert.match(queries[0].sql, /sessionId/)
   assert.match(queries[0].sql, /occurred_at >= \? AND occurred_at < \?/)
-  await fixture.request('/employees/12/activities?period=all')
+  await fixture.adminRequest('/employees/12/activities?period=all')
   assert.deepEqual(queries[1].params, ['12', '12'])
   assert.ok(!queries[1].sql.includes('occurred_at >= ?'))
 })

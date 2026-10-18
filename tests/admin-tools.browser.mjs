@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
 import ExcelJS from 'exceljs'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
+import { enterOperatorCode, startWork } from './operatorEntry.js'
 
 const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Gustavo' }
 const modulePath = process.env.PLAYWRIGHT_MODULE
@@ -12,7 +13,11 @@ const browser = await chromium.launch({ headless: true })
 const page = await browser.newPage({ viewport: { width: 1366, height: 900 }, timezoneId: 'America/Bahia' })
 const errors = []
 page.on('pageerror', (error) => errors.push(error.message))
-const navigate = (label) => page.locator('.sidebar').getByRole('button', { name: label, exact: true }).click()
+async function navigate(label) {
+  const item = page.locator('.sidebar').getByRole('button', { name: label, exact: true })
+  if (!await item.isVisible()) await page.locator('.sidebar').getByRole('button', { name: ['Fornecedores', 'Administradores', 'Funcionários', 'Clientes'].includes(label) ? 'Cadastros' : 'Gestão Financeira', exact: true }).click()
+  await item.click()
+}
 const waitSaved = () => page.waitForFunction(() => !document.querySelector('.offer-proposal-button')?.disabled)
 async function login(password = env.DEMO_ADMIN_PASSWORD) {
   await page.getByLabel('CPF', { exact: true }).fill(env.DEMO_ADMIN_CPF)
@@ -24,10 +29,10 @@ async function login(password = env.DEMO_ADMIN_PASSWORD) {
 try {
   const token = (await fixture.request('/auth/login', 'POST', { cpf: env.DEMO_ADMIN_CPF, password: env.DEMO_ADMIN_PASSWORD })).data.token
   const headers = { Authorization: `Bearer ${token}` }
-  const ana = (await fixture.request('/employees', 'POST', { name: 'Ana Teste', identification: '001', cpf: '00000000001', email: 'ana@example.invalid', birthDate: '1990-01-01' })).data.item
-  await fixture.request('/employees', 'POST', { name: 'Bruno Teste', identification: '002', cpf: '00000000002', email: 'bruno@example.invalid', birthDate: '1991-01-01' })
-  const machine = (await fixture.request('/machines', 'POST', { name: 'Torno teste', type: 'Torno', sector: 'Usinagem', hourlyRate: 80 }, headers)).data.item
-  const offer = (await fixture.request('/offers', 'POST', offerDraft)).data.item
+  const ana = (await fixture.adminRequest('/employees', 'POST', { name: 'Ana Teste', identification: '001', cpf: '00000000001', email: 'ana@example.invalid', birthDate: '1990-01-01' }, fixture.admin)).data.item
+  await fixture.adminRequest('/employees', 'POST', { name: 'Bruno Teste', identification: '002', cpf: '00000000002', email: 'bruno@example.invalid', birthDate: '1991-01-01' }, fixture.admin)
+  const machine = (await fixture.adminRequest('/machines', 'POST', { name: 'Torno teste', type: 'Torno', sector: 'Usinagem', hourlyRate: 80 }, headers)).data.item
+  const offer = (await fixture.adminRequest('/offers', 'POST', offerDraft)).data.item
   await fixture.mutateStore((store) => {
     store.orders.push({ code: 'OS-REPORT', offerId: 'old-offer', service: 'Estrutura de teste', company: 'Cliente Teste', cnpj: '12345678000190', labelNumber: '120', quantity: 10, requestedAt: '2026-10-01', createdAt: '2026-10-02T12:00:00-03:00', deadline: '2026-10-30', description: 'Registro antigo preservado.', resources: { materials: [], laborEntries: [] }, proposal: { kind: 'service', stages: ['welding', 'painting'], deadline: '2026-10-30', serviceValue: 600 }, operation: { status: 'paused', stages: [{ key: 'stage-1', name: 'Soldagem' }, { key: 'stage-2', name: 'Pintura' }], stageCounts: { 'stage-1': 7, 'stage-2': 7 }, accumulatedMs: 7200000, activeSession: null }, operationEvents: [
       { id: 'start', type: 'started', sessionId: 'session', employeeId: ana.id, employeeName: ana.name, machineId: machine.id, machineName: machine.name, at: '2026-10-02T09:00:00-03:00' },
@@ -37,14 +42,18 @@ try {
   await page.goto(fixture.url)
   await login()
   await navigate('Clientes')
-  const clientForm = page.locator('.registration-card form')
-  await clientForm.getByLabel('Nome / Razão social').fill('Empresa de teste')
-  await clientForm.getByRole('textbox', { name: 'CNPJ *', exact: true }).fill('12345678000190')
+  // Same pattern as Fornecedores: the list on screen, adding in a modal.
+  await page.getByRole('button', { name: 'Novo cliente', exact: true }).click()
+  const clientForm = page.getByRole('dialog', { name: 'Novo cliente' })
+  await clientForm.getByLabel('Nome / razão social').fill('Empresa de teste')
+  await clientForm.getByRole('textbox', { name: 'CNPJ', exact: true }).fill('12345678000190')
   await clientForm.getByLabel('E-mail').fill('empresa@example.invalid')
-  await clientForm.getByRole('button', { name: /Cadastrar/ }).click()
-  await page.locator('.registration-list-row').filter({ hasText: 'Empresa de teste' }).waitFor()
+  await clientForm.getByLabel('Observação').fill('Cliente de teste')
+  await clientForm.getByRole('button', { name: 'Salvar', exact: true }).click()
+  await clientForm.waitFor({ state: 'detached' })
+  await page.locator('.registration-table tbody tr').filter({ hasText: 'Empresa de teste' }).waitFor()
   await navigate('Administradores')
-  await page.locator('.registration-list-row').filter({ hasText: 'Gustavo' }).waitFor()
+  await page.locator('.registration-table tbody tr').filter({ hasText: 'Gustavo' }).waitFor()
   await navigate('Relatórios')
   await page.getByRole('heading', { name: 'Relatórios', exact: true }).waitFor()
   const kind = page.getByLabel('Tipo de relatório', { exact: true })
@@ -94,6 +103,8 @@ try {
   await page.getByLabel('Confirmar nova senha', { exact: true }).fill('novaSenha123')
   await page.getByRole('button', { name: 'Salvar alterações', exact: true }).click()
   await page.getByText('Conta atualizada com sucesso.', { exact: true }).waitFor()
+  // Changing the password closes the earlier sessions, the one of these API checks included: a new one is opened.
+  fixture.admin.Authorization = `Bearer ${(await fixture.request('/auth/login', 'POST', { cpf: env.DEMO_ADMIN_CPF, password: 'novaSenha123' })).data.token}`
   assert.equal(await page.locator('.account-copy strong').innerText(), 'Gustavo Novo')
   await page.screenshot({ path: 'test-results/account-settings.png', fullPage: true })
   for (const width of [390, 320]) {
@@ -119,7 +130,7 @@ try {
   await page.getByLabel('Descrição do serviço', { exact: true }).fill('Acabamento conforme desenho. Sem rebarbas.')
   await page.getByLabel('Descrição do serviço', { exact: true }).blur()
   await waitSaved()
-  const settings = (await fixture.request('/offers')).data.items.find((item) => item.id === offer.id).resources
+  const settings = (await fixture.adminRequest('/offers', 'GET', undefined, fixture.admin)).data.items.find((item) => item.id === offer.id).resources
   assert.equal(settings.paintColor, 'Azul epoxi')
   assert.equal(settings.serviceDescription, 'Acabamento conforme desenho. Sem rebarbas.')
   assert.equal(settings.manufacturedFrom, 'drawing')
@@ -141,13 +152,11 @@ try {
   await page.waitForFunction(() => !document.fullscreenElement)
   await page.evaluate((token) => { sessionStorage.setItem('gmac-operator-token', token) }, fixture.operatorToken)
   await page.reload()
-  await page.getByRole('button', { name: 'Trabalhar neste projeto', exact: true }).click()
-  await page.getByLabel('Funcionário', { exact: true }).selectOption(String(ana.id))
-  await page.getByRole('radio', { name: 'Máquina', exact: true }).check()
-  await page.getByRole('combobox', { name: 'Máquina', exact: true }).selectOption(String(machine.id))
-  await page.getByRole('button', { name: 'Iniciar trabalho', exact: true }).click()
-  await page.getByRole('button', { name: 'Pausar trabalho', exact: true }).waitFor()
-  const running = (await fixture.request('/operations/orders')).data.items.find((item) => item.code === 'OS-REPORT')
+  await enterOperatorCode(page, ana.accessCode)
+  await page.locator('.operator-project').filter({ hasText: 'OS-REPORT' }).click()
+  await startWork(page, 'Máquina', machine.name)
+  await page.getByRole('button', { name: /^Pausar trabalho/ }).waitFor()
+  const running = (await fixture.request('/operations/orders', 'GET', undefined, fixture.admin)).data.items.find((item) => item.code === 'OS-REPORT')
   assert.equal(running.operation.activeSession.machineName, 'Torno teste')
   assert.deepEqual(running.operation.stageCounts, { 'stage-1': 7, 'stage-2': 7 })
   assert.deepEqual(errors, [])

@@ -12,6 +12,12 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
 const errors = []
 page.on('pageerror', (error) => errors.push(error.message))
 const modal = () => page.locator('dialog[open]').last()
+// Gestão Financeira is a menu group that may start collapsed.
+const nav = async (name) => {
+  const item = page.locator('.sidebar').getByRole('button', { name, exact: true })
+  if (!await item.isVisible()) await page.locator('.sidebar').getByRole('button', { name: 'Gestão Financeira', exact: true }).click()
+  await item.click()
+}
 const tomorrow = new Date(Date.parse(todayBahia()) + 86400000).toISOString().slice(0, 10)
 // A tiny valid PNG for the preview check.
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64')
@@ -29,7 +35,7 @@ try {
   await page.getByLabel('Senha', { exact: true }).fill(env.DEMO_ADMIN_PASSWORD)
   await page.getByRole('button', { name: 'Entrar', exact: true }).click()
   await page.locator('.admin-home-main').waitFor()
-  await page.locator('.sidebar').getByRole('button', { name: 'Contas a Pagar', exact: true }).click()
+  await nav('Contas a Pagar')
   await page.locator('.payable-table tbody tr').first().waitFor()
   assert.match(await page.locator('.payable-table tbody tr').first().innerText(), /Vence em 1 dia(?!s)/)
 
@@ -126,16 +132,17 @@ try {
   await details.getByRole('button', { name: 'Fechar janela', exact: true }).click()
 
   // Real cost per OS in the BI.
-  await page.locator('.sidebar').getByRole('button', { name: 'Business Intelligence', exact: true }).click()
+  await nav('Business Intelligence')
   const margins = page.locator('.order-margins-table tbody tr').filter({ hasText: 'OS-2026-0001' })
   await margins.waitFor()
-  assert.match(await margins.innerText(), /R\$\s1\.000,00[\s\S]*R\$\s500,00[\s\S]*R\$\s1\.200,00[\s\S]*−?-?R\$\s200,00|R\$\s1\.000,00[\s\S]*R\$\s500,00[\s\S]*R\$\s1\.200,00[\s\S]*-20/)
+  // The cost planned in the proposal (500) is already posted; the linked accounts (1.200) are additional.
+  assert.match(await margins.innerText(), /R\$\s1\.000,00[\s\S]*R\$\s500,00[\s\S]*R\$\s1\.700,00[\s\S]*Previsto \+ R\$\s1\.200,00[\s\S]*[−-]R\$\s700,00[\s\S]*-70/)
   await page.locator('.order-margins').screenshot({ path: 'test-results/payables-order-margins.png' })
 
   // Mobile: the first account appears sooner.
   await page.setViewportSize({ width: 390, height: 844 })
   await page.getByRole('button', { name: 'Abrir menu de navegação', exact: true }).click()
-  await page.locator('.sidebar').getByRole('button', { name: 'Contas a Pagar', exact: true }).click()
+  await nav('Contas a Pagar')
   const first = page.locator('.payable-table tbody tr').first()
   await first.waitFor()
   const top = (await first.boundingBox()).y

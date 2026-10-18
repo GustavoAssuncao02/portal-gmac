@@ -99,9 +99,10 @@
   .payable-bi-charts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .calculator-workspace { grid-template-columns: 260px minmax(0, 1fr) 320px; }
   .format-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-  .operator-project-info { max-width: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 32px; align-items: start; }
-  .operator-info-header { grid-column: 1 / -1; }
-  .operator-info-section { min-width: 0; }
+  /* Two columns that balance their sections (no gaps beside tall ones); the header and the progress section take the whole width. */
+  .operator-project-info { max-width: none; column-count: 2; column-gap: 32px; }
+  .operator-info-header { column-span: all; }
+  .operator-info-section { min-width: 0; break-inside: avoid; }
 }
 
 @media (min-width: 2200px) {
@@ -120,9 +121,10 @@
   .proposal-card-column > div { min-height: 38px; font-size: 13px; }
   .proposal-card-column strong { font-size: 14px; }
   .proposal-card-heading { flex-wrap: wrap; }
-  .operator-stage-groups { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
-  .operator-stage-group + .operator-stage-group { padding-top: 0; border-top: 0; }
-  .operator-stages { flex-wrap: wrap; row-gap: 20px; overflow: visible; }
+  /* Tesouraria: the totals stay beside the movements, in view while the list scrolls. */
+  .treasury-layout { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 24px; align-items: start; }
+  .treasury-list { grid-column: 1; grid-row: 1; min-width: 0; }
+  .treasury-layout > .treasury-summary { grid-column: 2; grid-row: 1; grid-template-columns: minmax(0, 1fr); margin: 0; position: sticky; top: 60px; }
 }
 
 @media (min-width: 2500px) {

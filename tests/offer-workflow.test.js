@@ -68,42 +68,42 @@ test('shared stock handles decimal quantities, aliases, empty stock and unregist
 test('offer settings, materials and editable machine rate survive proposal PDF and OS acceptance', async (t) => {
   const fixture = await createWorkflowFixture()
   t.after(() => fixture.close())
-  const created = await fixture.request('/offers', 'POST', offerDraft)
+  const created = await fixture.adminRequest('/offers', 'POST', offerDraft)
   assert.equal(created.status, 201)
   const id = created.data.item.id
   const resources = { materials: [{ id: 'material', name: 'Titanio', quantity: 12.5, unitPrice: 20, stockStatus: 'unknown', stockAvailable: 0, purchaseQuantity: 12.5 }], laborEntries: [{ id: 'labor', machineId: 1, type: 'machine', resource: 'Torno de teste', hours: 2, hourlyRate: 175 }], stages: ['welding', 'cutting'], kind: 'product' }
-  const saved = await fixture.request(`/offers/${id}/resources`, 'PUT', resources)
+  const saved = await fixture.adminRequest(`/offers/${id}/resources`, 'PUT', resources)
   assert.equal(saved.status, 200)
   assert.deepEqual(saved.data.item.resources.stages, ['welding', 'cutting'])
   const proposal = { key: 'A', title: 'Teste', deadline: '2026-12-20', serviceValue: 600, materials: 250, labor: 350, machine: '2 horas', serviceTime: '2 horas', margin: 0, discount: 0, profit: 0, stages: ['painting'], kind: 'service' }
-  const generated = await fixture.request(`/offers/${id}/proposal`, 'POST', { proposal, layout: 'classic' })
+  const generated = await fixture.adminRequest(`/offers/${id}/proposal`, 'POST', { proposal, layout: 'classic' })
   assert.equal(generated.status, 200)
   assert.deepEqual(generated.data.item.proposal.stages, ['welding', 'cutting'])
   assert.equal(generated.data.item.proposal.kind, 'product')
-  const pdf = await fetch(`${fixture.url}/api/offers/${id}/proposal.pdf`)
+  const pdf = await fetch(`${fixture.url}/api/offers/${id}/proposal.pdf`, { headers: fixture.admin })
   assert.equal(pdf.status, 200)
   assert.equal(Buffer.from(await pdf.arrayBuffer()).subarray(0, 4).toString(), '%PDF')
-  const changed = await fixture.request(`/offers/${id}/resources`, 'PUT', { ...saved.data.item.resources, kind: 'service' })
+  const changed = await fixture.adminRequest(`/offers/${id}/resources`, 'PUT', { ...saved.data.item.resources, kind: 'service' })
   assert.equal(changed.data.item.proposal, null)
-  await fixture.request(`/offers/${id}/proposal`, 'POST', { proposal, layout: 'classic' })
-  const accepted = await fixture.request(`/offers/${id}/accept`, 'POST')
+  await fixture.adminRequest(`/offers/${id}/proposal`, 'POST', { proposal, layout: 'classic' })
+  const accepted = await fixture.adminRequest(`/offers/${id}/accept`, 'POST')
   assert.equal(accepted.status, 201)
   assert.equal(accepted.data.item.resources.laborEntries[0].hourlyRate, 175)
-  const offers = (await fixture.request('/offers')).data.items
-  const orders = (await fixture.request('/operations/orders')).data.items
+  const offers = (await fixture.adminRequest('/offers', 'GET', undefined, fixture.admin)).data.items
+  const orders = (await fixture.request('/operations/orders', 'GET', undefined, fixture.admin)).data.items
   assert.deepEqual(orders[0].operation.stages.map((stage) => stage.name), ['Soldagem', 'Corte'])
   assert.equal(materialRequests(offers, orders)[0].orderCode, accepted.data.item.code)
-  assert.equal((await fixture.request(`/offers/${id}/resources`, 'PUT', resources)).status, 404)
+  assert.equal((await fixture.adminRequest(`/offers/${id}/resources`, 'PUT', resources)).status, 404)
 })
 
 test('invalid or missing process settings cannot generate a proposal', async (t) => {
   const fixture = await createWorkflowFixture()
   t.after(() => fixture.close())
-  const { data } = await fixture.request('/offers', 'POST', offerDraft)
+  const { data } = await fixture.adminRequest('/offers', 'POST', offerDraft)
   const route = `/offers/${data.item.id}`
-  assert.equal((await fixture.request(`${route}/resources`, 'PUT', { materials: [], laborEntries: [], stages: ['invalid'], kind: 'service' })).status, 400)
-  assert.equal((await fixture.request(`${route}/resources`, 'PUT', { materials: [], laborEntries: [], stages: [], kind: 'invalid' })).status, 400)
-  assert.equal((await fixture.request(`${route}/proposal`, 'POST', { proposal: { stages: ['cutting'] }, layout: 'classic' })).status, 400)
+  assert.equal((await fixture.adminRequest(`${route}/resources`, 'PUT', { materials: [], laborEntries: [], stages: ['invalid'], kind: 'service' })).status, 400)
+  assert.equal((await fixture.adminRequest(`${route}/resources`, 'PUT', { materials: [], laborEntries: [], stages: [], kind: 'invalid' })).status, 400)
+  assert.equal((await fixture.adminRequest(`${route}/proposal`, 'POST', { proposal: { stages: ['cutting'] }, layout: 'classic' })).status, 400)
 })
 
 test('inventory pending requests follow offers until the material is registered, retaining purchase status and OS links', () => {

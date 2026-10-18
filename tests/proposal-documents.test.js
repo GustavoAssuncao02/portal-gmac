@@ -75,8 +75,8 @@ test('proposal models: drafts from the system, fiscal codes, Nestlé and etiquet
     assert.equal((await f.request('/fiscal/sync', 'POST', {})).status, 401, 'Manual sync is reserved to administrators')
 
     // An offer with planned resources.
-    const offer = (await f.request('/offers', 'POST', { ...offerDraft, company: 'Nestlé Brasil Ltda', service: 'Tampa graxadeira', description: 'Fabricação de 20 unidades, conforme amostra', quantity: 20, labelNumber: '5319' })).data.item
-    await f.request(`/offers/${offer.id}/resources`, 'PUT', { materials: [{ id: 'm1', name: 'Aço SAE 1020', detail: 'redondo 2"', quantity: 4, unitPrice: 10 }], laborEntries: [{ id: 'l1', type: 'machine', resource: 'Torno CNC 01', hours: 25, hourlyRate: 120 }, { id: 'l2', type: 'labor', resource: 'Ajustagem', hours: 2, hourlyRate: 50 }], stages: ['machining'] })
+    const offer = (await f.adminRequest('/offers', 'POST', { ...offerDraft, company: 'Nestlé Brasil Ltda', service: 'Tampa graxadeira', description: 'Fabricação de 20 unidades, conforme amostra', quantity: 20, labelNumber: '5319' })).data.item
+    await f.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [{ id: 'm1', name: 'Aço SAE 1020', detail: 'redondo 2"', quantity: 4, unitPrice: 10 }], laborEntries: [{ id: 'l1', type: 'machine', resource: 'Torno CNC 01', hours: 25, hourlyRate: 120 }, { id: 'l2', type: 'labor', resource: 'Ajustagem', hours: 2, hourlyRate: 50 }], stages: ['machining'] })
 
     // Etiqueta: every line of the price list, quantities from the system, unmatched resources left for the user.
     const etiqueta = (await request(`/offers/${offer.id}/proposal-draft?model=etiqueta`)).data.draft
@@ -86,37 +86,48 @@ test('proposal models: drafts from the system, fiscal codes, Nestlé and etiquet
     assert.deepEqual(etiqueta.usage.map((item) => [item.name, item.rowId]), [['Torno CNC 01', 'et-l4'], ['Ajustagem', null], ['Aço SAE 1020 redondo 2"', 'et-m4']])
     assert.deepEqual([etiqueta.labelNumber, etiqueta.componentName, etiqueta.issuerId], ['5319', 'Tampa graxadeira', 'usinagem'])
     const labor = etiqueta.labor.map((row) => row.id === 'et-l11' ? { ...row, quantity: 2 } : row)
-    const saved = await f.request(`/offers/${offer.id}/proposal-document`, 'POST', { model: 'etiqueta', document: { ...etiqueta, labor, requester: 'Joaci', freight: { place: 'BBA FAI', charge: true } }, assignments: [{ name: 'Ajustagem', rowId: 'et-l11' }], option: { key: 'B', deadline: '10 dias' } })
+    const saved = await f.adminRequest(`/offers/${offer.id}/proposal-document`, 'POST', { model: 'etiqueta', document: { ...etiqueta, labor, requester: 'Joaci', freight: { place: 'BBA FAI', charge: true } }, assignments: [{ name: 'Ajustagem', rowId: 'et-l11' }], option: { key: 'B', deadline: '10 dias' } })
     assert.equal(saved.status, 200, JSON.stringify(saved.data))
     const document = saved.data.item.proposal.document
     assert.equal(document.total, 25 * 206.8 + 2 * 90 + 4 * 22.97 + 200)
-    assert.deepEqual([saved.data.item.status, saved.data.item.proposal.layout, saved.data.item.proposal.serviceValue], ['proposed', 'etiqueta', document.total])
-    const pdf = await fetch(`${f.url}/api/offers/${offer.id}/proposal.pdf`)
+    // The OS value is the total of the document; the service value is the cost of the planned resources (R$ 40 of material
+    // and R$ 3.100 of labor), and the hours of the machine and of the labor are kept apart.
+    const proposal = saved.data.item.proposal
+    assert.deepEqual([saved.data.item.status, proposal.layout, proposal.osValue, proposal.serviceValue, proposal.materials, proposal.labor], ['proposed', 'etiqueta', document.total, 3140, 40, 3100])
+    assert.deepEqual([proposal.machine, proposal.serviceTime, proposal.totalTime, proposal.profit], ['25 horas', '2 horas', '27 horas', Math.round((document.total - 3140) * 100) / 100])
+    const pdf = await fetch(`${f.url}/api/offers/${offer.id}/proposal.pdf`, { headers: f.admin })
     assert.equal(pdf.status, 200); assert.match(pdf.headers.get('content-disposition'), /Etiqueta-5319\.pdf/)
     assert.equal((await pdf.arrayBuffer()).byteLength > 5000, true)
     assert.equal((await request(`/offers/${offer.id}/proposal-draft?model=etiqueta&fresh=1`)).data.draft.usage.find((item) => item.name === 'Ajustagem').rowId, 'et-l11', 'The assignment was learned')
     const reopened = (await request(`/offers/${offer.id}/proposal-draft?model=etiqueta`)).data.draft
     assert.equal(reopened.labor.find((row) => row.id === 'et-l11').quantity, 2, 'Reopening shows the saved document')
-    assert.equal((await f.request(`/offers/${offer.id}/proposal-document`, 'POST', { model: 'etiqueta', document: { ...etiqueta, labor: etiqueta.labor.map((row) => ({ ...row, quantity: 0 })), materials: [] } })).status, 400, 'An empty sheet is refused')
-    assert.equal((await f.request(`/offers/${offer.id}/proposal-document`, 'POST', { model: 'etiqueta', document: { ...etiqueta, labor: [{ id: 'invented', quantity: 1 }] } })).status, 409)
+    assert.equal((await f.adminRequest(`/offers/${offer.id}/proposal-document`, 'POST', { model: 'etiqueta', document: { ...etiqueta, labor: etiqueta.labor.map((row) => ({ ...row, quantity: 0 })), materials: [] } })).status, 400, 'An empty sheet is refused')
+    assert.equal((await f.adminRequest(`/offers/${offer.id}/proposal-document`, 'POST', { model: 'etiqueta', document: { ...etiqueta, labor: [{ id: 'invented', quantity: 1 }] } })).status, 409)
 
     // Model A: fiscal codes are mandatory; the quotation number follows the last one.
     const letter = (await request(`/offers/${offer.id}/proposal-draft?model=model-a&value=5170&deadline=15 dias`)).data.draft
-    assert.deepEqual([letter.quoteNumber, letter.customer, letter.items[0].unitPrice * letter.items[0].quantity, letter.deliveryTerm, letter.fiscal.cnae.code], ['13483', 'Nestlé Brasil Ltda', 5170, '15 dias', '2539-0/01'])
-    const withoutCodes = await f.request(`/offers/${offer.id}/proposal-document`, 'POST', { model: 'model-a', document: { ...letter, fiscal: { cnae: letter.fiscal.cnae } } })
+    assert.deepEqual([letter.quoteNumber, letter.customer, letter.items[0].unitPrice * letter.items[0].quantity, letter.deliveryTerm, letter.fiscal.cnae[0].code], ['13483', 'Nestlé Brasil Ltda', 5170, '15 dias', '2539-0/01'])
+    const withoutCodes = await f.adminRequest(`/offers/${offer.id}/proposal-document`, 'POST', { model: 'model-a', document: { ...letter, fiscal: { cnae: letter.fiscal.cnae } } })
     assert.equal(withoutCodes.status, 400); assert.match(withoutCodes.data.message, /NBS/)
-    assert.equal((await f.request(`/offers/${offer.id}/proposal-document`, 'POST', { model: 'model-a', document: { ...letter, items: [{ ...letter.items[0], unit: 'H/h' }], fiscal: { ...letter.fiscal, nbs: { code: '1.2001.50.00' } } } })).status, 400, 'Units are unit or kg')
-    assert.equal((await f.request(`/offers/${offer.id}/proposal-document`, 'POST', { model: 'model-a', document: { ...letter, items: [...letter.items, letter.items[0]], fiscal: { ...letter.fiscal, nbs: { code: '1.2001.50.00' } } } })).status, 400, 'Model A has a single composition line')
-    const proposalA = await f.request(`/offers/${offer.id}/proposal-document`, 'POST', { model: 'model-a', document: { ...letter, requester: 'Karoline', fiscal: { ...letter.fiscal, nbs: { code: '1.2001.50.00' } } } })
+    assert.equal((await f.adminRequest(`/offers/${offer.id}/proposal-document`, 'POST', { model: 'model-a', document: { ...letter, items: [{ ...letter.items[0], unit: 'H/h' }], fiscal: { ...letter.fiscal, nbs: { code: '1.2001.50.00' } } } })).status, 400, 'Units are unit or kg')
+    assert.equal((await f.adminRequest(`/offers/${offer.id}/proposal-document`, 'POST', { model: 'model-a', document: { ...letter, items: [...letter.items, letter.items[0]], fiscal: { ...letter.fiscal, nbs: { code: '1.2001.50.00' } } } })).status, 400, 'Model A has a single composition line')
+    const proposalA = await f.adminRequest(`/offers/${offer.id}/proposal-document`, 'POST', { model: 'model-a', document: { ...letter, requester: 'Karoline', fiscal: { ...letter.fiscal, nbs: { code: '1.2001.50.00' } } } })
     assert.equal(proposalA.status, 200, JSON.stringify(proposalA.data))
-    assert.deepEqual([proposalA.data.item.proposal.document.fiscal.nbs.description, proposalA.data.item.proposal.document.fiscal.cnae.registered], ['Serviços de manutenção e reparação de maquinários e equipamentos de uso industrial', true])
+    assert.deepEqual([proposalA.data.item.proposal.document.fiscal.nbs[0].description, proposalA.data.item.proposal.document.fiscal.cnae[0].registered], ['Serviços de manutenção e reparação de maquinários e equipamentos de uso industrial', true])
+    // A contract may have several CNAE codes: the order is kept (the first is the main one) and repeated codes are dropped.
+    const several = await f.adminRequest(`/offers/${offer.id}/proposal-document`, 'POST', { model: 'model-a', document: { ...letter, requester: 'Karoline', fiscal: { cnae: [{ code: '3314-7/10' }, letter.fiscal.cnae[0], { code: '3314-7/10' }], nbs: [{ code: '1.2001.50.00' }], ncm: [] } } })
+    assert.equal(several.status, 200, JSON.stringify(several.data))
+    assert.deepEqual(several.data.item.proposal.document.fiscal.cnae.map((entry) => entry.code), ['3314-7/10', letter.fiscal.cnae[0].code])
+    const severalPdf = await fetch(`${f.url}/api/offers/${offer.id}/proposal.pdf`, { headers: f.admin })
+    assert.equal(severalPdf.status, 200)
+    assert.equal(Buffer.from(await severalPdf.arrayBuffer()).subarray(0, 4).toString(), '%PDF')
     const modelB = (await request(`/offers/${offer.id}/proposal-draft?model=model-b`)).data.draft
     assert.deepEqual([modelB.quoteNumber, modelB.customerDocument], ['13484', '12.345.678/0001-90'])
     // Model B: items grouped for subtotals.
     const grouped = await request(`/offers/${offer.id}/proposal-document`, 'POST', { model: 'model-b', document: { ...modelB, fiscal: { ...modelB.fiscal, nbs: { code: '1.2001.50.00' } }, items: [{ description: 'Fundação', quantity: 1, unit: 'Un', unitPrice: 1000, group: 'Obra civil' }, { description: 'Parede', quantity: 1, unit: 'Un', unitPrice: 500, group: 'Obra civil' }, { description: 'Cobertura', quantity: 1, unit: 'Un', unitPrice: 800, group: 'Estrutura metálica' }] } })
     assert.equal(grouped.status, 200, JSON.stringify(grouped.data))
     assert.deepEqual([grouped.data.item.proposal.document.items.map((item) => item.group), grouped.data.item.proposal.document.total, grouped.data.item.proposal.document.customerDocument], [['Obra civil', 'Obra civil', 'Estrutura metálica'], 2300, '12.345.678/0001-90'])
-    assert.equal((await fetch(`${f.url}/api/offers/${offer.id}/proposal.pdf`)).status, 200)
+    assert.equal((await fetch(`${f.url}/api/offers/${offer.id}/proposal.pdf`, { headers: f.admin })).status, 200)
     // Technician: the company's by default, changeable in each proposal.
     assert.deepEqual(letter.technician, { name: 'José Jossenilson F. Gomes', registry: 'CREA – 53865', phone: '(75) 99933-5645' })
     const restored = await request(`/offers/${offer.id}/proposal-document`, 'POST', { model: 'model-a', document: { ...letter, requester: 'Karoline', technician: { name: 'Maria Souza', registry: 'CREA – 99999', phone: '(75) 98888-7777' }, fiscal: { ...letter.fiscal, nbs: { code: '1.2001.50.00' } } } })
@@ -124,7 +135,7 @@ test('proposal models: drafts from the system, fiscal codes, Nestlé and etiquet
     assert.deepEqual(restored.data.item.proposal.document.technician, { name: 'Maria Souza', registry: 'CREA – 99999', phone: '(75) 98888-7777' })
     assert.equal((await request(`/offers/${offer.id}/proposal-draft?model=model-a`)).data.draft.technician.name, 'Maria Souza', 'Reopening keeps the chosen technician')
     assert.equal((await request(`/offers/${offer.id}/proposal-draft?model=model-a&fresh=1`)).data.draft.technician.name, 'José Jossenilson F. Gomes')
-    const letterPdf = await fetch(`${f.url}/api/offers/${offer.id}/proposal.pdf`)
+    const letterPdf = await fetch(`${f.url}/api/offers/${offer.id}/proposal.pdf`, { headers: f.admin })
     assert.match(letterPdf.headers.get('content-disposition'), /Proposta-13483\.pdf/)
     assert.ok(Buffer.from(await letterPdf.arrayBuffer()).toString('latin1').includes('https://wa.me/557536166626?text=Ol%C3%A1%2C%20GMAC!%20Gostaria%20de%20falar%20sobre%20a%20cota%C3%A7%C3%A3o%20n%C2%BA%2013483'), 'Footer WhatsApp link with the quotation')
 
@@ -138,16 +149,16 @@ test('proposal models: drafts from the system, fiscal codes, Nestlé and etiquet
     assert.equal((await request('/proposal-settings', 'PUT', { tables: changed })).status, 200)
 
     // Nestlé FS-3055 from the planned resources; once accepted, the receivable of the OS suggests the sheet total.
-    const talisca = (await f.request('/offers', 'POST', { ...offerDraft, company: 'Nestlé Brasil Ltda', service: 'Talisca', description: 'Fabricação de talisca lado direito e lado esquerdo, conforme desenho', quantity: 1, labelNumber: '2022906' })).data.item
-    await f.request(`/offers/${talisca.id}/resources`, 'PUT', { materials: [{ id: 'm', name: 'Aço Inox 316L', quantity: 4, unitPrice: 30 }], laborEntries: [{ id: 'a', type: 'machine', resource: 'Centro de usinagem 5 eixos', hours: 5, hourlyRate: 100 }, { id: 'b', type: 'labor', resource: 'Caldeiraria', hours: 3, hourlyRate: 50 }], stages: ['machining'] })
+    const talisca = (await f.adminRequest('/offers', 'POST', { ...offerDraft, company: 'Nestlé Brasil Ltda', service: 'Talisca', description: 'Fabricação de talisca lado direito e lado esquerdo, conforme desenho', quantity: 1, labelNumber: '2022906' })).data.item
+    await f.adminRequest(`/offers/${talisca.id}/resources`, 'PUT', { materials: [{ id: 'm', name: 'Aço Inox 316L', quantity: 4, unitPrice: 30 }], laborEntries: [{ id: 'a', type: 'machine', resource: 'Centro de usinagem 5 eixos', hours: 5, hourlyRate: 100 }, { id: 'b', type: 'labor', resource: 'Caldeiraria', hours: 3, hourlyRate: 50 }], stages: ['machining'] })
     const nestle = (await request(`/offers/${talisca.id}/proposal-draft?model=nestle`)).data.draft
     assert.deepEqual([nestle.issuerId, nestle.number, nestle.labor.find((row) => row.id === 'fs-l11').quantity, nestle.labor.find((row) => row.id === 'fs-l14').quantity, nestle.materials.find((row) => row.id === 'fs-m2').quantity], ['metalurgica', '2022906', 5, 3, 4])
     const sheet = await request(`/offers/${talisca.id}/proposal-document`, 'POST', { model: 'nestle', document: { ...nestle, requester: 'Ionei' } })
     assert.equal(sheet.status, 200, JSON.stringify(sheet.data))
     assert.equal(sheet.data.item.proposal.document.total, 1373.95, 'Same total as FS-3055 n. 2022906 (R$ 1.374)')
-    const nestlePdf = await fetch(`${f.url}/api/offers/${talisca.id}/proposal.pdf`)
+    const nestlePdf = await fetch(`${f.url}/api/offers/${talisca.id}/proposal.pdf`, { headers: f.admin })
     assert.equal(nestlePdf.status, 200); assert.match(nestlePdf.headers.get('content-disposition'), /FS-3055-2022906\.pdf/)
-    const order = (await f.request(`/offers/${talisca.id}/accept`, 'POST')).data.item
+    const order = (await f.adminRequest(`/offers/${talisca.id}/accept`, 'POST')).data.item
     assert.equal((await request(`/receivables/order/${order.code}`)).data.order.valueCents, 137395)
   } finally { await f.close() }
 })

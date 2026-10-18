@@ -27,8 +27,9 @@ function QuantityInput({ value, onChange, label }) {
   return <input className="proposal-qty" inputMode="decimal" aria-label={label} value={text} placeholder="0" onChange={(event) => { setText(event.target.value); const number = parseDecimal(event.target.value); if (number === null || (Number.isFinite(number) && number >= 0)) onChange(number) }} />
 }
 
-// CNAE, NBS and NCM come from the official catalogs synchronized every week.
-function FiscalPicker({ kind, label, value, onChange, cnpj, hint }) {
+// CNAE, NBS and NCM come from the official catalogs synchronized every week. Each one is a list: a contract may have
+// several codes. The first CNAE is the main one.
+function FiscalPicker({ kind, label, values = [], onChange, cnpj, hint }) {
   const [query, setQuery] = useState(''), [items, setItems] = useState([]), [open, setOpen] = useState(false), [error, setError] = useState('')
   const listId = useId()
   useEffect(() => {
@@ -38,18 +39,21 @@ function FiscalPicker({ kind, label, value, onChange, cnpj, hint }) {
   }, [kind, query, cnpj, open])
   const pattern = { cnae: /^\d{4}-\d\/\d{2}$/, nbs: /^\d\.\d{4}\.\d{2}\.\d{2}$/, ncm: /^\d{4}\.\d{2}\.\d{2}$/ }[kind]
   const typed = query.trim()
-  const choose = (item) => { onChange(item); setQuery(''); setOpen(false) }
+  const choose = (item) => { if (!values.some((entry) => entry.code === item.code)) onChange([...values, item]); setQuery(''); setOpen(false) }
+  const remove = (code) => onChange(values.filter((entry) => entry.code !== code))
+  const makeMain = (code) => onChange([...values.filter((entry) => entry.code === code), ...values.filter((entry) => entry.code !== code)])
   return <div className="fiscal-picker">
-    <label>{label}<span className="fiscal-picker-search"><Search size={15} aria-hidden="true" /><input role="combobox" aria-expanded={open} aria-controls={listId} aria-label={label} value={query} placeholder={value ? 'Trocar código' : 'Busque por código ou descrição'} onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)} onChange={(event) => { setQuery(event.target.value); setOpen(true) }} /></span></label>
+    <label>{label}<span className="fiscal-picker-search"><Search size={15} aria-hidden="true" /><input role="combobox" aria-expanded={open} aria-controls={listId} aria-label={label} value={query} placeholder={values.length ? 'Adicionar outro código' : 'Busque por código ou descrição'} onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)} onChange={(event) => { setQuery(event.target.value); setOpen(true) }} /></span></label>
     {open && <ul id={listId} role="listbox" className="fiscal-picker-list">
-      {items.map((item) => <li key={item.code} role="option" aria-selected={value?.code === item.code}><button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => choose(item)}><strong>{item.code}</strong><span>{item.description}{item.group ? <small>{item.group}</small> : null}</span>{kind === 'cnae' && (item.registered ? <em className="fiscal-badge fiscal-badge--ok">No CNPJ</em> : <em className="fiscal-badge fiscal-badge--warn">Fora do CNPJ</em>)}</button></li>)}
+      {items.map((item) => <li key={item.code} role="option" aria-selected={values.some((entry) => entry.code === item.code)}><button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => choose(item)}><strong>{item.code}</strong><span>{item.description}{item.group ? <small>{item.group}</small> : null}</span>{kind === 'cnae' && (item.registered ? <em className="fiscal-badge fiscal-badge--ok">No CNPJ</em> : <em className="fiscal-badge fiscal-badge--warn">Fora do CNPJ</em>)}</button></li>)}
       {!items.length && pattern.test(typed) && <li role="option" aria-selected="false"><button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => choose({ code: typed, description: '' })}><strong>{typed}</strong><span>Usar o código digitado</span></button></li>}
       {!items.length && !pattern.test(typed) && <li className="fiscal-picker-empty">{error || (query ? 'Nenhum código encontrado.' : 'Digite para buscar.')}</li>}
     </ul>}
-    {value?.code ? <p className="fiscal-picker-value"><strong>{value.code}</strong><span>{value.description || 'Descrição não informada'}</span>{kind === 'cnae' && value.registered === false && <em className="fiscal-badge fiscal-badge--warn"><AlertTriangle size={13} aria-hidden="true" />Não registrado no CNPJ da emissora</em>}<button type="button" className="payable-link" onClick={() => onChange(null)}>Remover</button></p> : hint && <small className="payable-hint">{hint}</small>}
+    {values.length ? values.map((value, index) => <p className="fiscal-picker-value" key={value.code}><strong>{value.code}</strong><span>{value.description || 'Descrição não informada'}{kind === 'cnae' && values.length > 1 && (index === 0 ? <em className="fiscal-badge fiscal-badge--main">Principal</em> : <button type="button" className="payable-link fiscal-make-main" onClick={() => makeMain(value.code)}>Tornar principal</button>)}</span>{kind === 'cnae' && value.registered === false && <em className="fiscal-badge fiscal-badge--warn"><AlertTriangle size={13} aria-hidden="true" />Não registrado no CNPJ da emissora</em>}<button type="button" className="payable-link" onClick={() => remove(value.code)}>Remover</button></p>) : hint && <small className="payable-hint">{hint}</small>}
   </div>
 }
 
+const fiscalList = (value) => (Array.isArray(value) ? value : value ? [value] : []).filter((entry) => entry?.code)
 const technicianOf = (issuer) => ({ name: issuer?.technician || '', registry: issuer?.technicianRegistry || '', phone: issuer?.technicianPhone || '' })
 
 function LetterForm({ model, draft, setDraft, settings, catalog }) {
@@ -71,9 +75,9 @@ function LetterForm({ model, draft, setDraft, settings, catalog }) {
     </div></section>
     <section className="proposal-doc-section proposal-fiscal"><h3><BadgeCheck size={17} aria-hidden="true" />CNAE – Código de atividade – NCM/NBS</h3>
       <div className="proposal-doc-grid proposal-doc-grid--fiscal">
-        <FiscalPicker kind="cnae" label="CNAE (código de atividade)" cnpj={issuer?.cnpj} value={draft.fiscal.cnae && { ...draft.fiscal.cnae, registered: draft.fiscal.cnae.registered ?? registered(draft.fiscal.cnae.code) }} onChange={(value) => set('fiscal', { ...draft.fiscal, cnae: value })} />
-        <FiscalPicker kind="nbs" label="NBS (serviço)" value={draft.fiscal.nbs} onChange={(value) => set('fiscal', { ...draft.fiscal, nbs: value })} hint="Nomenclatura Brasileira de Serviços, exigida na NFS-e." />
-        <FiscalPicker kind="ncm" label="NCM (produto)" value={draft.fiscal.ncm} onChange={(value) => set('fiscal', { ...draft.fiscal, ncm: value })} hint="Para peças vendidas como produto." />
+        <FiscalPicker kind="cnae" label="CNAE (código de atividade)" cnpj={issuer?.cnpj} values={fiscalList(draft.fiscal.cnae).map((entry) => ({ ...entry, registered: entry.registered ?? registered(entry.code) }))} onChange={(values) => set('fiscal', { ...draft.fiscal, cnae: values })} hint="O primeiro CNAE é o principal." />
+        <FiscalPicker kind="nbs" label="NBS (serviço)" values={fiscalList(draft.fiscal.nbs)} onChange={(values) => set('fiscal', { ...draft.fiscal, nbs: values })} hint="Nomenclatura Brasileira de Serviços, exigida na NFS-e." />
+        <FiscalPicker kind="ncm" label="NCM (produto)" values={fiscalList(draft.fiscal.ncm)} onChange={(values) => set('fiscal', { ...draft.fiscal, ncm: values })} hint="Para peças vendidas como produto." />
       </div>
     </section>
     <section className="proposal-doc-section"><h3>1. Refere-se e 2. Escopo</h3>
@@ -177,7 +181,8 @@ export default function ProposalDocumentModal({ offer, option, onClose, onSaved 
   const [model, setModel] = useState(null), [draft, setDraft] = useState(null), [settings, setSettings] = useState(null), [catalog, setCatalog] = useState(null)
   const [assignments, setAssignments] = useState({}), [error, setError] = useState(''), [busy, setBusy] = useState(false), [loading, setLoading] = useState(false), [settingsOpen, setSettingsOpen] = useState(false)
   const formId = useId()
-  const value = option ? Number(option.serviceValue || 0) * (1 - Number(option.discount || 0) / 100) : 0
+  // The document charges the OS value of the option: cost plus gross profit, less the discount.
+  const value = option ? Number(option.osValue || 0) : 0
 
   async function load(key, fresh = false) {
     setLoading(true); setError(''); setAssignments({})
@@ -202,8 +207,11 @@ export default function ProposalDocumentModal({ offer, option, onClose, onSaved 
     } catch (caught) { setError(caught.message) } finally { setBusy(false) }
   }
 
+  // Letter models charge what is typed in their items; a table model has its own price list, so it is not compared.
+  const documentTotal = draft?.items ? draft.items.reduce((total, item) => total + itemTotal({ quantity: item.quantity, unitPrice: Number(item.unitPrice) || 0 }), 0) : null
   const current = proposalModels.find((item) => item.key === model)
-  const footer = model ? <><button className="admin-tool-button" type="button" disabled={busy} onClick={() => { setModel(null); setDraft(null) }}><ArrowLeft size={16} />Trocar modelo</button><button className="admin-tool-button" type="button" disabled={busy} onClick={() => load(model, true)}>Recomeçar com dados do sistema</button><button className="admin-tool-button admin-tool-button--primary" form={formId} type="submit" disabled={busy}><FileText size={16} />{busy ? 'Gerando...' : 'Gerar PDF'}</button></> : <button className="admin-tool-button" type="button" onClick={onClose}>Cancelar</button>
+  const differs = documentTotal != null && value > 0 && Math.abs(documentTotal - value) > 0.005
+  const footer = model ? <>{differs && <p className="payable-hint proposal-total-differs" role="status">O total deste documento ({money(documentTotal)}) é diferente do Valor da OS desta opção ({money(value)}). Use «Recomeçar com dados do sistema» para voltar ao valor calculado; o recebimento da OS segue o total do documento.</p>}<button className="admin-tool-button" type="button" disabled={busy} onClick={() => { setModel(null); setDraft(null) }}><ArrowLeft size={16} />Trocar modelo</button><button className="admin-tool-button" type="button" disabled={busy} onClick={() => load(model, true)}>Recomeçar com dados do sistema</button><button className="admin-tool-button admin-tool-button--primary" form={formId} type="submit" disabled={busy}><FileText size={16} />{busy ? 'Gerando...' : 'Gerar PDF'}</button></> : <button className="admin-tool-button" type="button" onClick={onClose}>Cancelar</button>
   // Rendered at the document root so the screen that opens it cannot restyle the form.
   return createPortal(<>
     <PayableModal title={model ? `Proposta · ${current.title}` : 'Escolha o modelo da proposta'} className="proposal-doc-modal" wide busy={busy} onClose={onClose} footer={footer}>

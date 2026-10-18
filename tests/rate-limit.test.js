@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 import test from 'node:test'
 import express from 'express'
 import { createServer } from 'vite'
@@ -50,9 +53,12 @@ test('rate limit expires automatically and the next window accepts requests agai
 test('Vite LAN proxy overwrites spoofed forwarding headers so clients cannot evade IP limits', async (t) => {
   const backend = await fixture(t, { limit: 2 })
   const proxy = viteConfig({ mode: 'test', command: 'serve' }).server.proxy['/api']
-  const vite = await createServer({ configFile: false, logLevel: 'silent', server: { host: '127.0.0.1', port: 0, strictPort: false, proxy: { '/api': { ...proxy, target: backend.url } } } })
+  // Its own dependency cache: sharing node_modules/.vite with a running `npm run dev` re-optimized its dependencies and
+  // left the portal blank (504 "Outdated Optimize Dep") until the cache was cleared.
+  const cacheDir = await mkdtemp(path.join(tmpdir(), 'gmac-vite-test-'))
+  const vite = await createServer({ configFile: false, cacheDir, optimizeDeps: { noDiscovery: true, include: [] }, logLevel: 'silent', server: { host: '127.0.0.1', port: 0, strictPort: false, proxy: { '/api': { ...proxy, target: backend.url } } } })
   await vite.listen()
-  t.after(() => vite.close())
+  t.after(async () => { await vite.close(); await rm(cacheDir, { recursive: true, force: true }) })
   const url = `http://127.0.0.1:${vite.httpServer.address().port}`
   for (const fakeIp of ['192.168.1.10', '192.168.1.11']) {
     const response = await fetch(`${url}/api/health`, { headers: { 'X-Forwarded-For': fakeIp } })

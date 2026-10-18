@@ -6,10 +6,10 @@ import { hourReport, reportRange, workIntervals } from '../server/reportData.js'
 
 const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Teste' }
 async function orderFor(fixture) {
-  const offer = (await fixture.request('/offers', 'POST', offerDraft)).data.item
-  await fixture.request(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], kind: 'service', stages: ['turning'] })
-  await fixture.request(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', deadline: offerDraft.deadline, serviceValue: 100 } })
-  return (await fixture.request(`/offers/${offer.id}/accept`, 'POST')).data.item
+  const offer = (await fixture.adminRequest('/offers', 'POST', offerDraft)).data.item
+  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], kind: 'service', stages: ['turning'] })
+  await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', deadline: offerDraft.deadline, serviceValue: 100 } })
+  return (await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')).data.item
 }
 
 test('machine changes keep the private work session and progress, reject invalid/foreign/repeated changes, and remain usable for pause', async () => {
@@ -19,11 +19,11 @@ test('machine changes keep the private work session and progress, reject invalid
     const headers = { Authorization: `Bearer ${admin.token}` }
     const machines = []
     for (const name of ['Torno', 'Fresa']) {
-      const result = await fixture.request('/machines', 'POST', { name, type: name, sector: 'Usinagem', hourlyRate: 100 }, headers)
+      const result = await fixture.adminRequest('/machines', 'POST', { name, type: name, sector: 'Usinagem', hourlyRate: 100 }, headers)
       assert.equal(result.status, 201)
       machines.push(result.data.item)
     }
-    const employee = (await fixture.request('/employees', 'POST', { name: 'Ana', birthDate: '1990-01-01', cpf: '00000000001', email: 'ana@example.invalid', identification: '001' })).data.item
+    const employee = (await fixture.adminRequest('/employees', 'POST', { name: 'Ana', birthDate: '1990-01-01', cpf: '00000000001', email: 'ana@example.invalid', identification: '001' }, fixture.admin)).data.item
     const order = await orderFor(fixture)
     const auth = { Authorization: `Bearer ${fixture.operatorToken}` }
     const route = `/operations/orders/${order.code}`
@@ -50,9 +50,9 @@ test('machine changes keep the private work session and progress, reject invalid
     assert.equal((await fixture.request(`${route}/machine`, 'POST', { ...credentials, machineId: machines[1].id }, auth)).status, 409)
     assert.equal((await fixture.request(`${route}/machine`, 'POST', { ...credentials, machineId: null }, auth)).status, 200)
     assert.equal((await fixture.request(`${route}/machine`, 'POST', { ...credentials, machineId: machines[0].id }, auth)).status, 200)
-    const events = (await fixture.request(`${route}/events`)).data.items
+    const events = (await fixture.request(`${route}/events`, 'GET', undefined, { Authorization: `Bearer ${fixture.operatorToken}` })).data.items
     assert.equal(events.filter((event) => event.type === 'machine_changed').length, 3)
-    const history = (await fixture.request(`/employees/${employee.id}/activities?period=all`)).data.items
+    const history = (await fixture.adminRequest(`/employees/${employee.id}/activities?period=all`)).data.items
     assert.equal(history.filter((event) => event.type === 'machine_changed').length, 3)
     assert.equal((await fixture.request(`${route}/pause`, 'POST', { ...credentials, reason: 'Descanso' }, auth)).status, 200)
     assert.equal((await fixture.request(`${route}/machine`, 'POST', { ...credentials, machineId: machines[1].id }, auth)).status, 409)

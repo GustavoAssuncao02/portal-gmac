@@ -3,9 +3,10 @@ import bcrypt from 'bcryptjs'
 import { randomUUID } from 'node:crypto'
 import { readStore, mutateStore } from './offers.js'
 import { notificationDefaults, notificationOptions } from './notificationRules.js'
+import { employeeRecords, staffAccountId } from './employeeAccess.js'
 
 const sessions = new Map()
-const safe = ({ id, name, birthDate, cpf, email, createdAt }) => ({ id, name, birthDate, cpf, email, createdAt })
+const safe = ({ id, name, birthDate, cpf, email, createdAt, role }) => ({ id, name, birthDate, cpf, email, createdAt, role: role || 'admin' })
 const digits = (value) => String(value || '').replace(/\D/g, '')
 const fail = (status, message) => { const error = new Error(message); error.status = status; throw error }
 export function notificationSettings(store, userId) {
@@ -19,8 +20,11 @@ export function appearanceSettings(store, userId) {
 export function issueAdminToken(user) {
   for (const [key, session] of sessions) if (session.expires < Date.now()) sessions.delete(key)
   const token = randomUUID()
-  sessions.set(token, { id: user.id, name: user.name, expires: Date.now() + 12 * 3600000 })
+  sessions.set(token, { id: user.id, name: user.name, role: user.role || 'admin', expires: Date.now() + 12 * 3600000 })
   return token
+}
+export function revokeAccountSessions(id) {
+  for (const [token, session] of sessions) if (String(session.id) === String(id)) sessions.delete(token)
 }
 export function adminIdentity(request) {
   const token = String(request.headers.authorization || '').replace(/^Bearer /, '')
@@ -32,8 +36,19 @@ export function requireAdmin(request, response, next) {
   if (!session || session.expires < Date.now()) return response.status(401).json({ message: 'Entre novamente como administrador.' })
   request.adminId = session.id
   request.adminName = session.name
+  request.adminRole = session.role
   request.adminToken = session.token
   next()
+}
+
+// Administrative employees keep the finance steps embedded in other screens (OS costs and completion, stock purchases),
+// but not the Gestão Financeira screens themselves.
+const financeArea = /^\/(payables|receivables|classifications|bank-statements|ai-reconciliations)(\/|$)/
+const staffFinanceRoutes = [['GET', /^\/payables$/], ['POST', /^\/payables(\/uploads)?$/], ['GET', /^\/payables\/order-costs\/[^/]+$/], ['GET', /^\/receivables\/order\/[^/]+$/], ['POST', /^\/receivables$/]]
+export function restrictStaffFinance(request, response, next) {
+  if (!financeArea.test(request.path) || adminIdentity(request)?.role !== 'staff') return next()
+  if (staffFinanceRoutes.some(([method, route]) => request.method === method && route.test(request.path))) return next()
+  response.status(403).json({ message: 'Seu acesso não inclui a Gestão Financeira.' })
 }
 
 export function createAccountService(pool, env = process.env) {
@@ -47,36 +62,80 @@ export function createAccountService(pool, env = process.env) {
     }
     return privateFields ? rows : rows.map(safe)
   }
+  async function staff() {
+    return (await employeeRecords(pool)).filter((item) => item.type === 'administrative').map((item) => ({ ...item, id: staffAccountId(item.id), employeeId: item.id, role: 'staff' }))
+  }
+  // Everyone who signs in with CPF and password: administrators first, then administrative employees.
+  async function accounts() {
+    return [...await admins(true), ...await staff()]
+  }
+  async function account(id) {
+    const user = (await accounts()).find((item) => String(item.id) === String(id))
+    return user ? safe(user) : null
+  }
+  // Test login only: the CPF chooses the account (administrator or administrative employee), without password.
+  async function accountByCpf(cpf) {
+    const user = (await accounts()).find((item) => digits(item.cpf) === digits(cpf))
+    return user ? safe(user) : null
+  }
+  const passwordMatches = async (user, password) => user.passwordHash ? bcrypt.compare(password, user.passwordHash) : user.id === 0 && password === env.DEMO_ADMIN_PASSWORD
   async function authenticate(cpf, password) {
-    const user = (await admins(true)).find((item) => digits(item.cpf) === cpf)
-    const matches = user && (user.passwordHash ? await bcrypt.compare(password, user.passwordHash) : user.id === 0 && password === env.DEMO_ADMIN_PASSWORD)
-    return matches ? safe(user) : null
+    for (const user of (await accounts()).filter((item) => digits(item.cpf) === cpf)) if (await passwordMatches(user, password)) return safe(user)
+    return null
   }
   async function updateAccount(id, fields) {
-    const current = (await admins(true)).find((item) => String(item.id) === String(id))
+    const current = (await accounts()).find((item) => String(item.id) === String(id))
     if (!current) fail(404, 'Conta não encontrada.')
     if (!String(fields.name || '').trim()) fail(400, 'Informe seu nome.')
-    if (!await authenticate(digits(current.cpf), fields.currentPassword || '')) fail(403, 'Senha atual incorreta.')
+    if (!await passwordMatches(current, fields.currentPassword || '')) fail(403, 'Senha atual incorreta.')
     if (fields.password && (typeof fields.password !== 'string' || fields.password.length < 6 || fields.password.length > 72)) fail(400, 'A nova senha deve ter entre 6 e 72 caracteres.')
     const changes = { name: fields.name.trim().slice(0, 120), ...(fields.password ? { passwordHash: await bcrypt.hash(fields.password, 12) } : {}) }
-    if (pool) await pool.execute('UPDATE users SET name = ?, password_hash = ? WHERE id = ? AND role = \'admin\'', [changes.name, changes.passwordHash || current.passwordHash, id])
+    if (current.role === 'staff') {
+      if (pool) await pool.execute('UPDATE employees SET name = ?, password_hash = ? WHERE id = ?', [changes.name, changes.passwordHash || current.passwordHash, current.employeeId])
+      else await mutateStore((store) => { Object.assign(store.employees.find((item) => String(item.id) === String(current.employeeId)), changes) })
+    } else if (pool) await pool.execute('UPDATE users SET name = ?, password_hash = ? WHERE id = ? AND role = \'admin\'', [changes.name, changes.passwordHash || current.passwordHash, id])
     else await mutateStore((store) => {
       if (Number(id) === 0) store.demoAdmin = { ...store.demoAdmin, ...changes }
       else Object.assign(store.admins.find((item) => String(item.id) === String(id)), changes)
     })
-    if (fields.password) for (const [token, session] of sessions) if (String(session.id) === String(id)) sessions.delete(token)
+    if (fields.password) revokeAccountSessions(id)
     return safe({ ...current, ...changes })
   }
+  // The free note of a client was added later: databases created before get the column once (existing clients stay blank).
+  // If the database user cannot change tables (common on shared hosting), the clients keep working without the note and
+  // the server logs how to add the column by hand. Resolves to whether the column exists.
+  // The e-mail of a client became optional (the customer list has none): the column is made nullable the same way.
+  let notesColumn = null
+  const ensureClientNotes = () => notesColumn ||= (async () => {
+    try {
+      const [email] = await pool.execute("SELECT IS_NULLABLE AS nullable FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'clients' AND COLUMN_NAME = 'email'")
+      if (email[0]?.nullable === 'NO') await pool.execute('ALTER TABLE clients MODIFY email VARCHAR(160) NULL')
+    } catch (error) { console.error(`O e-mail dos clientes continua obrigatório no banco (${error.code || error.message}). Rode no banco: ALTER TABLE clients MODIFY email VARCHAR(160) NULL`) }
+    try {
+      const [columns] = await pool.execute("SELECT COLUMN_NAME AS name FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'clients' AND COLUMN_NAME = 'notes'")
+      if (columns.length) return true
+      try { await pool.execute('ALTER TABLE clients ADD COLUMN notes VARCHAR(1000) NULL') } catch (error) { if (error.code !== 'ER_DUP_FIELDNAME') throw error }
+      return true
+    } catch (error) {
+      console.error(`A observação dos clientes ficará indisponível: não foi possível criar a coluna (${error.code || error.message}). Rode no banco: ALTER TABLE clients ADD COLUMN notes VARCHAR(1000) NULL`)
+      return false
+    }
+  })()
   async function clients() {
-    if (pool) { const [rows] = await pool.execute('SELECT id, name, document_type AS documentType, document, email, created_at AS createdAt FROM clients ORDER BY name'); return rows }
+    if (pool) {
+      const notes = await ensureClientNotes()
+      const [rows] = await pool.execute(`SELECT id, name, document_type AS documentType, document, email, ${notes ? "COALESCE(notes, '')" : "''"} AS notes, created_at AS createdAt FROM clients ORDER BY name`)
+      return rows
+    }
     return (await readStore()).clients || []
   }
   async function save(kind, id, body) {
     const name = String(body.name || '').trim().slice(0, 120)
-    const email = String(body.email || '').trim().slice(0, 160)
-    if (!name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(400, 'Informe nome e e-mail válidos.')
     const isClient = kind === 'clients'
-    const fields = isClient ? { name, email, documentType: body.documentType, document: digits(body.document) } : { name, email, birthDate: body.birthDate, cpf: digits(body.cpf) }
+    // A client may have no e-mail (stored as NULL, so several blanks do not collide in the unique index); administrators need one.
+    const email = String(body.email || '').trim().slice(0, 160) || (isClient ? null : '')
+    if (!name || (email || !isClient) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(400, 'Informe nome e e-mail válidos.')
+    const fields = isClient ? { name, email, documentType: body.documentType, document: digits(body.document), notes: String(body.notes ?? '').trim().slice(0, 1000) } : { name, email, birthDate: body.birthDate, cpf: digits(body.cpf) }
     if (isClient ? !['cnpj', 'cpf'].includes(fields.documentType) || fields.document.length !== (fields.documentType === 'cnpj' ? 14 : 11) : !/^\d{11}$/.test(fields.cpf) || !/^\d{4}-\d{2}-\d{2}$/.test(fields.birthDate || '')) fail(400, 'Confira documento e data de nascimento.')
     const rows = isClient ? await clients() : await admins(true)
     const current = id == null ? null : rows.find((item) => String(item.id) === String(id))
@@ -86,12 +145,13 @@ export function createAccountService(pool, env = process.env) {
       if (typeof body.password !== 'string' || body.password.length < 6 || body.password.length > 72) fail(400, 'A senha deve ter entre 6 e 72 caracteres.')
       fields.passwordHash = await bcrypt.hash(body.password, 12)
     }
-    if (rows.some((item) => String(item.id) !== String(id) && (item.email === email || (isClient ? item.document === fields.document : digits(item.cpf) === fields.cpf)))) fail(409, 'Documento ou e-mail já cadastrado.')
+    if (rows.some((item) => String(item.id) !== String(id) && (email && item.email === email || (isClient ? item.document === fields.document : digits(item.cpf) === fields.cpf)))) fail(409, 'Documento ou e-mail já cadastrado.')
     let item
     if (pool) {
       const table = isClient ? 'clients' : 'users'
-      const columns = isClient ? ['name', 'email', 'document_type', 'document'] : ['name', 'email', 'birth_date', 'cpf', 'password_hash']
-      const values = isClient ? [name, email, fields.documentType, fields.document] : [name, email, fields.birthDate, fields.cpf, fields.passwordHash || current.passwordHash]
+      const notes = isClient && await ensureClientNotes()
+      const columns = isClient ? ['name', 'email', 'document_type', 'document', ...(notes ? ['notes'] : [])] : ['name', 'email', 'birth_date', 'cpf', 'password_hash']
+      const values = isClient ? [name, email, fields.documentType, fields.document, ...(notes ? [fields.notes || null] : [])] : [name, email, fields.birthDate, fields.cpf, fields.passwordHash || current.passwordHash]
       if (id == null) {
         const [result] = await pool.execute(`INSERT INTO ${table} (${columns.join(', ')}${isClient ? '' : ', role'}) VALUES (${columns.map(() => '?').join(', ')}${isClient ? '' : ", 'admin'"})`, values)
         item = { id: result.insertId, ...fields }
@@ -107,11 +167,11 @@ export function createAccountService(pool, env = process.env) {
         return row
       }
       const row = { id: isClient ? randomUUID() : Math.max(0, ...store.admins.map((entry) => Number(entry.id) || 0)) + 1, ...fields, createdAt: new Date().toISOString() }
-      if (store[kind].some((entry) => entry.email === email || (isClient ? entry.document === fields.document : entry.cpf === fields.cpf))) fail(409, 'Cadastro duplicado.')
+      if (store[kind].some((entry) => email && entry.email === email || (isClient ? entry.document === fields.document : entry.cpf === fields.cpf))) fail(409, 'Cadastro duplicado.')
       store[kind].push(row)
       return row
     })
-    if (!isClient && body.password && id != null) for (const [token, session] of sessions) if (String(session.id) === String(id)) sessions.delete(token)
+    if (!isClient && body.password && id != null) revokeAccountSessions(id)
     return isClient ? item : safe(item)
   }
   async function remove(kind, id) {
@@ -128,10 +188,10 @@ export function createAccountService(pool, env = process.env) {
     if (pool && kind === 'admins') await mutateStore((store) => {
       if (store.adminNotificationPreferences) store.adminNotificationPreferences = store.adminNotificationPreferences.filter((item) => String(item.userId) !== String(id))
     })
-    if (kind === 'admins') for (const [token, session] of sessions) if (String(session.id) === String(id)) sessions.delete(token)
+    if (kind === 'admins') revokeAccountSessions(id)
   }
   async function getNotificationSettings(id) {
-    if (!(await admins()).some((item) => String(item.id) === String(id))) fail(404, 'Conta não encontrada.')
+    if (!await account(id)) fail(404, 'Conta não encontrada.')
     return notificationSettings(await readStore(), id)
   }
   async function updateNotificationSettings(id, fields) {
@@ -151,7 +211,7 @@ export function createAccountService(pool, env = process.env) {
     })
   }
   async function getAppearanceSettings(id) {
-    if (!(await admins()).some((item) => String(item.id) === String(id))) fail(404, 'Conta não encontrada.')
+    if (!await account(id)) fail(404, 'Conta não encontrada.')
     return appearanceSettings(await readStore(), id)
   }
   async function updateAppearanceSettings(id, fields) {
@@ -170,7 +230,7 @@ export function createAccountService(pool, env = process.env) {
       return appearanceSettings(store, id)
     })
   }
-  return { admins, clients, authenticate, updateAccount, getNotificationSettings, updateNotificationSettings, getAppearanceSettings, updateAppearanceSettings, save, remove }
+  return { admins, clients, account, accountByCpf, authenticate, updateAccount, getNotificationSettings, updateNotificationSettings, getAppearanceSettings, updateAppearanceSettings, save, remove }
 }
 
 export function createAccountsRouter(service) {
@@ -178,7 +238,7 @@ export function createAccountsRouter(service) {
   router.use(['/admins', '/clients', '/account', '/auth/logout', '/auth/session'], requireAdmin)
   router.get('/auth/session', async (request, response, next) => {
     try {
-      const user = (await service.admins()).find((item) => String(item.id) === String(request.adminId))
+      const user = await service.account(request.adminId)
       if (!user) return response.status(401).json({ message: 'Entre novamente como administrador.' })
       response.json({ user })
     } catch (error) { next(error) }

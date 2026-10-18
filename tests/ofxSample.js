@@ -14,3 +14,19 @@ export const sampleRows = [
   ['DEBIT', '20261002', '-1.00', 'T6', 'IOF'],
   ['CREDIT', '20261002', '10.00', 'T7', 'SALDO EM CONTA REMUNERADA'],
 ]
+
+// Sicoob (756) exports two OFX models, "money" (CRLF header) and "unix" (LF only): closed tags, Windows-1252 accents, short
+// memos and the counterparty in <NAME>. The data below is fictitious; real statements are not versioned.
+export const sicoobRecords = [
+  ['CREDIT', '1500.00', 'S1', 'CRÉD.TED-STR', 'CLIENTE EXEMPLO INDUSTRIA E COM'],
+  ['DEBIT', '-1000.00', 'S2', 'RDC AUTOMÁTICO'],
+  ['DEBIT', '-200.00', 'S3', 'PIX EMITIDO OUTRA IF', 'Pagamento Pix ***.123.456-**'],
+  ['CREDIT', '1000.00', 'S4', 'RESGATE RDC AUTOMÁTICO'],
+  ['DEBIT', '-350.00', 'S5', 'DÉB.CONV.DEMAIS EMPRESAS'],
+]
+export function sicoobOfx(newline = '\n', records = sicoobRecords) {
+  const header = ['OFXHEADER:100', 'DATA:OFXSGML', 'VERSION:102', 'SECURITY:NONE', 'ENCODING:USASCII', 'CHARSET:1252', 'COMPRESSION:NONE', 'OLDFILEUID:NONE', 'NEWFILEUID:NONE'].join(newline)
+  const rows = records.map(([type, amount, fitId, memo, name]) => ['<STMTTRN>', `<TRNTYPE>${type}</TRNTYPE>`, '<DTPOSTED>20261001120000[-3:BRT]</DTPOSTED>', `<TRNAMT>${amount}</TRNAMT>`, `<FITID>${fitId}</FITID>`, '<CHECKNUM>0</CHECKNUM>', `<MEMO>${memo}</MEMO>`, ...(name ? [`<NAME>${name}</NAME>`] : []), '</STMTTRN>'].join('\n')).join('\n')
+  const body = ['<OFX>', '<SIGNONMSGSRSV1>', '<SONRS>', '<STATUS>', '<CODE>0</CODE>', '<SEVERITY>INFO</SEVERITY>', '</STATUS>', '<DTSERVER>20261016120000[-3:BRT]</DTSERVER>', '<LANGUAGE>POR</LANGUAGE>', '<FI>', '<ORG>Banco Cooperativo do Brasil</ORG>', '<FID>756</FID>', '</FI>', '</SONRS>', '</SIGNONMSGSRSV1>', '<BANKMSGSRSV1>', '<STMTTRNRS>', '<TRNUID>1</TRNUID>', '<STMTRS>', '<CURDEF>BRL</CURDEF>', '<BANKACCTFROM>', '<BANKID>756</BANKID>', '<BRANCHID>0001-0</BRANCHID>', '<ACCTID>12345-6</ACCTID>', '<ACCTTYPE>CHECKING</ACCTTYPE>', '</BANKACCTFROM>', '<BANKTRANLIST>', '<DTSTART>20261001120000[-3:BRT]</DTSTART>', '<DTEND>20261016120000[-3:BRT]</DTEND>', rows, '</BANKTRANLIST>', '<LEDGERBAL>', '<BALAMT>950.00</BALAMT>', '<DTASOF>20261015120000[-3:BRT]</DTASOF>', '</LEDGERBAL>', '</STMTRS>', '</STMTTRNRS>', '</BANKMSGSRSV1>', '</OFX>'].join('\n')
+  return Buffer.from(`${header}${newline}${body}`, 'latin1')
+}

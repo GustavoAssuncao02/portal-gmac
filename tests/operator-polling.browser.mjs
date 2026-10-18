@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
+import { identifiedOperator } from './operatorEntry.js'
 
 const fixture = await createWorkflowFixture()
 const browser = await chromium.launch({ headless: true })
@@ -18,40 +19,41 @@ const auth = { Authorization: `Bearer ${fixture.operatorToken}` }
 const card = (service) => page.locator('.operator-project').filter({ hasText: service })
 
 async function createOrder(service) {
-  const offer = (await fixture.request('/offers', 'POST', { ...offerDraft, service })).data.item
-  assert.equal((await fixture.request(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], kind: 'service', stages: ['turning', 'painting'] })).status, 200)
-  assert.equal((await fixture.request(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', title: 'Teste de atualizacao', deadline: offerDraft.deadline, serviceValue: 100, margin: 15 } })).status, 200)
-  const result = await fixture.request(`/offers/${offer.id}/accept`, 'POST')
+  const offer = (await fixture.adminRequest('/offers', 'POST', { ...offerDraft, service })).data.item
+  assert.equal((await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], kind: 'service', stages: ['turning', 'painting'] })).status, 200)
+  assert.equal((await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', title: 'Teste de atualizacao', deadline: offerDraft.deadline, serviceValue: 100, margin: 15 } })).status, 200)
+  const result = await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')
   assert.equal(result.status, 201)
   return result.data.item
 }
 
 try {
   const first = await createOrder('OS em trabalho')
-  const employee = (await fixture.request('/employees', 'POST', { name: 'Operador teste', birthDate: '1990-01-01', cpf: '00000000001', email: 'operador@example.invalid', identification: '001' })).data.item
+  const employee = (await fixture.adminRequest('/employees', 'POST', { name: 'Operador teste', birthDate: '1990-01-01', cpf: '00000000001', email: 'operador@example.invalid', identification: '001' }, fixture.admin)).data.item
   const started = (await fixture.request(`/operations/orders/${first.code}/start`, 'POST', { employeeId: employee.id }, auth)).data
   const session = { id: started.operation.activeSession.id, token: started.sessionToken }
-  await context.addInitScript(({ token, code, session }) => {
+  await context.addInitScript(({ token, code, session, operator }) => {
     sessionStorage.setItem('gmac-operator-token', token)
+    sessionStorage.setItem(...operator)
     sessionStorage.setItem(`gmac-operator-session-${code}`, JSON.stringify(session))
-  }, { token: fixture.operatorToken, code: first.code, session })
+  }, { token: fixture.operatorToken, operator: identifiedOperator(employee), code: first.code, session })
   await page.goto(fixture.url)
-  await card(first.service).waitFor()
-  await page.locator('.operator-worker-toggle').first().click()
-  await page.getByRole('button', { name: 'Pausar trabalho', exact: true }).waitFor()
+  await card(first.service).click()
+  await page.getByRole('button', { name: /^Pausar trabalho/ }).waitFor()
   const quantities = page.locator('.operator-stage-action input')
   await quantities.first().fill('3')
   const baseline = requests.at(-1)
   const incoming = await createOrder('OS criada com o operador aberto')
-  assert.equal(await card(incoming.service).count(), 0)
-  await card(incoming.service).waitFor({ timeout: 15000 })
-  assert.ok(requests.some((at) => at - baseline >= 9500 && at - baseline <= 13000), 'A real ten-second polling tick discovers the new OS')
+  for (const deadline = Date.now() + 15000; !requests.some((at) => at - baseline >= 9500) && Date.now() < deadline;) await new Promise((resolve) => setTimeout(resolve, 200))
+  assert.ok(requests.some((at) => at - baseline >= 9500 && at - baseline <= 13000), 'A real ten-second polling tick runs while the OS is open')
   assert.equal(documentLoads, 1, 'The page never reloads')
   assert.equal(await page.locator('.operator-detail-heading h2').innerText(), first.service)
   assert.equal(await quantities.first().inputValue(), '3')
   assert.deepEqual(await page.evaluate((code) => JSON.parse(sessionStorage.getItem(`gmac-operator-session-${code}`)), first.code), session)
-  const operation = (await fixture.request('/operations/orders')).data.items.find((order) => order.code === first.code).operation
+  const operation = (await fixture.request('/operations/orders', 'GET', undefined, fixture.admin)).data.items.find((order) => order.code === first.code).operation
   assert.equal(operation.activeSession.id, session.id)
+  await page.getByRole('button', { name: '← Voltar para as OS', exact: true }).click()
+  await card(incoming.service).waitFor()
   await page.screenshot({ path: 'test-results/operator-polling-new-os.png' })
   const response = await fetch(`${fixture.url}/api/operations/operator/orders`, { headers: auth })
   assert.equal(response.headers.get('cache-control'), 'no-store')
@@ -73,11 +75,12 @@ try {
   })
   await page.evaluate(() => window.dispatchEvent(new Event('online')))
   await page.getByRole('alert').filter({ hasText: 'Falha temporaria de teste' }).waitFor()
-  assert.equal(await page.locator('.operator-detail-heading h2').innerText(), first.service)
+  assert.equal(await card(first.service).count(), 1, 'a failed update keeps the list on screen')
   const recoveryOrder = await createOrder('OS recebida apos reconectar')
   await page.evaluate(() => window.dispatchEvent(new Event('online')))
   await card(recoveryOrder.service).waitFor()
   assert.equal(await page.getByRole('alert').count(), 0)
+  await card(first.service).click()
   await page.getByRole('button', { name: 'Visualizar informa\u00e7\u00f5es do projeto', exact: true }).click()
   await page.locator('.operator-project-info').waitFor()
   const infoResponse = page.waitForResponse((response) => response.url().endsWith('/api/operations/operator/orders') && response.ok())

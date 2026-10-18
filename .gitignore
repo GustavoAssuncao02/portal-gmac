@@ -9,3 +9,6 @@ test-results/
 
 # Extratos bancarios contem dados financeiros e pessoais.
 *.ofx
+
+# Exportacoes do banco com dados reais (CPF, CNPJ, hashes de senha).
+database/export/

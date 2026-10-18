@@ -60,7 +60,7 @@ try {
   const classification = (await post('/classifications', { name: 'Materiais' })).data.item
   await post('/payables', { supplierId: supplier.id, classificationId: classification.id, description: 'Chapas de aco', documentNumber: 'NF-001', issueDate: todayBahia(), dueDate: todayBahia(), value: '1450.50', kind: 'normal' })
   const offer = (await post('/offers', offerDraft)).data.item
-  await fixture.request(`/offers/${offer.id}/resources`, 'PUT', { materials: [{ id: 'm1', name: 'Ferro', quantity: 10, unitPrice: 20 }], laborEntries: [], stages: ['turning', 'painting'], kind: 'service' })
+  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [{ id: 'm1', name: 'Ferro', quantity: 10, unitPrice: 20 }], laborEntries: [], stages: ['turning', 'painting'], kind: 'service' })
   await post(`/offers/${offer.id}/proposal`, { layout: 'classic', proposal: { key: 'A', deadline: '2026-12-20', serviceValue: 300, materials: 200, labor: 0, margin: 15, discount: 0 } })
   await post(`/offers/${offer.id}/accept`, {})
   await page.goto(fixture.url)

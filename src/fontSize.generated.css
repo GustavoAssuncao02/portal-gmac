@@ -6,6 +6,25 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .operator-avatar { font-size: calc(10px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .operator-sidebar-bottom strong { font-size: calc(10px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .operator-sidebar-bottom small { font-size: calc(8px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .operator-entry-card h1 { font-size: calc(22px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .operator-entry-card p { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .operator-entry-card label { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .operator-entry-card input { font-size: calc(24px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .operator-entry-card button { font-size: calc(14px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .operator-back { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .operator-detail-top .operator-outline { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .operator-step strong { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .operator-step small { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .operator-picker h2 { font-size: calc(22px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .operator-picker > p { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .operator-picker-group h3 { font-size: calc(16px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .operator-picker-sector h4 { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .operator-picker-option { font-size: calc(16px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .operator-picker-option small { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .operator-keypad button { font-size: calc(24px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .operator-keypad .operator-keypad-back { font-size: calc(14px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .operator-keypad .operator-keypad-ok { font-size: calc(18px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .operator-entry-card .operator-entry-cancel { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .operator-projects-count { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .operator-header h1 { font-size: calc(23px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .operator-header p { font-size: calc(11px * var(--account-font-scale)); }
@@ -24,8 +43,9 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .operator-detail-facts strong { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .operator-stages-heading h3 { font-size: calc(14px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .operator-stages-heading strong { font-size: calc(12px * var(--account-font-scale)); }
-:root:is([data-font-size="small"], [data-font-size="large"]) .operator-stage-group-heading h4 { font-size: calc(13px * var(--account-font-scale)); }
-:root:is([data-font-size="small"], [data-font-size="large"]) .operator-stage-group-heading span { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .stage-group-title h4 { font-size: calc(14px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .stage-group-state { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .stage-group-count { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .operator-stage-number { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .operator-stage strong { font-size: calc(12px * var(--account-font-scale)); line-height: calc(16px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .operator-stage small { font-size: calc(12px * var(--account-font-scale)); }
@@ -87,9 +107,13 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .operator-worker-name strong { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .operator-worker-name small, :root:is([data-font-size="small"], [data-font-size="large"]) .operator-worker-time small { font-size: calc(11px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .operator-worker-time strong { font-size: calc(13px * var(--account-font-scale)); }
-:root:is([data-font-size="small"], [data-font-size="large"]) .operator-worker-actions button { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .operator-dialog legend { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .operator-completed-by small { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .operator-dialog > .operator-dialog-later { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .operator-project-group > h2 { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .operator-stage-target { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .operator-stage-here { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .operator-stage-pick { font-size: inherit; font-size: calc(11px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .employee-activity-heading > div > span { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .employee-activity-heading h2 { font-size: calc(21px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .employee-activity-heading p { font-size: calc(12px * var(--account-font-scale)); }
@@ -103,6 +127,14 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .employee-activity-error { font-size: calc(13px * var(--account-font-scale)); }
 @media (max-width: 540px) {:root:is([data-font-size="small"], [data-font-size="large"]) .employee-activity-heading h2 { font-size: calc(19px * var(--account-font-scale)); } }
 :root:is([data-font-size="small"], [data-font-size="large"]) .os-action-content > p { font-size: calc(14px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .os-action-receivables h3 { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .os-action-receivables ul { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .os-action-choice legend { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .os-action-choice label { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .os-action-choice strong { font-size: calc(13.5px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .os-action-choice small { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .os-action-note { font-size: calc(12.5px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .os-action-content > p.os-action-note--standalone { font-size: calc(12.5px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .os-edit-tabs button { font-size: inherit; font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .os-edit-field { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .os-edit-field :is(input, select, textarea) { font-size: inherit; }
@@ -111,6 +143,7 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .os-edit-error { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .os-edit-attachments li span { font-size: calc(13px * var(--account-font-scale)); }
 @media (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .os-edit-field :is(input, select, textarea) { font-size: calc(16px * var(--account-font-scale)); } }
+:root:is([data-font-size="small"], [data-font-size="large"]) .os-deadline-reason textarea { font-size: inherit; }
 :root:is([data-font-size="small"], [data-font-size="large"]) .orders-shell--detail .orders-header h1 { font-size: calc(23px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .os-detail-title span { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .os-detail-title h2 { font-size: calc(22px * var(--account-font-scale)); }
@@ -152,6 +185,9 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .os-history-table-wrap table { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .os-history-table-wrap th { font-size: calc(11px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .os-history-table-wrap td small { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .os-history-edited b { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .os-history-time-form input { font-size: inherit; font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .os-missing { font-size: calc(14px * var(--account-font-scale)); }
 @media (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .orders-shell--detail .orders-header h1 { font-size: calc(21px * var(--account-font-scale)); } }
 @media (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .os-detail-title h2 { font-size: calc(19px * var(--account-font-scale)); } }
 @media (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .os-proposal-summary > div:first-child dd { font-size: calc(20px * var(--account-font-scale)); } }
@@ -160,6 +196,14 @@
 @media (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .os-history-heading h2 { font-size: calc(17px * var(--account-font-scale)); } }
 :root:is([data-font-size="small"], [data-font-size="large"]) .os-cost-list li { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .os-cost-list span { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .os-purchase-add { font-size: inherit; font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .os-purchase-hint { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .os-purchase-file { font-size: inherit; }
+:root:is([data-font-size="small"], [data-font-size="large"]) .os-purchase-remove { font-size: calc(16px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .os-deadline-changed { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .os-history-changes { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .os-atypical { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .os-atypical-tip { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .home-eyebrow { font-size: calc(11px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .home-heading h1 { font-size: calc(28px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .home-heading p { font-size: calc(12px * var(--account-font-scale)); }
@@ -274,6 +318,16 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .payable-modal--form .payable-type legend { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .payable-modal--form .payable-files h3 { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .payable-modal--form .admin-tool-button { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .treasury-intro { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .treasury-notice { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .admin-tools-main .treasury-date { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .treasury-table td small { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .treasury-type { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .finance-choice-summary { font-size: calc(14px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .finance-choice button { font-size: inherit; }
+:root:is([data-font-size="small"], [data-font-size="large"]) .finance-choice strong { font-size: calc(14px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .finance-choice small { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .finance-choice-question { font-size: calc(14px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .receivable-origin { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .receivable-reconciled { font-size: calc(11px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .bank-account-bar { font-size: calc(13px * var(--account-font-scale)); }
@@ -288,6 +342,7 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .bank-imports span, :root:is([data-font-size="small"], [data-font-size="large"]) .bank-conflicts span { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .bank-section-title { font-size: calc(17px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .admin-tools-main .bank-filter { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .bank-notice { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .bank-transactions small { font-size: calc(11px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .bank-transactions .admin-tool-button { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .bank-candidates > li > div { font-size: calc(13px * var(--account-font-scale)); }
@@ -308,6 +363,20 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .order-margins-table td small { font-size: calc(11px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .ai-meta { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .ai-progress p { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .offer-decision-facts dt { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .offer-decision-list { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .bank-closing-status { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .bank-closing-status strong { font-size: calc(14px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .bank-closings li { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .bank-closings li span { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .bank-closing-badge { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .bank-closing-pending { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .bank-closing-history { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .bank-closing-items small { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .registry-count { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .registry-name small { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .registry-doc-type { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .registry-badge { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .proposal-model-step > p { font-size: calc(14px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .proposal-model-card { font-size: inherit; }
 :root:is([data-font-size="small"], [data-font-size="large"]) .proposal-model-card strong { font-size: calc(16px * var(--account-font-scale)); }
@@ -335,6 +404,7 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .proposal-catalog-facts dt { font-size: calc(11.5px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .payable-modal .proposal-catalog-company h3 { font-size: calc(14px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .proposal-success { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .fiscal-make-main { font-size: calc(11px * var(--account-font-scale)); }
 @media (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .machine-history-modal td[data-label]::before { font-size: calc(12px * var(--account-font-scale)); } }
 :root:is([data-font-size="small"], [data-font-size="large"]) button, :root:is([data-font-size="small"], [data-font-size="large"]) input { font-size: inherit; }
 :root:is([data-font-size="small"], [data-font-size="large"]) .brand-panel__title { font-size: calc(34px * var(--account-font-scale)); }
@@ -378,6 +448,10 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .availability-legend { font-size: calc(14px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .usage-line { font-size: calc(14px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .usage-empty { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .machine-sector-picker small { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .machine-sector-picker button { font-size: inherit; font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .idle-employees-card h2 span { font-size: calc(14px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .idle-employees-card .usage-line small { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .modal-heading h2 { font-size: calc(23px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .modal-heading p { font-size: calc(14px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .modal-close { font-size: calc(28px * var(--account-font-scale)); }
@@ -430,8 +504,6 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .offer-empty-state strong { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .offer-empty-state span { font-size: calc(11px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .offer-resource-remove { font-size: calc(18px * var(--account-font-scale)); }
-:root:is([data-font-size="small"], [data-font-size="large"]) .offer-labor-row { font-size: calc(11px * var(--account-font-scale)); }
-:root:is([data-font-size="small"], [data-font-size="large"]) .offer-labor-row--header { font-size: calc(10px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .offer-resource-totals > div { font-size: calc(10px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .offer-resource-totals strong { font-size: calc(14px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .material-stock-status { font-size: calc(10px * var(--account-font-scale)); }
@@ -516,6 +588,9 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .proposal-inline-edit { font-size: calc(11px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .proposal-pill { font-size: calc(10px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .proposal-profit { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .proposal-price { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .proposal-price small { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .proposal-price b { font-size: calc(20px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .proposal-profit b { font-size: calc(17px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .proposal-notice { font-size: calc(11px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .proposal-notice > span { font-size: calc(24px * var(--account-font-scale)); }
@@ -579,6 +654,7 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .registration-list-heading > strong { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .registration-list-row { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .registration-list-row--header { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .registration-access-code button { font-size: inherit; }
 :root:is([data-font-size="small"], [data-font-size="large"]) .registration-list-row strong { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .registration-row-actions button { font-size: calc(11px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .offers-kicker { font-size: calc(13px * var(--account-font-scale)); }
@@ -776,6 +852,30 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .measure-fields label { font-size: calc(14px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .weight-result strong { font-size: calc(14px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .calculator-contact-prompt { font-size: calc(14px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .admin-os-po::before { font-size: calc(10px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .admin-os-sort { font-size: inherit; }
+:root:is([data-font-size="small"], [data-font-size="large"]) .admin-os-collaborator-filter label { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .admin-os-collaborator-filter select { font-size: inherit; }
+:root:is([data-font-size="small"], [data-font-size="large"]) .admin-os-collaborator-filter span { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .offer-stage-hint { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .offer-stage-range { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .offer-stage-number { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .offer-stage-time { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .offer-stage-time input { font-size: inherit; font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .piece-autocomplete-hint { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .piece-history-banner { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .proposal-margin-hint { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .proposal-declined-note { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .offer-status-cell .offer-sent-since { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .offer-lead-time small { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .offer-lead-time strong { font-size: calc(15px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .offer-lead-time span { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .download-link, :root:is([data-font-size="small"], [data-font-size="large"]) .os-attachment-download, :root:is([data-font-size="small"], [data-font-size="large"]) .operator-info-download { font-size: inherit; }
+:root:is([data-font-size="small"], [data-font-size="large"]) .download-link-error { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .os-attachments .os-attachment-download { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .operator-info-files .operator-info-download { font-size: calc(12px * var(--account-font-scale)); }
+@media screen and (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .proposal-generated-actions .download-link { font-size: calc(14px * var(--account-font-scale)); } }
+:root:is([data-font-size="small"], [data-font-size="large"]) .offers-page-notice-close { font-size: calc(18px * var(--account-font-scale)); }
 @media (min-width: 1101px) {:root:is([data-font-size="small"], [data-font-size="large"]) .sidebar .nav-item { font-size: calc(14px * var(--account-font-scale)); } }
 @media (min-width: 1101px) {:root:is([data-font-size="small"], [data-font-size="large"]) .sidebar .sidebar-submenu .nav-item { font-size: calc(13px * var(--account-font-scale)); } }
 @media (min-width: 1101px) {:root:is([data-font-size="small"], [data-font-size="large"]) .offers-board .offers-search input { font-size: calc(14px * var(--account-font-scale)); } }
@@ -870,8 +970,6 @@
 @media screen and (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .offer-table-actions button { font-size: calc(14px * var(--account-font-scale)); } }
 @media screen and (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .offer-detail-facts strong { font-size: calc(14px * var(--account-font-scale)); } }
 @media screen and (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .offer-resource-heading button { font-size: calc(13px * var(--account-font-scale)); } }
-@media screen and (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .offer-labor-row { font-size: calc(14px * var(--account-font-scale)); } }
-@media screen and (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .offer-labor-row > :not(button) { font-size: calc(14px * var(--account-font-scale)); } }
 @media screen and (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .offer-stage-item label { font-size: calc(14px * var(--account-font-scale)); } }
 @media screen and (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .offer-stage-heading h3 { font-size: calc(16px * var(--account-font-scale)); } }
 @media screen and (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .offer-process-settings .offer-kind-options label { font-size: calc(14px * var(--account-font-scale)); } }

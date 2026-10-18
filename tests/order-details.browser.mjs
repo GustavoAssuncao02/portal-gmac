@@ -5,7 +5,7 @@ import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
 
 const modulePath = process.env.PLAYWRIGHT_MODULE
 const { chromium, webkit } = await import(modulePath ? pathToFileURL(modulePath).href : 'playwright')
-const fixture = await createWorkflowFixture()
+const fixture = await createWorkflowFixture({ accountsEnv: { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste', DEMO_ADMIN_NAME: 'Gustavo' } })
 const browser = await (process.env.BROWSER_ENGINE === 'webkit' ? webkit : chromium).launch({ headless: true })
 const page = await browser.newPage({ viewport: { width: 1600, height: 1000 }, timezoneId: 'America/Bahia' })
 const errors = []
@@ -15,12 +15,12 @@ let historyRequests = 0
 page.on('request', (request) => { if (request.url().endsWith('/events')) historyRequests += 1 })
 
 async function createOrder(service, resources) {
-  const offer = (await fixture.request('/offers', 'POST', { ...offerDraft, service, description: 'Fabricacao de estrutura metalica conforme desenho.\nSoldagem seguida de pintura.' })).data.item
-  const response = await fetch(`${fixture.url}/api/offers/${offer.id}/attachments?name=desenho.txt&type=text/plain`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: 'Desenho de teste da estrutura' })
+  const offer = (await fixture.adminRequest('/offers', 'POST', { ...offerDraft, service, description: 'Fabricacao de estrutura metalica conforme desenho.\nSoldagem seguida de pintura.' })).data.item
+  const response = await fetch(`${fixture.url}/api/offers/${offer.id}/attachments?name=desenho.txt&type=text/plain`, { method: 'POST', headers: { ...fixture.admin, 'Content-Type': 'application/octet-stream' }, body: 'Desenho de teste da estrutura' })
   assert.equal(response.status, 201)
-  await fixture.request(`/offers/${offer.id}/resources`, 'PUT', resources)
-  await fixture.request(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', title: 'Opção A', deadline: '2026-10-05', serviceValue: 600, materials: 200, labor: 400, discount: 0, margin: 10, machine: '20 horas', serviceTime: '20 horas' } })
-  return (await fixture.request(`/offers/${offer.id}/accept`, 'POST')).data.item
+  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', resources)
+  await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', title: 'Opção A', deadline: '2026-10-05', serviceValue: 600, materials: 200, labor: 400, discount: 0, margin: 10, machine: '20 horas', serviceTime: '20 horas' } })
+  return (await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')).data.item
 }
 
 async function viewOrder(service) {
@@ -36,7 +36,7 @@ try {
   })
   const legacy = await createOrder('Projeto sem operacoes', { materials: [], laborEntries: [], stages: ['cutting'], kind: 'product' })
   await fixture.mutateStore((store) => { store.orders.find((item) => item.code === legacy.code).proposal.stages = [] })
-  const employee = (await fixture.request('/employees', 'POST', { name: 'Ana Teste', birthDate: '1990-01-01', cpf: '00000000001', email: 'ana@example.invalid', identification: '001' })).data.item
+  const employee = (await fixture.adminRequest('/employees', 'POST', { name: 'Ana Teste', birthDate: '1990-01-01', cpf: '00000000001', email: 'ana@example.invalid', identification: '001' }, fixture.admin)).data.item
   const headers = { Authorization: `Bearer ${fixture.operatorToken}` }
   const route = `/operations/orders/${order.code}`
   // Materials still pending must be acknowledged before the work starts.
@@ -56,6 +56,9 @@ try {
   await page.locator('.admin-os-table tbody tr').filter({ hasText: order.service }).getByRole('button', { name: 'Ver OS', exact: true }).click()
   const article = page.locator('.os-detail')
   await article.waitFor()
+  // The OS opens on its own screen, not inside the material requests.
+  await page.getByRole('heading', { name: 'Ordem de serviço', exact: true }).waitFor()
+  assert.deepEqual(await page.getByRole('tab').allTextContents(), ['Início', 'Serviços em andamento', 'Ordem de serviço'])
   assert.equal(await page.getByRole('dialog').count(), 0)
   assert.equal(historyRequests, 0)
   await page.clock.fastForward(11000)
@@ -82,7 +85,7 @@ try {
   assert.match(pdf.suggestedFilename(), /^Proposta-OF-.*\.pdf$/)
   assert.equal((await readFile(await pdf.path())).subarray(0, 4).toString(), '%PDF')
   const attachmentPromise = page.waitForEvent('download')
-  await article.getByRole('link', { name: 'desenho.txt', exact: true }).click()
+  await article.getByRole('button', { name: 'desenho.txt', exact: true }).click()
   assert.equal((await readFile(await (await attachmentPromise).path())).toString(), 'Desenho de teste da estrutura')
   const trigger = article.getByRole('button', { name: 'Histórico de operações', exact: true })
   await page.route('**/events', (request) => request.fulfill({ status: 503, json: { message: 'Falha simulada no histórico.' } }), { times: 1 })
@@ -90,7 +93,9 @@ try {
   const dialog = page.getByRole('dialog')
   await dialog.getByRole('alert').getByText('Falha simulada no histórico.').waitFor()
   await dialog.getByRole('button', { name: 'Tentar novamente' }).click()
-  await dialog.getByRole('status').getByText('4 operações registradas', { exact: true }).waitFor()
+  // The four production operations and the creation of the OS (the history of the OS is complete).
+  await dialog.getByRole('status').getByText('5 operações registradas', { exact: true }).waitFor()
+  assert.match(await dialog.innerText(), /OS criada/)
   assert.match(await dialog.innerText(), /Soldagem: \+3 peça\(s\), 3\/10 no total/)
   assert.match(await dialog.innerText(), /Descanso/)
   await page.screenshot({ path: 'test-results/order-history-desktop.png' })
@@ -132,7 +137,7 @@ try {
   await dialog.getByRole('button', { name: 'Encerrar sessão', exact: true }).click()
   await dialog.getByRole('alert').getByText('Falha simulada ao encerrar.').waitFor()
   assert.equal(await reason.inputValue(), '  Manutencao preventiva  ')
-  assert.ok((await fixture.request('/operations/orders')).data.items.find((item) => item.code === order.code).operation.activeSession)
+  assert.ok((await fixture.request('/operations/orders', 'GET', undefined, fixture.admin)).data.items.find((item) => item.code === order.code).operation.activeSession)
   let release
   const pending = new Promise((resolve) => { release = resolve })
   await page.route('**/interrupt', async (request) => { await pending; await request.continue() }, { times: 1 })
@@ -147,7 +152,7 @@ try {
   assert.equal(interruptRequests, 2)
   await article.getByText('Sem sessão ativa', { exact: true }).waitFor()
   await trigger.click()
-  await dialog.getByRole('status').getByText('5 operações registradas', { exact: true }).waitFor()
+  await dialog.getByRole('status').getByText('6 operações registradas', { exact: true }).waitFor()
   assert.match(await dialog.innerText(), /Manutencao preventiva/)
   assert.match(await dialog.innerText(), /Operador: Ana Teste/)
   await dialog.getByRole('button', { name: 'Fechar histórico' }).click()
@@ -165,7 +170,7 @@ try {
       assert.ok(right.x >= left.x + left.width)
     }
     await trigger.click()
-    await dialog.getByRole('status').getByText('5 operações registradas', { exact: true }).waitFor()
+    await dialog.getByRole('status').getByText('6 operações registradas', { exact: true }).waitFor()
     const box = await dialog.boundingBox()
     assert.ok(box.x >= 0 && box.x + box.width <= width && box.y >= 0 && box.y + box.height <= 1000)
     if (width === 390) await page.screenshot({ path: 'test-results/order-history-mobile.png' })
@@ -175,18 +180,19 @@ try {
   await page.setViewportSize({ width: 1366, height: 1000 })
   await viewOrder(legacy.service)
   await article.getByRole('button', { name: 'Histórico de operações', exact: true }).click()
-  await dialog.getByText('Nenhuma interação registrada.', { exact: true }).waitFor()
+  await dialog.getByText('1 operação registrada', { exact: true }).waitFor() // Without production, the history still shows the creation of the OS.
   await page.mouse.click(5, 5)
   await dialog.waitFor({ state: 'detached' })
   await article.getByLabel('Etapas na ordem de produção', { exact: true }).fill('Corte, Pintura')
   await article.getByRole('button', { name: 'Salvar etapas', exact: true }).click()
   await article.locator('.os-stage-list strong').getByText('Pintura', { exact: true }).waitFor()
   await article.getByRole('button', { name: 'Histórico de operações', exact: true }).click()
-  await dialog.getByRole('status').getByText('1 operação registrada', { exact: true }).waitFor()
+  await dialog.getByRole('status').getByText('2 operações registradas', { exact: true }).waitFor()
   assert.match(await dialog.innerText(), /Etapas configuradas.*Corte, Pintura/s)
   await dialog.getByRole('button', { name: 'Fechar histórico' }).click()
-  await article.getByRole('button', { name: 'Voltar à lista de ordens', exact: true }).click()
-  await page.getByRole('heading', { name: 'Pedidos de material', exact: true }).waitFor()
+  await article.getByRole('button', { name: 'Voltar para a tela anterior', exact: true }).click()
+  await page.getByRole('heading', { name: 'Painel de serviços em andamento' }).waitFor()
+  assert.deepEqual(await page.getByRole('tab').allTextContents(), ['Início', 'Serviços em andamento'])
   assert.deepEqual(errors, [])
   console.log('OS details passed: separated proposal fields, responsive two-column layout, PDF/attachment downloads, collapsed on-demand history, error/retry, current operations, interrupt, legacy stage configuration, keyboard/backdrop close and return navigation.')
 } catch (error) {

@@ -24,13 +24,13 @@ test('operator project data includes technical details and files but excludes fi
   } }
   const fixture = await createWorkflowFixture({ inventoryPool })
   t.after(() => fixture.close())
-  const offer = (await fixture.request('/offers', 'POST', offerDraft)).data.item
+  const offer = (await fixture.adminRequest('/offers', 'POST', offerDraft)).data.item
   const resources = { materials: [{ id: 'material', name: 'Aluminio', detail: 'Chapa 10 mm', quantity: 12.5, unitPrice: 999, stockAvailable: 8, stockStatus: 'partial', purchaseQuantity: 4.5 }], laborEntries: [{ id: 'machine', type: 'machine', resource: 'Torno CNC', hours: 2, hourlyRate: 777 }], kind: 'product', stages: ['cutting', 'assembly'] }
-  await fixture.request(`/offers/${offer.id}/resources`, 'PUT', resources)
-  const upload = await fetch(`${fixture.url}/api/offers/${offer.id}/attachments?name=desenho-tecnico.txt&type=text/plain`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: Buffer.from('Especificacao tecnica da peca') })
+  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', resources)
+  const upload = await fetch(`${fixture.url}/api/offers/${offer.id}/attachments?name=desenho-tecnico.txt&type=text/plain`, { method: 'POST', headers: { ...fixture.admin, 'Content-Type': 'application/octet-stream' }, body: Buffer.from('Especificacao tecnica da peca') })
   assert.equal(upload.status, 201)
-  await fixture.request(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', title: 'Teste', deadline: offerDraft.deadline, serviceValue: 98765, materials: 12487.5, labor: 1554, margin: 25, discount: 10, profit: 12345, machine: '2 horas', serviceTime: '2 horas' } })
-  const accepted = await fixture.request(`/offers/${offer.id}/accept`, 'POST')
+  await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', title: 'Teste', deadline: offerDraft.deadline, serviceValue: 98765, materials: 12487.5, labor: 1554, margin: 25, discount: 10, profit: 12345, machine: '2 horas', serviceTime: '2 horas' } })
+  const accepted = await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')
   assert.equal(accepted.status, 201)
   const order = accepted.data.item
   assert.equal((await fixture.request('/operations/operator/orders')).status, 401)
@@ -48,12 +48,15 @@ test('operator project data includes technical details and files but excludes fi
   assert.equal(item.resources.laborEntries[0].hours, 2)
   assert.equal(item.attachments[0].name, 'desenho-tecnico.txt')
   assert.deepEqual(item.operation.stages.map((stage) => stage.name), ['Corte', 'Montagem'])
-  const downloaded = await fetch(`${fixture.url}/api/offers/${offer.id}/attachments/${item.attachments[0].id}`)
+  // The files of the OS are opened by the operator account, never without a session.
+  const fileUrl = `${fixture.url}/api/offers/${offer.id}/attachments/${item.attachments[0].id}`
+  assert.equal((await fetch(fileUrl)).status, 401)
+  const downloaded = await fetch(fileUrl, { headers: { Authorization: `Bearer ${fixture.operatorToken}` } })
   assert.equal(await downloaded.text(), 'Especificacao tecnica da peca')
-  const adminOrder = (await fixture.request('/operations/orders')).data.items[0]
+  const adminOrder = (await fixture.request('/operations/orders', 'GET', undefined, fixture.admin)).data.items[0]
   assert.equal(adminOrder.proposal.serviceValue, 98765)
   assert.equal(adminOrder.resources.materials[0].unitPrice, 999)
-  const employee = (await fixture.request('/employees', 'POST', { name: 'Operador teste', birthDate: '1990-01-01', cpf: '12345678901', email: 'teste@example.com', identification: '001' })).data.item
+  const employee = (await fixture.adminRequest('/employees', 'POST', { name: 'Operador teste', birthDate: '1990-01-01', cpf: '12345678901', email: 'teste@example.com', identification: '001' }, fixture.admin)).data.item
   const started = await fixture.request(`/operations/orders/${order.code}/start`, 'POST', { employeeId: employee.id, pendingMaterialsConfirmation: pendingOrderMaterials(item).map((material) => [material.key, material.quantity]) }, headers)
   assert.equal(started.status, 200)
   assertOperationalData(started.data.order)

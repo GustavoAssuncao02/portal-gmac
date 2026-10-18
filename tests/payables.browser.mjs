@@ -8,7 +8,12 @@ const fixture = await createWorkflowFixture({ accountsEnv: env })
 const browser = await chromium.launch({ headless: true })
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, timezoneId: 'America/Bahia' })
 const errors = []; page.on('pageerror', (e) => errors.push(e.message))
-const nav = (name) => page.locator('.sidebar').getByRole('button', { name, exact: true }).click()
+// Cadastros and Gestão Financeira are menu groups that may start collapsed.
+const nav = async (name) => {
+  const item = page.locator('.sidebar').getByRole('button', { name, exact: true })
+  if (!await item.isVisible()) await page.locator('.sidebar').getByRole('button', { name: ['Fornecedores', 'Administradores', 'Funcionários', 'Clientes'].includes(name) ? 'Cadastros' : 'Gestão Financeira', exact: true }).click()
+  await item.click()
+}
 const modal = () => page.locator('dialog[open]').last()
 const apiToken = (await fixture.request('/auth/login', 'POST', { cpf: env.DEMO_ADMIN_CPF, password: env.DEMO_ADMIN_PASSWORD })).data.token
 const headers = { Authorization: `Bearer ${apiToken}` }

@@ -4,7 +4,7 @@ import { createWorkflowFixture } from './workflowFixture.js'
 
 const modulePath = process.env.PLAYWRIGHT_MODULE
 const { chromium } = await import(modulePath ? pathToFileURL(modulePath).href : 'playwright')
-const fixture = await createWorkflowFixture()
+const fixture = await createWorkflowFixture({ accountsEnv: { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste', DEMO_ADMIN_NAME: 'Gustavo' } })
 const browser = await chromium.launch({ headless: true })
 const page = await browser.newPage({ viewport: { width: 1366, height: 900 }, timezoneId: 'America/Bahia' })
 const errors = []
@@ -17,6 +17,8 @@ let inventory = [
   { id: 3, name: 'Aco no minimo', detail: 'Perfil', quantity: 4, minimum: 4, unitPrice: 15 },
   { id: 4, name: 'Aluminio disponivel', detail: 'Chapa', quantity: 50, minimum: 10, unitPrice: 30 },
 ]
+// The simulated login hands out a real session; "Sair" closes it, so the next login gets a new one.
+let simulatedToken = fixture.adminToken
 const home = page.locator('.admin-home-main')
 const navigate = (label) => page.locator('.sidebar').getByRole('button', { name: label === 'Dashboard' ? 'In\u00edcio' : label, exact: true }).click()
 const order = (code, service, deadline, status = 'waiting', fields = {}) => ({
@@ -43,7 +45,7 @@ try {
       { id: 'review-2', code: 'OF-002', status: 'review', service: 'Outra oferta', resources: { materials: [], laborEntries: [] } },
     ]
   })
-  await page.route('**/api/auth/login', (route) => route.fulfill({ status: 200, json: { user: { id: 1, name: userName, cpf: '12345678901' } } }))
+  await page.route('**/api/auth/login', (route) => route.fulfill({ status: 200, json: { user: { id: 1, name: userName, cpf: '12345678901' }, token: simulatedToken } }))
   await page.route('**/api/payables', (route) => route.fulfill({ status: 200, json: { items: [] } }))
   await page.route('**/api/inventory', (route) => route.fulfill({ status: inventoryStatus, json: inventoryStatus === 200 ? { items: inventory } : { message: 'Estoque indisponivel' } }))
   await page.clock.install({ time: new Date('2026-10-03T15:00:00-03:00') })
@@ -60,7 +62,7 @@ try {
   assert.match(await home.locator('.home-orders tbody tr').first().innerText(), /02\/10\/2026/)
   assert.deepEqual(await home.locator('.home-stock-item strong').allTextContents(), ['Inox zerado', 'Ferro critico', 'Aco no minimo'])
   assert.equal(await home.locator('.home-stock-title small').innerText(), '3 materiais')
-  assert.equal(await home.locator('.home-attention-item').filter({ hasText: 'Materiais aguardando aprovação' }).locator('strong').innerText(), '1')
+  assert.equal(await home.locator('.home-attention-item').filter({ hasText: 'Pedidos de material' }).locator('strong').innerText(), '1')
   assert.equal(await home.locator('.home-attention-item').filter({ hasText: 'OS concluídas aguardando confirmação' }).locator('strong').innerText(), '1')
   assert.ok(await page.locator('.sidebar-logo img').evaluate((element) => element.complete && element.naturalWidth > 0))
   assert.ok(await home.locator('*').evaluateAll((elements) => elements.every((element) => getComputedStyle(element).animationName === 'none' && getComputedStyle(element).transitionDuration === '0s')))
@@ -105,6 +107,7 @@ try {
   await page.getByRole('button', { name: 'Sair', exact: true }).click()
   await page.getByRole('heading', { name: 'Entrar no sistema', exact: true }).waitFor()
   userName = 'Fernanda Oliveira'
+  simulatedToken = (await fixture.request('/auth/login', 'POST', { cpf: '12345678901', password: 'teste' })).data.token
   await login('Fernanda')
   assert.equal(await page.locator('.account-copy strong').innerText(), 'Fernanda Oliveira')
   assert.equal(await page.getByRole('tab').count(), 1)

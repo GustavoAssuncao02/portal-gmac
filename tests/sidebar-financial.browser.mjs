@@ -11,7 +11,7 @@ const sidebar = page.locator('.sidebar')
 const group = sidebar.getByRole('button', { name: 'Gest\u00e3o Financeira', exact: true })
 const submenu = sidebar.locator('#sidebar-finance-menu')
 const registrations = sidebar.getByRole('button', { name: 'Cadastros', exact: true })
-const members = ['Contas a Pagar', 'Contas a Receber', 'Concilia\u00e7\u00e3o banc\u00e1ria', 'Business Intelligence', 'Classifica\u00e7\u00f5es']
+const members = ['Contas a Pagar', 'Contas a Receber', 'Tesouraria', 'Baixa em Lote', 'Concilia\u00e7\u00e3o banc\u00e1ria', 'Business Intelligence', 'Classifica\u00e7\u00f5es']
 const navigate = (name) => sidebar.getByRole('button', { name, exact: true }).click()
 try {
   await page.goto(fixture.url)
@@ -19,6 +19,9 @@ try {
   await page.getByLabel('Senha', { exact: true }).fill('test-menu')
   await page.getByRole('button', { name: 'Entrar', exact: true }).click()
   await page.getByRole('heading', { name: 'Bem-vindo, Gustavo', exact: true }).waitFor()
+  // The groups of the side menu start closed; one click opens them.
+  assert.equal(await group.getAttribute('aria-expanded'), 'false')
+  await group.click()
   assert.equal(await group.getAttribute('aria-expanded'), 'true')
   assert.deepEqual(await submenu.locator('.nav-item').allTextContents(), members)
   for (const name of members) {
@@ -34,7 +37,7 @@ try {
   assert.ok((await group.getAttribute('class')).includes('nav-item--active'))
   await navigate('In\u00edcio')
   assert.equal(await group.getAttribute('aria-expanded'), 'false')
-  assert.equal(await registrations.getAttribute('aria-expanded'), 'true')
+  assert.equal(await registrations.getAttribute('aria-expanded'), 'false', 'each group keeps its own state; Cadastros was never opened')
   await page.reload()
   await page.getByRole('heading', { name: 'Bem-vindo, Gustavo', exact: true }).waitFor()
   assert.equal(await group.getAttribute('aria-expanded'), 'false')

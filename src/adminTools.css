@@ -117,3 +117,5 @@
   .reports-search input { width: 100%; }
   .reports-summary { flex-wrap: wrap; gap: 20px; }
 }
+.admin-tool-button--primary.admin-tool-button--danger { background: #b42318; border-color: #b42318; color: #fff; }
+.admin-tool-button--primary.admin-tool-button--danger:hover:not(:disabled) { background: #93190f; border-color: #93190f; }

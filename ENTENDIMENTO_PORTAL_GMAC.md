@@ -67,10 +67,23 @@ Falta identificada na oferta/OS
 - Recebe notificações conforme suas preferências individuais.
 - Altera nome, senha e aparência da própria conta em Configurações.
 
+### Funcionário administrativo
+
+- Cadastrado em **Funcionários** com o tipo **Administrativo** e uma senha (6 a 72 caracteres).
+- Entra pela mesma tela de login do administrador, com CPF e senha, e usa o sistema administrativo normal, **exceto o grupo Gestão Financeira** (Contas a Pagar, Contas a Receber, Tesouraria, Baixa em Lote, Conciliação bancária, Business Intelligence e Classificações). O grupo some do menu, as telas não abrem e a tela inicial não mostra o resumo de contas a pagar.
+- O backend também bloqueia essas telas (`restrictStaffFinance`, resposta 403). Continuam liberadas as etapas financeiras que ficam dentro de outras telas: Fornecedores (em Cadastros), custo da OS, lançamento a receber ao concluir a OS e o financeiro da compra de estoque. Para esse perfil, `GET /api/payables` devolve fornecedores e classificações sem as contas.
+- Não recebe notificações de contas a pagar ou a receber.
+- No servidor, a sessão tem o papel `staff` e o id `employee-<id do funcionário>`, para não se misturar com os ids dos administradores nas preferências.
+- Por decisão do usuário, por enquanto ele pode acessar o cadastro de Administradores.
+- Trocar o tipo, a senha ou excluir o funcionário encerra as sessões abertas dele.
+
 ### Operador
 
-- Usa uma conta compartilhada de acesso à área operacional.
-- Ao iniciar um projeto, seleciona o funcionário responsável pelo trabalho.
+- Usa uma conta compartilhada de acesso à área operacional (tablet ou computador).
+- Ao abrir a conta compartilhada, aparece **Entrar**: o funcionário digita o código de 4 dígitos dele e só então vê as OS. O nome não é mais escolhido em uma lista.
+- O código é definido no cadastro do funcionário com o tipo **Operador** (único entre os operadores; o botão **Gerar código** sugere um livre) e pode ser alterado por administradores e funcionários administrativos. Na primeira inicialização após a mudança, os operadores já cadastrados receberam um código automático, que aparece na coluna **Acesso** da lista de funcionários.
+- O operador identificado fica guardado na sessão do navegador até clicar em **Trocar operador** (volta para **Entrar** sem sair da conta compartilhada) ou em **Sair** (sai da conta compartilhada).
+- O que acontece depois da identificação está provisório: o usuário vai reformular esse fluxo.
 - Seleciona a máquina ou o serviço de hora homem efetivamente utilizado (um dos dois, não ambos).
 - Registra quantidades por etapa, pausa, troca recursos e conclui o trabalho.
 - Recebe dados operacionais da OS, sem os valores comerciais internos no retorno específico da área do operador.
@@ -79,7 +92,8 @@ Falta identificada na oferta/OS
 ### Login normal
 
 - Administrador: CPF de 11 dígitos e senha, validados no backend.
-- Operador: usuário compartilhado de 11 dígitos e senha configurados no servidor.
+- Funcionário administrativo: CPF de 11 dígitos e senha, na mesma tela do administrador.
+- Operador: usuário compartilhado de 11 dígitos e senha configurados no servidor; depois, o código de 4 dígitos de cada funcionário (`POST /api/operations/operator/identify`).
 - Senhas dos administradores cadastrados são armazenadas como hashes; não são exportadas em relatórios.
 - O link de recuperação orienta entrar em contato com a administração; não há recuperação automática por e-mail descrita como implementada.
 - A sessão administrativa dura 12 horas e é restaurada ao recarregar, enquanto ainda for válida.
@@ -92,10 +106,11 @@ Na configuração local consultada nesta atualização, `TEST_LOGIN_ENABLED=true
 
 - Nos dois perfis, clicar em **Entrar** permite acesso com os campos vazios.
 - O backend ainda emite os tokens usados pelo sistema; não é apenas uma simulação visual de login.
-- O administrador usado é o cadastro correspondente a `DEMO_ADMIN_CPF`, se encontrado, ou o primeiro administrador disponível.
+- Com o CPF vazio, o administrador usado é o cadastro correspondente a `DEMO_ADMIN_CPF`, se encontrado, ou o primeiro administrador disponível.
+- Com um CPF digitado (senha vazia), o CPF escolhe o perfil: **00000000000** entra como administrador (conta "GMAC") e **11111111111** como funcionário administrativo (cadastro "Teste Administrativo", tipo Administrativo, senha aleatória que só serve no modo de teste). Qualquer outro CPF cadastrado entra na própria conta; CPF desconhecido recebe 401.
 - Não é criado um administrador fictício automaticamente. Se não existir cadastro, o backend informa o problema.
 - A tela consulta `/api/auth/config`. Em falha temporária, repete a consulta a cada 2 segundos, sem ficar presa na validação obrigatória dos campos. O backend continua decidindo se o acesso é permitido.
-- O modo de teste não dispensa selecionar o funcionário nem validar a credencial da sessão de trabalho.
+- O modo de teste não dispensa o código do operador nem a validação da credencial da sessão de trabalho.
 - Alteração de nome/senha em Configurações continua pedindo a senha atual: o modo temporário modifica a entrada no portal, não todas as verificações de segurança.
 - Para voltar ao login obrigatório: `TEST_LOGIN_ENABLED=false` no `.env` e reiniciar o projeto.
 - Com `NODE_ENV=production`, o acesso sem senha é bloqueado mesmo se a opção estiver ativada.
@@ -123,6 +138,10 @@ Serviços concluídos
 Ofertas e serviços
 Gestão Financeira
     Contas a Pagar
+    Contas a Receber
+    Tesouraria
+    Baixa em Lote
+    Conciliação bancária
     Business Intelligence
     Classificações
 Relatórios
@@ -162,12 +181,18 @@ Configurações
 
 | Cadastro | Informações principais | Observações |
 | --- | --- | --- |
-| Funcionários | Nome, nascimento, CPF, e-mail, identificação de 3 dígitos | A identificação preserva zeros à esquerda, como `001`. O funcionário é selecionado na operação; não é necessário inventar um login individual para esse fluxo. |
+| Funcionários | Tipo (Operador ou Administrativo), nome, CPF, nascimento e e-mail (opcionais), identificação de 3 dígitos; código de acesso de 4 dígitos (operador) ou senha (administrativo) | Nascimento e e-mail são opcionais só para funcionários (colunas `birth_date` e `email` aceitam nulo, ajustadas na inicialização); administradores continuam exigindo os dois. Os 20 funcionários importados da listagem do RH (16/10/2026) usam como código de acesso o **Nº identificador** da folha com 4 dígitos (identificador 6 → `0006`). A identificação preserva zeros à esquerda, como `001`. Criar, editar e excluir exigem login de administrador ou de funcionário administrativo. A lista pública de funcionários nunca devolve código nem senha; o código aparece só para quem está logado no sistema administrativo. Colunas no MySQL: `employee_type`, `access_code` e `password_hash`, criadas automaticamente na inicialização (`ensureEmployeeAccess`). |
 | Administradores | Nome, nascimento, CPF, e-mail, senha | Cadastro, edição e exclusão; senha nova pode ser omitida na edição para manter a atual. |
-| Clientes | Nome/razão social, tipo de documento, CPF/CNPJ, e-mail | Formatação e validação da quantidade de dígitos do documento. |
-| Fornecedores | Nome/razão social, CPF/CNPJ, e-mail, telefone | Usados nas contas a pagar; a exclusão é impedida quando há contas vinculadas. |
+| Clientes | Nome/razão social, tipo de documento, CPF/CNPJ, e-mail (opcional), observação | Formatação e validação da quantidade de dígitos do documento. O e-mail é opcional (gravado como NULL; a coluna é ajustada na inicialização). Os 175 clientes da planilha `CLIENTES_CNPJ_ATUALIZADO.xlsx` (16/10/2026; só o "CLIENTE AVULSO", sem documento, e a linha repetida da GAZIN ficaram de fora) entraram com razão social, CNPJ e, quando diferente da razão social, o nome fantasia na observação. |
+| Fornecedores | Nome/razão social, CPF/CNPJ, e-mail, telefone | Usados nas contas a pagar; a exclusão é impedida quando há contas vinculadas. Os 411 fornecedores da listagem do sistema antigo (16/10/2026) foram importados só com nome e CPF/CNPJ. |
 
 Os registros são persistidos pelo backend. Não tratar Administradores e Clientes como telas meramente demonstrativas, como dizia o documento antigo.
+
+As listas de cadastro (Funcionários, Clientes, Administradores e Fornecedores) usam `src/RegistryList.jsx`: busca por nome, CPF/CNPJ, e-mail (e nome fantasia/código), contagem, ordenação nos títulos e CPF/CNPJ formatado com a etiqueta do tipo; a coluna do nome fica com a maior parte da largura. Clientes e fornecedores aceitam CPF ou CNPJ.
+
+Em 16/10/2026 saíram os dados de teste: os 10 clientes `@clientes-teste.invalid` (substituídos pelos da planilha; as contas a receber de demonstração foram religadas pelo CNPJ ou ficaram sem vínculo), os funcionários Ana/Bruno/Carla Teste, os 10 fornecedores "(Fictício)" com as 120 contas a pagar de demonstração, e o sufixo "(Teste)" das classificações. Depois foram apagados também todas as ofertas/propostas, OS (com o histórico de trabalho no MySQL), pedidos de material, contas a receber, o estoque e os extratos bancários importados; a numeração das propostas continua (13502). As cópias de antes ficam em `server/data/backups/manual-*-2026-10-16*.json`.
+
+Um navegador sem estoque próprio no `localStorage` não envia nada para `/inventory/import`: antes ele mandava os materiais de exemplo do código e repovoava um estoque esvaziado.
 
 Há histórico de atividades do funcionário. Históricos operacionais devem continuar identificando quem realizou o trabalho mesmo quando cadastros forem posteriormente alterados ou removidos.
 
@@ -177,12 +202,15 @@ Há histórico de atividades do funcionário. Históricos operacionais devem con
 
 - Cadastro, edição, remoção e busca por máquina, setor ou operador.
 - Nome, tipo, setor e valor por hora.
+- Uma máquina pode pertencer a mais de um setor (`sectors`, com `sector` guardando o texto "Usinagem e Caldeiraria"). No cadastro, os setores são separados por vírgula ou marcados entre os já existentes; o Tipo é opcional. A máquina de vários setores é um cadastro só: aparece em cada grupo de setor, mas status, tempo de uso e histórico são únicos.
+- Em 16/10/2026 o cadastro foi trocado pelas máquinas reais: 18 máquinas de **Usinagem** e **Caldeiraria**, ainda com valor por hora R$ 0,00 e sem tipo. **Bancada**, **Têmpera** e **Prensa** são uma de cada, dos dois setores. A escolha de máquina do operador e o seletor da oferta agrupam por setor (`src/machineSectors.js`).
 - Filtros Todas, Em funcionamento e Ociosas, com resumos de quantidade.
 - Status calculado a partir das sessões reais de trabalho, não de uma escolha manual ou de um status fictício salvo no cadastro.
 - Lista mostra operador atual, início de uso e total utilizado no dia.
 - Atualização da tela a cada 10 segundos.
 - Ícone de informação ao lado do início de uso abre histórico com funcionário, OS, início, fim, duração e motivo de encerramento quando houver.
 - A troca de máquina durante o trabalho registra um evento e separa os intervalos de utilização, sem exigir pausar toda a sessão.
+- Abaixo dos resumos, **Funcionários ociosos (agora)** lista os operadores sem trabalho aberto em nenhuma OS, com o horário, o motivo e a OS da última parada de hoje (`GET /operations/idle-employees`, só administração); quem está parado há mais tempo vem primeiro.
 
 ### Serviços
 
@@ -193,7 +221,9 @@ Há histórico de atividades do funcionário. Históricos operacionais devem con
 - O operador pode selecionar o serviço no início e trocar o serviço durante a sessão.
 - O relatório de Serviços usa essas horas reais, não apenas as horas previstas na proposta.
 
-O catálogo inicial de testes é criado somente quando ainda não existe a lista de serviços:
+Em 16/10/2026 o catálogo real foi trocado pelos serviços da empresa (usinagem, caldeiraria, solda, manutenção mecânica, corte, dobra, montagem, desmontagem, adequação NR12, pintura e instalação), ainda **sem valor por hora** (R$ 0,00, a preencher na tela Serviços) e sem setor. Os serviços removidos continuam com nome e horas nos históricos e relatórios.
+
+O catálogo inicial de testes abaixo é criado somente quando ainda não existe a lista de serviços (instalação nova e testes automatizados):
 
 | Serviço | Valor inicial por hora |
 | --- | ---: |
@@ -270,7 +300,12 @@ Exemplo: uma OS de 20 peças com Pintura = 20, Caldeiraria = 8 e Usinagem = 5 po
 | C | 25% |
 | D | 30% |
 
-- Opções editáveis, com prazo, valor do serviço, materiais, mão de obra, tempos previstos, margem e desconto.
+- Em cada opção só o **prazo de entrega**, o **% de lucro bruto** e o **desconto** são editáveis. Materiais, mão de obra, valor do serviço e horas vêm dos recursos da oferta e não podem ser alterados na proposta (o servidor também os recalcula ao gerar, sem confiar no que o navegador envia).
+- **Valor do serviço** = materiais + mão de obra, ou seja, o **custo**. **Valor da OS** = valor do serviço × (1 + % de lucro) × (1 − desconto): é o que o cliente paga e o que vai para o PDF. **Lucro bruto esperado** = Valor da OS − valor do serviço. Exemplo: custo R$ 1.832,40 com 15% → Valor da OS R$ 2.107,26 e lucro R$ 274,86. A regra está em `proposalPricing` (`server/proposalMath.js`).
+- As horas são separadas: **Tempo de máquina** soma só as horas de hora máquina, **Tempo de serviço** soma só as de hora homem e **Horas totais** é a soma das duas (`proposalCosts`). Antes, o tempo de serviço somava também as horas de máquina.
+- A proposta salva guarda `serviceValue` (custo), `osValue` (Valor da OS), `profit`, `machine`, `serviceTime`, `totalTime`, `materials`, `labor`, `margin` e `discount`. Ao gerar um documento, `osValue` é o **total do documento** (é o que o cliente recebe e o que o recebimento da OS usa). A margem e o desconto escolhidos só são guardados se o documento cobra o Valor da OS que eles produzem; com tabela de preços (Nestlé, Etiqueta) ou preço editado no documento, guarda-se a margem real sobre o custo e desconto 0.
+- `osValueOf` devolve o valor cobrado de uma proposta salva: total do documento, depois `osValue`, depois (propostas antigas, sem `osValue`) o valor do serviço com o desconto aplicado. Recebimento da OS, margem real (`orderCosts`) e PDF genérico usam esse valor, nunca o custo.
+- No modal dos modelos A/B, o preço vem preenchido com o Valor da OS da opção. Se o total digitado no documento for diferente, aparece um aviso no rodapé; o recebimento da OS segue o total do documento.
 - A opção selecionada fica destacada.
 - Escolha de layout de PDF: Clássico, Executivo ou Compacto.
 - Gerar a proposta grava os dados e o PDF; a ação não deve ser confundida com envio automático por e-mail.
@@ -280,9 +315,8 @@ Exemplo: uma OS de 20 peças com Pintura = 20, Caldeiraria = 8 e Usinagem = 5 po
 
 **Pontos comerciais a conferir antes de modificar preços ou enviar PDFs:**
 
-- O cálculo atual de lucro esperado no construtor é `valor do serviço * (1 - desconto / 100) * (margem / 100)`.
-- A edição geral da OS recalcula o campo `profit` como valor do serviço menos materiais e mão de obra. As duas fórmulas não são equivalentes; não assumir que margem, acréscimo sobre custo e lucro real sejam a mesma regra.
-- O PDF da proposta, que vai ao cliente, **não mostra margem de lucro, lucro bruto esperado nem custos** (regra fixa em `proposalSections`, em `server/offers.js`, coberta por `tests/proposal-privacy.test.js` e pela auditoria dos PDFs). Ele é montado de novo a cada download a partir da proposta salva; nenhum arquivo de PDF é mais gravado em `server/data/files/` para propostas, e arquivos antigos dessa pasta (referenciados por `pdfId`) não são enviados. Também não mostra custos: materiais e mão de obra aparecem só por nome, especificação, quantidade e horas, sem valor por kg, valor por hora, totais ou os totais de materiais e mão de obra. O cliente vê o valor do serviço, o desconto, o prazo e os tempos previstos.
+- A edição geral da OS, em propostas com Valor da OS, recalcula o `profit` como Valor da OS menos valor do serviço (custo); em propostas antigas, sem Valor da OS, mantém o cálculo anterior (valor do serviço menos materiais e mão de obra). A aba de proposta da edição mostra "Valor da OS" e "Horas totais" só quando a proposta os tem.
+- O PDF da proposta, que vai ao cliente, **não mostra margem de lucro, lucro bruto esperado nem custos** (regra fixa em `proposalSections`, em `server/offers.js`, coberta por `tests/proposal-privacy.test.js` e pela auditoria dos PDFs). Ele é montado de novo a cada download a partir da proposta salva; nenhum arquivo de PDF é mais gravado em `server/data/files/` para propostas, e arquivos antigos dessa pasta (referenciados por `pdfId`) não são enviados. Também não mostra custos: materiais e mão de obra aparecem só por nome, especificação, quantidade e horas, sem valor por kg, valor por hora, totais ou os totais de materiais e mão de obra. O cliente vê o valor cobrado (o Valor da OS, sob o rótulo "Valor do serviço" no layout genérico), o desconto, o prazo e os tempos previstos; o valor do serviço interno (custo) nunca vai ao cliente.
 
 ## 9. Estoque e consumo de materiais
 
@@ -383,13 +417,18 @@ Pedido para uma OS com 10 kg pendentes
 ### Área do operador
 
 - Lista projetos com busca e filtros de estado; consulta novas OS a cada 10 segundos.
-- Selecionar projeto recolhe a lista à esquerda para ampliar os detalhes; existe caminho para voltar à lista.
+- Depois do código, a tela mostra só **Selecione uma OS** (lista com busca e filtros). Ao tocar numa OS, a lista some e aparece só a OS, com **← Voltar para as OS**.
+- Na OS, o trabalho segue três quadrados grandes, nesta ordem: **1 Selecionar máquina / serviço** (vermelho) abre uma tela própria com quadrados de todas as máquinas e, abaixo, de todos os serviços; escolher volta para a OS. **2 Iniciar trabalho** (cinza) só libera depois da escolha e, enquanto o operador identificado trabalha, vira **Pausar trabalho**; escolher outro recurso nesse momento troca o recurso da sessão. **3 Concluir serviço** (amarelo) segue a regra de antes (todas as peças em todas as etapas). Uma OS com um único serviço de hora homem previsto já abre com esse serviço escolhido.
+- Ao registrar a última peça da última etapa, abre sozinho o modal **Concluir serviço** (com **Agora não**).
+- Registro de etapas, funcionários trabalhando na OS e histórico continuam abaixo dos quadrados. Trocar operador volta para a lista.
 - Mostra material, responsável, prazo, etapa atual, quantidade, cliente, identificação da OS, tempos e grupos de etapas.
-- **Trabalhar neste projeto** fica sempre disponível (exceto em OS concluída ou sem etapas) e abre identificação do funcionário e seleção do recurso.
+- Cada grupo de etapas é um cartão discreto, na tela do operador e em **Informações do projeto**: fundo branco, uma linha fina lateral e um ponto em cor suave ao lado do nome (**Usinagem** azul, **Caldeiraria** laranja, **Pintura** violeta, **Outras etapas** cinza). O cabeçalho mostra o nome, o estado em texto simples (**Não iniciada**, **Em andamento** ou **Concluída**, esta em verde), as passagens registradas e uma barra fina de progresso do grupo. Evitar cores fortes, ícones e etiquetas nesse cartão: o usuário pediu um visual sóbrio. Os cartões se distribuem pela largura da tela (cada um precisa de cerca de 460 px): em tela larga ficam lado a lado, em largura média Usinagem e Pintura dividem a linha e a Caldeiraria usa a linha toda, e no celular ficam empilhados; um grupo sozinho na linha ocupa a linha inteira. Dentro do cartão, as etapas quebram em linhas (sem rolagem horizontal) fora do layout de celular. Em **Informações do projeto**, a partir de 1800 px a página tem duas colunas que se equilibram sozinhas e a seção **Andamento e etapas** ocupa a largura toda para os grupos ficarem lado a lado. A numeração das etapas continua sendo a da sequência da OS; o tom e o progresso vêm de `stageGroupTone` e `stageGroupProgress` (`src/serviceProgress.js`), com o cabeçalho em `src/OperatorStageGroup.jsx`.
+- Antes da lista, o funcionário clica em **Entrar** e digita o código de 4 dígitos (ver Perfis e acesso > Operador).
 - O funcionário escolhe **Máquina** ou **Serviço de hora homem**, nunca os dois ao mesmo tempo; a escolha de um deles é obrigatória na tela e o backend recusa os dois juntos.
 - Havendo falta, abre **Material pendente**, informa os kg faltantes e pergunta se deseja começar mesmo assim.
 - A confirmação é validada no backend e fica registrada; a interface não pode simplesmente ignorar a pendência.
-- Vários funcionários podem trabalhar na mesma OS ao mesmo tempo, cada um com sua sessão (`activeSessions`). O mesmo funcionário não pode ter duas sessões ativas na mesma OS.
+- **Máquina é de uma pessoa por vez**, em qualquer OS: iniciar ou trocar para uma máquina em uso por outra pessoa é recusado (409 `MACHINE_BUSY`, "A máquina X está sendo usada por Fulano na OS-…"), e na tela do operador ela aparece tracejada e desabilitada com "Em uso por Fulano · OS". O próprio funcionário pode levar a sua máquina ao trocar de OS. Se alguém esquecer de pausar, o administrador encerra a sessão pelo painel. Os **serviços de hora homem** continuam compartilhados por várias pessoas ao mesmo tempo. `GET /machines` traz `inUseBy` (funcionário e OS).
+- Vários funcionários podem trabalhar na mesma OS ao mesmo tempo, cada um com sua sessão (`activeSessions`). O mesmo funcionário não pode ter duas sessões ativas na mesma OS, nem trabalhar em duas OS ao mesmo tempo: ao iniciar outra OS, a tela pergunta "Você já está trabalhando na OS X. Deseja alterar para esta?"; confirmando (`switchFrom` no `start`), o trabalho na OS anterior é pausado com a justificativa automática **Troca de serviço**, no mesmo instante em que o novo começa. Sem a confirmação o backend responde 409 `WORKING_ELSEWHERE`, e a OS anterior só é pausada depois que o novo início foi aceito.
 - Abaixo das etapas e acima do histórico fica **Funcionários trabalhando neste serviço**. Ao clicar no nome aparecem **Pausar trabalho** e **Troca de máquina ou serviço** daquele funcionário.
 - O botão único **Troca de máquina ou serviço** abre uma janela que já vem no tipo em uso (máquina ou serviço) e permite sair da máquina para um serviço de hora homem e vice-versa (evento `resource_changed`), além de trocar por outro recurso do mesmo tipo.
 - Pausar, trocar recurso ou concluir exige a credencial da sessão, guardada no navegador em que o trabalho foi iniciado. Sessões de outro dispositivo aparecem na lista, com as ações desativadas.
@@ -398,7 +437,7 @@ Pedido para uma OS com 10 kg pendentes
 - O tempo do projeto conta uma única vez os períodos com pelo menos um funcionário trabalhando; as horas por funcionário, máquina e serviço continuam vindo dos intervalos de cada sessão.
 - No painel administrativo, encerrar sessão com justificativa pede a escolha do funcionário quando há mais de uma sessão ativa.
 - Registros antigos com uma única `activeSession` são lidos como lista de uma sessão.
-- Pausas disponíveis: Descanso, Horário de almoço, Gilson mandou parar e Troca de atividade.
+- Pausas disponíveis: Descanso, Horário de almoço, Jossenilson mandou parar e Troca de atividade. **Troca de serviço** não aparece na lista: é gravada sozinha na troca de OS.
 - Pausas não entram no tempo ativo. Os relógios locais atualizam a cada segundo com base nos horários persistidos.
 - O total de passagens pelas etapas não equivale ao total de peças concluídas; respeitar a regra do menor contador.
 
@@ -415,14 +454,21 @@ Pedido para uma OS com 10 kg pendentes
 ### Serviços concluídos
 
 - Concluir pelo operador não remove imediatamente a OS do painel de andamento.
-- A administração confirma a conclusão pelo botão correspondente; isso registra `completionAcknowledgedAt`.
+- A administração confirma a conclusão pelo botão **Concluído**; isso registra `completionAcknowledgedAt`.
+- O botão abre a janela **Recebimento do serviço**, que pergunta se o cliente já pagou: **Ainda vai receber** programa a conta em Contas a Receber (parcela única ou parcelado) e **Já recebido** registra a entrada na Tesouraria, já baixada, com data e forma de recebimento. **Concluir sem lançar** finaliza a OS sem criar lançamento financeiro. Nada é criado antes de uma dessas confirmações.
 - Depois dessa confirmação, o serviço sai do painel de andamento e aparece em **Serviços concluídos**.
 - Lista mantém a apresentação do processo e o acesso à OS, do mais recente para o menos recente.
+- A coluna **Colaboradores** mostra todos que trabalharam na OS (eventos de início e retomada, campo `collaborators` de `GET /operations/orders`), e o filtro **Colaborador** mostra só as OS de uma pessoa. Os títulos ordenam a tabela: números e datas começam do maior, texto de A a Z; clicar de novo inverte.
+- Serviços concluídos e Ofertas e serviços atualizam a cada 10 segundos, como o painel em andamento.
+- Com o MySQL configurado, o estado da operação (status, sessões, conclusão) fica na tabela `order_operations`, e **não** em `operation` da OS no JSON. Qualquer regra do servidor fora de `operations.js` que precise saber se a OS está concluída deve ler essa tabela (como o recebimento faz com `operationStates`); ler `order.operation` só vale sem banco. Foi esse o motivo de "A OS precisa estar concluída para programar o recebimento" aparecer para uma OS já concluída pelo operador (`tests/receivable-os-status.mysql.mjs`).
 - Consultar um serviço concluído não apaga nem reinicia seu histórico.
 
 ### Detalhes, edição e reabertura
 
+- A OS tem tela e aba próprias (**Ordem de serviço**), abertas pelo **Ver OS** dos painéis de serviços, das ofertas, do estoque e dos pedidos de material; o botão de voltar retorna à tela de origem. Ela não faz parte de **Pedidos de material**.
 - Detalhes da OS exibem informações separadas por contexto, materiais, processo, proposta aceita, arquivos e histórico de operações em modal.
+- No histórico, o administrador pode corrigir o horário de operações de sessão (início, retomada, pausa, troca de recurso, peças registradas, encerramento e conclusão). O horário original fica guardado no evento (`originalAt`, `timeEdits`), a linha recebe a marca **Horário editado** e o botão de informação mostra o horário original e quem editou.
+- A correção respeita a sequência das operações do funcionário na OS, não aceita horário futuro e recalcula tempo da sessão, tempo ativo da OS e as horas de máquina, serviço e funcionário nos relatórios.
 - Encerrar uma sessão ativa administrativamente pede justificativa em modal próprio, não em `window.prompt`.
 - **Editar OS** permite alterar dados do serviço/cliente, prazos, quantidade, materiais, mão de obra, proposta, processo, etapas, quantidades produzidas e anexos associados.
 - Editar OS concluída exige confirmação explícita.
@@ -430,6 +476,8 @@ Pedido para uma OS com 10 kg pendentes
 - Com sessão ativa, mudanças em etapas, regras de processo ou quantidades produzidas são impedidas até encerrar a sessão.
 - **Reabrir OS** está disponível para OS concluída e preserva quantidades produzidas e histórico; não zera a produção automaticamente.
 - A reabertura limpa a confirmação de conclusão e permite a OS voltar ao acompanhamento. Quantidades podem ser ajustadas pela edição.
+- Ao confirmar a reabertura, o sistema leva para **Serviços em andamento** e destaca a OS por alguns segundos (a tela da OS não fica aberta, para a OS não "sumir" da lista de concluídos sem aparecer onde foi parar).
+- Se a OS tem **contas a receber vinculadas** (programada, parcelada ou já recebida na Tesouraria), o modal de reabertura lista os lançamentos e pergunta o que fazer: **Manter** ou **Excluir** (nada vem marcado). A exclusão usa as mesmas regras de "Excluir conta" em Contas a Receber: o parcelamento sai inteiro, a entrada da Tesouraria pode ser removida, mas conta com histórico de recebimento ou conciliada com o banco não pode ser excluída; nesse caso o modal avisa e o lançamento é mantido. A API é `POST /operations/orders/:code/reopen` com `{ receivables: 'keep' | 'delete' }` (padrão `keep`); a exclusão acontece na mesma operação da reabertura (se for bloqueada, a OS continua concluída) e fica no histórico das contas e no evento "OS reaberta".
 - Alterações e reabertura ficam registradas no histórico.
 
 **Atenção para futuras mudanças:** a edição geral de materiais da OS não equivale a executar novas entradas/saídas ou estornar a baixa original automaticamente. Alterações de consumo após o aceite precisam ser analisadas explicitamente com o histórico e as regras de estoque, evitando prometer uma reconciliação que o fluxo de edição não executa.
@@ -452,6 +500,44 @@ Pedido para uma OS com 10 kg pendentes
 - Duplicidades são verificadas no backend, inclusive em operações concorrentes.
 - Exportação PDF/Excel respeita a seleção ou os filtros; detalhe individual inclui informações e histórico da conta.
 - Há script específico de demonstração para 120 contas entre setembro e dezembro de 2026, fornecedores e classificações. Não é executado automaticamente ao iniciar o projeto.
+- Em Contas a Receber, "Dar baixa" tem também o campo **ISS (R$)**, que começa em zero: é o ISS retido pelo cliente e sai do valor recebido (valor − desconto + juros − ISS), podendo vir junto com juros ou desconto. Fica em `receipt.issCents`, aparece no detalhe da conta e na coluna **ISS (R$)** do PDF/Excel; a baixa em massa não aceita ISS.
+
+### Tesouraria
+
+- Fica no grupo Gestão Financeira, logo abaixo de Contas a Receber. É o livro-caixa: lista todo dinheiro que já entrou ou saiu, com Entradas, Saídas e Saldo do período.
+- **Nova saída** usa o formulário de Contas a Pagar e **Nova entrada** o de Contas a Receber; no lugar de vencimento/tipo ficam a data e a forma do pagamento ou recebimento (Pix, Boleto, Transferência, Cartão ou Dinheiro). O lançamento já nasce baixado, sem passar por "dar baixa".
+- O lançamento é gravado como uma conta a pagar (`PAG-`) ou a receber (`REC-`) com a marca `treasury: true` e o pagamento/recebimento preenchido. Por isso entra normalmente em Business Intelligence, conciliação bancária, relatórios e nas listas de contas pagas/recebidas, com origem **Tesouraria**.
+- As baixas feitas em Contas a Pagar e em Contas a Receber também aparecem na Tesouraria (origem **Contas a Pagar** / **Contas a Receber**); o filtro **Só lançadas aqui** mostra apenas os lançamentos diretos.
+- Um lançamento da Tesouraria pode ser editado e ter anexos alterados sem estorno, e pode ser excluído diretamente, desde que não esteja conciliado com o extrato. Lançamentos iguais no mesmo dia são aceitos (a verificação de duplicidade não se aplica a eles).
+- Estornar a baixa de um lançamento da Tesouraria o transforma em uma conta em aberto comum.
+- Ao receber uma OS na Tesouraria (janela **Recebimento do serviço**, opção **Já recebido**), a conta guarda o **valor da OS** e o **valor recebido** à parte: se o recebido for maior, a diferença vira **juros**; se for menor, vira **desconto** (campo 
+eceived da API, como em "Dar baixa"). A janela avisa a diferença numa linha discreta sob o campo de valor (por exemplo, "Juros de R$ 20,00 sobre o valor da OS (R$ 960,00)."), tanto em **Já recebido** quanto em **Ainda vai receber** (neste, o aviso é só informativo: a conta programada guarda o valor digitado). A edição do lançamento mostra **Valor da OS** e **Valor recebido**. Entradas manuais sem OS continuam com um único valor.
+
+### Conciliação bancária
+
+- Importa extratos OFX 1.x/2.x (`server/ofx.js`) do **Itaú** e do **Sicoob** (os dois modelos do Sicoob, "money" e "unix", só mudam a quebra de linha). Vários arquivos podem ser escolhidos de uma vez: cada um vira um lote próprio, um arquivo com erro é informado pelo nome e não impede os outros, e a tela abre na conta do último arquivo.
+- Cada banco/conta (BANKID + ACCTID) é uma conta separada no seletor, com o nome do banco (Itaú, Sicoob, etc.). O FITID é único por conta; reimportar o mesmo período só soma "já existentes".
+- Sicoob: tags fechadas, acentos em Windows-1252, históricos curtos ("CRÉD.TED-STR", "PIX EMITIDO OUTRA IF", "DÉB.CONV…", "RDC AUTOMÁTICO", "RESGATE RDC…", "DÉB. REPACTUAÇÃO…") e a contraparte em `<NAME>`, usada na sugestão por nome. `<NAME>` com documento mascarado ("Pagamento Pix ***.519.435-**") fica só como referência. O Sicoob não envia saldo anterior nem saldos diários: o aviso é informativo e o fechamento por dia fica sem conferência.
+- **Conciliar tudo** vale para todas as contas e deixa de fora aplicações e resgates automáticos (RDC), que são dinheiro da própria empresa indo e voltando da aplicação; eles ainda podem ser conciliados um a um.
+- Extratos reais (`*.ofx`) nunca vão para o repositório.
+- **Encerramento da conciliação** (`store.bankClosings`, `CON-000001`…): um por conta e mês. A tela tem o seletor **Mês** (padrão: o mês mais recente da conta; "Todos os meses" só consulta) e a barra de situação: em aberto, encerrada ou reaberta.
+  - **Encerrar conciliação** mostra o resumo e, se houver movimentações sem vínculo, exige justificativa (mínimo de 10 caracteres). Aplicação/resgate RDC não contam como pendência. O encerramento guarda uma fotografia de cada movimentação do mês com o vínculo da época, quem encerrou e quando.
+  - Encerrado, o mês fica **travado**: Conciliar, Desfazer e "Conciliar tudo" não alteram vínculos daquele mês (409 no backend).
+  - **Reabrir para editar** pede motivo e destrava o mês; **Encerrar novamente** atualiza o mesmo registro (versão 2, 3…), com o histórico encerrada → reaberta → encerrada novamente.
+  - **Excluir** apaga só o registro do encerramento (fica um evento `closing_deleted` em `bankEvents` para auditoria); os vínculos continuam e o mês volta a ficar em aberto.
+  - Movimentações importadas num mês já encerrado aparecem como "importadas depois" no encerramento, para reabrir e encerrar de novo.
+  - A seção **Conciliações encerradas** lista todos os encerramentos, de todas as contas, com Ver, Reabrir e Excluir. API: `POST /bank-statements/closings`, `POST /bank-statements/closings/:id/reopen`, `DELETE /bank-statements/closings/:id`.
+
+### Compra de material lançada a partir do estoque
+
+- Depois de uma entrada de material (material novo com saldo ou entrada em material existente), pela tela de Estoque ou por Pedidos de material, o sistema pergunta se a compra vai para o financeiro: **Conta a pagar** (ainda será paga) ou **Pagamento já realizado** (saída na Tesouraria, já baixada). **Não lançar agora** apenas fecha a pergunta.
+- O formulário abre com valor (quantidade × valor por kg) e descrição preenchidos; fornecedor e classificação são informados pelo usuário. Editar um material não é compra e não pergunta nada.
+- A compra não é vinculada automaticamente a uma OS, porque o material previsto na proposta já está no custo da OS.
+
+### Custo real da OS
+
+- **Custos lançados** = custo previsto na proposta (materiais + mão de obra) + contas a pagar vinculadas à OS. As contas vinculadas são custos adicionais, que surgiram depois do planejado; sem elas, o custo lançado é igual ao previsto.
+- A margem real usa esse total. Vale para a seção **Custo real e margem** da OS e para a tabela por OS do Business Intelligence.
 
 ### Business Intelligence
 
@@ -492,7 +578,7 @@ O sino fica no cabeçalho superior e é compartilhado pelas telas administrativa
 
 | Relatório | Seleção/período | Conteúdo |
 | --- | --- | --- |
-| Funcionários | Cadastro geral | Informações cadastrais disponíveis, sem senhas |
+| Funcionários | Cadastro geral | Informações cadastrais disponíveis, sem senhas nem códigos de acesso |
 | Clientes | Cadastro geral | Nome, documento, contato e cadastro |
 | Administradores | Cadastro geral | Informações cadastrais, sem hashes/tokens/senhas |
 | Horas trabalhadas | Início/fim; todos ou funcionários selecionados | Total geral, total por funcionário e detalhe diário |

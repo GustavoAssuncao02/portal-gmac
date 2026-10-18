@@ -5,17 +5,33 @@ import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
 
 const modulePath = process.env.PLAYWRIGHT_MODULE
 const { chromium } = await import(modulePath ? pathToFileURL(modulePath).href : 'playwright')
-const fixture = await createWorkflowFixture({ accountsEnv: { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste', DEMO_ADMIN_NAME: 'Gustavo' } })
+// Accepting the offer takes its material out of the stock: a simulated stock database for that moment.
+const inventoryPool = { async getConnection() {
+  return {
+    async beginTransaction() {}, async commit() {}, async rollback() {}, release() {},
+    async execute(sql) {
+      if (sql.startsWith('SELECT id FROM inventory_movements')) return [[]]
+      if (sql.startsWith('SELECT id, name')) return [[{ id: 1, name: 'Alumínio cadastrado teste', quantity: 15, minimum: 0, unitPrice: 40 }]]
+      return [{}]
+    },
+  }
+} }
+const fixture = await createWorkflowFixture({ inventoryPool, accountsEnv: { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste', DEMO_ADMIN_NAME: 'Gustavo' } })
 const browser = await chromium.launch({ headless: true })
 const context = await browser.newContext({ viewport: { width: 1366, height: 900 } })
 const page = await context.newPage()
 const errors = []
 page.on('pageerror', (error) => errors.push(error.message))
-const navigate = (label) => page.locator('.sidebar').getByRole('button', { name: label, exact: true }).click()
+// On phones the side menu opens from the top button first.
+const navigate = async (label) => {
+  const opener = page.getByRole('button', { name: 'Abrir menu de navegação', exact: true })
+  if (await opener.isVisible() && await opener.getAttribute('aria-expanded') === 'false') await opener.click()
+  await page.locator('.sidebar').getByRole('button', { name: label, exact: true }).click()
+}
 const waitSaved = () => page.waitForFunction(() => !document.querySelector('.offer-proposal-button')?.disabled)
 
 try {
-  const created = await fixture.request('/offers', 'POST', offerDraft)
+  const created = await fixture.adminRequest('/offers', 'POST', offerDraft)
   const offerId = created.data.item.id
   await page.route('**/api/**', async (route) => {
     const url = new URL(route.request().url())
@@ -42,6 +58,8 @@ try {
   await inventoryDialog.getByLabel('Quantidade disponível').fill('15')
   await inventoryDialog.getByLabel('Valor por kg').fill('40')
   await inventoryDialog.getByRole('button', { name: 'Adicionar material', exact: true }).click()
+  // The purchase is offered to the financial module; here it is left for later.
+  await page.getByRole('dialog', { name: 'Lançar esta compra no financeiro?', exact: true }).getByRole('button', { name: 'Não lançar agora', exact: true }).click()
   await navigate('Ofertas e serviços')
   await page.locator('.offer-review-button').click()
   await page.getByRole('button', { name: 'Adicionar material', exact: true }).click()
@@ -62,29 +80,13 @@ try {
   const badge = page.locator('.material-stock-status--unknown')
   assert.equal(await badge.innerText(), 'Não verificado')
   assert.equal(await badge.evaluate((element) => getComputedStyle(element).color), 'rgb(196, 43, 59)')
+  // A missing material shows directly in Pedidos de material, already from the offer (the former "pending materials"
+  // card of Estoque was removed; see ENTENDIMENTO, section 10). It is shared with other computers and survives a reload.
   await navigate('Pedidos de material')
   await page.getByRole('heading', { name: 'Pedidos de material' }).waitFor()
-  assert.equal(await page.locator('.material-orders-table tbody tr').count(), 0)
-  await navigate('Estoque')
-  const pendingSection = page.locator('.pending-material-card')
-  const pendingRow = pendingSection.locator('.pending-material-row:not(.pending-material-row--header)')
-  assert.equal(await pendingRow.count(), 1)
-  assert.match(await pendingRow.innerText(), /Titanio novo teste.*12,5 kg.*OF-/s)
-  await pendingRow.getByRole('button', { name: 'Abrir solicitação de compra' }).click()
-  await page.getByRole('dialog').getByRole('button', { name: 'Cancelar', exact: true }).click()
-  await navigate('Pedidos de material')
-  assert.equal(await page.locator('.material-orders-table tbody tr').count(), 0)
-  await page.reload()
-  await page.getByRole('heading', { name: 'Pedidos de material' }).waitFor()
-  await navigate('Pedidos de material')
-  assert.equal(await page.locator('.material-orders-table tbody tr').count(), 0)
-  await navigate('Estoque')
-  await pendingRow.getByRole('button', { name: 'Abrir solicitação de compra' }).click()
-  await page.getByRole('dialog').getByRole('button', { name: 'Confirmar solicitação' }).click()
-  await pendingRow.getByText('Compra solicitada', { exact: true }).waitFor()
-  assert.match(await pendingRow.innerText(), /Compra solicitada/)
-  await navigate('Pedidos de material')
-  assert.equal(await page.locator('.material-orders-table tbody tr').count(), 1)
+  const requestRow = page.locator('.material-orders-table tbody tr').filter({ hasText: 'Titanio novo teste' })
+  assert.equal(await requestRow.count(), 1)
+  assert.match(await requestRow.innerText(), /12,5/)
   const otherContext = await browser.newContext({ viewport: { width: 1366, height: 900 } })
   const otherPage = await otherContext.newPage()
   await otherPage.goto(fixture.url)
@@ -97,10 +99,10 @@ try {
   await page.reload()
   await page.getByRole('heading', { name: 'Pedidos de material' }).waitFor()
   await navigate('Pedidos de material')
-  assert.equal(await page.locator('.material-orders-table tbody tr').count(), 1)
-  await navigate('Estoque')
+  assert.equal(await requestRow.count(), 1)
   await page.screenshot({ path: 'test-results/inventory-pending-offer-desktop.png', fullPage: true })
-  await pendingRow.getByRole('button', { name: /^OF-/ }).click()
+  await navigate('Ofertas e serviços')
+  await page.locator('.offer-review-button').click()
   await page.getByRole('button', { name: 'Adicionar mão de obra', exact: true }).click()
   const laborForm = page.locator('.offer-labor-form')
   const machineSelect = laborForm.locator('select').nth(1)
@@ -124,7 +126,8 @@ try {
   const row = page.locator('.material-orders-table tbody tr')
   assert.equal(await row.count(), 1)
   assert.match(await row.innerText(), /Titanio novo teste.*12,5 kg/s)
-  await row.getByRole('button', { name: 'Titanio novo teste' }).click()
+  // The OS / offer code of the request opens the offer (the material name opens Estoque).
+  await row.getByRole('button', { name: /^OF-/ }).click()
   assert.equal(await page.getByRole('checkbox', { name: 'Pintura', exact: true }).isChecked(), true)
   assert.equal(await page.getByRole('radio', { name: 'Produto', exact: true }).isChecked(), true)
   await page.getByRole('button', { name: 'Fazer proposta', exact: true }).click()
@@ -144,36 +147,33 @@ try {
   await page.getByLabel('Horas de Serv Usinagem em Torno Convencional', { exact: true }).fill('2')
   await page.getByRole('button', { name: 'Gerar PDF', exact: true }).click()
   assert.equal((await proposalResponse).status(), 200)
-  assert.equal((await fixture.request('/offers')).data.items.find((item) => item.id === offerId).proposal.margin, 17)
+  // A price list (Etiqueta) states its own price: the proposal keeps the real margin of the document on the cost.
+  const savedProposal = (await fixture.adminRequest('/offers', 'GET', undefined, fixture.admin)).data.items.find((item) => item.id === offerId).proposal
+  assert.equal(savedProposal.margin, Math.round((savedProposal.osValue - savedProposal.serviceValue) / savedProposal.serviceValue * 1000) / 10)
   await page.getByRole('tab', { name: 'Detalhes da oferta', exact: true }).click()
   await page.getByRole('button', { name: 'Fazer proposta', exact: true }).click()
   await page.getByRole('heading', { name: 'Fazer proposta', exact: true }).waitFor()
-  assert.deepEqual(await margins(), ['17,0%', '20,0%', '25,0%', '30,0%'])
+  assert.equal((await margins())[0], `${savedProposal.margin.toFixed(1).replace('.', ',')}%`, 'the saved option shows its margin')
   await page.getByRole('button', { name: 'Aceitar Oferta', exact: true }).click()
+  await page.getByRole('dialog', { name: 'Tem certeza que deseja aceitar a oferta?' }).getByRole('button', { name: 'Sim, aceitar e gerar a OS', exact: true }).click()
   await page.locator('.order-detail-card').waitFor()
   await navigate('Pedidos de material')
   await page.getByRole('heading', { name: 'Pedidos de material' }).waitFor()
   assert.match(await row.innerText(), /OS-/)
   await page.screenshot({ path: 'test-results/material-orders-desktop.png', fullPage: true })
-  await row.getByRole('button', { name: 'Titanio novo teste' }).click()
+  await row.getByRole('button', { name: /^OS-/ }).click()
   await page.locator('.order-detail-card').waitFor()
   const orderText = await page.locator('.order-detail-card').innerText()
   assert.equal(await page.locator('.os-planning-facts > div').filter({ has: page.locator('dt', { hasText: /^Tipo$/ }) }).locator('dd').innerText(), 'Produto')
   assert.deepEqual(await page.locator('.os-proposal-stages li').allTextContents(), ['1Tornearia', '2Pintura'])
   assert.match(orderText, /350,00/)
-  assert.equal((await fixture.request('/orders')).data.items[0].resources.laborEntries[0].hourlyRate, 175)
-  await navigate('Estoque')
-  assert.equal(await pendingRow.count(), 1)
-  assert.match(await pendingRow.innerText(), /Titanio novo teste.*12,5 kg.*OS-.*Compra solicitada/s)
-  await page.screenshot({ path: 'test-results/inventory-pending-os-desktop.png', fullPage: true })
-  await pendingRow.getByRole('button', { name: /^OS-/ }).click()
-  await page.locator('.order-detail-card').waitFor()
+  assert.equal((await fixture.request('/orders', 'GET', undefined, fixture.admin)).data.items[0].resources.laborEntries[0].hourlyRate, 175)
   await page.setViewportSize({ width: 390, height: 844 })
   await navigate('Pedidos de material')
   await page.getByRole('heading', { name: 'Pedidos de material' }).waitFor()
   await page.screenshot({ path: 'test-results/material-orders-mobile.png', fullPage: true })
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
-  await row.getByRole('button', { name: 'Titanio novo teste' }).click()
+  await row.getByRole('button', { name: /^OS-/ }).click()
   await page.screenshot({ path: 'test-results/order-details-mobile.png', fullPage: true })
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
   await page.getByRole('tab', { name: 'Detalhes da oferta', exact: true }).click()
@@ -191,10 +191,10 @@ try {
   await inventoryDialog.getByLabel('Quantidade disponível').fill('12.5')
   await inventoryDialog.getByLabel('Valor por kg').fill('20')
   await inventoryDialog.getByRole('button', { name: 'Adicionar material', exact: true }).click()
-  assert.equal(await pendingRow.count(), 0)
-  assert.match(await pendingSection.innerText(), /Nenhum produto solicitado pendente/)
+  // Adding the stock offers to post the purchase in the finance; it is left for later here.
+  await page.getByRole('dialog', { name: 'Lançar esta compra no financeiro?', exact: true }).getByRole('button', { name: 'Não lançar agora', exact: true }).click()
   assert.deepEqual(errors, [])
-  console.log('Browser workflow passed: pre-registration approval gates purchase orders, cancellation and reload preserve approval state, inventory suggestions, machine rate, process settings, PDF, material request/OS links, desktop/mobile.')
+  console.log('Browser workflow passed: missing material requested from the offer and shared between computers, inventory suggestions, machine rate, process settings, PDF, material request/OS links, desktop/mobile.')
 } catch (error) {
   await page.screenshot({ path: 'test-results/workflow-failure.png', fullPage: true })
   throw error

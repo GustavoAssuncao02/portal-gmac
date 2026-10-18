@@ -8,11 +8,11 @@ const fixture = await createWorkflowFixture({ accountsEnv: env })
 const browser = await chromium.launch()
 await mkdir('test-results', { recursive: true })
 try {
-  const offer = (await fixture.request('/offers', 'POST', offerDraft)).data.item
+  const offer = (await fixture.adminRequest('/offers', 'POST', offerDraft)).data.item
   const unknown = { id: 'unknown', name: 'Titanio solicitado', detail: 'Chapa 10mm', quantity: 5, purchaseQuantity: 5, unitPrice: 20, stockStatus: 'unknown' }
-  await fixture.request(`/offers/${offer.id}/resources`, 'PUT', { materials: [unknown], laborEntries: [], stages: ['painting'], kind: 'service' })
-  await fixture.request(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', title: 'Teste', serviceValue: 250, deadline: offer.deadline } })
-  const accepted = await fixture.request(`/offers/${offer.id}/accept`, 'POST')
+  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [unknown], laborEntries: [], stages: ['painting'], kind: 'service' })
+  await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', title: 'Teste', serviceValue: 250, deadline: offer.deadline } })
+  const accepted = await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')
   assert.equal(accepted.status, 201)
   const existing = { id: 6, name: 'Aco SAE 1020', detail: 'Barra redonda', quantity: 0, minimum: 10, unitPrice: 12.8 }
   const requested = { id: 'registered', inventoryId: 6, name: existing.name, detail: existing.detail, quantity: 170, purchaseQuantity: 10, inventoryConsumedQuantity: 160, stockStatus: 'partial', unitPrice: 12.8 }
@@ -83,6 +83,11 @@ try {
       await modal.getByRole('button', { name: 'Registrar entrada', exact: true }).click()
     }
     await modal.waitFor({ state: 'hidden' })
+    // The purchase is offered to the financial module; here it is left for later.
+    const finance = page.getByRole('dialog', { name: 'Lançar esta compra no financeiro?', exact: true })
+    assert.match((await finance.locator('.finance-choice-summary').innerText()).replace(/\s/g, ' '), /entrou no estoque: 12 kg × R\$ 14,00 = R\$ 168,00\./)
+    await finance.getByRole('button', { name: 'Não lançar agora', exact: true }).click()
+    await finance.waitFor({ state: 'detached' })
     await row.getByText('Material solicitado adicionado', { exact: true }).waitFor()
     assert.equal(await row.getByRole('button', { name: 'Adicionar material', exact: true }).count(), 0)
     assert.equal(await row.getByRole('button', { name: 'Recusar pedido', exact: true }).count(), 0)
@@ -110,6 +115,8 @@ try {
     await modal.getByLabel(/^Quantidade dispon\u00edvel/).fill('6')
     await modal.getByRole('button', { name: 'Adicionar material', exact: true }).click()
     await modal.waitFor({ state: 'hidden' })
+    await finance.getByRole('button', { name: 'Não lançar agora', exact: true }).click()
+    await finance.waitFor({ state: 'detached' })
     await newRow.getByText('Material solicitado adicionado', { exact: true }).waitFor()
     await page.reload()
     await table.waitFor()
