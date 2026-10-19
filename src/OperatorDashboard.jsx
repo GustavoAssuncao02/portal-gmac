@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { Users } from 'lucide-react'
 import OperatorProjectInformation from './OperatorProjectInformation.jsx'
 import PendingMaterialsModal from './PendingMaterialsModal.jsx'
 import { pollWhileVisible } from './polling.js'
@@ -297,7 +296,8 @@ export default function OperatorDashboard({ token, onLogout }) {
     } finally { setBusy(false) }
   }
 
-  // Leaves the identified operator; the shared account stays signed in for the next one.
+  // One exit button, in two steps: with an operator identified it leaves only the operator (back to the code and the
+  // shared account stays signed in for the next one); on the code screen it leaves the shared account.
   function switchEmployee() {
     rememberEmployee(null)
     setEmployee(null)
@@ -434,7 +434,7 @@ export default function OperatorDashboard({ token, onLogout }) {
     <aside className="operator-sidebar">
       <div className="operator-logo"><img src="/images/gmac-logo-transparent.png" alt="GMAC Metalúrgica" /></div>
       <nav><span className="operator-nav-item operator-nav-item--active">▣ <b>Entrar</b></span></nav>
-      <div className="operator-sidebar-bottom"><span className="operator-avatar">OP</span><div><strong>Operador</strong><small>Conta compartilhada</small></div><button type="button" onClick={logout} title="Sair">↪</button></div>
+      <div className="operator-sidebar-bottom"><span className="operator-avatar">OP</span><div><strong>Operador</strong><small>Conta compartilhada</small></div><button type="button" onClick={logout} title="Sair da conta do operador" aria-label="Sair da conta do operador">↪</button></div>
     </aside>
     <main className="operator-main operator-entry">
       <section className="operator-entry-card" aria-labelledby="operator-entry-title">
@@ -459,7 +459,7 @@ export default function OperatorDashboard({ token, onLogout }) {
     <aside className="operator-sidebar">
       <div className="operator-logo"><img src="/images/gmac-logo-transparent.png" alt="GMAC Metalúrgica" /></div>
       <nav><span className="operator-nav-item operator-nav-item--active">▣ <b>Projetos em andamento</b></span></nav>
-      <div className="operator-sidebar-bottom"><span className="operator-avatar">{initials(employee.name)}</span><div><strong>{employee.name}</strong><small>Conta compartilhada</small></div><button type="button" onClick={switchEmployee} title="Trocar operador" aria-label="Trocar operador"><Users size={14} aria-hidden="true" /></button><button type="button" onClick={logout} title="Sair">↪</button></div>
+      <div className="operator-sidebar-bottom"><span className="operator-avatar">{initials(employee.name)}</span><div><strong>{employee.name}</strong><small>Conta compartilhada</small></div><button type="button" onClick={switchEmployee} title="Sair do funcionário" aria-label="Sair do funcionário">↪</button></div>
     </aside>
     <main className="operator-main">
       {dialog === 'info' && selected ? <OperatorProjectInformation order={selected} token={token} events={events} now={now} onBack={() => setDialog(null)} statusLabels={statusLabels} eventLabels={eventLabels} formatDuration={formatDuration} /> : <>

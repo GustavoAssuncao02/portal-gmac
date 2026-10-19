@@ -23,7 +23,11 @@ async function checkLogout(storage = {}, blocked = false, selectService) {
     await page.goto(fixture.url)
     await page.getByRole('heading', { name: 'Selecione uma OS', exact: true }).waitFor()
     if (selectService) await page.locator('.operator-project').filter({ hasText: selectService }).click()
-    await page.getByTitle('Sair', { exact: true }).click()
+    // The same button leaves the operator first (back to the code) and then, on the code screen, the shared account.
+    await page.getByRole('button', { name: 'Sair do funcionário', exact: true }).click()
+    await page.getByRole('button', { name: 'Entrar', exact: true }).waitFor()
+    assert.equal(await page.getByRole('button', { name: 'Sair da conta do operador', exact: true }).count(), 1)
+    await page.getByRole('button', { name: 'Sair da conta do operador', exact: true }).click()
     if (blocked) {
       await page.getByRole('alert').filter({ hasText: 'Pause o trabalho antes de sair da conta do operador.' }).waitFor()
       assert.equal(await page.evaluate(() => sessionStorage.getItem('gmac-operator-token')), fixture.operatorToken)
@@ -45,7 +49,7 @@ async function checkSwitch() {
     const page = await context.newPage()
     page.on('pageerror', (error) => errors.push(error.message))
     await page.goto(fixture.url)
-    await page.getByRole('button', { name: 'Trocar operador', exact: true }).click()
+    await page.getByRole('button', { name: 'Sair do funcionário', exact: true }).click()
     await page.getByRole('button', { name: 'Entrar', exact: true }).waitFor()
     assert.equal(await page.evaluate(() => sessionStorage.getItem('gmac-operator-token')), fixture.operatorToken)
     assert.equal(await page.evaluate(() => sessionStorage.getItem('gmac-operator-employee')), null)

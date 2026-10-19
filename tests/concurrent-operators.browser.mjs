@@ -29,7 +29,7 @@ try {
 
   // Each employee takes the shared tablet, identifies with their own code and starts on the OS.
   const identify = async (employee) => {
-    if (!await page.locator('.operator-entry').isVisible()) await page.getByRole('button', { name: 'Trocar operador', exact: true }).click()
+    if (!await page.locator('.operator-entry').isVisible()) await page.getByRole('button', { name: 'Sair do funcionário', exact: true }).click()
     await enterOperatorCode(page, employee.accessCode)
   }
   const work = async (employee, group, name) => {
