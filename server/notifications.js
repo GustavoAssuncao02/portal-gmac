@@ -54,7 +54,8 @@ export default function createNotificationsRouter({ requireAdmin, payables, rece
         }
         return current
       })
-      response.set('Cache-Control', 'no-store').json({ items: items(store, request.adminId, finance) })
+      // The sound goes with every poll, so the bell plays the account's current choice without another request.
+      response.set('Cache-Control', 'no-store').json({ items: items(store, request.adminId, finance), sound: notificationSettings(store, request.adminId).sound })
     } catch (error) { next(error) }
   })
   router.sweepInventory = sweepInventory

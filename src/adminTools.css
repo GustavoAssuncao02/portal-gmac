@@ -44,6 +44,8 @@
 .account-settings-form h2 { margin-bottom: 18px; }
 .account-settings-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; margin-bottom: 30px; }
 .account-settings-fields input[readonly] { background: #edf3f8; color: #6b8096; }
+.account-sound-field { display: flex; gap: 8px; }
+.account-sound-field select { flex: 1; }
 .account-password-input { display: flex; position: relative; }
 .account-password-input input { width: 100%; padding-right: 40px; }
 .account-password-input button { position: absolute; right: 4px; top: 4px; display: grid; width: 30px; height: 30px; place-items: center; padding: 0; border: 0; background: transparent; color: #567797; cursor: pointer; }

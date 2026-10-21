@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Save, Eye, EyeOff, Sun, Moon, Type } from 'lucide-react'
+import { Save, Eye, EyeOff, Sun, Moon, Type, Volume2 } from 'lucide-react'
 import AdminWorkspace from './AdminWorkspace.jsx'
 import { payableRequest } from './payablesApi.js'
 import { useAccountAppearance } from './accountTheme.js'
-import { notificationDefaults, notificationOptions } from '../server/notificationRules.js'
+import { playNotificationSound } from './notificationSounds.js'
+import { notificationDefaults, notificationOptions, notificationSoundDefault, notificationSounds } from '../server/notificationRules.js'
 
 export default function AccountSettings({ user, onUpdateUser, ...props }) {
   const appearance = useAccountAppearance()
@@ -18,6 +19,7 @@ export default function AccountSettings({ user, onUpdateUser, ...props }) {
   const [reminderDays, setReminderDays] = useState('3')
   const [receivableDays, setReceivableDays] = useState('3')
   const [notificationPreferences, setNotificationPreferences] = useState(notificationDefaults)
+  const [sound, setSound] = useState(notificationSoundDefault)
   const [notificationLoading, setNotificationLoading] = useState(true)
   const [notificationBusy, setNotificationBusy] = useState(false)
   const [notificationError, setNotificationError] = useState('')
@@ -25,7 +27,7 @@ export default function AccountSettings({ user, onUpdateUser, ...props }) {
   useEffect(() => {
     let active = true
     setNotificationLoading(true)
-    payableRequest('/account/notifications').then((data) => { if (active) { setReminderDays(String(data.settings.payableReminderDays)); setReceivableDays(String(data.settings.receivableReminderDays ?? 3)); setNotificationPreferences(Object.fromEntries(notificationOptions.map(([key]) => [key, data.settings[key] ?? true]))) } })
+    payableRequest('/account/notifications').then((data) => { if (active) { setReminderDays(String(data.settings.payableReminderDays)); setReceivableDays(String(data.settings.receivableReminderDays ?? 3)); setSound(data.settings.sound ?? notificationSoundDefault); setNotificationPreferences(Object.fromEntries(notificationOptions.map(([key]) => [key, data.settings[key] ?? true]))) } })
       .catch((caught) => { if (active) setNotificationError(caught.message) })
       .finally(() => { if (active) setNotificationLoading(false) })
     return () => { active = false }
@@ -34,9 +36,10 @@ export default function AccountSettings({ user, onUpdateUser, ...props }) {
     event.preventDefault()
     setNotificationBusy(true); setNotificationError(''); setNotificationMessage('')
     try {
-      const data = await payableRequest('/account/notifications', 'PATCH', { payableReminderDays: reminderDays === 'never' ? 'never' : Number(reminderDays), receivableReminderDays: receivableDays === 'never' ? 'never' : Number(receivableDays), ...notificationPreferences })
+      const data = await payableRequest('/account/notifications', 'PATCH', { payableReminderDays: reminderDays === 'never' ? 'never' : Number(reminderDays), receivableReminderDays: receivableDays === 'never' ? 'never' : Number(receivableDays), sound, ...notificationPreferences })
       setReminderDays(String(data.settings.payableReminderDays))
       setReceivableDays(String(data.settings.receivableReminderDays ?? 3))
+      setSound(data.settings.sound ?? notificationSoundDefault)
       setNotificationPreferences(Object.fromEntries(notificationOptions.map(([key]) => [key, data.settings[key] ?? true])))
       setNotificationMessage('Preferência de notificações salva.')
       window.dispatchEvent(new Event('gmac-notification-settings-changed'))
@@ -79,7 +82,8 @@ export default function AccountSettings({ user, onUpdateUser, ...props }) {
     <h2>Segurança</h2><div className="account-settings-fields"><label>Senha atual<input type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} required autoComplete="current-password" /></label><label>Nova senha<span className="account-password-input"><input type={show ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} minLength={6} maxLength={72} autoComplete="new-password" /><button type="button" title={show ? 'Ocultar senha' : 'Mostrar senha'} aria-label={show ? 'Ocultar senha' : 'Mostrar senha'} onClick={() => setShow((value) => !value)}>{show ? <EyeOff size={17} /> : <Eye size={17} />}</button></span></label><label>Confirmar nova senha<input type="password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} required={Boolean(password)} minLength={password ? 6 : undefined} maxLength={72} autoComplete="new-password" /></label></div>
     {error && <p className="admin-tool-error" role="alert">{error}</p>}{message && <p className="admin-tool-success" role="status">{message}</p>}<button className="admin-tool-button admin-tool-button--primary" type="submit"><Save size={16} />{busy ? 'Salvando...' : 'Salvar alterações'}</button></fieldset>
   </form><form className="account-settings-form account-notification-settings" onSubmit={saveNotifications}>
-    <fieldset disabled={notificationLoading || notificationBusy}><h2>Notificações</h2><div className="account-settings-fields"><label>Contas a pagar a vencer<select aria-label="Contas a pagar a vencer" value={reminderDays} onChange={(event) => { setReminderDays(event.target.value); setNotificationMessage('') }}><option value="3">3 dias antes do vencimento</option><option value="5">5 dias antes do vencimento</option><option value="7">7 dias antes do vencimento</option><option value="never">Nunca</option></select></label><label>Contas a receber a vencer<select aria-label="Contas a receber a vencer" value={receivableDays} onChange={(event) => { setReceivableDays(event.target.value); setNotificationMessage('') }}><option value="3">3 dias antes e quando vencer</option><option value="5">5 dias antes e quando vencer</option><option value="7">7 dias antes e quando vencer</option><option value="never">Nunca</option></select></label></div>
+    <fieldset disabled={notificationLoading || notificationBusy}><h2>Notificações</h2><div className="account-settings-fields"><label>Contas a pagar a vencer<select aria-label="Contas a pagar a vencer" value={reminderDays} onChange={(event) => { setReminderDays(event.target.value); setNotificationMessage('') }}><option value="3">3 dias antes do vencimento</option><option value="5">5 dias antes do vencimento</option><option value="7">7 dias antes do vencimento</option><option value="never">Nunca</option></select></label><label>Contas a receber a vencer<select aria-label="Contas a receber a vencer" value={receivableDays} onChange={(event) => { setReceivableDays(event.target.value); setNotificationMessage('') }}><option value="3">3 dias antes e quando vencer</option><option value="5">5 dias antes e quando vencer</option><option value="7">7 dias antes e quando vencer</option><option value="never">Nunca</option></select></label>
+        <label>Som das notificações<span className="account-sound-field"><select aria-label="Som das notificações" value={sound} onChange={(event) => { setSound(event.target.value); setNotificationMessage(''); playNotificationSound(event.target.value) }}><option value="off">Sem som</option>{notificationSounds.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select><button className="admin-tool-button" type="button" title="Ouvir o som escolhido" disabled={sound === 'off'} onClick={() => playNotificationSound(sound)}><Volume2 size={16} aria-hidden="true" />Ouvir</button></span></label></div>
       <div className="account-notification-options">{notificationOptions.map(([key, label]) => <label key={key}><input type="checkbox" checked={notificationPreferences[key]} onChange={(event) => { setNotificationPreferences((current) => ({ ...current, [key]: event.target.checked })); setNotificationMessage('') }} /><span>{label}</span></label>)}</div>
       {notificationError && <p className="admin-tool-error" role="alert">{notificationError}</p>}{notificationMessage && <p className="admin-tool-success" role="status">{notificationMessage}</p>}<button className="admin-tool-button admin-tool-button--primary" type="submit"><Save size={16} />{notificationBusy ? 'Salvando...' : 'Salvar notificações'}</button>
     </fieldset>

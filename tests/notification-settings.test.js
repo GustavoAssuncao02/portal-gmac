@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createWorkflowFixture } from './workflowFixture.js'
 import { todayBahia } from '../server/payableRules.js'
-import { notificationDefaults } from '../server/notificationRules.js'
+import { notificationDefaults, notificationSoundDefault, notificationSounds } from '../server/notificationRules.js'
 
 const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Gustavo' }
 const dateAfter = (days) => new Date(Date.parse(`${todayBahia()}T12:00:00Z`) + days * 86400000).toISOString().slice(0, 10)
@@ -17,7 +17,7 @@ test('payable reminder preferences are authenticated, strict, persistent per adm
     const auth = { Authorization: `Bearer ${token}` }
     const request = (path, method, body) => fixture.request(path, method, body, auth)
     const before = (await request('/auth/session')).data.user
-    assert.deepEqual((await request(route)).data.settings, { payableReminderDays: 3, receivableReminderDays: 3, ...notificationDefaults })
+    assert.deepEqual((await request(route)).data.settings, { payableReminderDays: 3, receivableReminderDays: 3, sound: notificationSoundDefault, ...notificationDefaults })
     for (const value of [null, undefined, 0, 1, 4, 6, 8, '5', false, {}, [], 'invalid']) {
       assert.equal((await request(route, 'PATCH', { payableReminderDays: value })).status, 400, JSON.stringify(value))
     }
@@ -86,5 +86,36 @@ test('3/5/7-day windows include missed thresholds and due today; never hides ale
     })
     const final = await alerts()
     assert.deepEqual(final.map((notice) => notice.account.daysUntil).sort((a, b) => a - b), [0, 4, 5, 6, 7])
+  } finally { await fixture.close() }
+})
+
+test('notification sound: at least six sounds, strict choice per account, off switch and the choice sent with every poll', async () => {
+  const fixture = await createWorkflowFixture({ accountsEnv: env })
+  try {
+    const route = '/account/notifications'
+    assert.ok(notificationSounds.length >= 6)
+    assert.equal(new Set(notificationSounds.map(([key]) => key)).size, notificationSounds.length)
+    assert.equal((await fixture.request(route, 'PATCH', { sound: 'gota' })).status, 401)
+    const token = (await fixture.request('/auth/login', 'POST', { cpf: env.DEMO_ADMIN_CPF, password: env.DEMO_ADMIN_PASSWORD })).data.token
+    const auth = { Authorization: `Bearer ${token}` }
+    const request = (path, method, body) => fixture.request(path, method, body, auth)
+    assert.equal((await request(route)).data.settings.sound, notificationSoundDefault)
+    assert.equal((await request('/notifications')).data.sound, notificationSoundDefault)
+    for (const value of [null, '', 'Sino', 'buzina', 1, true, {}, []]) assert.equal((await request(route, 'PATCH', { sound: value })).status, 400, JSON.stringify(value))
+    const second = (await request('/admins', 'POST', { name: 'Segundo Admin', birthDate: '1990-01-01', cpf: '00000000002', email: 'segundo@example.invalid', password: 'teste123' })).data.item
+    const secondAuth = { Authorization: `Bearer ${(await fixture.request('/auth/login', 'POST', { cpf: second.cpf, password: 'teste123' })).data.token}` }
+    for (const [key] of [...notificationSounds, ['off']]) {
+      const saved = await request(route, 'PATCH', { sound: key })
+      assert.equal(saved.status, 200)
+      assert.equal(saved.data.settings.sound, key)
+      assert.equal((await request('/notifications')).data.sound, key)
+      assert.equal((await fixture.request('/notifications', 'GET', undefined, secondAuth)).data.sound, notificationSoundDefault, 'Each account keeps its own sound')
+    }
+    // Changing only the sound keeps the other preferences, and the other way around.
+    await request(route, 'PATCH', { payableReminderDays: 5, sound: 'metal' })
+    await request(route, 'PATCH', { payableReminderDays: 7 })
+    assert.equal((await request(route)).data.settings.sound, 'metal')
+    await request(route, 'PATCH', { sound: 'off' })
+    assert.equal((await request(route)).data.settings.payableReminderDays, 7)
   } finally { await fixture.close() }
 })

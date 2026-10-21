@@ -4,6 +4,19 @@ import './notifications.css'
 import { payableRequest, money, dateLabel } from './payablesApi.js'
 import { pollWhileVisible } from './polling.js'
 import { dueLabel } from '../server/payableRules.js'
+import { claimNotificationSound, playNotificationSound, unlockNotificationSound } from './notificationSounds.js'
+
+unlockNotificationSound()
+// What the bell already knew in this session (each screen mounts its own bell): only notifications that arrive
+// afterwards play the sound, never the ones found at login or brought back by a change of preferences.
+const heard = { token: null, ids: new Set() }
+function announce(token, { items = [], sound }, silent) {
+  const ids = items.map((item) => String(item.id))
+  if (heard.token !== token) { heard.token = token; heard.ids = new Set(ids); return }
+  const fresh = ids.filter((id) => !heard.ids.has(id))
+  for (const id of fresh) heard.ids.add(id)
+  if (!silent && fresh.length && sound && sound !== 'off' && claimNotificationSound(fresh)) playNotificationSound(sound)
+}
 
 export default function NotificationsButton({ onOpenAccount, onOpenReceivable, onOpenNotice }) {
   const id = useId()
@@ -17,17 +30,18 @@ export default function NotificationsButton({ onOpenAccount, onOpenReceivable, o
   useEffect(() => {
     if (!token) return undefined
     let active = true
-    const refresh = () => {
+    const refresh = (silent = false) => {
       // A closing refresh waits for the read acknowledgement, avoiding a stale badge.
       requestQueue.current = requestQueue.current.then(async () => {
         if (sessionStorage.getItem('gmac-admin-token') !== token || !active && !open) return
         const result = await payableRequest(open ? '/notifications/read-all' : '/notifications', open ? 'POST' : 'GET')
-        if (active) { setItems(result.items); setError('') }
+        if (active) { setItems(result.items); setError(''); announce(token, result, silent) }
       }).catch(() => { if (active) setError(open ? 'Não foi possível marcar as notificações como lidas. Abra o sino novamente para tentar.' : 'Não foi possível carregar as notificações.') })
     }
-    refresh(); const stopPolling = pollWhileVisible(refresh, 10000)
-    window.addEventListener('gmac-notification-settings-changed', refresh)
-    return () => { active = false; stopPolling(); window.removeEventListener('gmac-notification-settings-changed', refresh) }
+    const settingsChanged = () => refresh(true)
+    refresh(); const stopPolling = pollWhileVisible(() => refresh(), 10000)
+    window.addEventListener('gmac-notification-settings-changed', settingsChanged)
+    return () => { active = false; stopPolling(); window.removeEventListener('gmac-notification-settings-changed', settingsChanged) }
   }, [open, token])
   const unreadCount = items.filter((item) => !item.readAt).length
 
