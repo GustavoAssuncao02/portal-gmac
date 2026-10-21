@@ -132,7 +132,29 @@ button {
   text-shadow: 0 1px 12px var(--brand-shadow);
 }
 
+/* Entrance of the brand panel, once the logo layers are loaded: the white symbol, the orange stroke drawn as a line,
+   "GMAC", "METALÚRGICA" opening from the center, then the rule, the title and the subtitle. */
+.brand-logo { overflow: visible; }
+.brand-logo__symbol { transform-box: view-box; transform-origin: 665px 313px; }
+.brand-logo__pen { stroke-dasharray: 1 1; stroke-dashoffset: 0; }
+.brand-intro:not(.brand-intro--play) :is(.brand-logo image, .brand-panel__rule, .brand-panel__title, .brand-panel__subtitle) { opacity: 0; }
+.brand-intro--play .brand-logo__symbol { animation: brand-symbol-in 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) 0.1s both; }
+.brand-intro--play .brand-logo__pen { animation: brand-pen-draw 1.1s cubic-bezier(0.4, 0.1, 0.35, 1) 0.75s both; }
+.brand-intro--play .brand-logo__name { animation: brand-rise-in 0.65s cubic-bezier(0.2, 0.8, 0.2, 1) 1.7s both; }
+.brand-intro--play .brand-logo__tagline { animation: brand-unfold 0.75s cubic-bezier(0.2, 0.8, 0.2, 1) 2.05s both; }
+.brand-intro--play .brand-panel__rule { animation: brand-rule-in 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 2.55s both; }
+.brand-intro--play .brand-panel__title { animation: brand-text-in 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) 2.75s both; }
+.brand-intro--play .brand-panel__subtitle { animation: brand-text-in 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) 3s both; }
+
+@keyframes brand-symbol-in { from { opacity: 0; transform: scale(0.7) rotate(-14deg); } 55% { opacity: 1; } to { opacity: 1; transform: none; } }
+@keyframes brand-pen-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes brand-rise-in { from { opacity: 0; transform: translateY(70px); } to { opacity: 1; transform: none; } }
+@keyframes brand-unfold { from { opacity: 0; clip-path: inset(0 50% 0 50%); } to { opacity: 1; clip-path: inset(0 0 0 0); } }
+@keyframes brand-rule-in { from { opacity: 0; transform: scaleX(0); } to { opacity: 1; transform: none; } }
+@keyframes brand-text-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
 @media (prefers-reduced-motion: reduce) {
+  .brand-intro--play :is(.brand-logo image, .brand-logo__pen, .brand-panel__rule, .brand-panel__title, .brand-panel__subtitle) { animation: none; }
   .brand-media__slide { animation-name: brand-fade; }
   .brand-media__slide--leaving { animation: none; }
   .brand-media__slide::after { display: none; }

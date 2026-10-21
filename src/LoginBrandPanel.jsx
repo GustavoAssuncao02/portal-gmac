@@ -3,6 +3,28 @@ import { useEffect, useRef, useState } from 'react'
 const PHOTO_MS = 7000, VIDEO_MAX_MS = 12000, CALM_MS = 11000
 const origins = ['50% 50%', '35% 40%', '65% 40%', '40% 65%', '60% 60%']
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+// Layers of gmac-logo-light.png made by scripts/build-login-logo.mjs, all with the original size (1329×1018).
+const logoLayer = (name) => `/images/login-logo/${name}.png`
+const logoLayers = ['simbolo-branco', 'simbolo-laranja', 'nome-gmac', 'nome-metalurgica'].map(logoLayer)
+// Axis of the orange stroke measured by the same script, extended past both rounded ends: the mask draws along it.
+const LOGO_PEN = 'M 603 370 L 915 109'
+// If a layer is slow to arrive, the entrance starts anyway instead of keeping the panel empty.
+const INTRO_WAIT_MS = 2500
+
+// The logo enters in steps: the white symbol, the orange stroke drawn as a line, then "GMAC" and "METALÚRGICA".
+function BrandLogo() {
+  return <svg className="brand-panel__logo brand-logo" viewBox="0 0 1329 1018" role="img" aria-label="GMAC Metalúrgica">
+    <defs>
+      <mask id="gmac-logo-pen" maskUnits="userSpaceOnUse" x="0" y="0" width="1329" height="1018">
+        <path className="brand-logo__pen" d={LOGO_PEN} pathLength="1" fill="none" stroke="#fff" strokeWidth="140" strokeLinecap="round" />
+      </mask>
+    </defs>
+    <image className="brand-logo__symbol" href={logoLayers[0]} width="1329" height="1018" />
+    <image className="brand-logo__stroke" href={logoLayers[1]} width="1329" height="1018" mask="url(#gmac-logo-pen)" />
+    <image className="brand-logo__name" href={logoLayers[2]} width="1329" height="1018" />
+    <image className="brand-logo__tagline" href={logoLayers[3]} width="1329" height="1018" />
+  </svg>
+}
 
 // Random order without repeating an item until all were shown, and never the same item twice in a row.
 function nextIndex(bag, total, last) {
@@ -29,7 +51,15 @@ function Slide({ item, leaving, origin, onDone }) {
 
 export default function LoginBrandPanel() {
   const [items, setItems] = useState([]), [slides, setSlides] = useState({ current: null, previous: null })
+  const [introReady, setIntroReady] = useState(false)
   const bag = useRef([]), counter = useRef(0)
+  useEffect(() => {
+    let active = true
+    const start = () => { if (active) setIntroReady(true) }
+    const timer = window.setTimeout(start, INTRO_WAIT_MS)
+    Promise.all(logoLayers.map((src) => { const image = new Image(); image.src = src; return image.decode().catch(() => {}) })).then(start)
+    return () => { active = false; window.clearTimeout(timer) }
+  }, [])
   useEffect(() => {
     let active = true
     fetch('/login-media/manifest.json').then((response) => response.ok ? response.json() : { items: [] }).then((data) => { if (active) setItems((Array.isArray(data.items) ? data.items : []).filter((item) => item.type === 'image' || !reducedMotion())) }).catch(() => {})
@@ -66,8 +96,8 @@ export default function LoginBrandPanel() {
       {current && <Slide key={current.key} item={current.item} origin={current.origin} onDone={() => { if (items.length > 1) advance() }} />}
     </div>
     <div className="brand-panel__veil" />
-    <div className="brand-panel__content">
-      <div className="brand-panel__mark"><img className="brand-panel__logo" src="/images/gmac-logo-light.png" alt="GMAC Metalúrgica" /></div>
+    <div className={`brand-panel__content brand-intro${introReady ? ' brand-intro--play' : ''}`}>
+      <div className="brand-panel__mark"><BrandLogo /></div>
       <span className="brand-panel__rule" aria-hidden="true" />
       <p className="brand-panel__title">Sistema de Gestão</p>
       <p className="brand-panel__subtitle">Acesse para acompanhar produção, serviços e orçamentos.</p>
