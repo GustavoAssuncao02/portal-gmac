@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { integerInWords, moneyInWords } from './moneyWords.js'
 import { round2, rateFor, tableTotals, itemTotal, letterTotal, situationLabels } from './proposalMath.js'
 import { brandColors, brandPaths } from './proposalBrand.js'
+import { documentKind } from './clientDocument.js'
 
 export { round2, tableTotals, letterTotal }
 
@@ -591,7 +592,7 @@ export async function renderLetter(document) {
     doc.font(f.calibri).fontSize(10.5).fillColor(INK.muted).text(`${label} `, LETTER.left, left, { continued: true, width: 285 }).font(f.calibriBold).fillColor(INK.text).text(value)
     left += 15
   }
-  leftLine('CNPJ:', document.customerDocument)
+  leftLine(`${documentKind(document.customerDocument)}:`, document.customerDocument)
   leftLine('Solicitante:', document.requester)
   leftLine('Aos cuidados de:', document.attention)
   const cardLines = [

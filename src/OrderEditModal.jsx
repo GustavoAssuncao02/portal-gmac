@@ -135,7 +135,7 @@ export default function OrderEditModal({ order, confirmCompleted, onSave, onUplo
         <fieldset className="os-edit-fields" disabled={locked}>
           {tab === 'data' && <div className="os-edit-grid">
             {field('Peça / Serviço', 'service', { required: true, maxLength: 160 })}{field('Cliente', 'company', { required: true, maxLength: 160 })}
-            {field('CNPJ', 'cnpj', { required: true, maxLength: 18, inputMode: 'numeric' })}{field('Número da etiqueta', 'labelNumber', { maxLength: 80 })}
+            {field('CNPJ/CPF', 'cnpj', { required: true, maxLength: 18, inputMode: 'numeric' })}{field('Número da etiqueta', 'labelNumber', { maxLength: 80 })}
             {field('Quantidade de peças', 'quantity', { type: 'number', min: 1, step: 1, required: true })}{field('Prazo solicitado', 'deadline', { type: 'date', required: true })}{deadlineChanged && <label className="os-edit-field os-edit-wide os-deadline-reason">Justificativa da alteração do prazo<textarea required minLength={10} maxLength={1000} rows={3} value={deadlineReason} onChange={(event) => setDeadlineReason(event.target.value)} placeholder="Explique por que o prazo de entrega desta OS foi alterado" /></label>}
             <label className="os-edit-field">Data da solicitação<input type="date" value={data.requestedAt?.slice(0, 10) || ''} onChange={(event) => update('requestedAt', event.target.value ? `${event.target.value}T03:00:00.000Z` : '')} required /></label>
             <label className="os-edit-field os-edit-wide">Descrição da OS<textarea aria-label="Descrição da OS" rows={3} maxLength={5000} value={data.description} onChange={(event) => update('description', event.target.value)} required /></label>

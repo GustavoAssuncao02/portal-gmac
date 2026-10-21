@@ -3,6 +3,7 @@ import { productionStages, stageLabel, readStageLayout, validStageLayout, servic
 import { cleanStageTimes } from './pieces.js'
 import { realChangedFields } from './orderHistory.js'
 import { activeSessions } from './operationSessions.js'
+import { isClientDocument } from './clientDocument.js'
 
 const fail = (status, message) => { const error = new Error(message); error.status = status; throw error }
 const text = (value, limit = 160) => {
@@ -31,8 +32,8 @@ export function editOrder(order, state, body) {
   // The label number is optional.
   if (['company', 'service', 'description'].some((key) => !fields[key])) fail(400, 'Preencha cliente, serviço e descrição.')
   fields.cnpj = text(source.cnpj, 18).replace(/\D/g, '')
-  if (!/^\d{14}$/.test(fields.cnpj)) fail(400, 'Informe os 14 dígitos do CNPJ.')
-  // The same CNPJ keeps the way it was written.
+  if (!isClientDocument(fields.cnpj)) fail(400, 'Informe o CNPJ (14 dígitos) ou o CPF (11 dígitos) do cliente.')
+  // The same document keeps the way it was written.
   if (String(order.cnpj ?? '').replace(/\D/g, '') === fields.cnpj) fields.cnpj = order.cnpj
   fields.quantity = numeric(source.quantity, 'Quantidade da OS', { integer: true, min: 1, max: 1000000000 })
   fields.deadline = date(source.deadline, 'Prazo solicitado')

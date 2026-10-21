@@ -25,7 +25,7 @@ try {
     await page.getByRole('button', { name: 'Inserir Oferta Manualmente', exact: true }).click()
     const form = page.getByRole('dialog', { name: 'Inserir oferta manualmente' })
     const service = `Oferta manual ${viewport.width}`
-    await form.getByLabel('CNPJ *', { exact: true }).fill('12345678000190')
+    await form.getByLabel('CNPJ/CPF *', { exact: true }).fill('12345678000190')
     await form.getByLabel('Empresa *', { exact: true }).fill('Cliente teste')
     await form.getByLabel('Prazo solicitado *', { exact: true }).fill('2026-12-20')
     await form.getByLabel('Pe\u00e7a/Servi\u00e7o *', { exact: true }).fill(service)

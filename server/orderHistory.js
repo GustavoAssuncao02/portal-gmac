@@ -21,7 +21,7 @@ export const realChangedFields = (changes) => (changes?.changed || []).filter((k
 // Everything done with an OS, in one list: production (operation events), administrative actions recorded on the
 // order itself, and the accounts payable/receivable linked to it. Only administrators receive the last two groups.
 
-const fieldLabels = { company: 'Cliente', cnpj: 'CNPJ', service: 'Serviço', description: 'Descrição', labelNumber: 'Etiqueta', quantity: 'Quantidade da OS', deadline: 'Prazo solicitado', requestedAt: 'Data da solicitação', resources: 'Materiais e processo', proposal: 'Proposta', attachments: 'Anexos', stages: 'Etapas', stageCounts: 'Peças por etapa' }
+const fieldLabels = { company: 'Cliente', cnpj: 'CNPJ/CPF', service: 'Serviço', description: 'Descrição', labelNumber: 'Etiqueta', quantity: 'Quantidade da OS', deadline: 'Prazo solicitado', requestedAt: 'Data da solicitação', resources: 'Materiais e processo', proposal: 'Proposta', attachments: 'Anexos', stages: 'Etapas', stageCounts: 'Peças por etapa' }
 const resourceLabels = { kind: 'Tipo', manufacturedFrom: 'Fabricado a partir de', tempering: 'Têmpera', urgency: 'Tipo de proposta', paintColor: 'Cor/Tipo', serviceDescription: 'Descrição do serviço', strictProcess: 'Processo Injessado' }
 const valueLabels = { service: 'Serviço', product: 'Produto', sample: 'Amostra', drawing: 'Desenho', normal: 'Normal', emergency: 'Emergencial' }
 const proposalLabels = { value: 'Valor', deadline: 'Prazo de entrega', margin: 'Margem (%)', discount: 'Desconto (%)', materials: 'Custo de materiais', labor: 'Custo de mão de obra', machine: 'Tempo de máquina', serviceTime: 'Tempo de serviço' }

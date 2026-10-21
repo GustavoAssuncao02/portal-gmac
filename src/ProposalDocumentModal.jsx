@@ -69,7 +69,7 @@ function LetterForm({ model, draft, setDraft, settings, catalog }) {
       <label>Data<input type="date" required value={draft.date} onChange={(event) => set('date', event.target.value)} /></label>
       <label>Nº da cotação<input required maxLength={20} value={draft.quoteNumber} onChange={(event) => set('quoteNumber', event.target.value)} /></label>
       <label className="proposal-doc-wide">Cliente (À)<input required maxLength={160} value={draft.customer} onChange={(event) => set('customer', event.target.value)} /></label>
-      <label>CNPJ do cliente<input maxLength={20} value={draft.customerDocument || ''} onChange={(event) => set('customerDocument', event.target.value)} /></label>
+      <label>CNPJ/CPF do cliente<input maxLength={20} value={draft.customerDocument || ''} onChange={(event) => set('customerDocument', event.target.value)} /></label>
       <label>Solicitante<input maxLength={80} value={draft.requester} onChange={(event) => set('requester', event.target.value)} /></label>
       <label>Aos cuidados de<input maxLength={80} value={draft.attention} onChange={(event) => set('attention', event.target.value)} /></label>
     </div></section>

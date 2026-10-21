@@ -11,6 +11,7 @@ import PieceTrack, { workingStageKeys } from './PieceTrack.jsx'
 import { UndoAcceptModal } from './DeclineProposalModal.jsx'
 import DownloadLink from './DownloadLink.jsx'
 import { downloadFile } from './payablesApi.js'
+import { documentKind } from '../server/clientDocument.js'
 
 const currency = (value) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const date = (value) => value ? new Date(value).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : 'Não informado'
@@ -265,7 +266,7 @@ export default function OrderDetails({ order, activeTime, stageNamesInput, onCha
   return <article className="order-detail-card os-detail">
     <header className="os-detail-heading"><div className="os-detail-title"><button className="os-icon-button" type="button" onClick={onBack} aria-label="Voltar para a tela anterior" title="Voltar para a tela anterior"><Icon name="collapse" /></button><div><span>{order.code}</span><h2>{order.service}</h2><AtypicalToggle order={order} onChanged={onRefresh} /></div></div><div className="os-detail-actions">{operation?.status === 'waiting' && !operation.startedAt && <button className="os-button os-undo-accept" type="button" aria-haspopup="dialog" onClick={() => setUnaccepting(true)}>Desfazer aceite</button>}<button className="os-button" type="button" aria-haspopup="dialog" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setEditConfirmed(false); if (operation?.status === 'completed') setAction('edit'); else setEditOpen(true) }}><Icon name="edit" />Editar OS</button>{operation?.status === 'completed' && <button className="os-button" type="button" aria-haspopup="dialog" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setAction('reopen') }}><Icon name="expand" />Reabrir OS</button>}<button className="os-icon-button os-history-trigger os-info-trigger" type="button" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setHistoryOpen(true) }} aria-haspopup="dialog" aria-label="Histórico de operações" title="Histórico da OS: tudo o que foi feito, quem fez e quando"><Info size={20} aria-hidden="true" /></button></div></header>
     <Facts className="os-order-summary" items={[
-      ['Cliente', order.company, `CNPJ: ${order.cnpj || 'Não informado'}`], ['Número da etiqueta', order.labelNumber], ['Quantidade', `${number(order.quantity)} unidades`],
+      ['Cliente', order.company, `${documentKind(order.cnpj)}: ${order.cnpj || 'Não informado'}`], ['Número da etiqueta', order.labelNumber], ['Quantidade', `${number(order.quantity)} unidades`],
       ['Prazo solicitado', date(order.deadline), order.deadlineChange && <span className="os-deadline-changed" title={`De ${date(order.deadlineChange.from)} para ${date(order.deadlineChange.to)} em ${moment(order.deadlineChange.at)}. Justificativa: ${order.deadlineChange.reason}`}>Prazo alterado por {order.deadlineChange.by}</span>], ['Solicitação', date(order.requestedAt)], ['OS criada em', date(order.createdAt)],
     ]} />
     <div className="os-detail-layout"><div className="os-detail-primary">

@@ -504,7 +504,7 @@ export default function createOperationsRouter(pool) {
         if (!offer) throw new OperationError(409, 'A oferta vinculada à OS não foi encontrada.')
         for (const key of Object.keys(changes.after).filter((key) => !['stages', 'stageCounts'].includes(key))) offer[key] = structuredClone(order[key])
         offer.updatedAt = order.updatedAt
-        const labels = { company: 'Cliente', cnpj: 'CNPJ', service: 'Serviço', description: 'Descrição', labelNumber: 'Etiqueta', quantity: 'Quantidade da OS', deadline: 'Prazo solicitado', requestedAt: 'Data da solicitação', resources: 'Materiais e processo', proposal: 'Proposta', attachments: 'Anexos', stages: 'Etapas', stageCounts: 'Peças por etapa' }
+        const labels = { company: 'Cliente', cnpj: 'CNPJ/CPF', service: 'Serviço', description: 'Descrição', labelNumber: 'Etiqueta', quantity: 'Quantidade da OS', deadline: 'Prazo solicitado', requestedAt: 'Data da solicitação', resources: 'Materiais e processo', proposal: 'Proposta', attachments: 'Anexos', stages: 'Etapas', stageCounts: 'Peças por etapa' }
         return eventFor('order_edited', null, { employeeName: request.adminName || 'Administrador', adminId: request.adminId, changes, details: `Campos atualizados: ${changes.changed.map((key) => labels[key] || key).join(', ') || 'nenhuma alteração'}.${order.deadlineChange && changes.changed.includes('deadline') ? ` Justificativa do novo prazo: ${order.deadlineChange.reason}` : ''}` })
       }, true)
       response.json({ item: { ...result.order, operation: result.operation }, event: result.event })

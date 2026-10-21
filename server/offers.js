@@ -15,6 +15,7 @@ import { recordOrderEvent } from './orderHistory.js'
 import { cleanStageTimes, pieceTracking } from './pieces.js'
 import { proposalMargins, PROPOSAL_MARGIN_GAP, declineReasons } from './proposalMath.js'
 import { requireAdminOrOperator } from './access.js'
+import { documentKind, isClientDocument } from './clientDocument.js'
 
 const filesDirectory = path.join(dataDirectory, 'files')
 const storePath = path.join(dataDirectory, 'offers.json')
@@ -99,7 +100,7 @@ const chargedValue = (proposal) => Number(proposal.osValue ?? proposal.serviceVa
 export function proposalSections(offer, proposal, resources) {
   const facts = (name, entries) => ({ name, records: true, singleRecord: true, columns: entries.map(([label]) => label), rows: [entries.map(([, value]) => value)] })
   const sections = [
-    facts('Dados da solicitação', [['Serviço', offer.service], ['Cliente', offer.company], ['CNPJ', offer.cnpj], ['Número da etiqueta', offer.labelNumber], ['Quantidade', offer.quantity], ['Prazo solicitado', date(offer.deadline)]]),
+    facts('Dados da solicitação', [['Serviço', offer.service], ['Cliente', offer.company], [documentKind(offer.cnpj), offer.cnpj], ['Número da etiqueta', offer.labelNumber], ['Quantidade', offer.quantity], ['Prazo solicitado', date(offer.deadline)]]),
     facts('Descrição do serviço', [['Descrição', offer.description], ...(resources.serviceDescription ? [['Detalhes do serviço', resources.serviceDescription]] : [])]),
     { name: 'Materiais necessários', columns: ['Material', 'Especificação', 'Quantidade (kg)'], rows: (resources.materials || []).map((item) => [item.name, item.detail, Number(item.quantity)]) },
     { name: 'Mão de obra', columns: ['Recurso', 'Horas previstas'], rows: (resources.laborEntries || []).map((item) => [item.resource, Number(item.hours)]) },
@@ -125,8 +126,8 @@ router.get('/orders', async (_request, response) => {
 
 router.post('/offers', async (request, response) => {
   const { cnpj, company, deadline, service, quantity, description, labelNumber } = request.body ?? {}
-  if (!/^\d{14}$/.test(String(cnpj || '').replace(/\D/g, '')) || !clean(company) || !/^\d{4}-\d{2}-\d{2}$/.test(String(deadline || '')) || !clean(service) || !Number.isInteger(Number(quantity)) || Number(quantity) < 1 || !clean(description)) {
-    return response.status(400).json({ message: 'Preencha CNPJ, empresa, prazo, peça/serviço, quantidade e descrição.' })
+  if (!isClientDocument(cnpj) || !clean(company) || !/^\d{4}-\d{2}-\d{2}$/.test(String(deadline || '')) || !clean(service) || !Number.isInteger(Number(quantity)) || Number(quantity) < 1 || !clean(description)) {
+    return response.status(400).json({ message: 'Preencha CNPJ (14 dígitos) ou CPF (11), empresa, prazo, peça/serviço, quantidade e descrição.' })
   }
   try {
     const offer = await mutateStore((store) => {

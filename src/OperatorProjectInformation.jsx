@@ -2,6 +2,7 @@ import DownloadLink from './DownloadLink.jsx'
 import StageGroupHeading from './OperatorStageGroup.jsx'
 import { currentPieceProgress, groupProjectStages, stageGroupTone } from './serviceProgress.js'
 import { activeEmployeeNames, activeSessions, activeSince, operationElapsed } from '../server/operationSessions.js'
+import { documentKind } from '../server/clientDocument.js'
 
 const date = (value) => value ? new Date(value).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '\u2014'
 const moment = (value) => value ? new Date(value).toLocaleString('pt-BR', { timeZone: 'America/Bahia' }) : '\u2014'
@@ -23,7 +24,7 @@ export default function OperatorProjectInformation({ order, token, events, now, 
   const completedPieces = currentPieceProgress(operation, order.quantity).completedPieces
   const facts = [
     ['OS', order.code], ['Etiqueta', order.labelNumber || 'Não informada'], ['Tipo', order.kind === 'product' ? 'Produto' : 'Servi\u00e7o'],
-    ['Cliente', order.company], ['CNPJ', order.cnpj], ['Quantidade', `${number(order.quantity)} unidades`],
+    ['Cliente', order.company], [documentKind(order.cnpj), order.cnpj], ['Quantidade', `${number(order.quantity)} unidades`],
     ['Solicita\u00e7\u00e3o recebida', moment(order.requestedAt)], ['OS criada em', moment(order.createdAt)],
     ['Prazo solicitado', date(order.deadline)], ['Entrega prevista', delivery(order.deliveryDeadline || order.deadline)],
     ['Processo', order.resources?.strictProcess === false ? 'Etapas livres' : 'Sequência obrigatória'],
