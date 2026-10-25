@@ -13,7 +13,6 @@ try {
     let items = [{ id: 8, name: 'Inox do estoque', detail: 'Chapa inoxidavel', quantity: 1, minimum: 5, unitPrice: 20 }]
     let failOnce = true
     page.on('pageerror', (error) => errors.push(error.message))
-    await page.addInitScript(() => localStorage.setItem('gmac-inventory-migrated-v1', 'true'))
     await page.route('**/api/inventory**', async (route) => {
       if (route.request().method() === 'GET') return route.fulfill({ status: 200, json: { items } })
       const body = route.request().postDataJSON()

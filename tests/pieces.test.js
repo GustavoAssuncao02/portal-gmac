@@ -18,6 +18,29 @@ test('a piece is its name, and the average per piece weighs every piece the same
   assert.equal(pieceSuggestion({ offers: [], orders, name: 'Outra peça', quantity: 1 }), null)
 })
 
+test('a piece made before also brings the machine or service of each stage, still registered', () => {
+  const catalog = { machine: [{ id: 'torno', name: 'Torno Convencional 1' }, { id: 'cnc', name: 'Torno CNC 02' }], 'labor-service': [{ id: 'pintor', name: 'Pintura industrial' }] }
+  const resources = { materials: [], laborEntries: [], stages: ['turning', 'painting', 'plasma-cut'], stageTimes: { turning: 60, painting: 30, 'plasma-cut': 20 } }
+  // The last time had a plan: it is copied, with the current name; a plan for a removed machine is left empty.
+  const planned = [{ code: 'OS-2', offerId: 'b', service: 'Eixo', quantity: 1, createdAt: '2026-10-20', resources: { ...resources, stageResources: { turning: { type: 'machine', id: 'torno', name: 'Torno antigo' }, painting: { type: 'labor-service', id: 'pintor', name: 'Pintura' }, 'plasma-cut': { type: 'machine', id: 'removida', name: 'Plasma' } } } }]
+  assert.deepEqual(pieceSuggestion({ offers: [], orders: planned, name: 'eixo', quantity: 1, catalog }).resources.stageResources, {
+    turning: { type: 'machine', id: 'torno', name: 'Torno Convencional 1' }, painting: { type: 'labor-service', id: 'pintor', name: 'Pintura industrial' },
+  })
+  // Made before the plan was mandatory: each stage takes what the operators used the longest on it in the OS of the piece.
+  const at = (hour) => `2026-09-10T${String(hour).padStart(2, '0')}:00:00-03:00`
+  const old = [{ code: 'OS-1', offerId: 'a', service: 'Eixo', quantity: 1, createdAt: '2026-09-01', resources, operationEvents: [
+    { type: 'started', sessionId: 's1', machineId: 'torno', workStageName: 'Tornearia', at: at(8) },
+    { type: 'paused', sessionId: 's1', machineId: 'torno', at: at(9) },
+    { type: 'resumed', sessionId: 's2', machineId: 'cnc', workStageName: 'Tornearia', at: at(9) },
+    { type: 'paused', sessionId: 's2', machineId: 'cnc', at: at(12) },
+    { type: 'resumed', sessionId: 's3', laborServiceId: 'pintor', workStageName: 'Pintura', at: at(13) },
+    { type: 'stage_completed', sessionId: 's3', laborServiceId: 'pintor', at: at(14) },
+  ] }]
+  assert.deepEqual(pieceSuggestion({ offers: [], orders: old, name: 'Eixo', quantity: 1, catalog, history: old }).resources.stageResources, {
+    turning: { type: 'machine', id: 'cnc', name: 'Torno CNC 02' }, painting: { type: 'labor-service', id: 'pintor', name: 'Pintura industrial' },
+  })
+})
+
 test('stage times follow the operator, and new offers of the piece come with the averages of material and time', async () => {
   const fixture = await createWorkflowFixture()
   try {
@@ -46,8 +69,11 @@ test('stage times follow the operator, and new offers of the piece come with the
     assert.ok(changed.operation.stageTimeMs['stage-2'] >= 0)
     assert.equal(changed.order.resources.stageTimes.turning, 60, 'the operator sees the planned time')
     await fixture.request(`${route}/stages/stage-1`, 'POST', { ...key, quantity: 10 }, auth)
-    await fixture.request(`${route}/stages/stage-2`, 'POST', { ...key, quantity: 10 }, auth)
-    assert.equal((await fixture.request(`${route}/complete`, 'POST', key, auth)).status, 200)
+    // The finished stage ends the work; Ana starts again on the next one.
+    const restarted = (await fixture.request(`${route}/start`, 'POST', { employeeId: ana.id, machineId: machine.id, stageKey: 'stage-2', pendingMaterialsConfirmation: [['aco 1045|', 20]] }, auth)).data
+    const nextKey = { sessionId: restarted.session.id, sessionToken: restarted.sessionToken }
+    await fixture.request(`${route}/stages/stage-2`, 'POST', { ...nextKey, quantity: 10 }, auth)
+    assert.equal((await fixture.request(`${route}/complete`, 'POST', nextKey, auth)).status, 200)
 
     // Real execution: turning took 30 min, cut and bend 60 min, and 30 kg of steel were used.
     await fixture.mutateStore((store) => {

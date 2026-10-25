@@ -69,7 +69,7 @@ try {
   await page.getByRole('dialog', { name: 'REC-000003', exact: true }).getByText('3 de 3', { exact: true }).waitFor()
   await page.screenshot({ path: 'test-results/receivables-installments-details.png' })
   await page.getByRole('dialog', { name: 'REC-000003', exact: true }).getByRole('button', { name: 'Fechar janela', exact: true }).click()
-  assert.equal(await page.locator('.receivable-table tbody tr').filter({ hasText: 'Acordo de manutenção anual' }).count(), 3)
+  assert.equal(await page.locator('.receivable-table tbody tr').filter({ hasText: 'NF 5501' }).count(), 3, 'the list shows the document of each installment')
   assert.deepEqual(await page.locator('.receivable-table tbody td[data-label="Parcela"]').allTextContents(), ['1 de 3', '2 de 3', '3 de 3'])
   assert.deepEqual((await api('/receivables')).data.items.map((row) => row.valueCents), [333400, 333300, 333300])
 

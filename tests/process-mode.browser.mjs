@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
 import { defaultStageLayout } from '../server/serviceStages.js'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
-import { identifiedOperator } from './operatorEntry.js'
+import { identifiedOperator, stagePlans } from './operatorEntry.js'
 
 const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Teste' }
 const fixture = await createWorkflowFixture({ accountsEnv: env })
@@ -15,7 +15,9 @@ let operator
 try {
   const offer = (await fixture.adminRequest('/offers', 'POST', { ...offerDraft, service: 'Projeto com processo livre', quantity: 20 })).data.item
   const layout = defaultStageLayout()
-  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], stages: ['cut-bend', 'turning', 'painting'], stageLayout: [layout[2], layout[0], layout[1]], kind: 'service' })
+  const service = (await fixture.adminRequest('/labor-services')).data.items[0]
+  const stages = ['cut-bend', 'turning', 'painting']
+  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], stages, stageLayout: [layout[2], layout[0], layout[1]], stageResources: stagePlans(stages, { type: 'labor-service', id: service.id }), kind: 'service' })
   await admin.goto(fixture.url)
   await admin.getByLabel('CPF', { exact: true }).fill('12345678901')
   await admin.getByLabel('Senha', { exact: true }).fill(env.DEMO_ADMIN_PASSWORD)
@@ -51,7 +53,7 @@ try {
   await admin.getByText('Etapas livres', { exact: true }).waitFor()
 
   const employee = (await fixture.adminRequest('/employees', 'POST', { name: 'Ana', birthDate: '1990-01-01', cpf: '00000000001', email: 'ana@example.invalid', identification: '001' }, fixture.admin)).data.item
-  const started = (await fixture.request(`/operations/orders/${order.code}/start`, 'POST', { employeeId: employee.id }, { Authorization: `Bearer ${fixture.operatorToken}` })).data
+  const started = (await fixture.request(`/operations/orders/${order.code}/start`, 'POST', { employeeId: employee.id, laborServiceId: service.id }, { Authorization: `Bearer ${fixture.operatorToken}` })).data
   operator = await browser.newPage({ viewport: { width: 1366, height: 900 } })
   operator.on('pageerror', (error) => errors.push(error.message))
   await operator.addInitScript(({ token, code, session, operator }) => {
@@ -65,12 +67,24 @@ try {
   await group('Pintura').waitFor()
   assert.deepEqual(await operator.locator('.operator-stage-group-heading h4').allTextContents(), ['Caldeiraria', 'Usinagem', 'Pintura'])
   assert.ok(await operator.locator('.operator-stage-action button').evaluateAll((items) => items.every((item) => !item.disabled)))
+  // Pieces are registered on the stage the operator works on: the operator moves there first. A finished stage ended
+  // the work, so it starts again there, with the service planned for the stage.
+  const working = async () => (await operator.getByRole('button', { name: /^Pausar trabalho/ }).count()) > 0
   const register = async (name, quantity, passages) => {
+    const pick = group(name).getByRole('button', { name: 'Trabalhar nesta etapa', exact: true })
+    if (await pick.count()) await pick.click()
+    if (!(await working())) {
+      await operator.getByRole('button', { name: /Iniciar trabalho/ }).click()
+      await operator.getByRole('button', { name: /^Pausar trabalho/ }).waitFor()
+    }
     await group(name).locator('input').fill(String(quantity))
     await group(name).getByRole('button', { name: 'Registrar', exact: true }).click()
     await operator.waitForFunction((expected) => document.querySelector('.operator-stages-heading strong').textContent === expected, `${passages}/60 passagens`)
   }
   await register('Pintura', 20, 20)
+  // Every piece of the stage: the operator is no longer working, and the OS shows the finished stage.
+  await operator.locator('.operator-detail-heading').getByText('Etapa concluída', { exact: true }).waitFor()
+  assert.equal(await operator.locator('.operator-worker').count(), 0)
   assert.equal(await operator.getByRole('button', { name: /Concluir servi\u00e7o/ }).isDisabled(), true)
   await operator.getByRole('button', { name: '← Voltar para as OS', exact: true }).click()
   assert.equal(await operator.locator('.operator-project-bottom > div').nth(2).locator('strong').innerText(), '0/20')
@@ -87,8 +101,9 @@ try {
   for (const width of [1366, 390, 320]) {
     await operator.setViewportSize({ width, height: 900 })
     assert.ok(await operator.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${width}: operator has no page overflow`)
-    assert.equal(await group('Caldeiraria').getByRole('button', { name: 'Registrar', exact: true }).isEnabled(), true)
-    assert.equal(await group('Usinagem').getByRole('button', { name: 'Registrar', exact: true }).isEnabled(), true)
+    // The finished painting ended the work: the next open stage is the one chosen to start.
+    await group('Caldeiraria').getByText('Etapa escolhida para come\u00e7ar', { exact: true }).waitFor()
+    assert.equal(await group('Usinagem').getByRole('button', { name: 'Trabalhar nesta etapa', exact: true }).isEnabled(), true)
     await operator.screenshot({ path: `test-results/process-mode-operator-${width}.png`, fullPage: true })
   }
   await operator.setViewportSize({ width: 1366, height: 900 })

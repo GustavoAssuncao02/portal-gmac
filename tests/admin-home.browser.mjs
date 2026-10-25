@@ -43,6 +43,8 @@ try {
     store.offers = [
       { id: 'review-1', code: 'OF-001', status: 'review', service: 'Oferta nova', company: 'Cliente', quantity: 10, deadline: '2026-10-20', requestedAt: '2026-10-02', resources: { materials: [{ id: 'metal', name: 'Metal especial novo', quantity: 10, purchaseQuantity: 10, stockStatus: 'unknown' }], laborEntries: [] } },
       { id: 'review-2', code: 'OF-002', status: 'review', service: 'Outra oferta', resources: { materials: [], laborEntries: [] } },
+      // Only the accepted offer requests its missing material; the one in review above does not count yet.
+      { id: 'offer-OS-0004', code: 'OF-000', status: 'accepted', orderCode: 'OS-0004', service: 'Entrega distante', resources: { materials: [{ id: 'metal', name: 'Metal especial novo', quantity: 10, purchaseQuantity: 10, stockStatus: 'unknown' }], laborEntries: [] } },
     ]
   })
   await page.route('**/api/auth/login', (route) => route.fulfill({ status: 200, json: { user: { id: 1, name: userName, cpf: '12345678901' }, token: simulatedToken } }))
@@ -89,10 +91,6 @@ try {
   inventoryStatus = 500
   await home.getByRole('button', { name: 'Atualizar', exact: true }).click()
   await home.getByRole('alert').getByText('Não foi possível atualizar o estoque. Exibindo os últimos dados disponíveis.', { exact: true }).waitFor()
-  inventoryStatus = 503
-  await home.getByRole('button', { name: 'Atualizar', exact: true }).click()
-  await home.getByText('Estoque local', { exact: true }).waitFor()
-  assert.equal(await home.getByRole('alert').count(), 0)
   inventoryStatus = 200
   inventory[0].quantity = 0
   await home.getByRole('button', { name: 'Atualizar', exact: true }).click()

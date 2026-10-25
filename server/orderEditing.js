@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto'
-import { productionStages, stageLabel, readStageLayout, validStageLayout, serviceDetails } from './serviceStages.js'
-import { cleanStageTimes } from './pieces.js'
+import { productionStages, stageLabel, readStageLayout, validStageLayout, serviceDetails, stagePlanProblem } from './serviceStages.js'
+import { cleanStageResources, cleanStageTimes } from './pieces.js'
 import { realChangedFields } from './orderHistory.js'
 import { activeSessions } from './operationSessions.js'
 import { isClientDocument } from './clientDocument.js'
+import { materialUnit, unitPriceLabel, validMaterialUnit, validQuantityFor } from './materialUnits.js'
 
 const fail = (status, message) => { const error = new Error(message); error.status = status; throw error }
 const text = (value, limit = 160) => {
@@ -24,7 +25,23 @@ export function operationVersion(state) {
   return { status: state.status, stages: state.stages, stageCounts: state.stageCounts, activeSessionIds: activeSessions(state).map((session) => session.id) }
 }
 
-export function editOrder(order, state, body) {
+const planKey = (choice) => choice ? `${choice.type}:${choice.id}` : ''
+const samePlans = (left = {}, right = {}) => [...new Set([...Object.keys(left), ...Object.keys(right)])].every((code) => planKey(left[code]) === planKey(right[code]))
+
+// The machine or service of each stage of the OS: the ones already in it stay as they are (even if the machine left the
+// registry), a new or changed one must be registered. A stage that left the OS loses its plan.
+function editedStagePlans(previous, sent, stages, catalog) {
+  const result = {}
+  for (const [code, choice] of Object.entries(sent ?? previous)) {
+    if (!choice || !stages.includes(code)) continue
+    if (planKey(choice) === planKey(previous[code])) result[code] = previous[code]
+    else Object.assign(result, cleanStageResources({ [code]: choice }, stages, catalog))
+  }
+  return result
+}
+
+// `catalog`: the registered machines and labor services ({ machines, laborServices }), for the plans of the stages.
+export function editOrder(order, state, body, catalog = {}) {
   if (body.expectedUpdatedAt !== (order.updatedAt || order.createdAt) || JSON.stringify(body.expectedOperation) !== JSON.stringify(operationVersion(state))) fail(409, 'A OS foi alterada enquanto você editava. Feche a edição e abra novamente para carregar os dados atuais.')
   if (state.status === 'completed' && body.confirmCompleted !== true) fail(409, 'Confirme a edição desta OS finalizada.')
   const source = body.order || {}
@@ -63,13 +80,24 @@ export function editOrder(order, state, body) {
       const name = text(item.name)
       if (!name) fail(400, 'Informe o nome do material.')
       const detail = text(item.detail || '', 500)
-      const unchangedMaterial = previous?.name === name && (previous.detail || '') === detail
+      // A material linked to the stock keeps the unit of the stock; a new one uses the unit typed in the OS.
+      const unit = materialUnit(previous?.inventoryId != null && previous.name === name ? previous.unit : item.unit)
+      if (item.unit != null && !validMaterialUnit(item.unit)) fail(400, 'Escolha a unidade do material: quilo ou unidade.')
+      const unchangedMaterial = previous?.name === name && (previous.detail || '') === detail && materialUnit(previous.unit) === unit
       const quantity = numeric(item.quantity, 'Quantidade do material', { min: 0.001 })
+      if (!validQuantityFor(quantity, unit)) fail(400, `${name}: material contado por unidade aceita só quantidades inteiras.`)
       const stockAvailable = Number(previous?.stockAvailable || 0)
-      return { ...(unchangedMaterial ? previous : {}), id: previous && !unchangedMaterial ? randomUUID() : id, name, detail, quantity, unitPrice: numeric(item.unitPrice, 'Valor por kg'), ...(unchangedMaterial && previous.stockAvailable != null ? { purchaseQuantity: Math.max(0, Number((quantity - stockAvailable).toFixed(3))), stockStatus: previous.inventoryId == null ? 'unknown' : stockAvailable <= 0 ? 'missing' : stockAvailable < quantity ? 'partial' : 'available' } : {}) }
+      return { ...(unchangedMaterial ? previous : {}), id: previous && !unchangedMaterial ? randomUUID() : id, name, detail, unit, quantity, unitPrice: numeric(item.unitPrice, unitPriceLabel(unit)), ...(unchangedMaterial && previous.stockAvailable != null ? { purchaseQuantity: Math.max(0, Number((quantity - stockAvailable).toFixed(3))), stockStatus: previous.inventoryId == null ? 'unknown' : stockAvailable <= 0 ? 'missing' : stockAvailable < quantity ? 'partial' : 'available' } : {}) }
     })
   }
-  fields.resources = { ...order.resources, materials: rows(resources.materials), laborEntries: rows(resources.laborEntries, true), stages: [...resources.stages], stageLayout: readStageLayout(resources), kind: resources.kind, ...serviceDetails(resources), paintColor: text(resources.paintColor || ''), serviceDescription: text(resources.serviceDescription || '', 5000), stageTimes: cleanStageTimes(resources.stageTimes ?? order.resources?.stageTimes, resources.stages) }
+  fields.resources = { ...order.resources, materials: rows(resources.materials), laborEntries: rows(resources.laborEntries, true), stages: [...resources.stages], stageLayout: readStageLayout(resources), kind: resources.kind, ...serviceDetails(resources), serviceLocation: serviceDetails(order.resources).serviceLocation, paintColor: text(resources.paintColor || ''), serviceDescription: text(resources.serviceDescription || '', 5000), stageTimes: cleanStageTimes(resources.stageTimes ?? order.resources?.stageTimes, resources.stages) }
+  fields.resources.stageResources = editedStagePlans(order.resources?.stageResources || {}, resources.stageResources, fields.resources.stages, catalog)
+  // An OS from before the planned times and resources were mandatory can still be edited; changing its stages, their
+  // times or their machines and services asks for the time and the machine or service of every stage.
+  const previousStages = state.stages.map((stage) => productionStages.find(([, label]) => label === stage.name)?.[0] || stage.name)
+  const stagesTouched = JSON.stringify(fields.resources.stages) !== JSON.stringify(previousStages) || JSON.stringify(fields.resources.stageTimes) !== JSON.stringify(order.resources?.stageTimes || {}) || samePlans(fields.resources.stageResources, order.resources?.stageResources) === false
+  const problem = stagePlanProblem(fields.resources.stages, fields.resources)
+  if (stagesTouched && problem) fail(400, problem)
   const proposal = source.proposal || {}
   if (!['A', 'B', 'C', 'D'].includes(proposal.key)) fail(400, 'Selecione uma opção de proposta válida.')
   fields.proposal = { ...order.proposal, key: proposal.key, title: text(proposal.title || '', 160), deadline: date(proposal.deadline, 'Prazo acordado'), machine: text(proposal.machine || ''), serviceTime: text(proposal.serviceTime || ''), stages: [...resources.stages], kind: resources.kind, strictProcess: resources.strictProcess }

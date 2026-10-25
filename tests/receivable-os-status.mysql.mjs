@@ -25,7 +25,7 @@ try {
   fixture = await createWorkflowFixture({ pool })
   // The token of the administrator of the temporary database, issued by the same module the portal under test uses.
   const { issueAdminToken } = await import(pathToFileURL(path.join(fixture.directory, 'accounts.js')).href)
-  const auth = { Authorization: `Bearer ${issueAdminToken({ id: inserted.insertId, name: 'Gestor Teste' })}` }
+  const auth = { Authorization: `Bearer ${await issueAdminToken({ id: inserted.insertId, name: 'Gestor Teste' })}` }
   const operator = { Authorization: `Bearer ${fixture.operatorToken}` }
   const request = (path, method, body) => fixture.request(path, method, body, auth)
   const employee = (await request('/employees', 'POST', { name: 'Ana Teste', cpf: '00000000001', birthDate: '1990-01-01', email: 'ana@example.invalid', identification: '001' })).data.item

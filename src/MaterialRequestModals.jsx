@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { CircleCheck, CircleX, Plus, X } from 'lucide-react'
+import { formatQuantity, materialUnit, materialUnits } from '../server/materialUnits.js'
 
 function useRequestDialog() {
   const dialog = useRef(null)
@@ -21,9 +22,12 @@ export function MaterialRequestModal({ inventory, onSave, onClose }) {
   const [detail, setDetail] = useState('')
   const [inventoryId, setInventoryId] = useState('')
   const [quantity, setQuantity] = useState('')
+  const [unit, setUnit] = useState('kg')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const selected = inventory.find((item) => String(item.id) === inventoryId)
+  // A material of the stock is requested in its own unit; a new one in the unit chosen here.
+  const requestUnit = mode === 'stock' ? materialUnit(selected?.unit) : unit
   const close = () => { if (!pending.current) onClose() }
   async function submit(event) {
     event.preventDefault()
@@ -32,7 +36,7 @@ export function MaterialRequestModal({ inventory, onSave, onClose }) {
     setBusy(true)
     setError('')
     try {
-      await onSave({ name: mode === 'stock' ? selected.name : name.trim(), detail: detail.trim(), quantity: Number(quantity), inventoryId: mode === 'stock' ? selected.id : null })
+      await onSave({ name: mode === 'stock' ? selected.name : name.trim(), detail: detail.trim(), unit: requestUnit, quantity: Number(quantity), inventoryId: mode === 'stock' ? selected.id : null })
       onClose()
     } catch (failure) { setError(failure.message) }
     finally { pending.current = false; setBusy(false) }
@@ -41,9 +45,10 @@ export function MaterialRequestModal({ inventory, onSave, onClose }) {
     <header className="os-history-heading"><h2 id="manual-material-request-title">Solicitar material</h2><button className="os-icon-button" type="button" disabled={busy} onClick={close} aria-label="Fechar" title="Fechar"><X size={18} /></button></header>
     <form className="material-request-form" onSubmit={submit}>
       <fieldset className="material-request-modes" disabled={busy}><legend>Material solicitado</legend><label><input data-autofocus type="radio" name="material-request-mode" checked={mode === 'new'} onChange={() => { setMode('new'); setDetail('') }} />Novo material</label><label><input type="radio" name="material-request-mode" checked={mode === 'stock'} onChange={() => { setMode('stock'); setDetail(selected?.detail || '') }} />Material do estoque</label></fieldset>
-      {mode === 'stock' ? <label className="material-request-field">Material<select aria-label="Material" required disabled={busy} value={inventoryId} onChange={(event) => { setInventoryId(event.target.value); setDetail(inventory.find((item) => String(item.id) === event.target.value)?.detail || '') }}><option value="">Selecione</option>{inventory.map((item) => <option key={item.id} value={item.id}>{item.name} · {Number(item.quantity).toLocaleString('pt-BR')} kg em estoque</option>)}</select></label> : <label className="material-request-field">Nome do material<input required maxLength={160} value={name} disabled={busy} onChange={(event) => setName(event.target.value)} /></label>}
+      {mode === 'stock' ? <label className="material-request-field">Material<select aria-label="Material" required disabled={busy} value={inventoryId} onChange={(event) => { setInventoryId(event.target.value); setDetail(inventory.find((item) => String(item.id) === event.target.value)?.detail || '') }}><option value="">Selecione</option>{inventory.map((item) => <option key={item.id} value={item.id}>{item.name} · {formatQuantity(item.quantity, item.unit)} em estoque</option>)}</select></label> : <label className="material-request-field">Nome do material<input required maxLength={160} value={name} disabled={busy} onChange={(event) => setName(event.target.value)} /></label>}
       <label className="material-request-field">Especificação<input maxLength={500} value={detail} disabled={busy} onChange={(event) => setDetail(event.target.value)} /></label>
-      <label className="material-request-field">Quantidade solicitada (kg)<input required type="number" min="0.001" max="1000000000" step="0.001" inputMode="decimal" value={quantity} disabled={busy} onChange={(event) => setQuantity(event.target.value)} /></label>
+      {mode === 'new' && <fieldset className="material-request-modes" disabled={busy}><legend>Unidade</legend>{materialUnits.map(([key, label]) => <label key={key}><input type="radio" name="material-request-unit" checked={unit === key} onChange={() => setUnit(key)} />{label}</label>)}</fieldset>}
+      <label className="material-request-field">{`Quantidade solicitada (${requestUnit})`}<input required type="number" min={requestUnit === 'un' ? '1' : '0.001'} max="1000000000" step={requestUnit === 'un' ? '1' : '0.001'} inputMode={requestUnit === 'un' ? 'numeric' : 'decimal'} value={quantity} disabled={busy} onChange={(event) => setQuantity(event.target.value)} /></label>
       {error && <p className="os-edit-error" role="alert">{error}</p>}
       <footer className="os-edit-actions"><button className="os-button" type="button" disabled={busy} onClick={close}>Cancelar</button><button className="os-button os-button--primary" disabled={busy} type="submit"><Plus size={16} />{busy ? 'Solicitando...' : 'Solicitar material'}</button></footer>
     </form>
@@ -71,7 +76,7 @@ export function MaterialRequestHistoryModal({ request, loadHistory, onClose }) {
     <div className="material-request-history-content">
       {error ? <div className="material-request-history-error"><p className="os-edit-error" role="alert">{error}</p><button className="os-button" type="button" onClick={() => setRetry((value) => value + 1)}>Tentar novamente</button></div> : items === null ? <p role="status">Carregando histórico...</p> : <ol className="material-request-history-list">{items.map((item, index) => {
         const Symbol = icons[item.type] || Plus
-        return <li className={`material-request-event material-request-event--${item.type}`} key={`${item.type}-${item.at}-${index}`}><Symbol size={19} aria-hidden="true" /><div><div className="material-request-event-heading"><strong>{labels[item.type]}</strong><time>{moment(item.at)}</time></div><span className="material-request-event-user">{item.userName}</span>{item.quantity != null && <small>{Number(item.quantity).toLocaleString('pt-BR')} kg{item.type === 'received' && item.orderCode ? ` · ${Number(item.allocatedQuantity || 0).toLocaleString('pt-BR')} kg destinados à ${item.orderCode}` : item.type === 'received' ? ' · Entrada no estoque' : ''}</small>}</div></li>
+        return <li className={`material-request-event material-request-event--${item.type}`} key={`${item.type}-${item.at}-${index}`}><Symbol size={19} aria-hidden="true" /><div><div className="material-request-event-heading"><strong>{labels[item.type]}</strong><time>{moment(item.at)}</time></div><span className="material-request-event-user">{item.userName}</span>{item.quantity != null && <small>{formatQuantity(item.quantity, request.unit)}{item.type === 'received' && item.orderCode ? ` · ${formatQuantity(item.allocatedQuantity, request.unit)} destinados à ${item.orderCode}` : item.type === 'received' ? ' · Entrada no estoque' : ''}</small>}</div></li>
       })}</ol>}
     </div>
   </dialog>

@@ -17,10 +17,12 @@ try {
   }
   const [ana, bruno, carla] = employees
   const offer = (await fixture.adminRequest('/offers', 'POST', offerDraft)).data.item
-  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], kind: 'service', stages: ['turning', 'painting'] })
+  // Three people on the same stage: only a labor service is shared (a machine is one person at a time).
+  const service = (await fixture.adminRequest('/labor-services')).data.items[0]
+  const shared = { type: 'labor-service', id: service.id }
+  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], kind: 'service', stages: ['turning', 'painting'], stageResources: { turning: shared, painting: shared } })
   await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', deadline: offerDraft.deadline, serviceValue: 100 } })
   const order = (await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')).data.item
-  const service = (await fixture.adminRequest('/labor-services')).data.items[0]
   // Carla started on another device: this browser has no credential for her session.
   const remote = await fixture.request(`/operations/orders/${order.code}/start`, 'POST', { employeeId: carla.id, laborServiceId: service.id }, { Authorization: `Bearer ${fixture.operatorToken}` })
   assert.equal(remote.status, 200)
@@ -32,16 +34,16 @@ try {
     if (!await page.locator('.operator-entry').isVisible()) await page.getByRole('button', { name: 'Sair do funcionário', exact: true }).click()
     await enterOperatorCode(page, employee.accessCode)
   }
-  const work = async (employee, group, name) => {
+  const work = async (employee) => {
     await identify(employee)
     await openOrder(page, order.service)
-    await startWork(page, group, name)
+    await startWork(page, service.name)
     await page.locator('.operator-worker').filter({ hasText: employee.name }).waitFor()
   }
   await page.locator('.operator-entry').waitFor()
-  assert.equal(await page.locator('.operator-project').count(), 0, 'the OS list appears only after the code')
-  await work(ana, 'Máquina', 'Torno 01')
-  await work(bruno, 'Serviço', service.name)
+  assert.equal(await page.locator('.operator-project').count(), 0, 'the OS can be opened only after the code (before it, the panel is read-only)')
+  await work(ana)
+  await work(bruno)
   await identify(ana)
   await openOrder(page, order.service)
   assert.equal(await page.getByRole('button', { name: /Iniciar trabalho/ }).count(), 0, 'someone already working sees Pausar instead of Iniciar')

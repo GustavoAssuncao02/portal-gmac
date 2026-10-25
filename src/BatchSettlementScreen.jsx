@@ -8,6 +8,7 @@ import { pollWhileVisible } from './polling.js'
 import './payables.css'
 import { batchByClassification, openBalanceByMonth, palette } from './batchSettlement.js'
 import './batchSettlement.css'
+import BankSelect from './BankSelect.jsx'
 
 const pickerColumns = [['id', 'ID'], ['supplierName', 'Fornecedor'], ['description', 'Descrição'], ['classificationName', 'Classificação'], ['dueDate', 'Vencimento'], ['valueCents', 'Valor']]
 
@@ -54,11 +55,12 @@ function EvolutionChart({ rows }) {
 }
 
 function SettleForm({ count, total, onClose, onConfirm }) {
-  const [draft, setDraft] = useState({ date: todayBahia(), method: 'pix' })
+  const [draft, setDraft] = useState({ date: todayBahia(), method: 'pix', bankId: '' })
   return <ConfirmAction title="Efetivar baixa em lote" onClose={onClose} onConfirm={() => onConfirm(draft)}>
     <p>{count} {count === 1 ? 'conta será baixada' : 'contas serão baixadas'}, totalizando <strong>{money(total)}</strong>. Cada uma será paga pelo valor integral.</p>
     <label>Data do pagamento<input type="date" required value={draft.date} max={todayBahia()} onChange={(event) => setDraft({ ...draft, date: event.target.value })} /></label>
     <label>Forma de pagamento<select aria-label="Forma de pagamento" value={draft.method} onChange={(event) => setDraft({ ...draft, method: event.target.value })}><option value="pix">Pix</option><option value="boleto">Boleto</option><option value="card">Cartão</option></select></label>
+    <BankSelect value={draft.bankId} onChange={(bankId) => setDraft({ ...draft, bankId })} />
   </ConfirmAction>
 }
 

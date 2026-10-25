@@ -6,6 +6,7 @@ import MoneyInput from './MoneyInput.jsx'
 import { InstallmentFields, withInstallments, installmentPayload } from './ReceivableInstallments.jsx'
 import { todayBahia, cents, settlementMethods } from '../server/payableRules.js'
 import './payables.css'
+import BankSelect from './BankSelect.jsx'
 
 // A quiet line under the amount field: more than the value of the OS is interest, less is discount.
 const differenceNote = (orderCents, difference) => difference ? <small className="payable-hint receivable-difference">{difference > 0 ? 'Juros' : 'Desconto'} de <strong>{money(Math.abs(difference))}</strong> sobre o valor da OS ({money(orderCents)}).</small> : null
@@ -14,7 +15,7 @@ const differenceNote = (orderCents, difference) => difference ? <small className
 // Receber, single or in installments) or already received (posted to Tesouraria, settled); then the service is archived.
 export default function ReceivableScheduleModal({ orderCode, onClose, onAcknowledge }) {
   const formId = useId(), today = todayBahia()
-  const [info, setInfo] = useState(null), [mode, setMode] = useState(null), [draft, setDraft] = useState({ value: '', dueDate: '', description: '', kind: 'single', count: 2, installments: [], date: today, method: 'pix' }), [busy, setBusy] = useState(false), [error, setError] = useState(''), [loadError, setLoadError] = useState('')
+  const [info, setInfo] = useState(null), [mode, setMode] = useState(null), [draft, setDraft] = useState({ value: '', dueDate: '', description: '', kind: 'single', count: 2, installments: [], date: today, method: 'pix', bankId: '' }), [busy, setBusy] = useState(false), [error, setError] = useState(''), [loadError, setLoadError] = useState('')
   useEffect(() => {
     let active = true
     payableRequest(`/receivables/order/${encodeURIComponent(orderCode)}`).then((result) => { if (!active) return; setInfo(result); setDraft((current) => ({ ...current, value: decimal(result.order.valueCents), description: `${result.order.code} · ${result.order.service || 'Serviço'}` })) }).catch((caught) => { if (active) setLoadError(caught.message) })
@@ -32,7 +33,7 @@ export default function ReceivableScheduleModal({ orderCode, onClose, onAcknowle
       if (post && !info.item) {
         if (received && draft.date > today) throw new Error('O recebimento não pode ter data futura.')
         if (installment && draft.installments.reduce((sum, row) => sum + cents(row.value || '0'), 0) !== cents(draft.value)) throw new Error('A soma das parcelas deve ser exatamente igual ao valor total.')
-        await payableRequest('/receivables', 'POST', received ? { orderCode, treasury: true, value: decimal(info.order.valueCents), received: draft.value, date: draft.date, method: draft.method, description: draft.description } : { orderCode, ...draft, ...installmentPayload(draft) }); created = true
+        await payableRequest('/receivables', 'POST', received ? { orderCode, treasury: true, value: decimal(info.order.valueCents), received: draft.value, date: draft.date, method: draft.method, bankId: draft.bankId, description: draft.description } : { orderCode, ...draft, ...installmentPayload(draft) }); created = true
       }
       await onAcknowledge(orderCode)
       onClose()
@@ -66,6 +67,7 @@ export default function ReceivableScheduleModal({ orderCode, onClose, onAcknowle
             <label>Valor recebido<MoneyInput aria-label="Valor recebido" required positive value={draft.value} onChange={(value) => change('value', value)} />{differenceNote(info.order.valueCents, difference) || <small className="payable-hint">Se for diferente de {money(info.order.valueCents)}, a diferença é registrada como juros ou desconto.</small>}</label>
             <label>Data do recebimento<input type="date" aria-label="Data do recebimento" required max={today} value={draft.date} onChange={(event) => setDraft({ ...draft, date: event.target.value })} /></label>
             <label>Forma de recebimento<select aria-label="Forma de recebimento" value={draft.method} onChange={(event) => setDraft({ ...draft, method: event.target.value })}>{Object.entries(settlementMethods).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+            <BankSelect value={draft.bankId} onChange={(bankId) => setDraft({ ...draft, bankId })} />
           </> : <>
             <fieldset className="payable-type"><legend>Tipo do recebimento</legend>{[['single', 'Parcela única'], ['installment', 'Recebimento parcelado']].map(([key, label]) => <label className="payable-radio" key={key}><input name={`${formId}-kind`} type="radio" checked={draft.kind === key} onChange={() => change('kind', key)} />{label}</label>)}</fieldset>
             <label>{installment ? 'Valor total a receber' : 'Valor a receber'}<MoneyInput aria-label={installment ? 'Valor total a receber' : 'Valor a receber'} required positive value={draft.value} onChange={(value) => change('value', value)} />{differenceNote(info.order.valueCents, difference)}</label>

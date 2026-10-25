@@ -27,8 +27,10 @@ test('low inventory prioritizes empty and scarce materials without counting heal
   assert.deepEqual(inventory, snapshot)
 })
 
-test('management counts include new material requests without approval and respect manual completion acknowledgement', () => {
-  const offers = [{ id: 'offer', code: 'OF-1', status: 'review', resources: { materials: [{ id: 'new', name: 'Novo metal', quantity: 10, purchaseQuantity: 10, stockStatus: 'unknown' }] } }, { id: 'accepted', status: 'review', orderCode: 'OS-1' }, { id: 'proposed', status: 'proposed' }]
+test('management counts include the material requests of accepted offers and respect manual completion acknowledgement', () => {
+  const missing = { materials: [{ id: 'new', name: 'Novo metal', quantity: 10, purchaseQuantity: 10, stockStatus: 'unknown' }] }
+  // The offer still in review requests nothing yet; the accepted one (with its OS) does.
+  const offers = [{ id: 'offer', code: 'OF-1', status: 'review', resources: missing }, { id: 'accepted', status: 'review', orderCode: 'OS-1', resources: missing }, { id: 'proposed', status: 'proposed' }]
   const orders = [order('OS-1', '2026-10-05', 'completed'), order('OS-2', '2026-10-05', 'completed', { operation: { status: 'completed', completionAcknowledgedAt: '2026-10-02' } })]
   const summary = adminOverview(orders, offers, [], now)
   assert.equal(summary.reviewing, 1)

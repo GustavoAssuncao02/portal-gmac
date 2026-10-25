@@ -60,13 +60,13 @@ export function workIntervals(orders, now = Date.now()) {
     const closed = new Set()
     for (const event of [...(order.operationEvents || [])].sort((a, b) => Date.parse(a.at) - Date.parse(b.at))) {
       if (['started', 'resumed'].includes(event.type) && event.sessionId) starts.set(event.sessionId, event)
-      if (!['paused', 'completed', 'session_ended', 'admin_interrupted', ...resourceChanges].includes(event.type) || closed.has(event.sessionId)) continue
+      if (!['paused', 'stage_completed', 'completed', 'session_ended', 'admin_interrupted', ...resourceChanges].includes(event.type) || closed.has(event.sessionId)) continue
       const initial = starts.get(event.sessionId)
       const end = Math.min(now, Date.parse(event.at))
       const start = initial ? Date.parse(initial.at) : Number.isFinite(Number(event.durationMs)) ? Date.parse(event.at) - Number(event.durationMs) : NaN
-      if (Number.isFinite(start) && Number.isFinite(end) && end > start) intervals.push({ start, end, employeeId: initial?.employeeId ?? event.employeeId, employeeName: initial?.employeeName || event.affectedEmployeeName || event.employeeName, machineId: initial ? initial.machineId : event.machineId, machineName: initial ? initial.machineName : event.machineName, laborServiceId: initial ? initial.laborServiceId : event.laborServiceId, laborServiceName: initial ? initial.laborServiceName : event.laborServiceName, orderCode: order.code, sessionId: event.sessionId, active: false, endedBy: event.type, reason: event.reason || null })
+      if (Number.isFinite(start) && Number.isFinite(end) && end > start) intervals.push({ start, end, employeeId: initial?.employeeId ?? event.employeeId, employeeName: initial?.employeeName || event.affectedEmployeeName || event.employeeName, machineId: initial ? initial.machineId : event.machineId, machineName: initial ? initial.machineName : event.machineName, laborServiceId: initial ? initial.laborServiceId : event.laborServiceId, laborServiceName: initial ? initial.laborServiceName : event.laborServiceName, orderCode: order.code, sessionId: event.sessionId, stageName: initial?.workStageName ?? null, active: false, endedBy: event.type, reason: event.reason || null })
       if (resourceChanges.includes(event.type)) {
-        const next = { ...event }
+        const next = { ...event, workStageName: event.workStageName ?? initial?.workStageName }
         if (event.type !== 'labor_service_changed') Object.assign(next, { machineId: event.nextMachineId, machineName: event.nextMachineName })
         if (event.type !== 'machine_changed') Object.assign(next, { laborServiceId: event.nextLaborServiceId, laborServiceName: event.nextLaborServiceName })
         starts.set(event.sessionId, next)
@@ -77,7 +77,7 @@ export function workIntervals(orders, now = Date.now()) {
     for (const active of activeSessions(order.operation)) {
       if (closed.has(active.id)) continue
       const start = Date.parse(starts.get(active.id)?.at || active.resourceStartedAt || active.machineStartedAt || active.startedAt)
-      if (Number.isFinite(start) && now > start) intervals.push({ start, end: now, employeeId: active.employeeId, employeeName: active.employeeName, machineId: active.machineId, machineName: active.machineName, laborServiceId: active.laborServiceId, laborServiceName: active.laborServiceName, orderCode: order.code, sessionId: active.id, active: true, endedBy: null, reason: null })
+      if (Number.isFinite(start) && now > start) intervals.push({ start, end: now, employeeId: active.employeeId, employeeName: active.employeeName, machineId: active.machineId, machineName: active.machineName, laborServiceId: active.laborServiceId, laborServiceName: active.laborServiceName, orderCode: order.code, sessionId: active.id, stageName: active.stageName ?? starts.get(active.id)?.workStageName ?? null, active: true, endedBy: null, reason: null })
     }
   }
   return intervals

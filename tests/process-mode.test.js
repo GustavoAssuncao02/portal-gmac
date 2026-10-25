@@ -49,8 +49,14 @@ test('free stages count only pieces processed in every stage and preserve sessio
   const auth = { Authorization: `Bearer ${fixture.operatorToken}` }
   const route = `/operations/orders/${order.code}`
   const started = (await fixture.request(`${route}/start`, 'POST', { employeeId: employee.id }, auth)).data
-  const credentials = { sessionId: started.operation.activeSession.id, sessionToken: started.sessionToken }
-  const register = (key, quantity, session = credentials, headers = auth) => fixture.request(`${route}/stages/${key}`, 'POST', { ...session, quantity }, headers)
+  let credentials = { sessionId: started.operation.activeSession.id, sessionToken: started.sessionToken }
+  // A finished stage ends the work: the operator starts again on the stage given.
+  const restart = async (stageKey) => {
+    const again = (await fixture.request(`${route}/start`, 'POST', { employeeId: employee.id, stageKey }, auth)).data
+    credentials = { sessionId: again.session.id, sessionToken: again.sessionToken }
+  }
+  // Pieces are registered on the stage the session works on: the session moves there first.
+  const register = async (key, quantity, session = credentials, headers = auth) => { await fixture.request(`${route}/work-stage`, 'POST', { ...session, stageKey: key }, headers); return fixture.request(`${route}/stages/${key}`, 'POST', { ...session, quantity }, headers) }
   assert.equal((await register('stage-3', 20, credentials, {})).status, 401)
   assert.equal((await register('stage-3', 20, { ...credentials, sessionToken: 'foreign' })).status, 403)
   for (const quantity of [0, -1, 0.5]) assert.equal((await register('stage-3', quantity)).status, 400)
@@ -59,9 +65,12 @@ test('free stages count only pieces processed in every stage and preserve sessio
   assert.equal(result.status, 200)
   assert.equal(currentPieceProgress(result.data.operation, 20).completedPieces, 0)
   assert.equal(result.data.operation.progress, 33)
+  assert.equal(result.data.operation.status, 'stage_done')
+  await restart('stage-3')
   assert.equal((await fixture.request(`${route}/complete`, 'POST', credentials, auth)).status, 409)
   assert.equal((await register('stage-3', 1)).status, 409)
   assert.equal((await register('stage-1', 20)).status, 200)
+  await restart('stage-2')
   result = await register('stage-2', 5)
   assert.equal(result.status, 200)
   assert.equal(currentPieceProgress(result.data.operation, 20).completedPieces, 5)
@@ -85,7 +94,7 @@ test('default and legacy orders still require pieces to pass the preceding stage
     const route = `/operations/orders/${order.code}`
     const started = (await fixture.request(`${route}/start`, 'POST', { employeeId: employee.id }, auth)).data
     const credentials = { sessionId: started.operation.activeSession.id, sessionToken: started.sessionToken }
-    const register = (key, quantity) => fixture.request(`${route}/stages/${key}`, 'POST', { ...credentials, quantity }, auth)
+    const register = async (key, quantity) => { await fixture.request(`${route}/work-stage`, 'POST', { ...credentials, stageKey: key }, auth); return fixture.request(`${route}/stages/${key}`, 'POST', { ...credentials, quantity }, auth) }
     assert.equal((await register('stage-3', 1)).status, 409)
     assert.equal((await register('stage-2', 1)).status, 409)
     assert.equal((await register('stage-1', 5)).status, 200)
@@ -97,7 +106,7 @@ test('default and legacy orders still require pieces to pass the preceding stage
 })
 
 test('MySQL applies the saved mode inside the locked transaction and rolls back rejected progress', async (t) => {
-  let state = { status: 'running', stages: [{ key: 'stage-1', name: 'Tornearia' }, { key: 'stage-2', name: 'Pintura' }], stageCounts: { 'stage-1': 0, 'stage-2': 0 }, accumulatedMs: 0, activeSession: { id: 'session', tokenHash: createHash('sha256').update('private').digest('hex'), employeeId: 1, employeeName: 'Ana', startedAt: new Date().toISOString() } }
+  let state = { status: 'running', stages: [{ key: 'stage-1', name: 'Tornearia' }, { key: 'stage-2', name: 'Pintura' }], stageCounts: { 'stage-1': 0, 'stage-2': 0 }, accumulatedMs: 0, activeSession: { id: 'session', tokenHash: createHash('sha256').update('private').digest('hex'), employeeId: 1, employeeName: 'Ana', startedAt: new Date().toISOString(), stageKey: 'stage-2', stageName: 'Pintura' } }
   const events = []
   const calls = []
   let snapshot
@@ -127,7 +136,7 @@ test('MySQL applies the saved mode inside the locked transaction and rolls back 
   assert.equal((await fixture.request(route, 'POST', body, headers)).status, 200)
   assert.equal(state.stageCounts['stage-2'], 20)
   assert.equal(state.stageCounts['stage-1'], 0)
-  assert.equal(events.length, 1)
+  assert.deepEqual(events.map((event) => event.type), ['stage_progress', 'stage_completed'], 'the finished stage ends the work on it')
   assert.equal(currentPieceProgress(state, 20).completedPieces, 0)
   assert.ok(calls.some((sql) => sql.endsWith('FOR UPDATE')))
   assert.deepEqual(calls.slice(-2), ['commit', 'release'])

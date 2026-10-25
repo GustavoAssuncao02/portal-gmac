@@ -866,13 +866,15 @@ button {
 }
 
 .machine-toolbar {
+  flex-wrap: wrap;
   justify-content: space-between;
-  gap: 24px;
+  gap: 14px 24px;
   margin-top: 24px;
 }
 
 .machine-filters,
 .machine-actions {
+  flex-wrap: wrap;
   gap: 14px;
 }
 
@@ -935,7 +937,7 @@ button {
 
 .machine-metrics {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 17px;
   margin-top: 17px;
 }
@@ -1087,6 +1089,13 @@ button {
 .machine-status--idle { color: #56708f; background: #edf2f8; }
 .machine-status--idle i,
 .dot-gray { background: #91a6c2; }
+.machine-status--maintenance { color: #8a4d00; background: #fff3dc; }
+.machine-status--maintenance i,
+.dot-amber { display: inline-block; flex: 0 0 auto; width: 12px; height: 12px; margin-right: 9px; border-radius: 50%; background: #e3930b; }
+.status-dot--amber { background: #e3930b; }
+.metric-icon--amber { color: #a85d00; background: #fff4e0; }
+.machine-maintenance-note { margin: 0 0 16px; color: #3d5876; font-size: 14px; line-height: 1.5; }
+.machine-modal textarea { width: 100%; min-height: 80px; padding: 10px 12px; border: 1px solid #cbd9e8; border-radius: 6px; font: inherit; resize: vertical; }
 
 .row-actions {
   display: flex;
@@ -1113,6 +1122,9 @@ button {
 .row-actions .row-delete {
   color: #f0202a;
 }
+
+.machine-row .row-actions { gap: 8px; }
+.row-actions button:disabled { cursor: not-allowed; opacity: .35; }
 
 .machine-summary-grid {
   display: grid;
@@ -1224,10 +1236,13 @@ button {
 }
 
 /* Sectors of a machine: typed with commas or marked with one touch among the sectors already registered. */
-.machine-sector-picker { display: grid; gap: 8px; margin-top: 8px; }
+.machine-sector-picker { display: grid; gap: 8px; margin-top: 16px; }
+.machine-sector-title { color: #193f6a; font-size: 14px; }
+.machine-sector-empty { margin: 0; color: #5f7489; font-size: 13px; }
+.machine-sector-picker .workflow-error { margin: 0; }
 .machine-sector-picker small { color: #5f7489; font-size: 12px; }
 .machine-sector-options { display: flex; flex-wrap: wrap; gap: 6px; }
-.machine-sector-picker button { padding: 5px 12px; border: 1px solid #cfdbe7; border-radius: 999px; background: #fff; color: #31506f; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.machine-sector-picker button { min-height: 36px; padding: 6px 16px; border: 1px solid #cfdbe7; border-radius: 999px; background: #fff; color: #31506f; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
 .machine-sector-picker button[aria-pressed="true"] { border-color: #0c4c91; background: #e8f1fb; color: #0c4c91; }
 :root[data-theme="dark"] .machine-sector-picker small { color: #b4c6d8; }
 :root[data-theme="dark"] .machine-sector-picker button { border-color: #36516f; background: #162b43; color: #c9d8e8; }
@@ -1782,7 +1797,7 @@ button {
 .offer-materials-head,
 .offer-material-row {
   display: grid;
-  grid-template-columns: 62px minmax(135px, 1.5fr) 80px minmax(105px, 1.1fr) 75px 75px 30px;
+  grid-template-columns: 62px minmax(135px, 1.5fr) 80px minmax(105px, 1.1fr) 75px 75px 64px;
   align-items: center;
   gap: 8px;
 }
@@ -2140,6 +2155,18 @@ button {
   border-radius: 8px;
   color: #7189a4;
   text-align: center;
+  width: 100%;
+  padding: 12px;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.offer-empty-state:hover,
+.offer-empty-state:focus-visible {
+  border-color: #3772a9;
+  background: #f3f8fd;
 }
 
 .offer-empty-state .icon {
@@ -2173,6 +2200,31 @@ button {
   background: #fff7f8;
   font-size: 18px;
   line-height: 1;
+}
+
+/* Edit and remove side by side; the row being edited stays marked while its form is open. */
+.offer-resource-actions {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+}
+
+.offer-resource-edit {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid #c9dbef;
+  border-radius: 6px;
+  color: #0c4c91;
+  background: #f2f7fd;
+  cursor: pointer;
+}
+
+.offer-material-row--editing {
+  background: #f2f7fd;
+  box-shadow: inset 3px 0 0 #0c4c91;
 }
 
 .offer-resource-subsection {
@@ -2927,6 +2979,17 @@ button {
   font-weight: 400;
 }
 
+/* Unit of measure of a material: kilos or units, side by side. */
+.inventory-unit-field { min-width: 0; margin: 12px 0 0; padding: 0; border: 0; }
+.inventory-unit-field legend { margin-bottom: 6px; padding: 0; color: #31587f; font-size: 12px; font-weight: 700; }
+.inventory-unit-field > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.inventory-unit-field label { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid #cbdbea; border-radius: 6px; color: #173a62; font-size: 13px; cursor: pointer; }
+.inventory-unit-field label:has(input:checked) { border-color: #0c4c91; background: #eaf2fb; color: #0c4c91; font-weight: 600; }
+.inventory-modal .inventory-unit-field input { width: 16px; height: 16px; margin: 0; padding: 0; }
+.inventory-unit-field small { display: block; margin-top: 6px; color: #6b84a0; font-size: 11px; }
+:root[data-theme="dark"] .inventory-unit-field label { border-color: #36516f; color: #d3e0ee; }
+:root[data-theme="dark"] .inventory-unit-field label:has(input:checked) { border-color: #80b7f0; background: #234364; color: #e7f2ff; }
+
 .inventory-readonly-field input {
   border-color: #d7e1eb;
   color: #667f99;
@@ -3546,6 +3609,25 @@ button {
 .proposal-send-button .icon {
   width: 18px;
   height: 18px;
+}
+
+.proposal-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.proposal-draft-status {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin: 8px 2px 0;
+  color: #138146;
+  font-size: 12px;
+}
+
+.proposal-draft-status--unsaved {
+  color: #9a5b00;
 }
 
 .proposal-layout-modal {
@@ -6197,22 +6279,35 @@ button {
 .offer-table-status--approved { color: #138d56; background: #e2f7eb; }
 .offer-table-status--rejected { color: #d73d47; background: #ffe6e8; }
 
+/* Every action has the same size, however long its label: two equal columns, and a label that does not fit
+   breaks inside its button. */
 .offer-table-actions {
-  display: flex;
-  align-items: center;
-  gap: 14px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: center;
+  gap: 10px;
   padding-right: 16px !important;
 }
 
 .offer-table-actions button {
-  height: 46px;
-  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  padding: 4px 10px;
   border-radius: 7px;
   background: #ffffff;
   font-size: 15px;
   font-weight: 700;
-  white-space: nowrap;
+  line-height: 1.15;
+  text-align: center;
+  text-wrap: balance;
 }
+
+.offer-table-actions button svg { flex-shrink: 0; }
 
 .offer-approve-button,
 .offer-accept-button {
@@ -6357,8 +6452,8 @@ button {
   }
 
   .offer-table-actions button {
-    height: 34px;
-    padding: 0 7px;
+    min-height: 34px;
+    padding: 3px 6px;
     font-size: 10px;
   }
 }
@@ -6711,6 +6806,7 @@ button {
 }
 
 .offer-table-status--proposed { color: #235c9c; background: #e9f2ff; }
+.offer-table-status--saved { color: #5b3fb5; background: #f0ebff; }
 .offer-table-status--accepted { color: #138d56; background: #e2f7eb; }
 .offer-filter--proposed strong { color: #235c9c; background: #e9f2ff; }
 .offer-filter--accepted strong { color: #138d56; background: #e2f7eb; }
@@ -6963,7 +7059,7 @@ button {
   .offer-material-row { grid-template-columns: 30px minmax(0, 1fr) 30px; gap: 8px; text-align: left; }
   .offer-material-row .material-visual { grid-column: 1; grid-row: 1; font-size: 24px; }
   .offer-material-row .material-name { grid-column: 2; grid-row: 1; overflow-wrap: anywhere; }
-  .offer-material-row .offer-resource-remove { grid-column: 3; grid-row: 1; }
+  .offer-material-row .offer-resource-actions { grid-column: 3; grid-row: 1 / span 2; flex-direction: column; justify-content: flex-start; }
   .offer-material-row > span, .offer-material-row > strong { grid-column: 2 / -1; justify-self: start; }
   .offer-material-row > span:nth-child(3)::before { content: 'Necessário: '; }
   .offer-material-row > span:nth-child(5)::before { content: 'Valor/kg: '; }
@@ -7063,6 +7159,7 @@ button {
 .admin-os-stage-empty { color: #66809b; }
 .admin-os-status--running { background: #e4f6e9; color: #188449; }
 .admin-os-status--paused { background: #fff2dc; color: #b47419; }
+.admin-os-status--stage_done { background: #e2f4ec; color: #1d7a52; }
 .admin-os-status--finalizing { background: #f1e9fb; color: #7c4cb4; }
 .admin-os-table td .admin-os-status--completed { padding: 5px 7px; border: 1px solid #c5e4cf; background: #e8f6ec; color: #188449; font: inherit; }
 .admin-os-table td .admin-os-status--completed:hover:not(:disabled) { border-color: #188449; background: #d9efdf; }
@@ -7236,7 +7333,14 @@ button {
 .offer-stage-time { display: inline-flex; align-items: center; gap: 3px; margin-left: auto; color: #6b84a0; font-size: 11px; }
 .offer-stage-time input { width: 46px; height: 28px; padding: 0 6px; border: 1px solid #cbd9e6; border-radius: 5px; color: #173f6a; font: inherit; font-size: 12px; text-align: right; }
 .offer-stage-time input:focus { border-color: #4d91ce; outline: none; box-shadow: 0 0 0 3px rgba(43, 119, 183, .11); }
-.offer-stage-options.offer-stage-stack { max-width: 520px; }
+.offer-stage-time--missing input { border-color: #d9534f; background: #fff6f5; }
+.offer-stage-options.offer-stage-stack { max-width: 760px; }
+/* Machine or labor service planned for a checked stage, after its time. */
+.offer-stage-stack .offer-stage-item--selected { flex-wrap: wrap; row-gap: 6px; }
+.offer-stage-resource { flex: 0 1 220px; min-width: 150px; height: 28px; padding: 0 8px; border: 1px solid #cbd9e6; border-radius: 5px; background: #fff; color: #173f6a; font: inherit; font-size: 12px; }
+.offer-stage-resource:focus { border-color: #4d91ce; outline: none; box-shadow: 0 0 0 3px rgba(43, 119, 183, .11); }
+.offer-stage-resource--missing { border-color: #d9534f; background: #fff6f5; }
+:root[data-theme="dark"] .offer-stage-resource { border-color: #3b4d61; background: #18222d; color: #e2ecf6; }
 .piece-autocomplete-hint { display: block; margin-top: 5px; color: #6b84a0; font-size: 11px; font-weight: 400; }
 .piece-history-banner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 16px; padding: 12px 14px; border-left: 3px solid #0c4c91; border-radius: 6px; background: #edf5fc; color: #284b6c; font-size: 13px; }
 .piece-history-banner div { display: grid; gap: 2px; }

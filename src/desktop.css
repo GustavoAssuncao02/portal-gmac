@@ -19,6 +19,7 @@
   .machine-table { min-width: 1080px; }
   .machine-row { grid-template-columns: minmax(170px, 1.5fr) minmax(130px, 1.1fr) minmax(105px, .8fr) minmax(165px, 1fr) minmax(130px, 1fr) minmax(100px, .7fr) minmax(130px, .9fr) minmax(120px, .7fr); }
   .machine-row > * { padding: 10px 12px; overflow-wrap: anywhere; }
+  .machine-row > .row-actions { padding-inline: 6px; }
   .machine-name { gap: 10px; }
   .inventory-card, .pending-material-card, .registration-list-card { max-width: none; }
   .registration-layout { max-width: none; grid-template-columns: minmax(0, 1fr) 280px; }
@@ -27,7 +28,8 @@
   .proposal-material-summary button span { line-height: 1; }
   .account-settings-layout { display: grid; grid-template-columns: minmax(350px, .85fr) minmax(0, 1.15fr); align-items: start; gap: 28px 40px; }
   .account-settings-layout > .account-appearance-settings { max-width: none; margin: 0; padding: 0 0 24px; }
-  .account-settings-layout > .account-settings-form { max-width: none; grid-column: 2; grid-row: 1 / span 2; }
+  .account-settings-layout > .account-settings-form { max-width: none; }
+  .account-settings-layout > .account-access-column { grid-column: 2; grid-row: 1 / span 2; }
   .account-settings-layout > .account-notification-settings { grid-column: 1; grid-row: 2; margin: 0; padding: 0; border-top: 0; }
   .account-notification-settings .account-settings-fields { grid-template-columns: minmax(0, 1fr); }
   .admin-tools-main:has(.payable-classifications-table) { padding-left: 12px; padding-right: 12px; }
@@ -64,8 +66,8 @@
   .offer-table-status { margin: 8px 0; padding: 6px 8px; min-height: 40px; }
   .offer-table-status strong { font-size: 13px; }
   .offer-table-status span { font-size: 11px; }
-  .offer-table-actions { flex-wrap: wrap; gap: 6px; padding-right: 8px !important; }
-  .offer-table-actions button { max-width: 100%; height: auto; min-height: 36px; padding: 8px 10px; font-size: 12px; white-space: normal; overflow-wrap: anywhere; }
+  .offer-table-actions { gap: 6px; padding-right: 8px !important; }
+  .offer-table-actions button { min-height: 44px; padding: 5px 8px; font-size: 12px; }
 }
 
 /* Short desktop screens (HD with browser chrome): tighter rows so more of the menu fits without scrolling. */
@@ -112,7 +114,7 @@
   .registration-list-card { grid-column: 2; grid-row: 2; margin: 0; min-width: 0; }
   .registration-help { padding: 24px; }
   .account-settings-layout { grid-template-columns: minmax(400px, 1fr) minmax(600px, 1.4fr) minmax(300px, .8fr); }
-  .account-settings-layout > .account-settings-form { grid-row: 1; }
+  .account-settings-layout > .account-access-column { grid-row: 1; }
   .account-settings-layout > .account-notification-settings { grid-column: 3; grid-row: 1; }
   .account-settings-layout > .account-appearance-settings { border-bottom: 0; }
   .proposal-card-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; }

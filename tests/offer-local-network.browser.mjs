@@ -26,7 +26,7 @@ try {
 
   await page.getByRole('button', { name: 'Adicionar material', exact: true }).click()
   const materialForm = page.locator('.offer-inline-form').first()
-  await materialForm.getByRole('combobox').fill('Aço 1045 pela rede')
+  await materialForm.getByRole('combobox', { name: /^Material/ }).fill('Aço 1045 pela rede')
   await materialForm.getByLabel('Quantidade (kg)').fill('8')
   await materialForm.getByLabel('Valor unitário').fill('15')
   await materialForm.getByRole('button', { name: 'Adicionar material', exact: true }).click()

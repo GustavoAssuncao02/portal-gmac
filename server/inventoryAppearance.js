@@ -34,7 +34,8 @@ export async function ensureInventoryAppearance(pool) {
   const [columns] = await pool.execute("SELECT COLUMN_NAME AS name FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'inventory_materials'")
   const names = new Set(columns.map((column) => column.name))
   if (!names.size) throw new Error('Prepare o banco de dados com npm run db:setup antes de iniciar o portal.')
-  for (const [name, definition] of [['icon', `VARCHAR(24) NOT NULL DEFAULT '${defaultMaterialIcon}'`], ['photo', 'TEXT NULL']]) {
+  // `unit` came with the materials counted by unit (un) besides kilos (kg): existing materials stay in kg.
+  for (const [name, definition] of [['icon', `VARCHAR(24) NOT NULL DEFAULT '${defaultMaterialIcon}'`], ['photo', 'TEXT NULL'], ['unit', "VARCHAR(4) NOT NULL DEFAULT 'kg'"]]) {
     if (names.has(name)) continue
     try { await pool.execute(`ALTER TABLE inventory_materials ADD COLUMN ${name} ${definition}`) }
     catch (error) { if (error.code !== 'ER_DUP_FIELDNAME') throw error }

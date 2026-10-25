@@ -1,7 +1,8 @@
 import express from 'express'
 import bcrypt from 'bcryptjs'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { readStore, mutateStore } from './offers.js'
+import { storePool } from './store.js'
 import { notificationDefaults, notificationOptions, notificationSoundDefault, validNotificationSound } from './notificationRules.js'
 import { employeeRecords, staffAccountId } from './employeeAccess.js'
 
@@ -15,20 +16,70 @@ export function notificationSettings(store, userId) {
 }
 export function appearanceSettings(store, userId) {
   const preference = store.adminAppearancePreferences?.find((item) => String(item.userId) === String(userId))
-  return { theme: preference?.theme === 'dark' ? 'dark' : 'light', fontSize: ['small', 'large'].includes(preference?.fontSize) ? preference.fontSize : 'default', fontFamily: ['system', 'verdana', 'tahoma', 'inter', 'roboto', 'open-sans', 'montserrat', 'source-sans-3'].includes(preference?.fontFamily) ? preference.fontFamily : 'default' }
+  return { theme: ['dark', 'black'].includes(preference?.theme) ? preference.theme : 'light', fontSize: ['small', 'large'].includes(preference?.fontSize) ? preference.fontSize : 'default', fontFamily: ['system', 'verdana', 'tahoma', 'inter', 'roboto', 'open-sans', 'montserrat', 'source-sans-3'].includes(preference?.fontFamily) ? preference.fontFamily : 'default' }
 }
-export function issueAdminToken(user) {
-  for (const [key, session] of sessions) if (session.expires < Date.now()) sessions.delete(key)
+// Administrator logins last 12 hours and survive a restart of the API: each one is a row of admin_sessions, which keeps
+// only a hash of the token. This process keeps a copy of the open ones (`sessions`, by hash) to check every request
+// without a query; the copy is loaded when the API starts (loadAdminSessions) and every login and revocation writes
+// both. One API process is assumed, as for the request limit. Without the database (some tests) only the copy exists.
+const SESSION_MS = 12 * 3600000
+const tokenHash = (token) => createHash('sha256').update(String(token)).digest('hex')
+let sessionTable = null
+function sessionDatabase() {
+  let pool
+  try { pool = storePool() } catch { return null }
+  sessionTable ||= pool.query(`CREATE TABLE IF NOT EXISTS admin_sessions (
+    token_hash CHAR(64) PRIMARY KEY,
+    user_key VARCHAR(64) NOT NULL,
+    user_id VARCHAR(80) NOT NULL,
+    user_name VARCHAR(200) NULL,
+    role VARCHAR(20) NOT NULL,
+    expires_at BIGINT NOT NULL,
+    created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    KEY admin_sessions_user (user_key),
+    KEY admin_sessions_expiry (expires_at)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`).then(() => pool, (error) => { sessionTable = null; throw error })
+  return sessionTable
+}
+export async function loadAdminSessions() {
+  const database = sessionDatabase()
+  if (!database) return 0
+  const pool = await database
+  await pool.query('DELETE FROM admin_sessions WHERE expires_at < ?', [Date.now()])
+  const [rows] = await pool.query('SELECT token_hash, user_id, user_name, role, expires_at FROM admin_sessions')
+  sessions.clear()
+  // The id keeps its type (a number for administrators, text for administrative employees).
+  for (const row of rows) sessions.set(row.token_hash, { id: JSON.parse(row.user_id), name: row.user_name ?? undefined, role: row.role, expires: Number(row.expires_at) })
+  return rows.length
+}
+export async function issueAdminToken(user) {
+  const now = Date.now()
+  for (const [key, session] of sessions) if (session.expires < now) sessions.delete(key)
   const token = randomUUID()
-  sessions.set(token, { id: user.id, name: user.name, role: user.role || 'admin', expires: Date.now() + 12 * 3600000 })
+  const session = { id: user.id, name: user.name, role: user.role || 'admin', expires: now + SESSION_MS }
+  const database = sessionDatabase()
+  if (database) {
+    const pool = await database
+    await pool.query('DELETE FROM admin_sessions WHERE expires_at < ?', [now])
+    await pool.query('INSERT INTO admin_sessions (token_hash, user_key, user_id, user_name, role, expires_at) VALUES (?, ?, ?, ?, ?, ?)', [tokenHash(token), String(user.id), JSON.stringify(user.id ?? null), user.name ?? null, session.role, session.expires])
+  }
+  sessions.set(tokenHash(token), session)
   return token
 }
-export function revokeAccountSessions(id) {
-  for (const [token, session] of sessions) if (String(session.id) === String(id)) sessions.delete(token)
+// Leaving ("Sair") ends this login only.
+export async function endAdminSession(token) {
+  sessions.delete(tokenHash(token))
+  const database = sessionDatabase()
+  if (database) await (await database).query('DELETE FROM admin_sessions WHERE token_hash = ?', [tokenHash(token)])
+}
+export async function revokeAccountSessions(id) {
+  for (const [key, session] of sessions) if (String(session.id) === String(id)) sessions.delete(key)
+  const database = sessionDatabase()
+  if (database) await (await database).query('DELETE FROM admin_sessions WHERE user_key = ?', [String(id)])
 }
 export function adminIdentity(request) {
   const token = String(request.headers.authorization || '').replace(/^Bearer /, '')
-  const session = sessions.get(token)
+  const session = token ? sessions.get(tokenHash(token)) : null
   return session && session.expires >= Date.now() ? { ...session, token } : null
 }
 export function requireAdmin(request, response, next) {
@@ -63,7 +114,7 @@ export function createAccountService(pool, env = process.env) {
     return privateFields ? rows : rows.map(safe)
   }
   async function staff() {
-    return (await employeeRecords(pool)).filter((item) => item.type === 'administrative').map((item) => ({ ...item, id: staffAccountId(item.id), employeeId: item.id, role: 'staff' }))
+    return (await employeeRecords(pool)).filter((item) => item.type === 'administrative' && item.active !== false).map((item) => ({ ...item, id: staffAccountId(item.id), employeeId: item.id, role: 'staff' }))
   }
   // Everyone who signs in with CPF and password: administrators first, then administrative employees.
   async function accounts() {
@@ -98,7 +149,7 @@ export function createAccountService(pool, env = process.env) {
       if (Number(id) === 0) store.demoAdmin = { ...store.demoAdmin, ...changes }
       else Object.assign(store.admins.find((item) => String(item.id) === String(id)), changes)
     })
-    if (fields.password) revokeAccountSessions(id)
+    if (fields.password) await revokeAccountSessions(id)
     return safe({ ...current, ...changes })
   }
   // The free note of a client was added later: databases created before get the column once (existing clients stay blank).
@@ -171,7 +222,7 @@ export function createAccountService(pool, env = process.env) {
       store[kind].push(row)
       return row
     })
-    if (!isClient && body.password && id != null) revokeAccountSessions(id)
+    if (!isClient && body.password && id != null) await revokeAccountSessions(id)
     return isClient ? item : safe(item)
   }
   async function remove(kind, id) {
@@ -188,7 +239,7 @@ export function createAccountService(pool, env = process.env) {
     if (pool && kind === 'admins') await mutateStore((store) => {
       if (store.adminNotificationPreferences) store.adminNotificationPreferences = store.adminNotificationPreferences.filter((item) => String(item.userId) !== String(id))
     })
-    if (kind === 'admins') revokeAccountSessions(id)
+    if (kind === 'admins') await revokeAccountSessions(id)
   }
   async function getNotificationSettings(id) {
     if (!await account(id)) fail(404, 'Conta não encontrada.')
@@ -218,7 +269,7 @@ export function createAccountService(pool, env = process.env) {
   }
   async function updateAppearanceSettings(id, fields) {
     if (fields?.theme === undefined && fields?.fontSize === undefined && fields?.fontFamily === undefined) fail(400, 'Informe uma preferência de aparência.')
-    if (fields.theme !== undefined && !['light', 'dark'].includes(fields.theme)) fail(400, 'Escolha o modo claro ou escuro.')
+    if (fields.theme !== undefined && !['light', 'dark', 'black'].includes(fields.theme)) fail(400, 'Escolha o modo claro, escuro ou escuro intenso.')
     if (fields.fontSize !== undefined && !['small', 'default', 'large'].includes(fields.fontSize)) fail(400, 'Escolha a fonte pequena, padrão ou grande.')
     if (fields.fontFamily !== undefined && !['default', 'system', 'verdana', 'tahoma', 'inter', 'roboto', 'open-sans', 'montserrat', 'source-sans-3'].includes(fields.fontFamily)) fail(400, 'Escolha uma das fontes disponíveis.')
     await getAppearanceSettings(id)
@@ -245,7 +296,9 @@ export function createAccountsRouter(service) {
       response.json({ user })
     } catch (error) { next(error) }
   })
-  router.post('/auth/logout', (request, response) => { sessions.delete(request.adminToken); response.json({ ok: true }) })
+  router.post('/auth/logout', async (request, response, next) => {
+    try { await endAdminSession(request.adminToken); response.json({ ok: true }) } catch (error) { next(error) }
+  })
   router.get('/account/notifications', async (request, response, next) => {
     try { response.set('Cache-Control', 'no-store').json({ settings: await service.getNotificationSettings(request.adminId) }) } catch (error) { next(error) }
   })
@@ -259,7 +312,7 @@ export function createAccountsRouter(service) {
     try { response.json({ settings: await service.updateAppearanceSettings(request.adminId, request.body) }) } catch (error) { next(error) }
   })
   router.patch('/account', async (request, response, next) => {
-    try { const user = await service.updateAccount(request.adminId, request.body); response.json({ user, token: issueAdminToken(user) }) } catch (error) { next(error) }
+    try { const user = await service.updateAccount(request.adminId, request.body); response.json({ user, token: await issueAdminToken(user) }) } catch (error) { next(error) }
   })
   for (const kind of ['admins', 'clients']) {
     router.get(`/${kind}`, async (_request, response, next) => { try { response.json({ items: await service[kind]() }) } catch (error) { next(error) } })

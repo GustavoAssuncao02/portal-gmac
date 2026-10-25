@@ -1,8 +1,10 @@
+import { classificationParts } from '../server/payableRules.js'
+
 export const palette = ['#2f6fa5', '#2e9577', '#c9892f', '#8a5fb5', '#d1585b', '#3c9aa8', '#7a8f3a', '#b9577f']
 // Share of the batch by classification; classifications beyond the palette are folded into "Outras".
 export function batchByClassification(rows) {
   const totals = new Map()
-  for (const row of rows) totals.set(row.classificationName, (totals.get(row.classificationName) || 0) + row.valueCents)
+  for (const row of rows) for (const part of classificationParts(row)) totals.set(part.classificationName, (totals.get(part.classificationName) || 0) + part.valueCents)
   const sorted = [...totals].map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
   const head = sorted.slice(0, palette.length - 1), rest = sorted.slice(palette.length - 1)
   return rest.length ? [...head, { name: 'Outras', value: rest.reduce((sum, item) => sum + item.value, 0) }] : head

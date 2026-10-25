@@ -5,6 +5,8 @@ import { hourReport, localDate, ordersWithOperations, reportRange, workIntervals
 import { activityDateRange } from './employeeActivity.js'
 import { activeSessions } from './operationSessions.js'
 import { requireAdminOrOperator } from './access.js'
+import { registerSectorNames } from './registries.js'
+import { machineDay, machineUsageReport } from './machineUsage.js'
 
 export async function machineRows() { return (await readStore()).machines || [] }
 // A machine may serve more than one sector (the same T\u00eampera for Usinagem and Caldeiraria): `sectors` lists them and
@@ -29,7 +31,8 @@ export function machineAvailability(machines, orders, now = Date.now()) {
     const used = usage.get(String(machine.id)) || 0
     return {
       ...machine,
-      status: sessions.length ? 'working' : 'idle',
+      // A machine in maintenance cannot be chosen; the work already running on it (none, the change waits for it) wins.
+      status: sessions.length ? 'working' : machine.maintenance ? 'maintenance' : 'idle',
       operator: [...new Set(sessions.map((session) => session.employeeName || 'Operador não identificado'))].join(', ') || '\u2014',
       // Who holds the machine now (one person at a time): the operator screen shows it as taken.
       inUseBy: sessions.map((session) => ({ employeeId: session.employeeId ?? null, employeeName: session.employeeName || 'Operador não identificado', orderCode: session.orderCode })),
@@ -71,6 +74,28 @@ export default function createMachinesRouter(requireAdmin, pool) {
       response.set('Cache-Control', 'no-store').json({ items: machineAvailability(store.machines || [], orders) })
     } catch (error) { next(error) }
   })
+  // Machine use over a period (the current month by default on the screen), up to one year at a time.
+  router.get('/machines/usage', requireAdmin, async (request, response, next) => {
+    let range
+    try { range = reportRange(request.query.start, request.query.end) } catch (error) { return response.status(400).json({ message: error.message }) }
+    if (range.end - range.start > 366 * 86400000) return response.status(400).json({ message: 'Escolha um período de até 366 dias.' })
+    try {
+      const store = await readStore()
+      const orders = await ordersWithOperations(store.orders, pool)
+      response.set('Cache-Control', 'no-store').json(machineUsageReport(store.machines || [], orders, range))
+    } catch (error) { next(error) }
+  })
+  // Everything that happened to one machine on one day.
+  router.get('/machines/:id/day', requireAdmin, async (request, response, next) => {
+    try { reportRange(request.query.date, request.query.date) } catch (error) { return response.status(400).json({ message: error.message === 'Informe as datas de início e fim.' ? 'Informe a data.' : error.message }) }
+    try {
+      const store = await readStore()
+      const machine = (store.machines || []).find((item) => String(item.id) === request.params.id)
+      if (!machine) return response.status(404).json({ message: 'Máquina não encontrada.' })
+      const orders = await ordersWithOperations(store.orders, pool)
+      response.set('Cache-Control', 'no-store').json(machineDay(machine, orders, request.query.date))
+    } catch (error) { next(error) }
+  })
   router.get('/machines/:id/history', requireAdmin, async (request, response, next) => {
     try {
       const range = activityDateRange(request.query.period ?? 'all', request.query.date)
@@ -101,6 +126,9 @@ export default function createMachinesRouter(requireAdmin, pool) {
       if (!item.name || !Number.isFinite(Number(request.body.hourlyRate)) || Number(request.body.hourlyRate) < 0) return response.status(400).json({ message: 'Informe nome e valor por hora válidos.' })
       const found = await mutateStore((store) => {
         store.machines ||= []
+        // The sectors come from Cadastros > Setores, with its spelling.
+        item.sectors = registerSectorNames(store, item.sectors)
+        item.sector = sectorLabel(item.sectors)
         if (method === 'post') { store.machines.push(item); return item }
         const current = store.machines.find((row) => String(row.id) === request.params.id)
         if (!current) return null
@@ -109,6 +137,37 @@ export default function createMachinesRouter(requireAdmin, pool) {
       })
       if (!found) return response.status(404).json({ message: 'Máquina não encontrada.' })
       response.status(method === 'post' ? 201 : 200).json({ item: found })
+    } catch (error) { next(error) }
+  })
+  // Maintenance takes the machine out of use: the operators cannot choose it until it is released. Each period is kept,
+  // with who started and who ended it, for the machine history and the planning.
+  router.post('/machines/:id/maintenance', requireAdmin, async (request, response, next) => {
+    try {
+      const active = request.body?.active === true
+      const reason = String(request.body?.reason ?? '').trim().slice(0, 500)
+      if (active && reason.length < 3) return response.status(400).json({ message: 'Informe o motivo da manutenção.' })
+      const store = await readStore()
+      const machine = (store.machines || []).find((item) => String(item.id) === request.params.id)
+      if (!machine) return response.status(404).json({ message: 'Máquina não encontrada.' })
+      if (active) {
+        const orders = await ordersWithOperations(store.orders, pool)
+        const session = orders.flatMap((order) => activeSessions(order.operation).map((item) => ({ ...item, orderCode: order.code }))).find((item) => String(item.machineId) === request.params.id)
+        if (session) return response.status(409).json({ message: `A máquina está sendo usada por ${session.employeeName || 'um operador'} na ${session.orderCode}. Pause o trabalho antes de colocar em manutenção.` })
+      }
+      const at = new Date().toISOString(), by = request.adminName || 'Administrador'
+      const item = await mutateStore((current) => {
+        const row = (current.machines || []).find((entry) => String(entry.id) === request.params.id)
+        if (!row) return null
+        if (active && !row.maintenance) row.maintenance = { since: at, reason, startedBy: by }
+        else if (active) row.maintenance.reason = reason
+        else if (row.maintenance) {
+          row.maintenanceHistory = [{ ...row.maintenance, until: at, endedBy: by }, ...(row.maintenanceHistory || [])].slice(0, 200)
+          row.maintenance = null
+        }
+        return row
+      })
+      if (!item) return response.status(404).json({ message: 'Máquina não encontrada.' })
+      response.json({ item })
     } catch (error) { next(error) }
   })
   router.delete('/machines/:id', requireAdmin, async (request, response, next) => {

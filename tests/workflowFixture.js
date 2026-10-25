@@ -1,23 +1,30 @@
+import 'dotenv/config'
 import express from 'express'
-import { copyFile, cp, mkdir, mkdtemp, rm } from 'node:fs/promises'
+import mysql from 'mysql2/promise'
+import { randomUUID } from 'node:crypto'
+import { copyFile, cp, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { configureWeb, serveInterface } from '../server/webServer.js'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
-export async function createWorkflowFixture({ pool, inventoryPool = pool, accountsEnv, notificationInventory } = {}) {
+export async function createWorkflowFixture({ pool, inventoryPool = pool, accountsEnv, notificationInventory, fillStageTimes = true } = {}) {
   const results = path.join(root, 'test-results')
   await mkdir(results, { recursive: true })
   const directory = await mkdtemp(path.join(results, 'workflow-'))
   // The copied modules keep their data next to them; a DATA_DIR from the shell would point them at real data.
   delete process.env.DATA_DIR
-  for (const name of ['offers.js', 'orderHistory.js', 'pieces.js', 'access.js', 'orderMaterials.js', 'pendingMaterials.js', 'operations.js', 'orderEditing.js', 'operatorAuth.js', 'employeeAccess.js', 'employeeActivity.js', 'serviceStages.js', 'machines.js', 'laborServices.js', 'accounts.js', 'reports.js', 'reportData.js', 'documentExports.js', 'payables.js', 'payableRules.js', 'receivables.js', 'bankStatements.js', 'ofx.js', 'materialRequests.js', 'notificationRules.js', 'notificationEvents.js', 'operationSessions.js', 'operationEventTime.js','materialRequestCodes.js', 'notifications.js', 'fiscalCatalog.js', 'dataDirectory.js', 'proposalDocuments.js', 'clientDocument.js', 'proposalDefaults.js', 'proposalPdf.js', 'proposalBrand.js', 'proposalMath.js', 'moneyWords.js']) {
+  for (const name of ['planning.js', 'planningRules.js', 'offers.js', 'orderHistory.js', 'pieces.js', 'access.js', 'orderMaterials.js', 'pendingMaterials.js', 'operations.js', 'orderEditing.js', 'operatorAuth.js', 'employeeAccess.js', 'employeeActivity.js', 'serviceStages.js', 'machines.js', 'laborServices.js', 'accounts.js', 'reports.js', 'reportData.js', 'documentExports.js', 'payables.js', 'payableRules.js', 'receivables.js', 'bankStatements.js', 'ofx.js', 'materialRequests.js', 'notificationRules.js', 'notificationEvents.js', 'operationSessions.js', 'operationEventTime.js','materialRequestCodes.js', 'notifications.js', 'fiscalCatalog.js', 'dataDirectory.js', 'proposalDocuments.js', 'clientDocument.js', 'proposalDefaults.js', 'proposalPdf.js', 'proposalBrand.js', 'proposalMath.js', 'moneyWords.js', 'store.js', 'materialUnits.js', 'banks.js', 'operatorAccount.js', 'registries.js', 'serviceLocation.js', 'materialRequestSources.js', 'inventory.js', 'inventoryAppearance.js', 'materialIcons.js', 'uploads.js', 'machineUsage.js']) {
     await copyFile(path.join(root, 'server', name), path.join(directory, name))
   }
   // PDFs use the bundled logo and fonts.
   await cp(path.join(root, 'server', 'assets'), path.join(directory, 'assets'), { recursive: true })
-  const { default: createOffersRouter, mutateStore } = await import(pathToFileURL(path.join(directory, 'offers.js')))
+  // The store always lives in MySQL: each fixture gets its own empty database, dropped on close.
+  const storeDatabase = await createTestDatabase('gmac_test_store')
+  const { configureStore } = await import(pathToFileURL(path.join(directory, 'store.js')))
+  await configureStore(storeDatabase.pool)
+  const { default: createOffersRouter, mutateStore, readStore } = await import(pathToFileURL(path.join(directory, 'offers.js')))
   const { default: operationsRouter } = await import(pathToFileURL(path.join(directory, 'operations.js')))
   const { issueOperatorToken } = await import(pathToFileURL(path.join(directory, 'operatorAuth.js')))
   const { createAccountService, createAccountsRouter, issueAdminToken, requireAdmin, restrictStaffFinance } = await import(pathToFileURL(path.join(directory, 'accounts.js')))
@@ -32,17 +39,82 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   const { default: notificationsRouter } = await import(pathToFileURL(path.join(directory, 'notifications.js')))
   const { default: fiscalRouter } = await import(pathToFileURL(path.join(directory, 'fiscalCatalog.js')))
   const { default: proposalDocumentsRouter } = await import(pathToFileURL(path.join(directory, 'proposalDocuments.js')))
+  const { default: operatorAccountRouter } = await import(pathToFileURL(path.join(directory, 'operatorAccount.js')))
+  const { default: registriesRouter } = await import(pathToFileURL(path.join(directory, 'registries.js')))
+  const { default: planningRouter } = await import(pathToFileURL(path.join(directory, 'planning.js')))
+  const { default: inventoryRouter } = await import(pathToFileURL(path.join(directory, 'inventory.js')))
+  // The stock screens use the real SQL routes, on the tests' own MySQL pool or on the fixture database (simulated pools only answer execute).
+  const stockPool = typeof inventoryPool?.query === 'function' ? inventoryPool : storeDatabase.pool
+  for (const statement of await inventorySchema()) await stockPool.query(statement)
   const accounts = createAccountService(pool, accountsEnv || {})
   const app = express()
   // Same compression, cache and security headers as the published portal.
   configureWeb(app)
   app.use(express.json())
   app.use('/api', restrictStaffFinance)
+  // The planned time and the machine or service of every stage are mandatory. Most tests are not about it: stages they
+  // send without a time get 60 minutes, as a detailed offer has, and stages without a machine or service get the first
+  // labor service. Once the offer is accepted, the OS loses those filled resources again, like an OS from before the
+  // rule: the operator tests keep choosing their machine or service through the API. `fillStageTimes: false` keeps the
+  // requests as sent (tests of the rule itself).
+  const filledPlans = new Map()
+  if (fillStageTimes) app.use('/api', async (request, _response, next) => {
+    try {
+      const offer = request.method === 'PUT' && request.path.match(/^\/offers\/([^/]+)\/resources$/)
+      const resources = offer ? request.body : request.method === 'PUT' && /^\/operations\/orders\/[^/]+$/.test(request.path) ? request.body?.order?.resources : null
+      if (!Array.isArray(resources?.stages)) return next()
+      resources.stageTimes = { ...Object.fromEntries(resources.stages.map((code) => [code, 60])), ...Object.fromEntries(Object.entries(resources.stageTimes || {}).filter(([, minutes]) => minutes)) }
+      const store = await readStore()
+      const service = store.laborServices?.[0]
+      if (!service) return next()
+      const plans = { ...(resources.stageResources ?? (offer ? store.offers.find((item) => item.id === offer[1])?.resources?.stageResources : null) ?? {}) }
+      const filled = resources.stages.filter((code) => !plans[code])
+      for (const code of filled) plans[code] = { type: 'labor-service', id: service.id }
+      resources.stageResources = plans
+      if (offer && filled.length) filledPlans.set(offer[1], new Set([...(filledPlans.get(offer[1]) || []), ...filled]))
+      next()
+    } catch (error) { next(error) }
+  })
+  if (fillStageTimes) app.use('/api', async (request, response, next) => {
+    const accept = request.method === 'POST' && request.path.match(/^\/offers\/([^/]+)\/accept$/)
+    if (!accept) return next()
+    // An offer accepted again (after an undone acceptance) gets its filled resources back for the acceptance.
+    try {
+      await mutateStore((store) => {
+        const item = store.offers.find((entry) => entry.id === accept[1]), service = store.laborServices?.[0]
+        const stages = item?.resources?.stages || []
+        if (!item || item.orderCode || !service) return
+        const missing = stages.filter((code) => !item.resources.stageResources?.[code])
+        if (!missing.length) return
+        item.resources.stageResources = { ...item.resources.stageResources, ...Object.fromEntries(missing.map((code) => [code, { type: 'labor-service', id: service.id, name: service.name }])) }
+        filledPlans.set(accept[1], new Set([...(filledPlans.get(accept[1]) || []), ...missing]))
+      })
+    } catch (error) { return next(error) }
+    const filled = filledPlans.get(accept[1])
+    if (!filled?.size) return next()
+    const send = response.json.bind(response)
+    const filledHere = (plan, code, service) => filled.has(code) && plan?.type === 'labor-service' && String(plan.id) === String(service?.id)
+    response.json = (body) => {
+      if (response.statusCode >= 400) return send(body)
+      mutateStore((store) => {
+        const service = store.laborServices?.[0]
+        for (const item of [store.offers.find((entry) => entry.id === accept[1]), store.orders.find((entry) => entry.offerId === accept[1])]) {
+          for (const [code, plan] of Object.entries(item?.resources?.stageResources || {})) if (filledHere(plan, code, service)) delete item.resources.stageResources[code]
+        }
+        for (const [code, plan] of Object.entries(body?.item?.resources?.stageResources || {})) if (filledHere(plan, code, service)) delete body.item.resources.stageResources[code]
+      }).then(() => { filledPlans.delete(accept[1]); send(body) }, next)
+      return response
+    }
+    next()
+  })
   app.use('/api', createOffersRouter(inventoryPool, requireAdmin))
   app.use('/api', operationsRouter(pool))
   app.use('/api', createAccountsRouter(accounts))
   app.use('/api', machinesRouter(requireAdmin, pool))
   app.use('/api', laborServicesRouter(requireAdmin, pool))
+  app.use('/api', registriesRouter(requireAdmin, pool))
+  app.use('/api', planningRouter(requireAdmin, pool))
+  app.use('/api', operatorAccountRouter(requireAdmin))
   app.use('/api', reportsRouter(pool, accounts, requireAdmin))
   const payables = payablesRouter(accounts, requireAdmin)
   app.use('/api', payables)
@@ -54,13 +126,13 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   app.use('/api', proposalDocumentsRouter(requireAdmin))
   app.use('/api', notificationsRouter({ requireAdmin, payables, receivables, loadInventory: notificationInventory }))
   app.use('/api', materialRequestsRouter(requireAdmin, inventoryPool, accounts))
-  app.get('/api/inventory', (_request, response) => response.status(503).json({ message: 'O banco de dados ainda não está configurado.' }))
+  app.use('/api', inventoryRouter(stockPool, requireAdmin))
   app.post('/api/auth/login', async (request, response, next) => {
     if (!accountsEnv) return response.status(503).json({ message: 'O banco de dados ainda não está configurado.' })
     try {
       const user = await accounts.authenticate(request.body.cpf, request.body.password)
       if (!user) return response.status(401).json({ message: 'CPF ou senha inválidos.' })
-      response.json({ user, token: issueAdminToken(user) })
+      response.json({ user, token: await issueAdminToken(user) })
     } catch (error) { next(error) }
   })
   app.use((error, _request, response, _next) => response.status(error.status || 500).json({ message: error.message }))
@@ -68,7 +140,7 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   const server = app.listen(0, '127.0.0.1')
   await new Promise((resolve) => server.once('listening', resolve))
   const url = `http://127.0.0.1:${server.address().port}`
-  const adminToken = issueAdminToken({ id: 0 })
+  const adminToken = await issueAdminToken({ id: 0 })
   return {
     url,
     directory,
@@ -76,10 +148,13 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
     admin: { Authorization: `Bearer ${adminToken}` },
     operatorToken: issueOperatorToken(),
     mutateStore,
+    // A server module of this fixture (same database), for start-up tasks the HTTP routes do not run.
+    serverModule: (name) => import(pathToFileURL(path.join(directory, name))),
     saveRequestedMaterial,
     async request(route, method = 'GET', body, headers = {}) {
       const response = await fetch(`${url}/api${route}`, { method, headers: { 'Content-Type': 'application/json', ...headers }, body: body === undefined ? undefined : JSON.stringify(body) })
-      return { status: response.status, data: await response.json() }
+      const text = await response.text()
+      return { status: response.status, data: text ? JSON.parse(text) : null }
     },
     // The same request with the administrator session (the routes of offers, OS and registrations require it).
     // Uses `admin`, so a test that renews the session (after a password change) updates every later call.
@@ -88,7 +163,30 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
     },
     async close() {
       await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
+      await storeDatabase.drop()
       await rm(directory, { recursive: true, force: true })
+    },
+  }
+}
+
+const inventorySchema = async () => (await readFile(path.join(root, 'database', 'schema.sql'), 'utf8')).match(/CREATE TABLE IF NOT EXISTS inventory_\w+ \([\s\S]*?\n\);/g)
+
+const databaseOptions = () => ({ host: process.env.DB_HOST || '127.0.0.1', port: Number(process.env.DB_PORT || 3306), user: process.env.DB_USER || 'root', password: process.env.DB_PASSWORD || '' })
+
+// A throwaway database named `<prefix>_<uuid>`; `drop` removes it and closes the pool.
+export async function createTestDatabase(prefix) {
+  const name = `${prefix}_${randomUUID().replaceAll('-', '')}`
+  if (!/^gmac_test_[a-z_]+_[a-f0-9]{32}$/.test(name)) throw new Error(`Nome de banco de teste inválido: ${name}`)
+  const admin = await mysql.createConnection(databaseOptions())
+  try { await admin.query(`CREATE DATABASE \`${name}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`) } finally { await admin.end() }
+  const pool = mysql.createPool({ ...databaseOptions(), database: name, connectionLimit: 5 })
+  return {
+    name,
+    pool,
+    async drop() {
+      await pool.end().catch(() => {})
+      const connection = await mysql.createConnection(databaseOptions())
+      try { await connection.query(`DROP DATABASE IF EXISTS \`${name}\``) } finally { await connection.end() }
     },
   }
 }

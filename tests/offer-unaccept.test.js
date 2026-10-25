@@ -62,7 +62,7 @@ test('with the stock database, what the OS took out comes back as an entry "Esto
       executed.push([sql, params])
       if (sql.startsWith('SELECT data FROM order_operations')) return [[]]
       if (sql.includes('FROM inventory_movements WHERE order_code')) return [[{ materialId: 7, type: 'exit', quantity: '12.500' }, { materialId: 9, type: 'exit', quantity: '3' }, { materialId: 9, type: 'entry', quantity: '3' }]]
-      if (sql.startsWith('SELECT id, name, quantity_kg')) return [[{ id: 7, name: 'Aço 1045', quantity_kg: '2.000', unit_price: '10.00' }]]
+      if (sql.startsWith('SELECT id, name, unit, quantity_kg')) return [[{ id: 7, name: 'Aço 1045', unit: 'kg', quantity_kg: '2.000', unit_price: '10.00' }]]
       return [{ affectedRows: 1 }]
     },
   }
@@ -77,7 +77,7 @@ test('with the stock database, what the OS took out comes back as an entry "Esto
     })
     const undone = await fixture.request(`/offers/${offer.id}/unaccept`, 'POST', {}, fixture.admin)
     assert.equal(undone.status, 200, JSON.stringify(undone.data))
-    assert.deepEqual(undone.data.returned, [{ materialId: 7, name: 'Aço 1045', quantity: 12.5 }], 'material 9 already came back')
+    assert.deepEqual(undone.data.returned, [{ materialId: 7, name: 'Aço 1045', unit: 'kg', quantity: 12.5 }], 'material 9 already came back')
     assert.deepEqual(executed.find(([sql]) => sql.startsWith('UPDATE inventory_materials'))[1], [14.5, 7])
     const entry = executed.find(([sql]) => sql.startsWith('INSERT INTO inventory_movements'))[1]
     assert.deepEqual(entry.slice(0, 6), [7, 12.5, 10, 14.5, 'Estorno de OS', 'OS-2026-0900'])

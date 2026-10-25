@@ -23,6 +23,7 @@
 .employee-activity-date { width: 155px; min-width: 155px; font-variant-numeric: tabular-nums; }
 .employee-activity-type { color: #345878; font-weight: 700; }
 .employee-activity-type--paused, .employee-activity-type--admin_interrupted { color: #a16c14; }
+.employee-activity-type--stage_completed { color: #1d7a52; }
 .employee-activity-type--completed { color: #188449; }
 .employee-activity-table-scroll .employee-activity-empty { height: 160px; color: #71869c; text-align: center; vertical-align: middle; }
 .employee-activity-error { padding: 28px 24px; color: #b4303f; font-size: 13px; }

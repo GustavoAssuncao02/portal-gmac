@@ -1,3 +1,4 @@
+import { formatQuantity, materialUnit } from './materialUnits.js'
 const normalize = (value) => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLocaleLowerCase('pt-BR')
 const fail = (status, message) => { const error = new Error(message); error.status = status; throw error }
 const kg = (value) => Number(Number(value).toFixed(3))
@@ -25,10 +26,12 @@ export function orderMaterialPlan(materials, inventory) {
   for (const [index, material] of materials.entries()) {
     const quantity = Number(material.quantity)
     if (!Number.isFinite(quantity) || quantity <= 0) fail(400, `Quantidade inválida para ${material.name || 'o material'}.`)
+    // Without the link, a material is matched by name among the ones counted in the same unit (kg or un).
     const item = inventory.find((row) => material.inventoryId != null && String(row.id) === String(material.inventoryId))
-      || inventory.find((row) => normalize(row.name) === normalize(material.name))
-    const key = item ? `inventory-${item.id}` : `new-${normalize(material.name)}`
-    if (!groups.has(key)) groups.set(key, { inventoryId: item?.id ?? null, name: item?.name || material.name, quantity: 0, stockAvailable: Math.max(0, Number(item?.quantity) || 0), minimum: item?.minimum, unitPrice: Number(item?.unitPrice) || 0, materialIndexes: [] })
+      || inventory.find((row) => normalize(row.name) === normalize(material.name) && materialUnit(row.unit) === materialUnit(material.unit))
+    const unit = materialUnit(item ? item.unit : material.unit)
+    const key = item ? `inventory-${item.id}` : `new-${unit}-${normalize(material.name)}`
+    if (!groups.has(key)) groups.set(key, { inventoryId: item?.id ?? null, name: item?.name || material.name, unit, quantity: 0, stockAvailable: Math.max(0, Number(item?.quantity) || 0), minimum: item?.minimum, unitPrice: Number(item?.unitPrice) || 0, materialIndexes: [] })
     const group = groups.get(key)
     group.quantity = kg(group.quantity + quantity)
     group.materialIndexes.push(index)
@@ -42,10 +45,10 @@ export function orderMaterialPlan(materials, inventory) {
 export async function consumeOrderMaterials(connection, order, { allowPartial = false } = {}) {
   const materials = order.resources?.materials || []
   if (!materials.length) return []
-  const [inventory] = await connection.execute('SELECT id, name, quantity_kg AS quantity, minimum_kg AS minimum, unit_price AS unitPrice FROM inventory_materials ORDER BY id FOR UPDATE')
+  const [inventory] = await connection.execute('SELECT id, name, unit, quantity_kg AS quantity, minimum_kg AS minimum, unit_price AS unitPrice FROM inventory_materials ORDER BY id FOR UPDATE')
   const plan = orderMaterialPlan(materials, inventory)
   const shortages = plan.filter((row) => row.purchaseQuantity > 0)
-  if (!allowPartial && shortages.length) fail(409, `Estoque insuficiente: ${shortages.map((row) => `${row.name}: faltam ${row.purchaseQuantity.toLocaleString('pt-BR')} kg`).join('; ')}.`)
+  if (!allowPartial && shortages.length) fail(409, `Estoque insuficiente: ${shortages.map((row) => `${row.name}: faltam ${formatQuantity(row.purchaseQuantity, row.unit)}`).join('; ')}.`)
   const remaining = new Map(plan.map((row) => [row, row.stockAvailable]))
   order.resources = { ...order.resources, materials: materials.map((material, index) => {
     const group = plan.find((row) => row.materialIndexes.includes(index))
@@ -53,7 +56,7 @@ export async function consumeOrderMaterials(connection, order, { allowPartial = 
     const consumed = kg(Math.min(available, Number(material.quantity)))
     remaining.set(group, kg(available - consumed))
     return {
-      ...material, inventoryId: group.inventoryId, stockAvailable: available,
+      ...material, inventoryId: group.inventoryId, unit: group.unit, stockAvailable: available,
       stockStatus: group.inventoryId == null ? 'unknown' : available <= 0 ? 'missing' : available < Number(material.quantity) ? 'partial' : 'available',
       purchaseQuantity: kg(Number(material.quantity) - consumed), inventoryConsumedQuantity: consumed,
       groupStockStatus: group.inventoryId == null ? 'unknown' : group.stockAvailable <= 0 ? 'missing' : group.purchaseQuantity > 0 ? 'partial' : 'available',
@@ -67,7 +70,7 @@ export async function consumeOrderMaterials(connection, order, { allowPartial = 
       `INSERT INTO inventory_movements
         (material_id, movement_type, quantity_kg, unit_price_kg, balance_after_kg, destination, order_code, notes)
        VALUES (?, 'exit', ?, ?, ?, ?, ?, ?)`,
-      [row.inventoryId, row.consumedQuantity, row.unitPrice, row.balance, 'Utilizado na ordem de serviço', order.code, `${row.quantity.toLocaleString('pt-BR')} kg necessários${row.purchaseQuantity ? `; ${row.purchaseQuantity.toLocaleString('pt-BR')} kg pendentes de compra` : ''}.`],
+      [row.inventoryId, row.consumedQuantity, row.unitPrice, row.balance, 'Utilizado na ordem de serviço', order.code, `${formatQuantity(row.quantity, row.unit)} necessários${row.purchaseQuantity ? `; ${formatQuantity(row.purchaseQuantity, row.unit)} pendentes de compra` : ''}.`],
     )
   }
   return plan

@@ -1,14 +1,15 @@
 import express from 'express'
 import { randomUUID } from 'node:crypto'
-import { mkdir, writeFile, readFile } from 'node:fs/promises'
+import { receiveFile, sendStoredFile } from './uploads.js'
 import path from 'node:path'
 import { dataDirectory } from './dataDirectory.js'
 import { readStore, mutateStore } from './offers.js'
 import { exportPdf, exportWorkbook } from './reports.js'
-import { cents, validDate, todayBahia, payableStatus, daysUntil, makeInstallments, shiftMonth, filterPayables, settlementMethods, treasuryEntry } from './payableRules.js'
+import { cents, validDate, todayBahia, payableStatus, daysUntil, makeInstallments, shiftMonth, filterPayables, settlementMethods, treasuryEntry, classificationParts, splitInstallments } from './payableRules.js'
 import { notificationSettings } from './accounts.js'
 import { assertNotReconciled, reconciledTransaction } from './bankStatements.js'
 import { orderValue } from './receivables.js'
+import { settlementBank } from './banks.js'
 
 const directory = path.join(dataDirectory, 'payable-files')
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), { status }) }
@@ -56,17 +57,34 @@ function duplicates(store, proposed, ignored = []) {
 function fields(store, body, current) {
   const supplier = (store.suppliers || []).find((item) => String(item.id) === String(body.supplierId))
   if (!supplier) fail('Selecione um fornecedor cadastrado.')
-  const classification = store.classifications.find((item) => item.id === body.classificationId)
-  if (!classification || classification.inactive && classification.id !== current?.classificationId) fail('Selecione uma classificação ativa.')
+  // A classification already in the account stays accepted even if it was deactivated later.
+  const usable = (id) => { const item = store.classifications.find((row) => row.id === id); return item && (!item.inactive || classificationParts(current || {}).some((part) => part.classificationId === id)) ? item : null }
+  const classification = usable(body.classificationSplit?.length > 1 ? body.classificationSplit[0]?.classificationId : body.classificationId)
+  if (!classification) fail('Selecione uma classificação ativa.')
   if (!validDate(body.issueDate) || !validDate(body.dueDate)) fail('Informe emissão e vencimento válidos.')
   if (!['normal', 'installment', 'recurring'].includes(body.kind)) fail('Tipo de conta inválido.')
   if (body.kind === 'recurring' && !['monthly', 'yearly'].includes(body.recurrence)) fail('Selecione recorrência mensal ou anual.')
   let valueCents
   try { valueCents = cents(body.value) } catch (error) { fail(error.message) }
   if (!valueCents) fail('O valor deve ser maior que zero.')
+  let classificationSplit = null
+  if (body.classificationSplit != null && !Array.isArray(body.classificationSplit)) fail('Divisão entre classificações inválida.')
+  if (body.classificationSplit?.length > 1) {
+    if (body.classificationSplit.length > 20) fail('Divida a conta em até 20 classificações.')
+    classificationSplit = body.classificationSplit.map((part) => {
+      const item = usable(part?.classificationId)
+      if (!item) fail('Selecione uma classificação ativa em cada parte da divisão.')
+      let partCents
+      try { partCents = cents(part.value) } catch (error) { fail(error.message) }
+      if (!partCents) fail(`Informe o valor de ${item.name} na divisão.`)
+      return { classificationId: item.id, classificationName: item.name, valueCents: partCents }
+    })
+    if (new Set(classificationSplit.map((part) => part.classificationId)).size !== classificationSplit.length) fail('Cada classificação aparece uma vez na divisão.')
+    if (classificationSplit.reduce((sum, part) => sum + part.valueCents, 0) !== valueCents) fail('A soma da divisão entre classificações deve ser igual ao valor da conta.')
+  }
   const orderCode = clean(body.orderCode, 40) || null
   if (orderCode && !(store.orders || []).some((order) => order.code === orderCode)) fail('OS vinculada não encontrada.')
-  return { orderCode, supplierId: supplier.id, supplierName: supplier.name, classificationId: classification.id, classificationName: classification.name, description: clean(body.description, 5000), documentNumber: clean(body.documentNumber, 160), issueDate: body.issueDate, dueDate: body.dueDate, valueCents, kind: body.kind, recurrence: body.kind === 'recurring' ? body.recurrence : null }
+  return { orderCode, supplierId: supplier.id, supplierName: supplier.name, classificationId: classification.id, classificationName: classificationSplit ? classificationSplit.map((part) => part.classificationName).join(' + ') : classification.name, classificationSplit, description: clean(body.description, 5000), documentNumber: clean(body.documentNumber, 160), issueDate: body.issueDate, dueDate: body.dueDate, valueCents, kind: body.kind, recurrence: body.kind === 'recurring' ? body.recurrence : null }
 }
 function installments(body, valueCents, dueDate) {
   const count = Number(body.count ?? 1)
@@ -76,7 +94,8 @@ function installments(body, valueCents, dueDate) {
   if (!Number.isInteger(count) || count < 1 || count > 120 || rows.length !== count || rows.some((row) => !validDate(row.dueDate) || row.valueCents <= 0) || rows.reduce((sum, row) => sum + row.valueCents, 0) !== valueCents) fail('A soma das parcelas deve ser exatamente igual ao valor total, com datas e valores válidos.')
   return rows
 }
-function payment(body, valueCents, bulk = false, methods = billMethods) {
+// With `store`, the bank of the settlement is required once banks are registered (Cadastros > Bancos).
+function payment(body, valueCents, bulk = false, methods = billMethods, store = null) {
   if (!validDate(body.date) || body.date > todayBahia()) fail('Data de pagamento inválida ou futura.')
   if (!methods.includes(body.method)) fail(methods === billMethods ? 'Selecione Pix, Boleto ou Cartão.' : 'Selecione a forma de pagamento.')
   let interestCents = 0, discountCents = 0
@@ -84,13 +103,20 @@ function payment(body, valueCents, bulk = false, methods = billMethods) {
   if (interestCents && discountCents || bulk && (interestCents || discountCents || body.receipts?.length || body.fileIds?.length)) fail('Juros e desconto são exclusivos; baixa em massa não aceita ajustes nem comprovante compartilhado.')
   const finalCents = valueCents + interestCents - discountCents
   if (finalCents < 0) fail('O desconto não pode ultrapassar o valor da conta.')
-  return { date: body.date, method: body.method, interestCents, discountCents, finalCents, note: clean(body.note, 5000), receipts: [] }
+  return { date: body.date, method: body.method, interestCents, discountCents, finalCents, note: clean(body.note, 5000), receipts: [], ...(store ? settlementBank(store, body.bankId) : {}) }
 }
 // Payment of a Tesouraria entry: the full value, on the informed date, with any way of paying.
-const treasuryPayment = (body, valueCents) => payment({ date: body.date, method: body.method, note: body.note }, valueCents, false, Object.keys(settlementMethods))
+const treasuryPayment = (body, valueCents, store) => payment({ date: body.date, method: body.method, note: body.note, bankId: body.bankId }, valueCents, false, Object.keys(settlementMethods), store)
+// Names follow a classification renamed later.
+function classificationView(row, store) {
+  const nameOf = (part) => store.classifications.find((item) => item.id === part.classificationId)?.name || part.classificationName
+  if (!row.classificationSplit?.length) return { classificationName: nameOf(row) }
+  const classificationSplit = row.classificationSplit.map((part) => ({ ...part, classificationName: nameOf(part) }))
+  return { classificationSplit, classificationName: classificationSplit.map((part) => part.classificationName).join(' + ') }
+}
 function view(row, store) {
   const supplier = (store.suppliers || []).find((item) => String(item.id) === String(row.supplierId))
-  return { ...row, supplierDocument: supplier?.document || null, supplierName: supplier?.name || row.supplierName, classificationName: store.classifications.find((item) => item.id === row.classificationId)?.name || row.classificationName, status: payableStatus(row), daysUntil: daysUntil(row.dueDate) }
+  return { ...row, supplierDocument: supplier?.document || null, supplierName: supplier?.name || row.supplierName, ...classificationView(row, store), status: payableStatus(row), daysUntil: daysUntil(row.dueDate) }
 }
 // Real cost of an OS against its price. The materials and labor planned in the proposal are already part of it;
 // every payable linked to the OS (archived ones were still paid) is an additional cost that came up later.
@@ -117,8 +143,8 @@ export function notificationItems(store, userId) {
   return activeNotifications(store, userId).map(({ readBy, ...notice }) => ({ ...notice, readAt: readBy?.find((entry) => String(entry.userId) === String(userId))?.at || null, account: view(find(store, notice.accountId), store) })).reverse()
 }
 function report(rows, store, individual = false, filters = {}) {
-  const columns = ['ID', 'Fornecedor', 'Descrição', 'Classificação', 'Documento', 'Emissão', 'Valor (R$)', 'Vencimento', 'Status', 'Parcela', 'Pagamento', 'Forma', 'Juros (R$)', 'Desconto (R$)', 'Pago (R$)', 'Observação da baixa', 'Compra original (R$)', 'Origem recorrente']
-  const sections = [{ name: 'Contas a pagar', columns, rows: rows.map((raw) => { const r = view(raw, store), p = r.payment; return [r.id, r.supplierName, `${r.description}${r.inactive ? ' (D)' : ''}`, r.classificationName, r.documentNumber, r.issueDate, r.valueCents / 100, r.dueDate, `${statusLabel[r.status]}${r.inactive ? ' (D)' : ''}`, r.groupId ? `${r.installmentNumber} de ${r.installmentCount}` : '', p?.date, paymentLabel[p?.method] || p?.method, (p?.interestCents || 0) / 100, (p?.discountCents || 0) / 100, p ? p.finalCents / 100 : '', p?.note, (r.originalTotalCents || r.valueCents) / 100, r.previousId] }) }]
+  const columns = ['ID', 'Fornecedor', 'Descrição', 'Classificação', 'Documento', 'Emissão', 'Valor (R$)', 'Vencimento', 'Status', 'Parcela', 'Pagamento', 'Forma', 'Banco', 'Juros (R$)', 'Desconto (R$)', 'Pago (R$)', 'Observação da baixa', 'Compra original (R$)', 'Origem recorrente']
+  const sections = [{ name: 'Contas a pagar', columns, rows: rows.map((raw) => { const r = view(raw, store), p = r.payment; return [r.id, r.supplierName, `${r.description}${r.inactive ? ' (D)' : ''}`, r.classificationSplit ? r.classificationSplit.map((part) => `${part.classificationName} (${money(part.valueCents)})`).join(' + ') : r.classificationName, r.documentNumber, r.issueDate, r.valueCents / 100, r.dueDate, `${statusLabel[r.status]}${r.inactive ? ' (D)' : ''}`, r.groupId ? `${r.installmentNumber} de ${r.installmentCount}` : '', p?.date, paymentLabel[p?.method] || p?.method, p?.bankName || '', (p?.interestCents || 0) / 100, (p?.discountCents || 0) / 100, p ? p.finalCents / 100 : '', p?.note, (r.originalTotalCents || r.valueCents) / 100, r.previousId] }) }]
   if (individual) {
     const ids = rows.map((row) => row.id)
     sections.push({ name: 'Histórico', columns: ['Conta', 'Data/hora (Bahia)', 'Usuário', 'Ação', 'Detalhes'], rows: store.payableEvents.filter((e) => ids.includes(e.accountId)).map((e) => [e.accountId, new Date(e.at).toLocaleString('pt-BR', { timeZone: 'America/Bahia' }), e.userName, actionLabel[e.type] || e.type, [e.reason, readableDetails(e.changes || e.details || '')].filter(Boolean).join('\n')]) })
@@ -204,7 +230,7 @@ export default function createPayablesRouter(accounts, requireAdmin) {
       const rows = batchView(store).ids.map((id) => find(store, id))
       if (!rows.length) fail('A lista de baixa em lote está vazia.', 409)
       // The list is read from the store inside the same write, so two people settling at once cannot pay an account twice.
-      const data = rows.map((row) => payment(req.body, row.valueCents, true))
+      const data = rows.map((row) => payment(req.body, row.valueCents, true, billMethods, store))
       rows.forEach((row, i) => { row.payment = data[i]; row.lastStatus = 'paid'; event(store, req.actor, 'paid', row.id, { details: { ...data[i], bulk: true, batch: true } }) })
       store.payableBatch = { ids: [], updatedAt: new Date().toISOString(), updatedByName: req.actor.name || 'Sistema' }
       return rows
@@ -216,7 +242,7 @@ export default function createPayablesRouter(accounts, requireAdmin) {
       init(store)
       const treasury = req.body.treasury === true
       // The date and the way of paying are checked before the account fields that derive from them.
-      if (treasury) treasuryPayment(req.body, 0)
+      if (treasury) treasuryPayment(req.body, 0, store)
       const body = treasury ? treasuryBody(req.body) : req.body
       const common = fields(store, body)
       const parts = common.kind === 'installment' ? installments(body, common.valueCents, common.dueDate) : [{ valueCents: common.valueCents, dueDate: common.dueDate }]
@@ -229,12 +255,13 @@ export default function createPayablesRouter(accounts, requireAdmin) {
       if (!Number.isInteger(ahead) || ahead < 0 || ahead > 24) fail('Informe de 0 a 24 ocorrências futuras.')
       const seriesId = ahead ? randomUUID() : null
       const occurrences = ahead ? Array.from({ length: ahead + 1 }, (_, index) => ({ valueCents: common.valueCents, dueDate: shiftMonth(common.dueDate, index * (common.recurrence === 'yearly' ? 12 : 1)) })) : parts
-      const proposed = occurrences.map((part, index) => ({ ...common, ...part, groupId, installmentNumber: seriesId ? 1 : index + 1, installmentCount: seriesId ? 1 : parts.length, seriesId, seriesIndex: seriesId ? index + 1 : null, seriesCount: seriesId ? occurrences.length : null, originalTotalCents: common.valueCents, previousId: index === 0 ? previous?.id || null : null, inactive: false, payment: null, attachments: [], createdAt: new Date().toISOString() }))
+      const splits = common.kind === 'installment' ? splitInstallments(common.classificationSplit, occurrences.map((part) => part.valueCents)) : occurrences.map(() => common.classificationSplit)
+      const proposed = occurrences.map((part, index) => ({ ...common, ...part, classificationSplit: splits[index], groupId, installmentNumber: seriesId ? 1 : index + 1, installmentCount: seriesId ? 1 : parts.length, seriesId, seriesIndex: seriesId ? index + 1 : null, seriesCount: seriesId ? occurrences.length : null, originalTotalCents: common.valueCents, previousId: index === 0 ? previous?.id || null : null, inactive: false, payment: null, attachments: [], createdAt: new Date().toISOString() }))
       if (!treasury) duplicates(store, proposed)
       const attachments = claimFiles(store, req.body.fileIds || [], req.actor)
       for (const [index, row] of proposed.entries()) {
         row.attachments = seriesId && index > 0 ? [] : [...attachments]
-        if (treasury) Object.assign(row, { treasury: true, payment: treasuryPayment(req.body, row.valueCents) })
+        if (treasury) Object.assign(row, { treasury: true, payment: treasuryPayment(req.body, row.valueCents, store) })
         store.payableSequence = (store.payableSequence || 0) + 1; row.id = `PAG-${String(store.payableSequence).padStart(6, '0')}`; row.lastStatus = payableStatus(row); store.payables.push(row)
         event(store, req.actor, 'created', row.id, { details: { valueCents: row.valueCents, dueDate: row.dueDate, previousId: row.previousId, text: treasury ? 'Saída lançada na Tesouraria, já baixada' : previous ? `Criada a partir de ${previous.id}` : seriesId ? `Recorrência ${index + 1} de ${proposed.length}, gerada antecipadamente` : '' } })
         if (treasury) event(store, req.actor, 'paid', row.id, { details: { ...row.payment, treasury: true } })
@@ -248,14 +275,14 @@ export default function createPayablesRouter(accounts, requireAdmin) {
       init(store); const row = find(store, req.params.id)
       // A Tesouraria entry is corrected in place and stays paid.
       const treasury = treasuryEntry(row) && req.body.treasury === true
-      if (treasury) treasuryPayment(req.body, 0); else editable(row)
+      if (treasury) treasuryPayment(req.body, 0, store); else editable(row)
       assertNotReconciled(store, 'payable', row.id, 'editar')
       const common = fields(store, treasury ? treasuryBody(req.body) : req.body, row)
       const attachments = claimFiles(store, req.body.fileIds || [], req.actor)
       const addAttachments = (target) => { target.attachments.push(...attachments); for (const file of attachments) event(store, req.actor, 'attachment_added', target.id, { details: { name: file.name } }) }
       if (treasury) {
         const before = { ...row }
-        Object.assign(row, common, { originalTotalCents: common.valueCents, payment: { ...treasuryPayment(req.body, common.valueCents), receipts: row.payment.receipts || [] }, lastStatus: 'paid' })
+        Object.assign(row, common, { originalTotalCents: common.valueCents, payment: { ...treasuryPayment(req.body, common.valueCents, store), receipts: row.payment.receipts || [] }, lastStatus: 'paid' })
         event(store, req.actor, 'edited', row.id, { changes: { before, after: { ...row } } }); addAttachments(row); return [row]
       }
       if (row.kind === 'installment') {
@@ -266,7 +293,8 @@ export default function createPayablesRouter(accounts, requireAdmin) {
           if (parts.length !== siblings.length || parts.some((p, i) => p.valueCents !== siblings[i].valueCents || p.dueDate !== siblings[i].dueDate) || common.dueDate !== row.dueDate) fail('Existe parcela paga. A estrutura do parcelamento está bloqueada.', 409)
           const before = { ...row }; Object.assign(row, common, { valueCents: row.valueCents, originalTotalCents: row.originalTotalCents }); event(store, req.actor, 'edited', row.id, { changes: { before, after: { ...row } } }); addAttachments(row); return [row]
         }
-        const proposed = parts.map((part, index) => ({ ...(siblings[index] || row), ...common, ...part, originalTotalCents: row.originalTotalCents, installmentNumber: index + 1, installmentCount: parts.length, attachments: siblings[index]?.attachments || [], id: siblings[index]?.id }))
+        const splits = splitInstallments(common.classificationSplit, parts.map((part) => part.valueCents))
+        const proposed = parts.map((part, index) => ({ ...(siblings[index] || row), ...common, ...part, classificationSplit: splits[index], originalTotalCents: row.originalTotalCents, installmentNumber: index + 1, installmentCount: parts.length, attachments: siblings[index]?.attachments || [], id: siblings[index]?.id }))
         duplicates(store, proposed, siblings.map((r) => r.id))
         if (siblings.slice(parts.length).some((r) => r.attachments.length || store.payables.some((p) => p.previousId === r.id) || store.payableEvents.some((e) => e.accountId === r.id && ['paid', 'reversed'].includes(e.type)))) fail('Não é possível remover parcelas com anexos, pagamentos anteriores ou vínculos.', 409)
         store.payables = store.payables.filter((r) => r.groupId !== row.groupId)
@@ -280,7 +308,8 @@ export default function createPayablesRouter(accounts, requireAdmin) {
       }
       if (common.kind === 'installment') {
         const parts = installments(req.body, common.valueCents, common.dueDate), groupId = randomUUID(), before = { ...row }
-        const proposed = parts.map((part, index) => ({ ...row, ...common, ...part, id: index === 0 ? row.id : undefined, groupId, installmentNumber: index + 1, installmentCount: parts.length, originalTotalCents: common.valueCents, previousId: index === 0 ? row.previousId : null, attachments: index === 0 ? [...row.attachments] : [], createdAt: index === 0 ? row.createdAt : new Date().toISOString() }))
+        const splits = splitInstallments(common.classificationSplit, parts.map((part) => part.valueCents))
+        const proposed = parts.map((part, index) => ({ ...row, ...common, ...part, classificationSplit: splits[index], id: index === 0 ? row.id : undefined, groupId, installmentNumber: index + 1, installmentCount: parts.length, originalTotalCents: common.valueCents, previousId: index === 0 ? row.previousId : null, attachments: index === 0 ? [...row.attachments] : [], createdAt: index === 0 ? row.createdAt : new Date().toISOString() }))
         duplicates(store, proposed, [row.id])
         store.payables = store.payables.filter((r) => r.id !== row.id)
         for (const [index, updated] of proposed.entries()) {
@@ -302,7 +331,7 @@ export default function createPayablesRouter(accounts, requireAdmin) {
       if (!['pay', 'deactivate'].includes(req.body.action)) fail('Ação inválida.')
       if (req.body.action === 'pay') {
         for (const row of rows) editable(row)
-        const data = rows.map((row) => payment(req.body, row.valueCents, true))
+        const data = rows.map((row) => payment(req.body, row.valueCents, true, billMethods, store))
         rows.forEach((row, i) => { row.payment = data[i]; row.lastStatus = 'paid'; event(store, req.actor, 'paid', row.id, { details: { ...data[i], bulk: true } }) })
       } else {
         if (rows.some((row) => !row.payment || row.inactive)) fail('Somente contas pagas e ativas podem ser desativadas.')
@@ -312,23 +341,28 @@ export default function createPayablesRouter(accounts, requireAdmin) {
       return rows
     }); res.json({ items: result })
   }))
-  router.post('/payables/:id/pay', handle(async (req, res) => { const item = await mutateStore((store) => { init(store); const row = find(store, req.params.id); editable(row); const data = payment(req.body, row.valueCents); data.receipts = claimFiles(store, req.body.fileIds || [], req.actor); row.payment = data; row.lastStatus = 'paid'; event(store, req.actor, 'paid', row.id, { details: row.payment }); for (const file of data.receipts) event(store, req.actor, 'attachment_added', row.id, { details: { name: file.name, receipt: true } }); return row }); res.json({ item }) }))
+  router.post('/payables/:id/pay', handle(async (req, res) => { const item = await mutateStore((store) => { init(store); const row = find(store, req.params.id); editable(row); const data = payment(req.body, row.valueCents, false, billMethods, store); data.receipts = claimFiles(store, req.body.fileIds || [], req.actor); row.payment = data; row.lastStatus = 'paid'; event(store, req.actor, 'paid', row.id, { details: row.payment }); for (const file of data.receipts) event(store, req.actor, 'attachment_added', row.id, { details: { name: file.name, receipt: true } }); return row }); res.json({ item }) }))
   router.post('/payables/:id/reverse', handle(async (req, res) => { const item = await mutateStore((store) => { init(store); const row = find(store, req.params.id); if (!row.payment || row.inactive) fail('Reative a conta antes de estornar.', 409); assertNotReconciled(store, 'payable', row.id, 'estornar'); const reason = clean(req.body.reason); if (reason.length < 10) fail('Informe um motivo com pelo menos 10 caracteres.'); event(store, req.actor, 'reversed', row.id, { reason, details: { payment: row.payment } }); row.payment = null; row.lastStatus = payableStatus(row); return row }); res.json({ item }) }))
   router.post('/payables/:id/activation', handle(async (req, res) => { const item = await mutateStore((store) => { init(store); const row = find(store, req.params.id); if (!row.payment || typeof req.body.inactive !== 'boolean') fail('Somente contas pagas podem ser desativadas ou reativadas.'); if (req.body.inactive) assertNotReconciled(store, 'payable', row.id, 'desativar'); if (row.inactive !== req.body.inactive) { row.inactive = req.body.inactive; event(store, req.actor, row.inactive ? 'deactivated' : 'reactivated', row.id) } return row }); res.json({ item }) }))
   router.delete('/payables/:id', handle(async (req, res) => { await mutateStore((store) => { init(store); const row = find(store, req.params.id); /* A Tesouraria entry posted by mistake is removed directly; the history keeps its data. */ if (!row.treasury && (row.payment || store.payableEvents.some((e) => e.accountId === row.id && ['paid', 'reversed'].includes(e.type)) || row.groupId || store.payables.some((r) => r.previousId === row.id))) fail('Conta com pagamento, parcelamento ou vínculo: preserve o histórico; desative quando paga.', 409); assertNotReconciled(store, 'payable', row.id, 'excluir'); event(store, req.actor, 'deleted', row.id, { details: { account: row } }); store.payables = store.payables.filter((r) => r.id !== row.id) }); res.json({ ok: true }) }))
-  router.post('/payables/uploads', express.raw({ type: 'application/octet-stream', limit: '20mb' }), handle(async (req, res) => {
-    if (!Buffer.isBuffer(req.body) || !req.body.length) fail('Selecione um arquivo, com até 20 MB.')
-    const file = { id: randomUUID(), name: path.basename(clean(req.query.name, 200)), contentType: clean(req.query.type, 160) || 'application/octet-stream', size: req.body.length, userId: req.actor.id }
+  // Files of any size: written to the disk first, then recorded; a record that is not saved removes its file.
+  router.post('/payables/uploads', handle(async (req, res) => {
+    const file = { id: randomUUID(), name: path.basename(clean(req.query.name, 200)), contentType: clean(req.query.type, 160) || 'application/octet-stream', userId: req.actor.id }
     if (!file.name) fail('Nome de arquivo inválido.')
-    await mutateStore(async (store) => { store.payableUploads ||= []; await mkdir(directory, { recursive: true }); await writeFile(path.join(directory, file.id), req.body); store.payableUploads.push(file) }); res.status(201).json({ item: { id: file.id } })
+    const received = await receiveFile(req, directory, file.id)
+    if (!received) fail('Selecione um arquivo.')
+    file.size = received.size
+    await mutateStore((store) => { store.payableUploads ||= []; store.payableUploads.push(file) }).catch(async (error) => { await received.discard(); throw error }); res.status(201).json({ item: { id: file.id } })
   }))
-  router.post('/payables/:id/files', express.raw({ type: 'application/octet-stream', limit: '20mb' }), handle(async (req, res) => {
-    if (!Buffer.isBuffer(req.body) || !req.body.length) fail('Selecione um arquivo, com até 20 MB.')
-    const file = { id: randomUUID(), name: path.basename(clean(req.query.name, 200)), contentType: clean(req.query.type, 160) || 'application/octet-stream', size: req.body.length }
+  router.post('/payables/:id/files', handle(async (req, res) => {
+    const file = { id: randomUUID(), name: path.basename(clean(req.query.name, 200)), contentType: clean(req.query.type, 160) || 'application/octet-stream' }
     if (!file.name) fail('Nome de arquivo inválido.')
-    await mutateStore(async (store) => { init(store); const row = find(store, req.params.id); attachable(row); await mkdir(directory, { recursive: true }); await writeFile(path.join(directory, file.id), req.body); row.attachments.push(file); event(store, req.actor, 'attachment_added', row.id, { details: { name: file.name } }) }); res.status(201).json({ item: file })
+    const received = await receiveFile(req, directory, file.id)
+    if (!received) fail('Selecione um arquivo.')
+    file.size = received.size
+    await mutateStore((store) => { init(store); const row = find(store, req.params.id); attachable(row); row.attachments.push(file); event(store, req.actor, 'attachment_added', row.id, { details: { name: file.name } }) }).catch(async (error) => { await received.discard(); throw error }); res.status(201).json({ item: file })
   }))
-  router.get('/payables/:id/files/:fileId', handle(async (req, res) => { const store = await readStore(); init(store); const row = find(store, req.params.id); const file = [...row.attachments, ...(row.payment?.receipts || [])].find((f) => f.id === req.params.fileId); if (!file) fail('Arquivo não encontrado.', 404); res.setHeader('Content-Type', 'application/octet-stream'); res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(file.name)}`); res.send(await readFile(path.join(directory, file.id))) }))
+  router.get('/payables/:id/files/:fileId', handle(async (req, res) => { const store = await readStore(); init(store); const row = find(store, req.params.id); const file = [...row.attachments, ...(row.payment?.receipts || [])].find((f) => f.id === req.params.fileId); if (!file) fail('Arquivo não encontrado.', 404); res.setHeader('Content-Type', 'application/octet-stream'); res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(file.name)}`); await sendStoredFile(res, path.join(directory, file.id)) }))
   router.delete('/payables/:id/files/:fileId', handle(async (req, res) => { await mutateStore((store) => { init(store); const row = find(store, req.params.id); attachable(row); const file = row.attachments.find((f) => f.id === req.params.fileId); if (!file) fail('Arquivo não encontrado.', 404); row.attachments = row.attachments.filter((f) => f.id !== file.id); event(store, req.actor, 'attachment_removed', row.id, { details: { name: file.name } }) }); res.json({ ok: true }) }))
   router.post('/payables/export', handle(async (req, res) => { const store = await sweep(); if (req.body.ids !== undefined && !Array.isArray(req.body.ids)) fail('Seleção inválida.'); const rows = req.body.id ? [find(store, req.body.id)] : filterPayables(store.payables.map((r) => view(r, store)), req.body.filters).filter((r) => !req.body.ids || req.body.ids.includes(r.id)); if (!['pdf', 'xlsx'].includes(req.body.format)) fail('Formato inválido.'); const data = report(rows, store, Boolean(req.body.id), req.body.filters); const output = req.body.format === 'pdf' ? await exportPdf(data) : await exportWorkbook(data); res.setHeader('Content-Type', req.body.format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); res.setHeader('Content-Disposition', `attachment; filename="gmac-contas-a-pagar.${req.body.format}"`); res.send(Buffer.from(output)) }))
   router.get('/suppliers', handle(async (_req, res) => { res.json({ items: (await readStore()).suppliers || [] }) }))
@@ -344,9 +378,9 @@ export default function createPayablesRouter(accounts, requireAdmin) {
     Object.assign(row, fields); event(store, req.actor, before ? 'supplier_edited' : 'supplier_created', null, { details: { before, after: row } }); return row
   }); res.json({ item }) }))
   router.delete('/suppliers/:id', handle(async (req, res) => { await mutateStore((store) => { init(store); const row = (store.suppliers || []).find((s) => s.id === req.params.id); if (!row) fail('Fornecedor não encontrado.', 404); if (store.payables.some((r) => String(r.supplierId) === row.id)) fail('Existem contas vinculadas a este fornecedor.', 409); store.suppliers = store.suppliers.filter((s) => s.id !== row.id); event(store, req.actor, 'supplier_deleted', null, { details: row }) }); res.json({ ok: true }) }))
-  router.get('/classifications', handle(async (_req, res) => { const store = await sweep(); res.json({ items: store.classifications.map((c) => ({ ...c, count: store.payables.filter((r) => r.classificationId === c.id).length })) }) }))
+  router.get('/classifications', handle(async (_req, res) => { const store = await sweep(); res.json({ items: store.classifications.map((c) => ({ ...c, count: store.payables.filter((r) => classificationParts(r).some((part) => part.classificationId === c.id)).length })) }) }))
   for (const method of ['post', 'put']) router[method](method === 'post' ? '/classifications' : '/classifications/:id', handle(async (req, res) => { const item = await mutateStore((store) => { init(store); const name = clean(req.body.name, 120); if (!name) fail('Informe o nome.'); if (store.classifications.some((c) => c.id !== req.params.id && c.name.toLocaleLowerCase() === name.toLocaleLowerCase())) fail('Classificação já cadastrada.', 409); let row = store.classifications.find((c) => c.id === req.params.id); if (method === 'put' && !row) fail('Classificação não encontrada.', 404); const before = row ? { ...row } : null; if (!row) { row = { id: randomUUID(), inactive: false }; store.classifications.push(row) } row.name = name; if (typeof req.body.inactive === 'boolean') row.inactive = req.body.inactive; event(store, req.actor, before ? 'classification_edited' : 'classification_created', null, { details: { before, after: row } }); return row }); res.json({ item }) }))
-  router.delete('/classifications/:id', handle(async (req, res) => { await mutateStore((store) => { init(store); const row = store.classifications.find((c) => c.id === req.params.id); if (!row) fail('Classificação não encontrada.', 404); if (store.payables.some((r) => r.classificationId === row.id)) fail('Existem contas usando esta classificação.', 409); store.classifications = store.classifications.filter((c) => c.id !== row.id); event(store, req.actor, 'classification_deleted', null, { details: row }) }); res.json({ ok: true }) }))
+  router.delete('/classifications/:id', handle(async (req, res) => { await mutateStore((store) => { init(store); const row = store.classifications.find((c) => c.id === req.params.id); if (!row) fail('Classificação não encontrada.', 404); if (store.payables.some((r) => classificationParts(r).some((part) => part.classificationId === row.id))) fail('Existem contas usando esta classificação.', 409); store.classifications = store.classifications.filter((c) => c.id !== row.id); event(store, req.actor, 'classification_deleted', null, { details: row }) }); res.json({ ok: true }) }))
   router.sweep = sweep
   return router
 }

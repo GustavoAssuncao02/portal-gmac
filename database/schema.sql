@@ -24,6 +24,9 @@ CREATE TABLE IF NOT EXISTS employees (
   employee_type ENUM('operator', 'administrative') NOT NULL DEFAULT 'operator',
   access_code CHAR(4) NULL UNIQUE,
   password_hash VARCHAR(255) NULL,
+  sector_id VARCHAR(64) NULL,
+  sector_ids TEXT NULL,
+  active TINYINT(1) NOT NULL DEFAULT 1,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id)
 );
@@ -37,6 +40,19 @@ CREATE TABLE IF NOT EXISTS clients (
   notes VARCHAR(1000) NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Logins of the administrators (12 h), kept across restarts of the API. Only a hash of each token is stored.
+CREATE TABLE IF NOT EXISTS admin_sessions (
+  token_hash CHAR(64) PRIMARY KEY,
+  user_key VARCHAR(64) NOT NULL,
+  user_id VARCHAR(80) NOT NULL,
+  user_name VARCHAR(200) NULL,
+  role VARCHAR(20) NOT NULL,
+  expires_at BIGINT NOT NULL,
+  created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  KEY admin_sessions_user (user_key),
+  KEY admin_sessions_expiry (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS order_operations (
   order_code VARCHAR(80) NOT NULL,
@@ -63,6 +79,7 @@ CREATE TABLE IF NOT EXISTS inventory_materials (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT,
   name VARCHAR(160) NOT NULL,
   detail VARCHAR(255) NULL,
+  unit VARCHAR(4) NOT NULL DEFAULT 'kg',
   quantity_kg DECIMAL(12,3) NOT NULL DEFAULT 0,
   minimum_kg DECIMAL(12,3) NOT NULL DEFAULT 0,
   unit_price DECIMAL(12,2) NOT NULL DEFAULT 0,

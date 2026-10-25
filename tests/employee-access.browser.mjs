@@ -43,7 +43,7 @@ async function fillEmployee(form, index, name) {
 try {
   await fixture.mutateStore((store) => { store.machines = [{ id: 'torno', name: 'Torno 01' }] })
   const offer = (await fixture.adminRequest('/offers', 'POST', offerDraft)).data.item
-  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], kind: 'service', stages: ['turning'] })
+  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], kind: 'service', stages: ['turning'], stageResources: { turning: { type: 'machine', id: 'torno' } } })
   await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', deadline: offerDraft.deadline, serviceValue: 100 } })
   const order = (await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')).data.item
 
@@ -120,17 +120,12 @@ try {
   await operator.screenshot({ path: 'test-results/operator-flow-list.png' })
   await openOrder(operator, order.service)
   assert.equal(await operator.locator('.operator-project').count(), 0, 'the OS list gives way to the OS')
+  // The stage brings the machine planned in the offer: the operator does not choose it.
   const start = operator.getByRole('button', { name: /Iniciar trabalho/ })
-  assert.equal(await start.isDisabled(), true, 'starting waits for the machine or service')
+  await operator.locator('.operator-step--resource').getByText('Máquina: Torno 01', { exact: true }).waitFor()
+  assert.equal(await start.isEnabled(), true, 'the planned machine is enough to start')
   assert.equal(await operator.getByRole('button', { name: /Concluir serviço/ }).isDisabled(), true)
   await operator.screenshot({ path: 'test-results/operator-flow-order.png' })
-  await operator.getByRole('button', { name: /Selecionar máquina \/ serviço/ }).click()
-  await operator.getByRole('region', { name: 'Máquina', exact: true }).getByRole('button', { name: 'Torno 01', exact: true }).waitFor()
-  assert.ok(await operator.getByRole('region', { name: 'Serviço', exact: true }).getByRole('button').count() > 0, 'services are listed below the machines')
-  assert.equal(await operator.locator('.operator-steps').count(), 0, 'the choice has its own screen')
-  await operator.screenshot({ path: 'test-results/operator-flow-picker.png' })
-  await operator.getByRole('region', { name: 'Máquina', exact: true }).getByRole('button', { name: 'Torno 01', exact: true }).click()
-  await operator.getByText('Máquina: Torno 01', { exact: true }).waitFor()
   await start.click()
   await operator.locator('.operator-worker').filter({ hasText: 'Ana Operadora' }).waitFor()
   await operator.getByRole('button', { name: /Pausar trabalho/ }).first().waitFor()

@@ -2,6 +2,7 @@ import express from 'express'
 import { randomUUID } from 'node:crypto'
 import { readStore, mutateStore } from './offers.js'
 import { missingMaterialRequestCodes, nextMaterialRequestCode } from './materialRequestCodes.js'
+import { materialUnit, validMaterialUnit, validQuantityFor } from './materialUnits.js'
 
 const requestIds = (store) => new Set([
   ...(store.offers || []),
@@ -84,18 +85,22 @@ export default function createMaterialRequestsRouter(requireAdmin, pool, account
   })
   router.post('/material-requests', async (request, response, next) => {
     const body = request.body || {}, quantity = Number(body.quantity)
-    if (typeof body.name !== 'string' || !body.name.trim() || body.name.length > 160 || body.detail != null && (typeof body.detail !== 'string' || body.detail.length > 500) || !Number.isFinite(quantity) || quantity < .001 || quantity > 1000000000) return response.status(400).json({ message: 'Informe o material, a especificação e uma quantidade válida em kg.' })
+    if (typeof body.name !== 'string' || !body.name.trim() || body.name.length > 160 || body.detail != null && (typeof body.detail !== 'string' || body.detail.length > 500) || !Number.isFinite(quantity) || quantity < .001 || quantity > 1000000000) return response.status(400).json({ message: 'Informe o material, a especificação e uma quantidade válida.' })
+    if (body.unit != null && !validMaterialUnit(body.unit)) return response.status(400).json({ message: 'Escolha a unidade do material: quilo ou unidade.' })
     if (body.inventoryId != null && (!Number.isInteger(Number(body.inventoryId)) || Number(body.inventoryId) <= 0)) return response.status(400).json({ message: 'Selecione um material válido do estoque.' })
     try {
       let inventory
       if (body.inventoryId != null && pool) {
-        const [[row]] = await pool.execute('SELECT id, name, detail, unit_price AS unitPrice FROM inventory_materials WHERE id = ?', [body.inventoryId])
+        const [[row]] = await pool.execute('SELECT id, name, detail, unit, unit_price AS unitPrice FROM inventory_materials WHERE id = ?', [body.inventoryId])
         if (!row) fail(404, 'Material não encontrado no estoque.')
         inventory = row
       }
+      // A material of the stock keeps its unit; a new one uses the unit chosen in the request.
+      const unit = materialUnit(inventory ? inventory.unit : body.unit)
+      if (!validQuantityFor(quantity, unit)) fail(400, 'Material contado por unidade aceita só quantidades inteiras.')
       const item = await mutateStore((store) => {
         store.manualMaterialRequests ||= []
-        const item = { id: `manual-${randomUUID()}`, code: nextMaterialRequestCode(store), manual: true, name: inventory?.name || body.name.trim(), detail: body.detail?.trim() || inventory?.detail || '', inventoryId: inventory?.id ?? (body.inventoryId != null ? Number(body.inventoryId) : null), quantity: Number(quantity.toFixed(3)), purchaseQuantity: Number(quantity.toFixed(3)), unitPrice: Number(inventory?.unitPrice || 0), requestedAt: new Date().toISOString(), requestedBy: request.adminId, requestedByName: request.adminName || null }
+        const item = { id: `manual-${randomUUID()}`, code: nextMaterialRequestCode(store), manual: true, name: inventory?.name || body.name.trim(), detail: body.detail?.trim() || inventory?.detail || '', inventoryId: inventory?.id ?? (body.inventoryId != null ? Number(body.inventoryId) : null), unit, quantity: Number(quantity.toFixed(3)), purchaseQuantity: Number(quantity.toFixed(3)), unitPrice: Number(inventory?.unitPrice || 0), requestedAt: new Date().toISOString(), requestedBy: request.adminId, requestedByName: request.adminName || null }
         store.manualMaterialRequests.unshift(item)
         return item
       })

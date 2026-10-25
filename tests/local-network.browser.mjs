@@ -40,8 +40,6 @@ try {
     await context.addInitScript(({ token, user }) => {
       sessionStorage.setItem('gmac-admin-token', token)
       sessionStorage.setItem('gmac-admin-workspace', JSON.stringify({ userId: user.id, activeNav: 'Estoque', tabs: ['Estoque'] }))
-      // Do not initialize the real stock from this empty, disposable browser profile.
-      localStorage.setItem('gmac-inventory-migrated-v1', 'true')
     }, { token, user })
     const page = await context.newPage()
     page.on('pageerror', (error) => errors.push(error.message))

@@ -3,6 +3,7 @@ import { CalendarClock, CircleCheck } from 'lucide-react'
 import { PayableModal } from './PayableModal.jsx'
 import PayableForm from './PayableForm.jsx'
 import { money, decimal, payableRequest } from './payablesApi.js'
+import { formatQuantity } from '../server/materialUnits.js'
 import './payables.css'
 
 // Quantity that actually entered the stock: a stock entry or the opening balance of a new material.
@@ -13,7 +14,7 @@ export const purchasedQuantity = (item) => Number(item.stockEntryQuantity) > 0 ?
 export default function StockPurchaseFinance({ purchase, onClose }) {
   const [mode, setMode] = useState(null), [data, setData] = useState(null), [busy, setBusy] = useState(false), [error, setError] = useState('')
   const quantity = Number(purchase.quantity) || 0, unitPrice = Number(purchase.unitPrice) || 0, totalCents = Math.round(quantity * unitPrice * 100)
-  const amount = `${quantity.toLocaleString('pt-BR')} kg`
+  const amount = formatQuantity(quantity, purchase.unit)
   async function choose(next) {
     setBusy(true); setError('')
     try { setData(await payableRequest('/payables')); setMode(next) } catch (caught) { setError(caught.message) } finally { setBusy(false) }

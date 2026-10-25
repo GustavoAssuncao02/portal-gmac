@@ -3,15 +3,17 @@ import { parseArgs } from 'node:util'
 import { mkdir, writeFile } from 'node:fs/promises'
 import mysql from 'mysql2/promise'
 import { readStore } from '../server/offers.js'
+import { configureStore } from '../server/store.js'
 import { saveRequestedMaterial } from '../server/materialRequests.js'
 import { allocateReceivedMaterial } from '../server/orderMaterials.js'
 
 const { values } = parseArgs({ options: { order: { type: 'string' }, material: { type: 'string' }, movement: { type: 'string' } } })
 if (!values.order || !values.material || !/^\d+$/.test(values.movement || '')) throw Error('Informe --order, --material e --movement para uma entrada já registrada.')
+const pool = mysql.createPool({ host: process.env.DB_HOST, port: Number(process.env.DB_PORT || 3306), user: process.env.DB_USER, password: process.env.DB_PASSWORD, database: process.env.DB_NAME })
+await configureStore(pool)
 const store = await readStore()
 const order = store.orders.find((entry) => entry.code === values.order)
 if (!order?.resources.materials.some((entry) => entry.id === values.material)) throw Error('Material não encontrado nesta OS.')
-const pool = mysql.createPool({ host: process.env.DB_HOST, port: Number(process.env.DB_PORT || 3306), user: process.env.DB_USER, password: process.env.DB_PASSWORD, database: process.env.DB_NAME })
 let connection
 try {
   const result = await saveRequestedMaterial(`${order.offerId}-${values.material}`, 'repair', async ({ order: currentOrder, material, remainingQuantity }) => {

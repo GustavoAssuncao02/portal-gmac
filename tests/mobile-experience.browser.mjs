@@ -85,7 +85,7 @@ try {
       const opener = page.getByRole('button', { name: 'Abrir menu de navegação', exact: true })
       if (await opener.isVisible()) await opener.click()
       const item = page.locator('.sidebar').getByRole('button', { name, exact: true })
-      if (!(await item.isVisible())) await page.locator('.sidebar').getByRole('button', { name: ['Fornecedores', 'Administradores', 'Funcionários', 'Clientes'].includes(name) ? 'Cadastros' : 'Gestão Financeira', exact: true }).click()
+      if (!(await item.isVisible())) await page.locator('.sidebar').getByRole('button', { name: ['Fornecedores', 'Administradores', 'Funcionários', 'Clientes'].includes(name) ? 'Cadastros' : ['Serviços em andamento', 'Serviços concluídos', 'Ofertas e serviços'].includes(name) ? 'Operação' : 'Gestão Financeira', exact: true }).click()
       await item.click()
       await page.waitForTimeout(200)
       await page.evaluate(() => window.scrollTo(0, 0))
@@ -175,10 +175,11 @@ try {
         await capture('Relatorio de horas')
       }
       if (!before && name === 'Máquinas') {
+        await fixture.adminRequest('/sectors', 'POST', { name: 'Usinagem' })
         await page.getByRole('button', { name: 'Adicionar máquina', exact: true }).click()
         await dialog().getByLabel('Nome da máquina', { exact: true }).fill(`Torno mobile ${width}`)
         await dialog().getByLabel('Tipo', { exact: true }).fill('Torno')
-        await dialog().getByLabel('Setor', { exact: true }).fill('Usinagem')
+        await dialog().getByRole('button', { name: 'Usinagem', exact: true }).click()
         await dialog().getByLabel('Valor da hora (R$)', { exact: true }).fill('90')
         await dialog().getByRole('button', { name: 'Salvar máquina', exact: true }).click()
         await page.locator('.machine-row').filter({ hasText: `Torno mobile ${width}` }).waitFor()

@@ -15,7 +15,7 @@ test('the customer proposal never shows margin, profit, costs or unit prices', (
   const numbers = sections.flatMap((section) => section.rows.flat()).filter((value) => typeof value === 'number')
   for (const hidden of [37.77, 4510.55, 250, 240, 12.5, 80, 250.5]) assert.ok(!numbers.includes(hidden), `${hidden} must not be present`)
   // Materials and labor are listed by name, specification, quantity and hours only.
-  assert.deepEqual(sections.find((section) => section.name === 'Materiais necessários').rows, [['Chapa', '10 mm', 20]])
+  assert.deepEqual(sections.find((section) => section.name === 'Materiais necessários').rows, [['Chapa', '10 mm', 20, 'kg']])
   assert.deepEqual(sections.find((section) => section.name === 'Mão de obra').rows, [['Torno', 3]])
   // Commercial conditions that the customer needs are still there.
   const conditions = sections.find((section) => section.name === 'Condições da proposta')

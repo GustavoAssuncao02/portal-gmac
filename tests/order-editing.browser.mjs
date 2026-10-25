@@ -23,8 +23,11 @@ for (const device of ['desktop', 'iPhone 15', 'iPhone 15 Pro Max']) {
     const start = pending.status === 409 ? await fixture.request(`${base}/start`, 'POST', { employeeId: employee.id, pendingMaterialsConfirmation: pending.data.pendingMaterials?.map((row) => [row.key, row.quantity]) }, operatorHeaders) : pending
     const session = { sessionId: start.data.operation.activeSession.id, sessionToken: start.data.sessionToken }
     await fixture.request(`${base}/stages/stage-1`, 'POST', { ...session, quantity: 10 }, operatorHeaders)
-    await fixture.request(`${base}/stages/stage-2`, 'POST', { ...session, quantity: 10 }, operatorHeaders)
-    await fixture.request(`${base}/complete`, 'POST', session, operatorHeaders)
+    // The finished stage ends the work; it starts again on the next one.
+    const restart = await fixture.request(`${base}/start`, 'POST', { employeeId: employee.id, stageKey: 'stage-2', pendingMaterialsConfirmation: pending.data.pendingMaterials?.map((row) => [row.key, row.quantity]) }, operatorHeaders)
+    const next = { sessionId: restart.data.session.id, sessionToken: restart.data.sessionToken }
+    await fixture.request(`${base}/stages/stage-2`, 'POST', { ...next, quantity: 10 }, operatorHeaders)
+    await fixture.request(`${base}/complete`, 'POST', next, operatorHeaders)
     await fixture.request(`${base}/acknowledge-completion`, 'POST', {})
     await page.goto(fixture.url)
     await page.getByLabel('CPF', { exact: true }).fill('12345678901')

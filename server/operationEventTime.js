@@ -2,7 +2,7 @@
 // The original time is kept in the event, and every value derived from it is recalculated.
 
 const sessionStarts = ['started', 'resumed']
-const sessionEnds = ['paused', 'completed', 'session_ended', 'admin_interrupted']
+const sessionEnds = ['paused', 'stage_completed', 'completed', 'session_ended', 'admin_interrupted']
 const resourceChanges = ['machine_changed', 'labor_service_changed', 'resource_changed']
 export const timeEditableEvents = [...sessionStarts, ...sessionEnds, ...resourceChanges, 'stage_progress']
 

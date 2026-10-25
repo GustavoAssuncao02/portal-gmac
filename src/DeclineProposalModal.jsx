@@ -1,6 +1,7 @@
 import { useId, useState } from 'react'
 import { PayableModal } from './PayableModal.jsx'
 import { declineReasons, osValueOf } from '../server/proposalMath.js'
+import { formatQuantity } from '../server/materialUnits.js'
 
 // The customer said no to the proposal sent. The offer is closed as declined and the option counts in its acceptance rate.
 export default function DeclineProposalModal({ offer, onConfirm, onClose }) {
@@ -49,7 +50,7 @@ export function AcceptOfferModal({ offer, onConfirm, onClose }) {
     <p><strong>{offer.code} · {offer.service}</strong></p>
     <dl className="offer-decision-facts"><div><dt>Opção</dt><dd>Proposta {offer.proposal?.key}</dd></div><div><dt>Valor da OS</dt><dd>{brl(osValueOf(offer.proposal))}</dd></div><div><dt>Quantidade</dt><dd>{offer.quantity} un</dd></div></dl>
     <p>A OS será gerada agora e aparecerá para os operadores.{materials.length ? ' O material disponível sai do estoque neste momento:' : ''}</p>
-    {materials.length > 0 && <ul className="offer-decision-list">{materials.map((material) => <li key={material.id}>{material.name}{material.detail ? ` (${material.detail})` : ''}: {Number(material.quantity).toLocaleString('pt-BR')} kg</li>)}</ul>}
+    {materials.length > 0 && <ul className="offer-decision-list">{materials.map((material) => <li key={material.id}>{material.name}{material.detail ? ` (${material.detail})` : ''}: {formatQuantity(material.quantity, material.unit)}</li>)}</ul>}
     {error && <p className="admin-tool-error" role="alert">{error}</p>}
   </PayableModal>
 }

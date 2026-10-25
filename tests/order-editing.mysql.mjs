@@ -47,7 +47,7 @@ try {
   // Finished again, with an account receivable: reopening can take it along, in the same transaction as the operation.
   await pool.execute('UPDATE order_operations SET data = ? WHERE order_code = ?', [JSON.stringify({ ...stored, status: 'completed', completedAt: '2026-10-04T10:00:00Z', completionAcknowledgedAt: '2026-10-04T10:01:00Z' }), order.code])
   const { issueAdminToken } = await import(pathToFileURL(path.join(fixture.directory, 'accounts.js')).href)
-  const manager = { Authorization: `Bearer ${issueAdminToken({ id: inserted.insertId, name: 'Gestor Teste' })}` }
+  const manager = { Authorization: `Bearer ${await issueAdminToken({ id: inserted.insertId, name: 'Gestor Teste' })}` }
   const account = await fixture.request('/receivables', 'POST', { orderCode: order.code, value: '300', dueDate: '2099-01-10' }, manager)
   assert.equal(account.status, 201, JSON.stringify(account.data))
   const blocked = await fixture.request(`/operations/orders/${order.code}/reopen`, 'POST', { receivables: 'maybe' }, manager)

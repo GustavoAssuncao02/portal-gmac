@@ -37,7 +37,8 @@ test('repeated materials share available stock without changing the inventory ba
   assert.deepEqual(checked.map((row) => row.purchaseQuantity), [0, 1, 0])
   assert.deepEqual(checked.map((row) => row.groupPurchaseQuantity), [1, 1, 0])
   assert.deepEqual(checked.map((row) => row.groupStockStatus), ['partial', 'partial', 'available'])
-  const requests = purchaseMaterialRequests([{ id: 'offer', resources: { materials: checked } }], [])
+  assert.equal(purchaseMaterialRequests([{ id: 'offer', resources: { materials: checked } }], []).length, 0, 'an offer not yet accepted requests nothing')
+  const requests = purchaseMaterialRequests([{ id: 'offer', orderCode: 'OS-1', resources: { materials: checked } }], [])
   assert.equal(requests.length, 1)
   assert.equal(requests[0].quantity, 1)
   assert.equal(requests[0].id, 'offer-second')
@@ -110,25 +111,26 @@ test('inventory pending requests follow offers until the material is registered,
   const materials = [{ id: 'new', name: 'Titanio', detail: 'Chapa de teste', quantity: 12.5, unitPrice: 20, stockStatus: 'unknown' }, { id: 'existing', name: 'Aluminio', quantity: 10, stockAvailable: 8, stockStatus: 'partial' }]
   const offer = { id: 'offer', code: 'OF-TEST', resources: { materials } }
   const inventory = [{ id: 1, name: 'Alum\u00ednio', quantity: 8 }]
-  const before = pendingInventoryRequests([offer], [], inventory)
+  assert.equal(pendingInventoryRequests([offer], [], inventory).length, 0, 'the request appears only when the offer is accepted')
+  const accepted = { ...offer, orderCode: 'OS-TEST' }
+  const before = pendingInventoryRequests([accepted], [], inventory)
   assert.equal(before.length, 1)
   assert.equal(before[0].name, 'Titanio')
   assert.equal(before[0].quantity, 12.5)
   assert.equal(before[0].detail, 'Chapa de teste')
   assert.equal(before[0].unitPrice, 20)
-  assert.equal(before[0].os, 'OF-TEST')
+  assert.equal(before[0].os, 'OS-TEST')
   const saved = [{ id: before[0].id, status: 'purchase-requested' }]
-  const accepted = { ...offer, orderCode: 'OS-TEST' }
   const after = pendingInventoryRequests([accepted], [{ offerId: offer.id, code: 'OS-TEST', resources: offer.resources }], inventory, saved)
   assert.equal(after.length, 1)
   assert.equal(after[0].os, 'OS-TEST')
   assert.equal(after[0].status, 'purchase-requested')
   assert.equal(pendingInventoryRequests([accepted], [], [...inventory, { id: 2, name: 'Tit\u00e2nio', quantity: 0 }], saved).length, 0)
-  assert.equal(pendingInventoryRequests([{ ...offer, resources: { materials: [] } }], [], inventory, saved).length, 0)
+  assert.equal(pendingInventoryRequests([{ ...accepted, resources: { materials: [] } }], [], inventory, saved).length, 0)
 })
 
 test('new materials enter purchase orders directly without pre-registration approval', () => {
-  const offer = { id: 'offer', code: 'OF-TEST', resources: { materials: [
+  const offer = { id: 'offer', code: 'OF-TEST', orderCode: 'OS-TEST', resources: { materials: [
     { id: 'new', name: 'Titanio', quantity: 12.5, stockStatus: 'unknown' },
     { id: 'legacy', name: 'Material antigo', quantity: 7 },
     { id: 'partial', name: 'Aluminio', quantity: 10, stockAvailable: 8, stockStatus: 'partial' },

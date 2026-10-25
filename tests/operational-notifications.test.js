@@ -24,17 +24,17 @@ test('all four administrator notices are shared, deduplicated, individually read
   const offer = (await request('/offers', 'POST', offerDraft)).data.item
   const resources = { materials: [{ id: 'titanio', name: 'Titanio', quantity: 10, unitPrice: 20, purchaseQuantity: 10, stockStatus: 'unknown' }], laborEntries: [], stages: ['painting'], kind: 'service' }
   assert.equal((await request(`/offers/${offer.id}/resources`, 'PUT', resources)).status, 200)
-  assert.equal((await alerts()).length, 1)
-  assert.equal((await alerts())[0].type, 'material-request')
-  await request(`/offers/${offer.id}/resources`, 'PUT', resources)
-  assert.equal((await alerts()).length, 1, 'Autosaving the same material does not duplicate the request alert')
   await request(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', deadline: offer.deadline, serviceValue: 100 } })
+  assert.deepEqual(await alerts(), [], 'the missing material is requested only when the offer is accepted')
   const accepted = await request(`/offers/${offer.id}/accept`, 'POST')
   assert.equal(accepted.status, 201)
   const order = accepted.data.item
-  assert.equal((await alerts()).filter((item) => item.type === 'service-added').length, 1)
+  // Whoever accepted already knows about the new OS; the other administrator is told.
+  assert.deepEqual((await alerts()).map((item) => item.type), ['material-request'])
+  const secondTypes = async () => (await fixture.request('/notifications', 'GET', undefined, secondAuth)).data.items.map((item) => item.type).sort()
+  assert.deepEqual(await secondTypes(), ['material-request', 'service-added'])
   await request(`/offers/${offer.id}/accept`, 'POST')
-  assert.equal((await alerts()).length, 2)
+  assert.deepEqual(await secondTypes(), ['material-request', 'service-added'], 'accepting again does not duplicate the alerts')
 
   const employee = (await request('/employees', 'POST', { name: 'Ana Teste', cpf: '00000000001', birthDate: '1990-01-01', email: 'ana@example.invalid', identification: '001' })).data.item
   const operatorAuth = { Authorization: `Bearer ${fixture.operatorToken}` }
@@ -51,7 +51,7 @@ test('all four administrator notices are shared, deduplicated, individually read
   inventory = [{ ...inventory[0], quantity: 4 }]
   assert.equal((await alerts()).filter((item) => item.type === 'low-stock').length, 1)
   await Promise.all([alerts(), alerts(), alerts()])
-  assert.equal((await alerts()).length, 4)
+  assert.equal((await alerts()).length, 3)
   const read = await request('/notifications/read-all', 'POST', { userId: second.id })
   assert.ok(read.data.items.every((item) => item.readAt))
   assert.ok((await fixture.request('/notifications', 'GET', undefined, secondAuth)).data.items.every((item) => !item.readAt))
@@ -77,6 +77,78 @@ test('all four administrator notices are shared, deduplicated, individually read
   assert.equal(final.find((item) => !item.readAt).quantity, 3)
   await request(`/material-requests/${offer.id}-titanio/reject`, 'POST')
   assert.equal((await alerts()).filter((item) => item.type === 'material-request').length, 1)
+})
+
+test('a saved proposal keeps the four options, notifies the other administrators and follows their preference', async (t) => {
+  const fixture = await createWorkflowFixture({ accountsEnv: notificationTestEnv })
+  t.after(() => fixture.close())
+  const signIn = async (cpf, password) => ({ Authorization: `Bearer ${(await fixture.request('/auth/login', 'POST', { cpf, password })).data.token}` })
+  const auth = await signIn(notificationTestEnv.DEMO_ADMIN_CPF, notificationTestEnv.DEMO_ADMIN_PASSWORD)
+  const request = (route, method, body) => fixture.request(route, method, body, auth)
+  assert.equal((await request('/admins', 'POST', { name: 'Segundo Admin', birthDate: '1990-01-01', cpf: '00000000002', email: 'segundo@example.invalid', password: 'teste123' })).status, 200)
+  const otherAuth = await signIn('00000000002', 'teste123')
+  const other = (route, method, body) => fixture.request(route, method, body, otherAuth)
+  const noticesOf = async (send) => (await send('/notifications')).data.items.filter((item) => item.type === 'proposal-saved')
+  const saved = () => noticesOf(other)
+  const offer = (await request('/offers', 'POST', offerDraft)).data.item
+  const route = `/offers/${offer.id}/proposal-draft`
+  const options = ['A', 'B', 'C', 'D'].map((key, index) => ({ key, margin: 15 + index * 5, discount: index, deadline: '2026-12-24' }))
+  assert.equal((await fixture.request(route, 'PUT', { selectedKey: 'B', options })).status, 401)
+  assert.equal((await fixture.request(route, 'PUT', { selectedKey: 'B', options }, { Authorization: `Bearer ${fixture.operatorToken}` })).status, 401)
+  for (const body of [{ selectedKey: 'E', options }, { selectedKey: 'B', options: options.slice(1) }, { selectedKey: 'B', options: [{ ...options[0], margin: '15' }, ...options.slice(1)] }, { selectedKey: 'B', options: [{ ...options[0], discount: 101 }, ...options.slice(1)] }]) {
+    assert.equal((await request(route, 'PUT', body)).status, 400)
+  }
+  assert.deepEqual(await saved(), [])
+
+  const response = await request(route, 'PUT', { selectedKey: 'B', options: [...options].reverse() })
+  assert.equal(response.status, 200)
+  const { savedAt, savedBy, ...draft } = response.data.item.proposalDraft
+  assert.deepEqual(draft, { selectedKey: 'B', options, savedByName: notificationTestEnv.DEMO_ADMIN_NAME })
+  assert.ok(savedAt && savedBy != null)
+  assert.deepEqual((await request('/offers')).data.items.find((item) => item.id === offer.id).proposalDraft, response.data.item.proposalDraft)
+  const [notice] = await saved()
+  assert.equal(notice.title, 'Proposta salva')
+  assert.equal(notice.offerId, offer.id)
+  assert.equal(notice.employeeName, notificationTestEnv.DEMO_ADMIN_NAME)
+  assert.match(notice.description, /Proposta B$/)
+  assert.deepEqual(await noticesOf(request), [], 'whoever saved is not notified of their own save')
+  await request(route, 'PUT', { selectedKey: 'C', options })
+  assert.equal((await saved()).length, 2, 'every save is a new notice')
+  assert.equal((await other(route, 'PUT', { selectedKey: 'D', options })).status, 200)
+  assert.deepEqual((await noticesOf(request)).map((item) => item.employeeName), ['Segundo Admin'], 'the first administrator hears of the second one save')
+  assert.equal((await saved()).length, 2)
+  const read = await request('/notifications/read-all', 'POST')
+  assert.ok(read.data.items.every((item) => item.readAt))
+  assert.ok((await saved()).every((item) => !item.readAt), 'reading is still individual')
+
+  await other('/account/notifications', 'PATCH', { proposalSaved: false })
+  assert.deepEqual(await saved(), [])
+  await other('/account/notifications', 'PATCH', { proposalSaved: true })
+  assert.equal((await saved()).length, 2)
+
+  assert.equal((await request(`/offers/${offer.id}/reject`, 'POST')).status, 200)
+  assert.equal((await request(route, 'PUT', { selectedKey: 'A', options })).status, 404, 'a declined offer is not quoted anymore')
+})
+
+test('an accepted offer tells the other administrators about the new OS, not the one who accepted it', async (t) => {
+  const fixture = await createWorkflowFixture({ accountsEnv: notificationTestEnv })
+  t.after(() => fixture.close())
+  const signIn = async (cpf, password) => ({ Authorization: `Bearer ${(await fixture.request('/auth/login', 'POST', { cpf, password })).data.token}` })
+  const auth = await signIn(notificationTestEnv.DEMO_ADMIN_CPF, notificationTestEnv.DEMO_ADMIN_PASSWORD)
+  const request = (route, method, body) => fixture.request(route, method, body, auth)
+  assert.equal((await request('/admins', 'POST', { name: 'Segundo Admin', birthDate: '1990-01-01', cpf: '00000000002', email: 'segundo@example.invalid', password: 'teste123' })).status, 200)
+  const otherAuth = await signIn('00000000002', 'teste123')
+  const added = async (headers) => (await fixture.request('/notifications', 'GET', undefined, headers)).data.items.filter((item) => item.type === 'service-added')
+  const offer = (await request('/offers', 'POST', offerDraft)).data.item
+  assert.equal((await request(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], stages: ['cutting'], kind: 'service' })).status, 200)
+  const generated = await request(`/offers/${offer.id}/proposal`, 'POST', { proposal: { key: 'A', title: 'Teste', deadline: '2026-12-20', serviceValue: 600, materials: 0, labor: 600, margin: 0, discount: 0, profit: 0 }, layout: 'classic' })
+  assert.equal(generated.status, 200, generated.data.message)
+  const accepted = await request(`/offers/${offer.id}/accept`, 'POST')
+  assert.equal(accepted.status, 201)
+  assert.deepEqual(await added(auth), [], 'whoever accepted already knows')
+  const [notice] = await added(otherAuth)
+  assert.equal(notice.title, 'Novo serviço em andamento')
+  assert.equal(notice.orderCode, accepted.data.item.code)
 })
 
 test('inventory notices include OS consumption, minimum changes and new low-stock materials without startup floods', () => {

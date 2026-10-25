@@ -17,18 +17,14 @@ export async function openOrder(page, text) {
   await page.locator('.operator-steps').waitFor()
 }
 
-// Step 1 opens the machine/service screen; choosing returns to the OS. Step 2 starts the work.
-export async function chooseResource(page, group, name) {
-  await page.getByRole('button', { name: /Selecionar máquina \/ serviço/ }).click()
-  const option = page.getByRole('region', { name: group, exact: true }).getByRole('button', { name, exact: true })
-  await option.click()
-  await page.locator('.operator-steps').waitFor()
-}
-
-export async function startWork(page, group, name) {
-  await chooseResource(page, group, name)
+// The stage brings the machine or service planned for it in the offer: step 1 shows it and step 2 starts the work there.
+export async function startWork(page, resourceName) {
+  if (resourceName) await page.locator('.operator-step--resource').getByText(resourceName, { exact: false }).waitFor()
   await page.getByRole('button', { name: /Iniciar trabalho/ }).click()
 }
+
+// The machine or service of every stage, planned in the offer: `plan` maps each stage code to a machine or service id.
+export const stagePlans = (stages, choice) => Object.fromEntries(stages.map((code) => [code, choice]))
 
 // Session value of an operator already identified, for pages opened straight on the project list.
 export const identifiedOperator = ({ id, name, identification }) => ['gmac-operator-employee', JSON.stringify({ id, name, identification })]

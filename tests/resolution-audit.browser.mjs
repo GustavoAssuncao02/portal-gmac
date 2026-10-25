@@ -92,7 +92,7 @@ try {
     }
     async function navigate(name) {
       const button = page.locator('.sidebar').getByRole('button', { name, exact: true })
-      if (!(await button.isVisible())) await page.locator('.sidebar').getByRole('button', { name: ['Fornecedores', 'Administradores', 'Funcionários', 'Clientes'].includes(name) ? 'Cadastros' : 'Gestão Financeira', exact: true }).click()
+      if (!(await button.isVisible())) await page.locator('.sidebar').getByRole('button', { name: ['Fornecedores', 'Administradores', 'Funcionários', 'Clientes'].includes(name) ? 'Cadastros' : ['Serviços em andamento', 'Serviços concluídos', 'Ofertas e serviços'].includes(name) ? 'Operação' : 'Gestão Financeira', exact: true }).click()
       await button.click()
       await page.evaluate(() => window.scrollTo(0, 0))
     }

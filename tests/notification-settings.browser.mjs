@@ -42,7 +42,7 @@ try {
   assert.equal(await preference.inputValue(), '3')
   assert.deepEqual(await preference.locator('option').allTextContents(), ['3 dias antes do vencimento', '5 dias antes do vencimento', '7 dias antes do vencimento', 'Nunca'])
   await waitBadge(1)
-  assert.equal(await page.getByLabel('Senha atual', { exact: true }).inputValue(), '')
+  assert.equal(await page.getByLabel('Senha atual', { exact: true }).count(), 0, 'notifications are saved without the account password')
   await selectAndSave('5', 2)
   assert.equal((await request('/account/notifications')).data.settings.payableReminderDays, 5)
   assert.equal((await request('/auth/session')).data.user.name, 'Gustavo')
@@ -78,6 +78,7 @@ try {
     await page.screenshot({ path: `test-results/notification-settings-mobile-${width}.png`, fullPage: true })
   }
   await page.setViewportSize({ width: 1366, height: 900 })
+  await page.getByRole('button', { name: 'Editar dados e senha', exact: true }).click()
   await page.getByLabel('Nome', { exact: true }).fill('Gustavo Atualizado')
   await page.getByLabel('Senha atual', { exact: true }).fill(env.DEMO_ADMIN_PASSWORD)
   await page.getByRole('button', { name: 'Salvar alterações', exact: true }).click()

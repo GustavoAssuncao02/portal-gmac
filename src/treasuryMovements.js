@@ -5,7 +5,7 @@ const day = (time) => new Date(time).toISOString().slice(0, 10)
 
 // Cash book: every amount actually paid or received, posted in Tesouraria or settled in Contas a Pagar / Receber.
 export function treasuryMovements(payables = [], receivables = []) {
-  const movement = (row, type, settlement, name, document, origin) => ({ id: row.id, type, date: settlement.date, name, document: document || null, description: row.description || '', classification: row.classificationName || '', documentNumber: row.documentNumber || '', orderCode: row.orderCode || null, method: settlement.method, cents: settlement.finalCents, direct: Boolean(row.treasury), origin: row.treasury ? 'Tesouraria' : origin })
+  const movement = (row, type, settlement, name, document, origin) => ({ id: row.id, type, date: settlement.date, name, document: document || null, description: row.description || '', classification: row.classificationName || '', documentNumber: row.documentNumber || '', orderCode: row.orderCode || null, method: settlement.method, bankId: settlement.bankId || null, bankName: settlement.bankName || '', cents: settlement.finalCents, direct: Boolean(row.treasury), origin: row.treasury ? 'Tesouraria' : origin })
   return [
     ...payables.filter((row) => row.payment).map((row) => movement(row, 'out', row.payment, row.supplierName, row.supplierDocument, 'Contas a Pagar')),
     ...receivables.filter((row) => row.receipt).map((row) => movement(row, 'in', row.receipt, row.customerName, row.customerDocument, 'Contas a Receber')),
@@ -13,7 +13,7 @@ export function treasuryMovements(payables = [], receivables = []) {
 }
 
 export function filterMovements(rows, filters = {}) {
-  return rows.filter((row) => (!filters.start || row.date >= filters.start) && (!filters.end || row.date <= filters.end) && (!filters.direct || row.direct)
+  return rows.filter((row) => (!filters.start || row.date >= filters.start) && (!filters.end || row.date <= filters.end) && (!filters.direct || row.direct) && (!filters.bankId || row.bankId === filters.bankId)
     && matchesSearch({ id: row.id, supplierName: row.name, supplierDocument: row.document, description: `${row.description} ${row.classification} ${row.origin}`, documentNumber: row.documentNumber, orderCode: row.orderCode, valueCents: row.cents }, filters.search))
 }
 

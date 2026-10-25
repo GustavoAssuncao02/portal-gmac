@@ -1,7 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import postcss from 'postcss'
 
-const files = ['operator.css', 'employeeActivity.css', 'orderEditing.css', 'orderDetails.css', 'adminHome.css', 'notifications.css', 'adminTools.css', 'payables.css', 'proposalDocuments.css', 'machineHistory.css', 'styles.css', 'desktop.css', 'mobile.css']
+const files = ['operator.css', 'employeeActivity.css', 'orderEditing.css', 'orderDetails.css', 'adminHome.css', 'notifications.css', 'adminTools.css', 'payables.css', 'proposalDocuments.css', 'machineHistory.css', 'machineUsage.css', 'planning.css', 'styles.css', 'desktop.css', 'mobile.css']
 const allowed = /^(color|background.*|border.*|outline.*|box-shadow|text-shadow|fill|stroke|accent-color|caret-color|text-decoration-color)$/
 const bytes = (hex) => {
   const value = hex.slice(1)
@@ -66,6 +66,46 @@ for (const file of files) {
 }
 await writeFile(new URL('../src/darkTheme.generated.css', import.meta.url), `${output.toString()}\n`, 'utf8')
 console.log(`Dark palette generated from ${files.length} stylesheets.`)
+
+// "Escuro intenso" is the dark mode on true black: every dark rule (generated or hand-written) is repeated under
+// [data-tone="black"], with the navy surfaces, borders and greyish-blue texts turned neutral. Accents, status
+// colors and charts keep their hue, so everything validated for the dark mode still reads the same way.
+const darkToken = '[data-theme="dark"]'
+function blackColor(hex) {
+  const [hue, saturation, light] = hsl(bytes(hex))
+  const alpha = hex.length === 9 ? hex.slice(7) : hex.length === 5 ? hex[4].repeat(2) : ''
+  const cool = hue >= 180 && hue <= 250
+  let result
+  if (light >= .5) result = cool && saturation < .55 ? chromatic(hue, Math.min(saturation, .05), light) : hex.slice(0, 7)
+  else if (saturation < .15 || (cool && (saturation < .5 || light < .22))) result = chromatic(hue, .03, light * .6)
+  else result = light < .3 ? chromatic(hue, saturation, light * .8) : hex.slice(0, 7)
+  return result + alpha
+}
+const blackValue = (value) => value.replace(/#[\da-f]{8}\b|#[\da-f]{6}\b|#[\da-f]{4}\b|#[\da-f]{3}\b/gi, (hex) => blackColor(hex.length < 6 ? `#${[...hex.slice(1, 4)].map((letter) => letter + letter).join('')}${hex.length === 5 ? hex[4].repeat(2) : ''}` : hex))
+  .replace(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([\d.]+))?\s*\)/g, (_, r, g, b, alpha) => blackColor(`#${[r, g, b].map((value) => Number(value).toString(16).padStart(2, '0')).join('')}`) + (alpha == null ? '' : Math.round(Number(alpha) * 255).toString(16).padStart(2, '0')))
+const black = postcss.root()
+black.append(postcss.comment({ text: 'Generated from every dark mode rule. Run npm run theme:build after changing the dark palette.' }))
+const handWritten = await Promise.all([...files, 'theme.css'].map(async (file) => postcss.parse(await readFile(new URL(`../src/${file}`, import.meta.url), 'utf8'))))
+for (const source of [output, ...handWritten]) {
+  source.walkRules((rule) => {
+    if (rule.parent.type === 'atrule' && /keyframes$/i.test(rule.parent.name)) return
+    const selectors = rule.selectors.filter((selector) => selector.includes(darkToken) && !selector.includes('data-tone'))
+    if (!selectors.length) return
+    const declarations = rule.nodes.filter((node) => node.type === 'decl' && (allowed.test(node.prop) || node.prop.startsWith('--'))).map((node) => ({ node, value: blackValue(node.value) })).filter(({ node, value }) => node.value !== value)
+    if (!declarations.length) return
+    const scoped = postcss.rule({ selector: selectors.map((selector) => selector.replace(darkToken, `${darkToken}[data-tone="black"]`)).join(', ') })
+    for (const { node, value } of declarations) scoped.append({ prop: node.prop, value, important: node.important })
+    let child = scoped
+    for (let ancestor = rule.parent; ancestor.type !== 'root'; ancestor = ancestor.parent) {
+      if (ancestor.type !== 'atrule') continue
+      const wrapper = postcss.atRule({ name: ancestor.name, params: ancestor.params })
+      wrapper.append(child); child = wrapper
+    }
+    black.append(child)
+  })
+}
+await writeFile(new URL('../src/blackTheme.generated.css', import.meta.url), `${black.toString()}\n`, 'utf8')
+console.log('Black ("escuro intenso") palette generated from the dark mode rules.')
 
 // Fixed pixel sizes need explicit overrides; inherited sizes keep their existing ratios.
 const typography = postcss.root()

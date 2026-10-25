@@ -5,6 +5,8 @@ import { activityDateRange } from './employeeActivity.js'
 import { activeSessions } from './operationSessions.js'
 import { requireAdminOrOperator } from './access.js'
 import { duration, hourReport, ordersWithOperations, workIntervals } from './reportData.js'
+import { registerSectorNames } from './registries.js'
+import { machineSectors, sectorLabel } from './machines.js'
 
 const defaults = [
   ['Tornearia', 'Usinagem', 85], ['Fresagem', 'Usinagem', 90],
@@ -16,7 +18,7 @@ const defaults = [
 export async function ensureLaborServices() {
   if (Array.isArray((await readStore()).laborServices)) return
   await mutateStore((store) => {
-    if (!Array.isArray(store.laborServices)) store.laborServices = defaults.map(([name, sector, hourlyRate]) => ({ id: randomUUID(), name, type: 'Hora homem', sector, hourlyRate, createdAt: new Date().toISOString() }))
+    if (!Array.isArray(store.laborServices)) store.laborServices = defaults.map(([name, sector, hourlyRate]) => ({ id: randomUUID(), name, type: 'Hora homem', sectors: [sector], sector, hourlyRate, createdAt: new Date().toISOString() }))
   })
 }
 export async function laborServiceRows() { return (await readStore()).laborServices || [] }
@@ -51,13 +53,16 @@ export default function createLaborServicesRouter(requireAdmin, pool) {
   })
   for (const method of ['post', 'put']) router[method](method === 'post' ? '/labor-services' : '/labor-services/:id', requireAdmin, async (request, response, next) => {
     try {
-      const { name, type = 'Hora homem', sector = '', hourlyRate } = request.body || {}
+      // Like the machines, a service may belong to more than one sector, chosen from Cadastros > Setores.
+      const { name, type = 'Hora homem', hourlyRate } = request.body || {}
+      const sectors = machineSectors(request.body || {}), sector = sectorLabel(sectors)
       if (typeof name !== 'string' || !name.trim() || name.length > 160 || typeof type !== 'string' || type.length > 100 || typeof sector !== 'string' || sector.length > 100 || hourlyRate == null || hourlyRate === '' || !['number', 'string'].includes(typeof hourlyRate) || !Number.isFinite(Number(hourlyRate)) || Number(hourlyRate) < 0) return response.status(400).json({ message: 'Informe nome e valor por hora válidos.' })
       const item = await mutateStore((store) => {
         store.laborServices ||= []
         const row = method === 'post' ? { id: randomUUID(), createdAt: new Date().toISOString() } : store.laborServices.find((entry) => String(entry.id) === request.params.id)
         if (!row) return null
-        Object.assign(row, { name: name.trim(), type: type.trim(), sector: sector.trim(), hourlyRate: Number(hourlyRate) })
+        const names = registerSectorNames(store, sectors)
+        Object.assign(row, { name: name.trim(), type: type.trim(), sectors: names, sector: sectorLabel(names), hourlyRate: Number(hourlyRate) })
         if (method === 'post') store.laborServices.push(row)
         return row
       })

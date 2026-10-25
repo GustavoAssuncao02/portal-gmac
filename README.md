@@ -10,7 +10,7 @@ Valores são validados em centavos. Duplicidades por fornecedor, valor e vencime
 
 O Mini BI filtra por **vencimento** e agrupa pagamentos pela **data da baixa**, incluindo contas desativadas e valores efetivamente pagos. Os gráficos aplicam filtros na própria tela. PDF e Excel respeitam os filtros ou a seleção atual. Notificações de três dias antes e do dia do vencimento usam o sininho existente; a API verifica vencimentos a cada minuto enquanto estiver em execução e o portal atualiza a lista a cada 30 segundos.
 
-O módulo usa a persistência JSON serializada e os anexos privados em `server/data/`, seguindo o fluxo local já utilizado pelas ofertas/OS. Faça backup dessa pasta; não é enviada ao GitHub. O acesso às contas, anexos, histórico e exportações exige sessão administrativa. Não há contas financeiras fictícias criadas automaticamente.
+Os dados do módulo ficam no MySQL; os anexos privados ficam em `server/data/` (ou em `DATA_DIR`), e o banco guarda o nome e o caminho de cada arquivo. Faça backup do banco e dessa pasta; ela não é enviada ao GitHub. O acesso às contas, anexos, histórico e exportações exige sessão administrativa. Não há contas financeiras fictícias criadas automaticamente.
 
 A busca encontra contas também pelo valor ("1.234,56", "1234,56" ou "1234.56") e pelo CPF/CNPJ do fornecedor. Os filtros de situação mostram a quantidade e o total em reais, há atalhos de vencimento (hoje, próximos 7 dias, este mês) e a seleção em massa exibe a soma antes da baixa. Os campos de valor aceitam o formato brasileiro. O fornecedor pode ser cadastrado sem sair do formulário, e a classificação usada por último com ele é sugerida. Na baixa, digitar o valor pago preenche juros ou desconto. Contas recorrentes podem gerar as próximas ocorrências de uma vez (até 24); cada ocorrência é independente, e a oferta de "próxima recorrência" após o pagamento só aparece quando a série acaba. PDFs e imagens anexados podem ser visualizados sem download.
 
@@ -73,7 +73,7 @@ O **catálogo fiscal** é atualizado todo domingo à meia-noite (horário da Bah
 - NCM: BrasilAPI;
 - atividades registradas nos CNPJs das duas empresas: BrasilAPI, com a cnpj.ws como reserva.
 
-Uma fonte fora do ar não apaga a versão anterior, e a tentativa se repete em 6 horas. O catálogo também pode ser atualizado manualmente. Ele fica em `server/data/fiscal-catalog.json`. Para desligar a atualização automática, use `FISCAL_CATALOG_SYNC=off`.
+Uma fonte fora do ar não apaga a versão anterior, e a tentativa se repete em 6 horas. O catálogo também pode ser atualizado manualmente. Ele fica nas tabelas `fiscal_codes` e `fiscal_catalog` do MySQL. Para desligar a atualização automática, use `FISCAL_CATALOG_SYNC=off`.
 
 As fontes Arial, Calibri e Berlin Sans do Windows são usadas quando presentes. Fora do Windows, o sistema usa equivalentes de mesmas medidas: Helvetica e Carlito. O título "Proposta Comercial" usa a Montserrat. Carlito e Montserrat têm licença OFL e ficam em `server/assets/fonts`. O logo vetorial fica em `server/proposalBrand.js`.
 
@@ -100,7 +100,7 @@ Para testes temporários, `TEST_LOGIN_ENABLED=true` em `.env` permite clicar em 
 
 ## Ofertas e ordens de serviço
 
-As solicitações inseridas manualmente, propostas e ordens de serviço são gravadas pela API em `server/data/offers.json`. Anexos e PDFs ficam em `server/data/files/` e continuam disponíveis após reiniciar o servidor. O limite por anexo é 20 MB. A tela **Pedidos** lista materiais cuja compra foi solicitada, com acesso à OS relacionada. Materiais novos ficam no pré-cadastro do estoque até a aprovação da compra.
+As solicitações inseridas manualmente, propostas e ordens de serviço são gravadas pela API no MySQL. Anexos e PDFs ficam em `server/data/files/` e continuam disponíveis após reiniciar o servidor. Os anexos não têm limite de tamanho: o arquivo vai direto para o disco, sem passar inteiro pela memória do servidor (o servidor da hospedagem pode ter um limite próprio de upload). A tela **Pedidos** lista materiais cuja compra foi solicitada, com acesso à OS relacionada. Materiais novos ficam no pré-cadastro do estoque até a aprovação da compra.
 
 Para usar esse fluxo, inicie o frontend e a API juntos com `npm run dev`. A configuração do MySQL é opcional para ofertas e OS; o estoque e a autenticação continuam usando as integrações já existentes.
 
@@ -110,7 +110,7 @@ No login, escolha **Operador** para usar a conta compartilhada. Configure `OPERA
 
 As etapas de cada OS vêm da proposta aceita. Cada etapa conta de 0 até a quantidade de peças da OS; uma etapa posterior só pode registrar peças já concluídas na etapa anterior. O sistema grava início, retomada, peças por etapa, pausa com motivo, conclusão e interrupção administrativa, incluindo horário, funcionário e sessão. O tempo ativo acumulado e o tempo da sessão são mostrados na tela do operador. O painel do admin consulta esses dados a cada 10 segundos.
 
-Com MySQL configurado, aplique `database/migrations/003_operator_workflow.sql` em bancos existentes. Funcionários, estado operacional e histórico ficam no MySQL. Sem MySQL, esses dados são persistidos em `server/data/offers.json` para uso local. As ofertas e o conteúdo principal das OS continuam nesse arquivo.
+Com MySQL configurado, aplique `database/migrations/003_operator_workflow.sql` em bancos existentes. Funcionários, estado operacional e histórico ficam no MySQL, assim como as ofertas e o conteúdo das OS.
 
 ## Configurar o MySQL
 
@@ -132,7 +132,7 @@ As rotas `/api` aceitam ate 200 requisicoes por minuto por IP, somadas entre tod
 
 O estoque anterior do navegador e copiado para a chave local `gmac-inventory-before-mysql` antes da primeira importacao. Materiais ausentes sao importados para o MySQL; saldos ja existentes no servidor nao sao sobrescritos por caches de outros computadores. Um navegador novo so inicializa o catalogo de demonstracao quando o estoque compartilhado esta vazio. Edicoes e entradas usam os IDs e saldos retornados pelo servidor; a tela consulta o estoque a cada 10 segundos.
 
-Ofertas, conteudo das OS, maquinas, aprovacoes de compra e contas a pagar continuam em `server/data/`, agora compartilhados pela mesma API. A primeira sessao administrativa importa aprovacoes validas do navegador sem apagar as de outros computadores; novas aprovacoes sao persistidas no servidor e consultadas a cada 10 segundos. Portanto, faca backup tanto do MySQL quanto dessa pasta, incluindo anexos. Nao copie a pasta de dados para cada cliente. Este ambiente e de teste em rede confiavel; nao publique a porta do Vite na internet. Se houver bloqueio no Firewall do Windows, permita Node.js/porta TCP 5174 apenas na rede local. Nao desative o firewall.
+Ofertas, conteudo das OS, maquinas, aprovacoes de compra e contas a pagar tambem ficam no MySQL, compartilhados pela mesma API; em `server/data/` ficam so os arquivos enviados (anexos, comprovantes, extratos OFX) e os backups diarios. Faca backup tanto do MySQL quanto dessa pasta. Nao copie a pasta de dados para cada cliente. Este ambiente e de teste em rede confiavel; nao publique a porta do Vite na internet. Se houver bloqueio no Firewall do Windows, permita Node.js/porta TCP 5174 apenas na rede local. Nao desative o firewall.
 
 ## Hospedagem (SaveInCloud ou outro servidor)
 
@@ -153,7 +153,7 @@ Variáveis de ambiente no servidor, além das do banco e das credenciais:
 | `PORT` | a porta que a hospedagem encaminha (`8080` no SaveInCloud) | Porta do processo Node. |
 | `NODE_ENV` | `production` | Gera a interface no start, bloqueia o acesso de teste sem senha e deixa a API fechada para outros sites. |
 | `BUILD_ON_START` | `true` num ambiente de teste sem `NODE_ENV=production` | Gera a interface no start, como em produção. Serve para publicar um ambiente de teste com `TEST_LOGIN_ENABLED=true`, que produção sempre bloqueia. |
-| `DATA_DIR` | uma pasta fora do código, ex.: `/home/jelastic/portal-data` | Onde ficam ofertas, OS, financeiro, anexos e extratos (padrão `server/data/`). Um deploy do GitHub substitui o código; fora dele, os dados continuam. |
+| `DATA_DIR` | uma pasta fora do código, ex.: `/home/jelastic/portal-data` | Onde ficam os arquivos enviados (anexos, comprovantes, extratos OFX) e os backups diários (padrão `server/data/`). Os dados ficam no MySQL. Um deploy do GitHub substitui o código; fora dele, os arquivos continuam. |
 | `TRUST_PROXY` | `1` com um balanceador na frente | Faz o servidor enxergar o IP real de cada usuário. Com o padrão `loopback`, atrás de um balanceador todos os usuários contam como um só IP no limite de requisições. |
 | `API_RATE_LIMIT` | `200` ou mais | Requisições por minuto por IP. Usuários da mesma rede saem para a internet com o mesmo IP público e dividem esse limite; aumente se aparecer o erro 429. |
 | `CORS_ORIGIN` | vazio | Lista de outros sites autorizados a chamar a API. Vazio, em produção, só o próprio portal chama. |
@@ -165,7 +165,7 @@ Confirme no painel da hospedagem a porta encaminhada e quantos proxies ficam à 
 - Servidor de aplicação Node.js com deploy pelo repositório do GitHub; `PROCESS_MANAGER=npm` faz o contêiner usar `npm start`. Com pm2, o arquivo iniciado é o `server.js` da raiz, que faz o mesmo.
 - Banco: MySQL no mesmo ambiente. Em `DB_HOST`, use o endereço interno do nó do banco (IP da rede local do ambiente ou `nodeXXXX-env-XXXX...`), porta `3306`. Crie o banco importando `database/schema.sql` (ou um dump do banco local) pelo phpMyAdmin.
 - Sem um administrador na tabela `users`, ninguém entra no portal: leve ao menos o administrador junto com o dump do banco local.
-- Copie `server/data/offers.json` local para a pasta de `DATA_DIR` se quiser levar máquinas, fornecedores, classificações e serviços já cadastrados. O catálogo fiscal é baixado sozinho no primeiro start.
+- O MySQL é obrigatório: sem `DB_HOST`, `DB_USER` e `DB_NAME` o portal não sobe. As tabelas são criadas sozinhas no primeiro start. Se a pasta de `DATA_DIR` ainda tiver um `offers.json` ou `fiscal-catalog.json` da versão anterior e o banco estiver vazio, eles são importados para o banco uma única vez (o `offers.json` vai para `backups/`). O catálogo fiscal também é baixado sozinho.
 - Ambiente de teste igual ao local (login sem senha): não defina `NODE_ENV`, use `TEST_LOGIN_ENABLED=true` e `BUILD_ON_START=true`. Qualquer pessoa com o endereço entra como administrador: não use assim com o portal em uso real.
 - Uma reimplantação do contêiner (troca de versão do Node) mantém só as pastas declaradas como volume: inclua a pasta de `DATA_DIR` nos volumes do nó.
 
@@ -176,7 +176,7 @@ Confirme no painel da hospedagem a porta encaminhada e quantos proxies ficam à 
 - `index.html` e `login-media/manifest.json` são sempre confirmados com o servidor. Fontes ficam 30 dias em cache; logos, fotos e vídeos do login, um dia.
 - Os dados da API nunca são guardados por caches intermediários. O navegador confirma a cópia com o servidor a cada consulta e recebe um `304`, sem corpo, quando nada mudou.
 - As consultas periódicas das telas param enquanto a aba está oculta e são refeitas no instante em que ela volta a aparecer.
-- No `localStorage` ficam as preferências de aparência de cada conta (tema, tamanho e tipo de letra) e a última cópia do estoque, usada quando o banco não está configurado. A sessão e o estado das abas ficam no `sessionStorage` e somem ao fechar a aba. Ofertas, OS, clientes e contas a pagar e a receber não são gravados no navegador.
+- No `localStorage` ficam só conveniências do aparelho: uma cópia das preferências de aparência de cada conta (tema, tamanho e tipo de letra; a original fica no banco) e quais avisos sonoros já tocaram. A sessão e o estado das abas ficam no `sessionStorage` e somem ao fechar a aba. Estoque, máquinas, ofertas, OS, clientes e contas a pagar e a receber não são gravados no navegador.
 - A fonte escolhida na conta começa a ser baixada junto com a página, antes dos estilos.
 
 **Segurança**
@@ -188,16 +188,16 @@ Confirme no painel da hospedagem a porta encaminhada e quantos proxies ficam à 
 
 - Todas as rotas que alteram ou mostram dados internos exigem sessão. A conta do operador alcança só o que o painel de produção usa: arquivos e histórico da OS, máquinas e serviços de mão de obra. Ficam abertos apenas o login, a configuração do login e `/api/health`. O teste `tests/access-control.test.js` confere isso.
 - Sessões e o limite de requisições ficam na memória do processo: use uma única instância. Reiniciar o servidor exige novo login.
-- `server/data/` (ou a pasta de `DATA_DIR`) guarda ofertas, OS, contas, anexos e extratos. A pasta precisa sobreviver a cada deploy e entrar no backup, junto com o MySQL.
+- Todos os dados ficam no MySQL. `server/data/` (ou a pasta de `DATA_DIR`) guarda só os arquivos enviados (anexos, comprovantes, extratos) e os backups diários. A pasta precisa sobreviver a cada deploy e entrar no backup, junto com o MySQL.
 
 **Backup**
 
-- O servidor guarda sozinho uma cópia diária de `server/data/offers.json` em `server/data/backups/auto-AAAA-MM-DD.json` e mantém os últimos 30 dias. Ela ajuda a desfazer uma alteração errada, mas fica no mesmo disco.
+- O servidor exporta sozinho, uma vez por dia, os dados do portal (ofertas, OS, financeiro, cadastros) do MySQL para `server/data/backups/auto-AAAA-MM-DD.json` e mantém os últimos 30 dias. Ela ajuda a desfazer uma alteração errada, mas fica no mesmo disco.
 - Na hospedagem, programe também uma cópia **fora do servidor**: a pasta `server/data/` inteira (com os anexos) e um dump do MySQL (`mysqldump`), pelo menos uma vez por dia.
 
 ## Cadastros e Conta
 
-Clientes e administradores são persistidos pela API: no MySQL quando configurado, ou no arquivo local. Máquinas ficam no arquivo local e o catálogo anterior do navegador é importado uma única vez ao entrar como administrador. Horas e nomes de máquina ficam registrados em cada sessão, inclusive após excluir um cadastro.
+Clientes, administradores e máquinas são persistidos pela API no MySQL. Horas e nomes de máquina ficam registrados em cada sessão, inclusive após excluir um cadastro.
 
 Em **Configurações**, cada administrador pode alterar seu nome e senha após confirmar a senha atual. Senhas são armazenadas como hashes e nunca são incluídas em relatórios. O acesso a cadastros administrativos, configurações e relatórios exige a sessão administrativa. Trocas de senha invalidam sessões anteriores; reiniciar a API também exige um novo login.
 

@@ -39,7 +39,8 @@
 :root[data-theme="dark"] .account-theme-option:has(input:focus-visible) { outline-color: #80b7f0; }
 :root[data-theme="dark"] :is(.dashboard-main, .admin-home-main, .admin-tools-main, .offers-main, .orders-main, .machines-main, .inventory-main, .calculator-main, .operator-main, .offer-details-main, .proposal-main) { background-color: #0d1c2e; }
 :root[data-theme="dark"] :is(.sidebar, .workspace-tabs, .operator-sidebar) { background-color: #112239; }
-:root[data-theme="dark"] :is(.sidebar-logo img, .operator-logo img) { background: #f3f7fc; border-radius: 6px; padding: 5px; }
+/* Dark mode uses the white and orange version of the logo, straight on the dark menu. */
+:root[data-theme="dark"] :is(.sidebar-logo img, .operator-logo img) { content: url("/images/gmac-logo-light.png"); background: none; padding: 0; }
 :root[data-theme="dark"] :is(input, select, textarea) { caret-color: #e7f2ff; }
 /* Trend series are validated per mode against the workspace surface; the generated palette would wash them out. */
 :root[data-theme="dark"] .finance-trend { --trend-receivable: #2aaf60; --trend-payable: #c83636; --trend-surface: #0d1c2e; --trend-grid: #1f344b; --trend-axis: #8ea5bd; --trend-ink: #d3e0ee; --trend-crosshair: #5b7a9a; --trend-today: #2b4560; }
@@ -53,9 +54,24 @@
 :root[data-theme="dark"] dialog::backdrop { background: #06111dcc; }
 :root[data-theme="dark"] :is(.modal-backdrop, .mobile-menu-backdrop) { background: #06111dcc; }
 @media (max-width: 760px) {
-  .account-theme-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .account-theme-option { padding: 12px 10px; gap: 8px; }
+  .account-theme-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .account-theme-option { flex-direction: column; justify-content: center; text-align: center; padding: 12px 6px; gap: 6px; }
   .account-font-options { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .account-font-options .account-theme-option { grid-template-columns: 20px 24px; justify-content: center; justify-items: center; padding: 10px 6px; gap: 6px; }
   .account-font-options .account-theme-option > span:last-child { grid-column: 1 / -1; text-align: center; }
 }
+/* Escuro intenso: the base surfaces on true black. Everything else comes from blackTheme.generated.css, imported
+   before this file so these hand-picked values win. The white and orange logo already sits on black as it is. */
+:root[data-theme="dark"][data-tone="black"] { background: #0b0b0b; color: #ececec; scrollbar-color: #3a3a3d #141414; }
+:root[data-theme="dark"][data-tone="black"] body { background: #0b0b0b; }
+:root[data-theme="dark"][data-tone="black"] :is(.dashboard-main, .admin-home-main, .admin-tools-main, .offers-main, .orders-main, .machines-main, .inventory-main, .calculator-main, .operator-main, .offer-details-main, .proposal-main) { background-color: #0b0b0b; }
+:root[data-theme="dark"][data-tone="black"] :is(.sidebar, .workspace-tabs, .operator-sidebar) { background-color: #141414; }
+:root[data-theme="dark"][data-tone="black"] :is(.sidebar-logo img, .operator-logo img) { content: url("/images/gmac-logo-light.png"); background: none; padding: 0; }
+:root[data-theme="dark"][data-tone="black"] .finance-trend { --trend-surface: #0b0b0b; }
+:root[data-theme="dark"][data-tone="black"] .pause-reasons-chart { --pause-surface: #0b0b0b; }
+:root[data-theme="dark"][data-tone="black"] .account-theme-option.selected { background: #1f1f22; border-color: #80b7f0; color: #f2f2f2; }
+/* Pause reasons pie: the same eight hues stepped for the dark workspace (validated against #0d1c2e). */
+:root[data-theme="dark"] .pause-reasons-chart { --pause-slot-1: #3987e5; --pause-slot-2: #d95926; --pause-slot-3: #199e70; --pause-slot-4: #c98500; --pause-slot-5: #d55181; --pause-slot-6: #008300; --pause-slot-7: #9085e9; --pause-slot-8: #e66767; --pause-other: #5b7a9a; --pause-surface: #0d1c2e; }
+:root[data-theme="dark"] .receivable-forecast-chart { --forecast-gross: #3987e5; --forecast-net: #d95926; }
+:root[data-theme="dark"] .receivable-forecast-card { background: #112239; border-color: #30485f; }
+:root[data-theme="dark"] .receivable-forecast-card--net { background: #162b43; border-color: #36516f; }

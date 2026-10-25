@@ -46,7 +46,7 @@ try {
   await page.getByLabel('Busca rápida', { exact: true }).fill('07.857.217/0001-61')
   await page.waitForFunction(() => document.querySelectorAll('.receivable-table tbody tr').length === 1)
   await page.getByLabel('Busca rápida', { exact: true }).fill('121,00')
-  await page.waitForFunction(() => document.querySelectorAll('.receivable-table tbody tr').length === 1 && document.querySelector('.receivable-table tbody tr').innerText.includes('Lote 21'))
+  await page.waitForFunction(() => document.querySelectorAll('.receivable-table tbody tr').length === 1 && document.querySelector('.receivable-table tbody tr').innerText.includes('Cliente lote 21'))
   await page.getByLabel('Busca rápida', { exact: true }).fill('')
 
   // Selection with total and bulk receipt.

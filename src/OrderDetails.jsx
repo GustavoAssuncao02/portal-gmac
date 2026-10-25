@@ -12,6 +12,8 @@ import { UndoAcceptModal } from './DeclineProposalModal.jsx'
 import DownloadLink from './DownloadLink.jsx'
 import { downloadFile } from './payablesApi.js'
 import { documentKind } from '../server/clientDocument.js'
+import { currentServiceLocation, serviceLocations, serviceLocationTimes } from '../server/serviceLocation.js'
+import { formatQuantity } from '../server/materialUnits.js'
 
 const currency = (value) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const date = (value) => value ? new Date(value).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : 'Não informado'
@@ -20,8 +22,8 @@ const duration = (value) => {
   const seconds = Math.floor(Math.max(0, Number(value || 0)) / 1000)
   return [Math.floor(seconds / 3600), Math.floor(seconds % 3600 / 60), seconds % 60].map((part) => String(part).padStart(2, '0')).join(':')
 }
-const statusLabels = { waiting: 'Aguardando', running: 'Em execução', paused: 'Pausado', finalizing: 'Finalizando', completed: 'Concluído' }
-const eventLabels = { started: 'Início', resumed: 'Retomada', paused: 'Pausa', machine_changed: 'Troca de máquina', labor_service_changed: 'Troca de serviço de hora homem', resource_changed: 'Troca entre máquina e serviço', session_ended: 'Sessão encerrada na conclusão', stage_progress: 'Peças registradas', completed: 'Conclusão', completion_acknowledged: 'Conclusão confirmada no painel', admin_interrupted: 'Interrupção administrativa', stages_configured: 'Etapas configuradas', order_edited: 'OS editada', order_reopened: 'OS reaberta', order_created: 'OS criada', attachment_added: 'Anexo incluído', purchase_order_added: 'Pedido de compra anexado', purchase_order_removed: 'Pedido de compra removido', payable_event: 'Contas a pagar', receivable_event: 'Contas a receber', stage_changed: 'Troca de etapa', marked_atypical: 'Marcada como OS atípica', unmarked_atypical: 'Desmarcada como OS atípica' }
+const statusLabels = { waiting: 'Aguardando', running: 'Em execução', paused: 'Pausado', stage_done: 'Etapa concluída', finalizing: 'Finalizando', completed: 'Concluído' }
+const eventLabels = { started: 'Início', resumed: 'Retomada', paused: 'Pausa', stage_completed: 'Etapa concluída', machine_changed: 'Troca de máquina', labor_service_changed: 'Troca de serviço de hora homem', resource_changed: 'Troca entre máquina e serviço', session_ended: 'Sessão encerrada na conclusão', stage_progress: 'Peças registradas', completed: 'Conclusão', completion_acknowledged: 'Conclusão confirmada no painel', admin_interrupted: 'Interrupção administrativa', stages_configured: 'Etapas configuradas', order_edited: 'OS editada', order_reopened: 'OS reaberta', order_created: 'OS criada', attachment_added: 'Anexo incluído', purchase_order_added: 'Pedido de compra anexado', purchase_order_removed: 'Pedido de compra removido', payable_event: 'Contas a pagar', receivable_event: 'Contas a receber', stage_changed: 'Troca de etapa', marked_atypical: 'Marcada como OS atípica', unmarked_atypical: 'Desmarcada como OS atípica', location_changed: 'Tipo de serviço alterado', attachment_removed: 'Anexo removido' }
 
 const moment = (value) => new Date(value).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })
 // Operation times are typed and shown in Bahia time (UTC-3, without daylight saving time).
@@ -228,6 +230,53 @@ function AtypicalToggle({ order, onChanged }) {
   return <div className="os-atypical"><label><input type="checkbox" checked={checked} disabled={busy} onChange={change} />OS atípica</label><span className="os-atypical-info" tabIndex={0} role="note" aria-label={hint}><Info size={14} aria-hidden="true" /><span className="os-atypical-tip" aria-hidden="true">{hint}</span></span>{error && <small role="alert">{error}</small>}</div>
 }
 
+// Days, hours and minutes, for the time an OS spent inside the company or outside.
+const longDuration = (milliseconds) => {
+  const minutes = Math.floor(Math.max(0, milliseconds) / 60000), days = Math.floor(minutes / 1440), hours = Math.floor(minutes % 1440 / 60)
+  return [days && `${days} ${days === 1 ? 'dia' : 'dias'}`, (days || hours) && `${hours} h`, `${minutes % 60} min`].filter(Boolean).join(' ')
+}
+
+// Interno/Externo comes from the offer and can be switched here; the time in each one appears once it was switched.
+function ServiceLocation({ order, onChanged }) {
+  const [busy, setBusy] = useState(false), [error, setError] = useState(''), [now, setNow] = useState(Date.now())
+  const current = currentServiceLocation(order), times = serviceLocationTimes(order, now)
+  const running = Boolean(times) && order.operation?.status !== 'completed'
+  useEffect(() => { if (!running) return undefined; const timer = window.setInterval(() => setNow(Date.now()), 60000); return () => window.clearInterval(timer) }, [running])
+  async function change(location) {
+    if (location === current || busy) return
+    setBusy(true); setError('')
+    try {
+      const response = await fetch(`/api/orders/${encodeURIComponent(order.code)}/location`, { method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ location }) })
+      if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || 'Não foi possível alterar o tipo de serviço.')
+      await onChanged?.()
+      setNow(Date.now())
+    } catch (caught) { setError(caught.message) } finally { setBusy(false) }
+  }
+  const last = order.locationChanges?.at(-1)
+  return <section className="os-section os-location"><div className="os-section-heading"><h3>Tipo de serviço</h3></div>
+    <div className="os-location-options" role="radiogroup" aria-label="Tipo de serviço">{serviceLocations.map(([key, label]) => <label key={key} className={current === key ? 'is-selected' : ''}><input type="radio" name={`os-location-${order.code}`} checked={current === key} disabled={busy} onChange={() => change(key)} />{label}</label>)}</div>
+    {times && <dl className="os-location-times">{serviceLocations.map(([key, label]) => <div key={key}><dt>Tempo como {label.toLowerCase()}</dt><dd>{longDuration(times[key])}</dd></div>)}</dl>}
+    {times && <p className="os-purchase-hint">Contado desde a criação da OS{running ? '' : ' até a conclusão'}. {order.locationChanges.length} {order.locationChanges.length === 1 ? 'troca' : 'trocas'}; a última por {last.by} em {moment(last.at)}.</p>}
+    {error && <p className="workflow-error" role="alert">{error}</p>}
+  </section>
+}
+
+// Files of the OS: download, add more and remove the ones attached by mistake.
+function OrderAttachments({ order, onUpload, onChanged, Icon }) {
+  const input = useRef(null), [busy, setBusy] = useState(false), [error, setError] = useState('')
+  const files = order.attachments || []
+  async function run(task) {
+    setBusy(true); setError('')
+    try { await task() } catch (caught) { setError(caught.message) } finally { setBusy(false) }
+  }
+  const upload = (list) => run(async () => { for (const file of list) { await onUpload(file) } })
+  const remove = (file) => { if (window.confirm(`Remover o anexo "${file.name}" da OS?`)) run(async () => { const response = await fetch(`/api/orders/${encodeURIComponent(order.code)}/attachments/${encodeURIComponent(file.id)}`, { method: 'DELETE', headers: authHeaders() }); if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || 'Não foi possível remover o anexo.'); await onChanged?.() }) }
+  return <section className="os-section os-attachments os-order-attachments"><div className="os-section-heading"><h3>Anexos da OS</h3><span>{files.length} {files.length === 1 ? 'arquivo' : 'arquivos'}</span><button type="button" className="os-purchase-add" disabled={busy} onClick={() => input.current.click()}>{busy ? 'Enviando...' : 'Adicionar anexo'}</button><input ref={input} type="file" multiple hidden aria-label="Arquivo da OS" onChange={(event) => { const list = [...event.target.files]; event.target.value = ''; if (list.length) upload(list) }} /></div>
+    {files.length ? <ul>{files.map((file) => <li key={file.id}><DownloadLink className="os-attachment-download" url={`/api/offers/${order.offerId}/attachments/${file.id}`} name={file.name}><Icon name="orders" /><span>{file.name}</span><Icon name="expand" /></DownloadLink><button type="button" className="os-purchase-remove" disabled={busy} aria-label={`Remover ${file.name}`} title="Remover" onClick={() => remove(file)}>×</button></li>)}</ul> : <p className="os-empty">Nenhum anexo.</p>}
+    {error && <p className="workflow-error" role="alert">{error}</p>}
+  </section>
+}
+
 function PurchaseOrders({ order, onChanged, Icon }) {
   const input = useRef(null), [busy, setBusy] = useState(false), [error, setError] = useState('')
   const files = order.purchaseOrders || [], base = `/api/orders/${encodeURIComponent(order.code)}/purchase-orders`
@@ -236,7 +285,7 @@ function PurchaseOrders({ order, onChanged, Icon }) {
     try { await task(); await onChanged?.() } catch (caught) { setError(caught.message) } finally { setBusy(false) }
   }
   const check = async (response) => { if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || 'Não foi possível concluir a operação.'); return response }
-  const upload = (list) => run(async () => { for (const file of list) { if (file.size > 20 * 1024 * 1024) throw new Error(`${file.name}: o arquivo deve ter até 20 MB.`); await check(await fetch(`${base}?name=${encodeURIComponent(file.name)}&type=${encodeURIComponent(file.type || 'application/octet-stream')}`, { method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/octet-stream' }, body: file })) } })
+  const upload = (list) => run(async () => { for (const file of list) { await check(await fetch(`${base}?name=${encodeURIComponent(file.name)}&type=${encodeURIComponent(file.type || 'application/octet-stream')}`, { method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/octet-stream' }, body: file })) } })
   async function download(file) {
     setError('')
     try { const blob = await (await check(await fetch(`${base}/${file.id}`, { headers: authHeaders() }))).blob(); const url = URL.createObjectURL(blob), link = document.createElement('a'); link.href = url; link.download = file.name; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000) } catch (caught) { setError(caught.message) }
@@ -279,7 +328,7 @@ export default function OrderDetails({ order, activeTime, stageNamesInput, onCha
         {operationError && <p className="workflow-error" role="alert">{operationError}</p>}
       </section>}
       <section className="os-section"><div className="os-section-heading"><h3>Descrição do serviço</h3></div><p className="os-description">{order.description || 'Nenhuma descrição informada.'}</p></section>
-      <section className="os-section"><div className="os-section-heading"><h3>Materiais necessários</h3><span>{materials.length} {materials.length === 1 ? 'material' : 'materiais'}</span></div>{materials.length ? <div className="os-resource-table-wrap"><table className="os-resource-table"><thead><tr><th>Material / Especificação</th><th>Quantidade</th><th>Valor total</th></tr></thead><tbody>{materials.map((item) => <tr key={item.id}><td><strong>{item.name}</strong><small>{item.detail || 'Sem especificação'}</small></td><td>{number(item.quantity)} kg</td><td>{currency(item.quantity * item.unitPrice)}</td></tr>)}</tbody></table></div> : <p className="os-empty">Nenhum material informado.</p>}</section>
+      <section className="os-section"><div className="os-section-heading"><h3>Materiais necessários</h3><span>{materials.length} {materials.length === 1 ? 'material' : 'materiais'}</span></div>{materials.length ? <div className="os-resource-table-wrap"><table className="os-resource-table"><thead><tr><th>Material / Especificação</th><th>Quantidade</th><th>Valor total</th></tr></thead><tbody>{materials.map((item) => <tr key={item.id}><td><strong>{item.name}</strong><small>{item.detail || 'Sem especificação'}</small></td><td>{formatQuantity(item.quantity, item.unit)}</td><td>{currency(item.quantity * item.unitPrice)}</td></tr>)}</tbody></table></div> : <p className="os-empty">Nenhum material informado.</p>}</section>
       <section className="os-section"><div className="os-section-heading"><h3>Mão de obra</h3><span>{labor.length} {labor.length === 1 ? 'registro' : 'registros'}</span></div>{labor.length ? <div className="os-resource-table-wrap"><table className="os-resource-table"><thead><tr><th>Recurso</th><th>Tempo</th><th>Valor total</th></tr></thead><tbody>{labor.map((item) => <tr key={item.id}><td><strong>{item.resource}</strong><small>{item.type === 'machine' ? 'Hora máquina' : 'Profissional'}</small></td><td>{number(item.hours)} h</td><td>{currency(item.hours * item.hourlyRate)}</td></tr>)}</tbody></table></div> : <p className="os-empty">Nenhuma mão de obra informada.</p>}</section>
     </div><div className="os-detail-secondary">
       <section className="os-section os-proposal"><div className="os-section-heading"><h3>Proposta aceita</h3><span className="os-proposal-option">Opção {proposal.key || '—'}</span></div>{proposal.title && proposal.title !== `Opção ${proposal.key}` && <p className="os-proposal-title">{proposal.title}</p>}
@@ -295,11 +344,12 @@ export default function OrderDetails({ order, activeTime, stageNamesInput, onCha
           ['Fabricado a partir de', order.resources?.manufacturedFrom === 'sample' ? 'Amostra' : order.resources?.manufacturedFrom === 'drawing' ? 'Desenho' : 'Não informado'], ['Têmpera', order.resources?.tempering === true ? 'Sim' : order.resources?.tempering === false ? 'Não' : 'Não informada'], ...(proposalStages.includes('painting') ? [['Cor/Tipo', order.resources?.paintColor || 'Não informado']] : []),
         ]} />
         {order.resources?.serviceDescription && <p className="os-description">{order.resources.serviceDescription}</p>}
-        <div className="os-proposal-stages"><span>Etapas do serviço</span>{proposalStages.length ? <ol>{proposalStages.map((stage, index) => <li key={stage}><b>{index + 1}</b>{stageLabel(stage)}</li>)}</ol> : <p className="os-empty">A definir</p>}</div>
+        <div className="os-proposal-stages"><span>Etapas do serviço</span>{proposalStages.length ? <ol>{proposalStages.map((stage, index) => <li key={stage}><b>{index + 1}</b>{stageLabel(stage)}{order.resources?.stageResources?.[stage] && <small className="os-stage-resource"> · {order.resources.stageResources[stage].name}</small>}</li>)}</ol> : <p className="os-empty">A definir</p>}</div>
         <button className="os-button os-download-button" type="button" onClick={() => downloadFile(`/api/offers/${order.offerId}/proposal.pdf`, `proposta-${order.code}.pdf`).catch((caught) => window.alert(caught.message))}><Icon name="orders" />Baixar PDF da proposta</button>
       </section>
       <OrderCosts code={order.code} />
-      <section className="os-section os-attachments"><div className="os-section-heading"><h3>Anexos da OS</h3><span>{order.attachments?.length || 0} {order.attachments?.length === 1 ? 'arquivo' : 'arquivos'}</span></div>{order.attachments?.length ? <ul>{order.attachments.map((attachment) => <li key={attachment.id}><DownloadLink className="os-attachment-download" url={`/api/offers/${order.offerId}/attachments/${attachment.id}`} name={attachment.name}><Icon name="orders" /><span>{attachment.name}</span><Icon name="expand" /></DownloadLink></li>)}</ul> : <p className="os-empty">Nenhum anexo.</p>}</section>
+      <ServiceLocation order={order} onChanged={onRefresh} />
+      <OrderAttachments order={order} onUpload={onUpload} onChanged={onRefresh} Icon={Icon} />
       <PurchaseOrders order={order} onChanged={onRefresh} Icon={Icon} />
     </div></div>
     {unaccepting && <UndoAcceptModal orderCode={order.code} onConfirm={async () => { const response = await fetch(`/api/offers/${encodeURIComponent(order.offerId)}/unaccept`, { method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: '{}' }); if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || 'Não foi possível desfazer o aceite.'); await onRefresh?.(); onBack() }} onClose={() => setUnaccepting(false)} />}

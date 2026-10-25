@@ -31,6 +31,7 @@
 .os-section-heading .os-status { padding: 5px 8px; border-radius: 4px; color: #607283; background: #edf2f6; font-weight: 600; }
 .os-section-heading .os-status--running, .os-section-heading .os-status--completed { color: #168344; background: #e8f6ed; }
 .os-section-heading .os-status--paused { color: #9c670a; background: #fff2d9; }
+.os-section-heading .os-status--stage_done { color: #1d7a52; background: #e2f4ec; }
 .os-section-heading .os-status--finalizing { color: #6b47a3; background: #f2ecfa; }
 .os-operation-facts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .os-operation-facts dd { font-size: 16px; font-variant-numeric: tabular-nums; }
@@ -197,3 +198,16 @@
 :root[data-theme="dark"] .os-purchase-hint { color:#b9c9d8; }
 :root[data-theme="dark"] .os-deadline-changed { color:#b9c9d8; }
 :root[data-theme="dark"] .os-purchase-file small { color:#b9c9d8; }
+/* Anexos da OS share the layout of the purchase orders: download link, then the remove button. */
+.os-order-attachments .os-section-heading { gap:12px; }
+.os-order-attachments li { display:flex; align-items:center; gap:8px; }
+.os-order-attachments .os-attachment-download { flex:1; min-width:0; }
+/* Tipo de serviço: two options side by side and, after a switch, the time in each one. */
+.os-location-options { display:flex; gap:8px; flex-wrap:wrap; }
+.os-location-options label { display:inline-flex; align-items:center; gap:8px; padding:8px 14px; border:1px solid #d9e3ec; border-radius:8px; background:#fff; color:#31587f; font-size:14px; cursor:pointer; }
+.os-location-options label.is-selected { border-color:#0c4c91; background:#eaf2fb; color:#0c4c91; font-weight:600; }
+.os-location-times { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin:14px 0 0; }
+.os-location-times div { padding:10px 12px; border:1px solid #e3ebf3; border-radius:8px; }
+.os-location-times dt { color:#5d7792; font-size:12px; }
+.os-location-times dd { margin:4px 0 0; color:#0b2f55; font-size:16px; font-weight:600; font-variant-numeric:tabular-nums; }
+.os-stage-resource { color:#5d7792; font-weight:400; }

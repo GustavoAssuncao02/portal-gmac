@@ -64,7 +64,7 @@ test('material request refusal is authenticated, persistent, idempotent and pres
 test('materials without shortage cannot be refused and rejection metadata survives old approval imports', async (t) => {
   const fixture = await createWorkflowFixture()
   t.after(() => fixture.close())
-  await fixture.mutateStore((store) => { store.offers = [{ id: 'offer', resources: { materials: [{ id: 'available', name: 'Ferro', quantity: 5, stockStatus: 'available' }, { id: 'pending', name: 'Inox', quantity: 2 }] } }] })
+  await fixture.mutateStore((store) => { store.offers = [{ id: 'offer', status: 'accepted', orderCode: 'OS-TEST', resources: { materials: [{ id: 'available', name: 'Ferro', quantity: 5, stockStatus: 'available' }, { id: 'pending', name: 'Inox', quantity: 2 }] } }] })
   const headers = { Authorization: `Bearer ${fixture.adminToken}` }
   assert.equal((await fixture.request('/material-requests/offer-available/reject', 'POST', {}, headers)).status, 409)
   const rejected = await fixture.request('/material-requests/offer-pending/reject', 'POST', {}, headers)

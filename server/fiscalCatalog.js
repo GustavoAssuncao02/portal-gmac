@@ -1,11 +1,8 @@
 import https from 'node:https'
-import { randomUUID } from 'node:crypto'
-import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
-import path from 'node:path'
-import { dataDirectory } from './dataDirectory.js'
+import { readFile, rename } from 'node:fs/promises'
 import express from 'express'
+import { storePool } from './store.js'
 
-const catalogPath = path.join(dataDirectory, 'fiscal-catalog.json')
 const WEEK = 7 * 86400000
 const RETRY_AFTER_FAILURE = 6 * 3600000
 
@@ -87,24 +84,83 @@ export function normalizeCompany(data, cnpj) {
   return { cnpj, legalName: data.razao_social || '', tradeName: establishment?.nome_fantasia || data.nome_fantasia || '', activities: [{ ...primary, description: sentence(primary.description), primary: true }, ...secondary.map((row) => ({ ...row, description: sentence(row.description), primary: false }))] }
 }
 
-let cache = null
-export async function readFiscalCatalog() {
-  try {
-    const { mtimeMs } = await stat(catalogPath)
-    if (cache?.mtimeMs !== mtimeMs) cache = { mtimeMs, data: JSON.parse(await readFile(catalogPath, 'utf8')) }
-    return cache.data
-  } catch (error) {
-    if (error.code === 'ENOENT') return { cnae: [], ncm: [], nbs: [], companies: {}, sources: {} }
-    throw error
+// The lists (CNAE, NCM, NBS) are rows of fiscal_codes; the companies and the result of each source are kept with the
+// revision in fiscal_catalog. The catalog is read from memory while the revision does not change.
+const KINDS = ['cnae', 'ncm', 'nbs']
+const emptyCatalog = () => ({ cnae: [], ncm: [], nbs: [], companies: {}, sources: {} })
+let tables = null, tablesPool = null, cache = null
+function ensureTables() {
+  const pool = storePool()
+  if (tablesPool !== pool) {
+    tablesPool = pool
+    cache = null
+    tables = (async () => {
+      await pool.query(`CREATE TABLE IF NOT EXISTS fiscal_catalog (
+        id TINYINT UNSIGNED PRIMARY KEY,
+        revision BIGINT UNSIGNED NOT NULL DEFAULT 0,
+        checked_at VARCHAR(40) NULL,
+        sources LONGTEXT NOT NULL,
+        companies LONGTEXT NOT NULL,
+        updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`)
+      await pool.query(`CREATE TABLE IF NOT EXISTS fiscal_codes (
+        kind VARCHAR(8) NOT NULL,
+        position INT UNSIGNED NOT NULL,
+        code VARCHAR(20) NOT NULL,
+        description TEXT NOT NULL,
+        group_name TEXT NOT NULL,
+        PRIMARY KEY (kind, position),
+        KEY fiscal_code (kind, code)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`)
+      await pool.query("INSERT IGNORE INTO fiscal_catalog (id, revision, sources, companies) VALUES (1, 0, '{}', '{}')")
+    })()
+    tables.catch(() => { tablesPool = null })
   }
+  return tables
 }
 
-async function writeCatalog(catalog) {
-  await mkdir(dataDirectory, { recursive: true })
-  const temporary = `${catalogPath}.${randomUUID()}.tmp`
-  await writeFile(temporary, JSON.stringify(catalog), 'utf8')
-  await rename(temporary, catalogPath)
+export async function readFiscalCatalog() {
+  await ensureTables()
+  const pool = storePool()
+  const [[state]] = await pool.query('SELECT revision, checked_at AS checkedAt, sources, companies FROM fiscal_catalog WHERE id = 1')
+  if (cache?.revision === Number(state.revision)) return cache.data
+  const catalog = { ...emptyCatalog(), companies: JSON.parse(state.companies), sources: JSON.parse(state.sources), ...(state.checkedAt ? { checkedAt: state.checkedAt } : {}) }
+  const [rows] = await pool.query('SELECT kind, code, description, group_name AS `group` FROM fiscal_codes ORDER BY kind, position')
+  for (const { kind, code, description, group } of rows) catalog[kind]?.push({ code, description, group })
+  cache = { revision: Number(state.revision), data: catalog }
+  return catalog
+}
+
+async function writeCatalog(catalog, previous = emptyCatalog()) {
+  await ensureTables()
+  const connection = await storePool().getConnection()
+  try {
+    await connection.beginTransaction()
+    for (const kind of KINDS) {
+      if (JSON.stringify(catalog[kind] || []) === JSON.stringify(previous[kind] || [])) continue
+      await connection.query('DELETE FROM fiscal_codes WHERE kind = ?', [kind])
+      const rows = (catalog[kind] || []).map((row, position) => [kind, position, row.code, row.description || '', row.group || ''])
+      for (let start = 0; start < rows.length; start += 1000) await connection.query('INSERT INTO fiscal_codes (kind, position, code, description, group_name) VALUES ?', [rows.slice(start, start + 1000)])
+    }
+    await connection.query('UPDATE fiscal_catalog SET revision = revision + 1, checked_at = ?, sources = ?, companies = ? WHERE id = 1', [catalog.checkedAt || null, JSON.stringify(catalog.sources || {}), JSON.stringify(catalog.companies || {})])
+    await connection.commit()
+  } catch (error) {
+    await connection.rollback().catch(() => {})
+    throw error
+  } finally { connection.release() }
   cache = null
+}
+
+// Before the database, the catalog was DATA_DIR/fiscal-catalog.json. It is imported once, if the tables are still empty,
+// and renamed so it is never read again.
+export async function importJsonFiscalCatalog(file) {
+  let text
+  try { text = await readFile(file, 'utf8') } catch (error) { if (error.code === 'ENOENT') return false; throw error }
+  const current = await readFiscalCatalog()
+  if (current.checkedAt || KINDS.some((kind) => current[kind].length)) return false
+  await writeCatalog({ ...emptyCatalog(), ...JSON.parse(text) })
+  await rename(file, `${file}.imported`)
+  return true
 }
 
 let running = null
@@ -143,7 +199,7 @@ export function syncFiscalCatalog({ fetcher = download, now = () => new Date() }
     }
     catalog.checkedAt = now().toISOString()
     catalog.cnae ||= []; catalog.ncm ||= []; catalog.nbs ||= []
-    await writeCatalog(catalog)
+    await writeCatalog(catalog, previous)
     return fiscalStatus(catalog)
   })().finally(() => { running = null })
   return running

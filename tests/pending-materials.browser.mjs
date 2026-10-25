@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { mkdir } from 'node:fs/promises'
 import { chromium } from 'playwright'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
-import { enterOperatorCode, startWork } from './operatorEntry.js'
+import { enterOperatorCode, stagePlans, startWork } from './operatorEntry.js'
 
 const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Gustavo' }
 const fixture = await createWorkflowFixture({ accountsEnv: env })
@@ -11,7 +11,9 @@ await mkdir('test-results', { recursive: true })
 try {
   const employee = (await fixture.adminRequest('/employees', 'POST', { name: 'Ana Teste', cpf: '00000000001', birthDate: '1990-01-01', email: 'ana@example.invalid', identification: '001' }, fixture.admin)).data.item
   const offer = (await fixture.adminRequest('/offers', 'POST', offerDraft)).data.item
-  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], stages: ['turning', 'milling', 'painting', 'cut-bend'], kind: 'service' })
+  const tornearia = (await fixture.adminRequest('/labor-services')).data.items.find((item) => item.name === 'Tornearia')
+  const stages = ['turning', 'milling', 'painting', 'cut-bend']
+  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], stages, stageResources: stagePlans(stages, { type: 'labor-service', id: tornearia.id }), kind: 'service' })
   await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', deadline: offer.deadline, serviceValue: 100 } })
   const base = (await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')).data.item
   for (const viewport of [{ width: 1920, height: 1080 }, { width: 393, height: 852 }, { width: 430, height: 932 }]) {
@@ -51,7 +53,7 @@ try {
     await page.locator('.operator-project').first().click()
     await page.locator('.operator-steps').waitFor()
     async function openWarning() {
-      await startWork(page, 'Serviço', 'Tornearia')
+      await startWork(page, 'Serviço: Tornearia')
       await page.getByRole('dialog', { name: 'Material pendente', exact: true }).waitFor()
     }
     await openWarning()

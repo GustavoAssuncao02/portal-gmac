@@ -37,8 +37,25 @@ export function nameSimilarity(a, b) {
 function financialRecords(store, kind) {
   // Both the settlement date (when there is one) and the due date are compared with the bank date.
   const dates = (settledOn, settledKind, dueDate) => [...(settledOn ? [{ date: settledOn, kind: settledKind }] : []), { date: dueDate, kind: 'vencimento' }]
-  if (kind === 'payable') return store.payables.filter((row) => !row.inactive).map((row) => ({ kind, id: row.id, name: row.supplierName, document: (store.suppliers || []).find((item) => String(item.id) === String(row.supplierId))?.document || null, valueCents: row.payment ? row.payment.finalCents : row.valueCents, date: row.payment?.date || row.dueDate, dateKind: row.payment ? 'pagamento' : 'vencimento', dates: dates(row.payment?.date, 'pagamento', row.dueDate), description: row.description, settled: Boolean(row.payment) }))
-  return store.receivables.filter((row) => !row.inactive).map((row) => ({ kind, id: row.id, name: row.customerName, document: row.customerDocument || null, valueCents: row.receipt ? row.receipt.finalCents : row.valueCents, date: row.receipt?.date || row.dueDate, dateKind: row.receipt ? 'recebimento' : 'vencimento', dates: dates(row.receipt?.date, 'recebimento', row.dueDate), description: row.description, settled: Boolean(row.receipt) }))
+  if (kind === 'payable') return store.payables.filter((row) => !row.inactive).map((row) => ({ kind, id: row.id, name: row.supplierName, document: (store.suppliers || []).find((item) => String(item.id) === String(row.supplierId))?.document || null, valueCents: row.payment ? row.payment.finalCents : row.valueCents, date: row.payment?.date || row.dueDate, dateKind: row.payment ? 'pagamento' : 'vencimento', dates: dates(row.payment?.date, 'pagamento', row.dueDate), description: row.description, settled: Boolean(row.payment), bankId: row.payment?.bankId || null }))
+  return store.receivables.filter((row) => !row.inactive).map((row) => ({ kind, id: row.id, name: row.customerName, document: row.customerDocument || null, valueCents: row.receipt ? row.receipt.finalCents : row.valueCents, date: row.receipt?.date || row.dueDate, dateKind: row.receipt ? 'recebimento' : 'vencimento', dates: dates(row.receipt?.date, 'recebimento', row.dueDate), description: row.description, settled: Boolean(row.receipt), bankId: row.receipt?.bankId || null }))
+}
+
+// The bank of Cadastros > Bancos behind an account of the statements: the one chosen on the screen or, without a
+// choice, the registered bank whose branch and account are the digits of the OFX account (leading zeros ignored).
+const digitsOf = (value) => String(value ?? '').replace(/\D/g, '').replace(/^0+/, '')
+export function registeredBankFor(store, account) {
+  const banks = store.banks || []
+  if (!account) return null
+  if (account.registryBankId) return banks.find((bank) => bank.id === account.registryBankId) || null
+  const ofx = digitsOf(account.accountId), ofxBranch = digitsOf(account.branchId)
+  const matches = banks.filter((bank) => {
+    const number = digitsOf(bank.account), agency = digitsOf(bank.agency)
+    if (!number) return false
+    const full = digitsOf(`${bank.agency || ''}${bank.account}`)
+    return ofx === number || ofx === full || ofx.endsWith(number) && (!agency || ofxBranch === agency || ofx.startsWith(agency))
+  })
+  return matches.length === 1 ? matches[0] : null
 }
 
 // Evidence ladder: value is always exact; document, name and date only add confidence. Nothing is chosen automatically.
@@ -48,10 +65,14 @@ export function reconciliationCandidates(store, transaction, toleranceDays = sto
   const kind = transaction.direction === 'out' ? 'payable' : transaction.direction === 'in' ? 'receivable' : null
   if (!kind) return { kind, candidates: [], ambiguous: false, toleranceDays }
   const amount = Math.abs(transaction.amountCents)
+  // With "considerar o banco", records settled through another bank are left out; the ones still without a bank stay.
+  const matchBank = Boolean(store.bankSettings?.matchBank)
+  const bank = matchBank ? registeredBankFor(store, store.bankAccounts.find((row) => row.id === transaction.bankAccountId)) : null
   const taken = new Set(store.bankTransactions.filter((row) => row.reconciliation && row.id !== transaction.id).map((row) => `${row.reconciliation.kind}:${row.reconciliation.recordId}`))
   const candidates = []
   for (const record of financialRecords(store, kind)) {
     if (record.valueCents !== amount || taken.has(`${kind}:${record.id}`)) continue
+    if (bank && record.bankId && record.bankId !== bank.id) continue
     const nearest = record.dates.map((item) => ({ ...item, days: daysBetween(item.date, transaction.bankDate) })).sort((a, b) => a.days - b.days)[0]
     const days = nearest.days
     const documentMatch = Boolean(transaction.counterpartyDocument && record.document && record.document === transaction.counterpartyDocument)
@@ -61,13 +82,14 @@ export function reconciliationCandidates(store, transaction, toleranceDays = sto
     const reasons = [`Valor exato: ${money(amount)}`]
     if (documentMatch) reasons.push(`${record.document.length === 14 ? 'CNPJ' : 'CPF'} coincide com o histórico bancário`)
     if (!documentMatch && similarity >= 0.6) reasons.push(`Nome semelhante: "${transaction.counterpartyName}" × "${record.name}"`)
+    if (bank) reasons.push(record.bankId ? `Baixa registrada no mesmo banco (${bank.name})` : 'Sem banco registrado na baixa')
     reasons.push(days === 0 ? `Mesma data de ${nearest.kind}` : level === 5 ? `Data de ${nearest.kind} a ${days} dias do banco, fora da tolerância de ${toleranceDays}: confira antes de conciliar` : `Data de ${nearest.kind} a ${days} dia${days === 1 ? '' : 's'} (tolerância de ${toleranceDays})`)
     const { dates: _dates, ...summary } = record
     candidates.push({ ...summary, date: nearest.date, dateKind: nearest.kind, level, strength: { 1: 'Forte', 2: 'Boa', 3: 'Média', 4: 'Fraca', 5: 'Conferir data' }[level], days, reasons })
   }
   candidates.sort((a, b) => a.level - b.level || a.days - b.days || a.id.localeCompare(b.id))
   const best = candidates[0]?.level
-  return { kind, candidates, ambiguous: candidates.filter((row) => row.level === best).length > 1, toleranceDays }
+  return { kind, candidates, ambiguous: candidates.filter((row) => row.level === best).length > 1, toleranceDays, matchBank, bankName: bank?.name || null, bankUnlinked: matchBank && !bank }
 }
 
 // The statement balance warning only appears above R$ 10,00 (company's choice); the difference itself stays in the validation.
@@ -179,7 +201,7 @@ export default function createBankStatementsRouter(accounts, requireAdmin) {
   const handle = (fn) => async (req, res, next) => { try { await fn(req, res) } catch (error) { next(error) } }
   router.get('/bank-statements', handle(async (_req, res) => {
     const store = await readStore(); init(store)
-    res.json({ accounts: store.bankAccounts, imports: [...store.bankImports].reverse().map(({ header, ...row }) => ({ ...row, warnings: visibleWarnings(row) })), transactions: store.bankTransactions.map((row) => transactionView(store, row)), balances: store.bankBalances, conflicts: store.bankConflicts, closings: [...store.bankClosings].sort((a, b) => b.month.localeCompare(a.month) || a.id.localeCompare(b.id)).map((row) => closingView(store, row)), settings: store.bankSettings, operationLabels })
+    res.json({ accounts: store.bankAccounts.map((row) => ({ ...row, registeredBank: registeredBankFor(store, row) })), banks: store.banks || [], imports: [...store.bankImports].reverse().map(({ header, ...row }) => ({ ...row, warnings: visibleWarnings(row) })), transactions: store.bankTransactions.map((row) => transactionView(store, row)), balances: store.bankBalances, conflicts: store.bankConflicts, closings: [...store.bankClosings].sort((a, b) => b.month.localeCompare(a.month) || a.id.localeCompare(b.id)).map((row) => closingView(store, row)), settings: store.bankSettings, operationLabels })
   }))
   router.post('/bank-statements/import', express.raw({ type: 'application/octet-stream', limit: '10mb' }), handle(async (req, res) => {
     if (!Buffer.isBuffer(req.body) || !req.body.length) fail('Selecione um arquivo OFX com até 10 MB.')
@@ -196,10 +218,32 @@ export default function createBankStatementsRouter(accounts, requireAdmin) {
     res.status(201).json({ item: { ...record, warnings: visibleWarnings(record) } })
   }))
   router.put('/bank-statements/settings', handle(async (req, res) => {
-    const days = Number(req.body.dateToleranceDays)
-    if (!Number.isInteger(days) || days < 0 || days > 30) fail('Informe uma tolerância de 0 a 30 dias.')
-    const settings = await mutateStore((store) => { init(store); const before = store.bankSettings.dateToleranceDays; store.bankSettings.dateToleranceDays = days; event(store, req.actor, 'settings', { details: { before, after: days } }); return store.bankSettings })
+    const days = req.body.dateToleranceDays === undefined ? undefined : Number(req.body.dateToleranceDays)
+    if (days !== undefined && (!Number.isInteger(days) || days < 0 || days > 30)) fail('Informe uma tolerância de 0 a 30 dias.')
+    if (req.body.matchBank !== undefined && typeof req.body.matchBank !== 'boolean') fail('Informe se a conciliação considera o banco.')
+    const settings = await mutateStore((store) => {
+      init(store)
+      const before = { ...store.bankSettings }
+      if (days !== undefined) store.bankSettings.dateToleranceDays = days
+      if (req.body.matchBank !== undefined) store.bankSettings.matchBank = req.body.matchBank
+      event(store, req.actor, 'settings', { details: { before: before.dateToleranceDays, after: store.bankSettings.dateToleranceDays, matchBankBefore: Boolean(before.matchBank), matchBank: Boolean(store.bankSettings.matchBank) } })
+      return store.bankSettings
+    })
     res.json({ settings })
+  }))
+  // Which registered bank an account of the statements is; empty goes back to the automatic match by branch and account.
+  router.put('/bank-statements/accounts/:id/bank', handle(async (req, res) => {
+    const item = await mutateStore((store) => {
+      init(store)
+      const account = store.bankAccounts.find((row) => row.id === req.params.id)
+      if (!account) fail('Conta do extrato não encontrada.', 404)
+      const bankId = req.body.bankId ? String(req.body.bankId) : null
+      if (bankId && !(store.banks || []).some((bank) => bank.id === bankId)) fail('Banco não encontrado no cadastro.')
+      account.registryBankId = bankId
+      event(store, req.actor, 'account_bank', { details: { bankAccountId: account.id, bankId } })
+      return { ...account, registeredBank: registeredBankFor(store, account) }
+    })
+    res.json({ item })
   }))
   router.get('/bank-statements/transactions/:id/candidates', handle(async (req, res) => {
     const store = await readStore(); init(store)

@@ -158,7 +158,7 @@ try {
   // Entries posted here show up settled in the account screens.
   await navigate('Contas a Receber')
   await page.getByRole('group', { name: 'Situação', exact: true }).getByRole('button', { name: /^Recebidas/ }).click()
-  assert.match((await page.locator('.receivable-table tbody tr').filter({ hasText: 'Venda de sucata' }).innerText()).replace(/\s+/g, ' '), /Tesouraria.*Recebido/)
+  assert.match((await page.locator('.receivable-table tbody tr').filter({ hasText: 'Sucata Bahia' }).innerText()).replace(/\s+/g, ' '), /Tesouraria.*Recebido/)
 
   // Stock: once the material is in, the purchase is offered to the financial module.
   await navigate('Estoque')

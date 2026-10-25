@@ -6,6 +6,7 @@ import { activeSessions } from '../server/operationSessions.js'
 import { newId } from './newId.js'
 import { payableRequest, money, dateLabel } from './payablesApi.js'
 import './orderEditing.css'
+import { materialUnit, materialUnits } from '../server/materialUnits.js'
 
 function useDialog(dialog) {
   useEffect(() => {
@@ -84,6 +85,13 @@ export default function OrderEditModal({ order, confirmCompleted, onSave, onUplo
   const [error, setError] = useState('')
   const [files, setFiles] = useState([])
   const [deadlineReason, setDeadlineReason] = useState('')
+  // Machines and labor services registered, for the machine or service of each stage.
+  const [resourceOptions, setResourceOptions] = useState({ machines: [], laborServices: [] })
+  useEffect(() => {
+    let active = true
+    Promise.all([payableRequest('/machines'), payableRequest('/labor-services')]).then(([machines, laborServices]) => { if (active) setResourceOptions({ machines: machines.items || [], laborServices: laborServices.items || [] }) }).catch(() => {})
+    return () => { active = false }
+  }, [])
   useDialog(dialog)
   const data = draft.order
   const resources = data.resources
@@ -141,12 +149,14 @@ export default function OrderEditModal({ order, confirmCompleted, onSave, onUplo
             <label className="os-edit-field os-edit-wide">Descrição da OS<textarea aria-label="Descrição da OS" rows={3} maxLength={5000} value={data.description} onChange={(event) => update('description', event.target.value)} required /></label>
           </div>}
           {tab === 'resources' && <>
-            <div className="os-edit-section-heading"><h3>Materiais</h3><button className="os-button" type="button" onClick={() => resource('materials', [...resources.materials, { id: newId(), name: '', detail: '', quantity: 1, unitPrice: 0 }])}><Plus size={16} />Adicionar material</button></div>
+            <div className="os-edit-section-heading"><h3>Materiais</h3><button className="os-button" type="button" onClick={() => resource('materials', [...resources.materials, { id: newId(), name: '', detail: '', unit: 'kg', quantity: 1, unitPrice: 0 }])}><Plus size={16} />Adicionar material</button></div>
             {resources.materials.map((item) => <div className="os-edit-resource-row" key={item.id}>
               <label className="os-edit-field">Material<input value={item.name} maxLength={160} onChange={(event) => row('materials', item.id, 'name', event.target.value)} required /></label>
               <label className="os-edit-field">Especificação<input value={item.detail || ''} maxLength={500} onChange={(event) => row('materials', item.id, 'detail', event.target.value)} /></label>
-              <label className="os-edit-field">Quantidade (kg)<input type="number" min="0.001" step="0.001" value={item.quantity} onChange={(event) => row('materials', item.id, 'quantity', event.target.value)} required /></label>
-              <label className="os-edit-field">Valor/kg (R$)<input type="number" min="0" step="0.01" value={item.unitPrice} onChange={(event) => row('materials', item.id, 'unitPrice', event.target.value)} required /></label>
+              {/* A material linked to the stock keeps the unit of its registration. */}
+              <label className="os-edit-field">Unidade<select value={materialUnit(item.unit)} disabled={item.inventoryId != null} onChange={(event) => row('materials', item.id, 'unit', event.target.value)}>{materialUnits.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+              <label className="os-edit-field">{`Quantidade (${materialUnit(item.unit)})`}<input type="number" min={materialUnit(item.unit) === 'un' ? '1' : '0.001'} step={materialUnit(item.unit) === 'un' ? '1' : '0.001'} value={item.quantity} onChange={(event) => row('materials', item.id, 'quantity', event.target.value)} required /></label>
+              <label className="os-edit-field">{`Valor/${materialUnit(item.unit)} (R$)`}<input type="number" min="0" step="0.01" value={item.unitPrice} onChange={(event) => row('materials', item.id, 'unitPrice', event.target.value)} required /></label>
               <button className="os-icon-button" type="button" title="Remover material" aria-label={`Remover material ${item.name || 'sem nome'}`} onClick={() => resource('materials', resources.materials.filter((entry) => entry.id !== item.id))}><Trash2 size={16} /></button>
             </div>)}
             <div className="os-edit-section-heading"><h3>Mão de obra</h3><button className="os-button" type="button" onClick={() => resource('laborEntries', [...resources.laborEntries, { id: newId(), type: 'person', resource: '', hours: 1, hourlyRate: 0 }])}><Plus size={16} />Adicionar mão de obra</button></div>
@@ -159,7 +169,7 @@ export default function OrderEditModal({ order, confirmCompleted, onSave, onUplo
             </div>)}
           </>}
           {tab === 'process' && <div className="offer-process-settings os-edit-process">
-            <ServiceStageEditor layout={resources.stageLayout} stages={resources.stages} onLayoutChange={reorder} onToggle={toggleStage} disabled={locked} stageTimes={resources.stageTimes} onStageTime={(code, minutes) => { const next = { ...resources.stageTimes }; if (minutes) next[code] = minutes; else delete next[code]; resource('stageTimes', next) }} />
+            <ServiceStageEditor layout={resources.stageLayout} stages={resources.stages} onLayoutChange={reorder} onToggle={toggleStage} disabled={locked} stageTimes={resources.stageTimes} onStageTime={(code, minutes) => { const next = { ...resources.stageTimes }; if (minutes) next[code] = minutes; else delete next[code]; resource('stageTimes', next) }} stageResources={resources.stageResources} resourceOptions={resourceOptions} onStageResource={(code, choice) => { const next = { ...resources.stageResources }; if (choice) next[code] = choice; else delete next[code]; resource('stageResources', next) }} />
             {resources.stages.filter((key) => !productionStages.some(([code]) => code === key)).map((key) => <label key={key} className="os-edit-checkbox"><input type="checkbox" checked onChange={() => toggleStage(key)} />{key}</label>)}
             <div className="os-edit-grid">
               <label className="os-edit-field">Tipo<select aria-label="Tipo" value={resources.kind} onChange={(event) => resource('kind', event.target.value)}><option value="service">Serviço</option><option value="product">Produto</option></select></label>
@@ -181,7 +191,7 @@ export default function OrderEditModal({ order, confirmCompleted, onSave, onUplo
             </div><h3>Anexos</h3><ul className="os-edit-attachments">{(order.attachments || []).filter((item) => data.attachmentIds.includes(item.id)).map((item) => <li key={item.id}><span>{item.name}</span><button className="os-icon-button" type="button" aria-label={`Remover anexo ${item.name}`} title="Remover anexo" onClick={() => update('attachmentIds', data.attachmentIds.filter((id) => id !== item.id))}><Trash2 size={16} /></button></li>)}</ul>
           </>}
         </fieldset>
-        {tab === 'proposal' && <><label className="os-edit-field">Adicionar anexos<input type="file" multiple disabled={busy} onChange={(event) => { const selected = [...event.target.files]; if (selected.some((file) => !file.size || file.size > 20 * 1024 * 1024)) { setError('Cada anexo deve ter entre 1 byte e 20 MB.'); return } setFiles((current) => [...current, ...selected]); event.target.value = '' }} /></label><ul className="os-edit-attachments">{files.map((file, index) => <li key={`${file.name}-${index}`}><span>{file.name}</span><button className="os-icon-button" type="button" disabled={busy} aria-label={`Remover novo anexo ${file.name}`} title="Remover anexo" onClick={() => setFiles((current) => current.filter((_, position) => position !== index))}><Trash2 size={16} /></button></li>)}</ul></>}
+        {tab === 'proposal' && <><label className="os-edit-field">Adicionar anexos<input type="file" multiple disabled={busy} onChange={(event) => { const selected = [...event.target.files]; if (selected.some((file) => !file.size)) { setError('Um dos anexos está vazio.'); return } setFiles((current) => [...current, ...selected]); event.target.value = '' }} /></label><ul className="os-edit-attachments">{files.map((file, index) => <li key={`${file.name}-${index}`}><span>{file.name}</span><button className="os-icon-button" type="button" disabled={busy} aria-label={`Remover novo anexo ${file.name}`} title="Remover anexo" onClick={() => setFiles((current) => current.filter((_, position) => position !== index))}><Trash2 size={16} /></button></li>)}</ul></>}
       </div>
       <footer className="os-edit-footer">{error && <p className="os-edit-error" role="alert">{error}</p>}<div className="os-edit-actions"><button className="os-button" type="button" onClick={close} disabled={busy}>Cancelar</button><button className="os-button os-edit-primary" type="submit" disabled={busy}><Save size={16} />{busy ? 'Salvando...' : saved.current ? 'Reenviar anexos' : 'Salvar alterações'}</button></div></footer>
     </form>

@@ -84,8 +84,8 @@ Falta identificada na oferta/OS
 - O código é definido no cadastro do funcionário com o tipo **Operador** (único entre os operadores; o botão **Gerar código** sugere um livre) e pode ser alterado por administradores e funcionários administrativos. Na primeira inicialização após a mudança, os operadores já cadastrados receberam um código automático, que aparece na coluna **Acesso** da lista de funcionários.
 - O operador identificado fica guardado na sessão do navegador até sair. A barra lateral tem um único botão de saída, em dois passos: com o funcionário identificado ele é **Sair do funcionário** (volta para **Entrar**, sem sair da conta compartilhada); na tela do código ele vira **Sair da conta do operador** (volta ao login, bloqueado enquanto houver trabalho em andamento neste aparelho).
 - O que acontece depois da identificação está provisório: o usuário vai reformular esse fluxo.
-- Seleciona a máquina ou o serviço de hora homem efetivamente utilizado (um dos dois, não ambos).
-- Registra quantidades por etapa, pausa, troca recursos e conclui o trabalho.
+- Não escolhe máquina nem serviço: cada etapa já vem com a máquina ou o serviço de hora homem definido na oferta. O operador escolhe só a etapa.
+- Registra quantidades por etapa, pausa, troca de etapa e conclui o trabalho.
 - Recebe dados operacionais da OS, sem os valores comerciais internos no retorno específico da área do operador.
 - Cada sessão de trabalho tem uma credencial própria. A conta compartilhada não elimina a identificação do funcionário nem a proteção da sessão ativa.
 
@@ -98,7 +98,7 @@ Falta identificada na oferta/OS
 - O link de recuperação orienta entrar em contato com a administração; não há recuperação automática por e-mail descrita como implementada.
 - A sessão administrativa dura 12 horas e é restaurada ao recarregar, enquanto ainda for válida.
 - O token do operador dura 8 horas. O navegador conserva a sessão no recarregamento.
-- Reiniciar a API invalida as sessões administrativas, que ficam em memória. Não confundir persistência ao recarregar a página com persistência após reiniciar o servidor.
+- As sessões administrativas (12 horas) ficam no MySQL, na tabela `admin_sessions`, que guarda só o hash de cada token: reiniciar a API não desconecta ninguém. A API carrega as sessões abertas ao iniciar (`loadAdminSessions`) e mantém uma cópia em memória para conferir cada requisição sem consulta; sair, trocar a senha, desativar ou excluir a conta apagam as sessões no banco. Supõe um único processo da API, como o limite de requisições.
 
 ### Modo temporário de teste
 
@@ -211,6 +211,9 @@ Há histórico de atividades do funcionário. Históricos operacionais devem con
 - Ícone de informação ao lado do início de uso abre histórico com funcionário, OS, início, fim, duração e motivo de encerramento quando houver.
 - A troca de máquina durante o trabalho registra um evento e separa os intervalos de utilização, sem exigir pausar toda a sessão.
 - Abaixo dos resumos, **Funcionários ociosos (agora)** lista os operadores sem trabalho aberto em nenhuma OS, com o horário, o motivo e a OS da última parada de hoje (`GET /operations/idle-employees`, só administração); quem está parado há mais tempo vem primeiro.
+- Abaixo, **Uso das máquinas por período** (`src/MachineUsageBI.jsx`, `GET /api/machines/usage?start&end`, só administração, até 366 dias): mês atual por padrão, qualquer mês dos últimos dois anos ou período personalizado. Cartões (tempo total em uso, utilização média, máquina mais usada, máquina mais ociosa, sessões, peças, dia de maior uso, horário de pico, manutenção), ranking da mais usada para a menos usada (barra do período inteiro: em uso, manutenção, ociosa), uso por dia, uso por hora do dia, quem mais usou, motivos de pausa e a tabela por máquina. Os cálculos ficam em `server/machineUsage.js`, a partir dos eventos de operação (`workIntervals`) e dos períodos de manutenção; sessões sobrepostas na mesma máquina contam uma vez.
+- **Ociosa** é o tempo do período (até agora) sem uso e sem manutenção, contando as 24 horas de cada dia: o sistema ainda não tem horário de expediente cadastrado.
+- **Histórico diário da máquina** (`GET /api/machines/:id/day?date`): para a máquina e o dia escolhidos (setas, data ou Hoje; clicar numa máquina do ranking ou num dia do gráfico abre o dia), barra de 00:00 a 24:00 com em uso, manutenção, ociosa e o que ainda não aconteceu, as sessões (operador, OS, etapa, início, fim, como terminou) e a linha do tempo com início, retomada, pausa e motivo, peças registradas, troca de etapa ou de recurso, conclusão, interrupção, manutenção e os intervalos ociosos. Abre na máquina em uso agora, ou na mais usada do período.
 
 ### Serviços
 
@@ -262,10 +265,14 @@ O modal cadastra dados como CNPJ, empresa, prazo solicitado, peça/serviço, qua
 - Verificação de estoque que considera a soma de linhas do mesmo material.
 - Mão de obra por hora máquina ou hora homem, selecionada dos respectivos catálogos.
 - Ao selecionar máquina/serviço, o valor por hora vem preenchido; pode ser alterado para a composição da proposta.
+- Cada linha de material e de mão de obra tem **Editar** (lápis) ao lado do X: o mesmo formulário abre preenchido, a linha fica marcada e **Salvar alterações** substitui a linha (mesmo id), sem remover e incluir de novo. Uma mão de obra antiga, só com o nome do recurso, encontra a máquina ou o serviço pelo nome.
+- Peça já feita antes (`GET /api/pieces/suggestion`, `server/pieces.js`): a oferta vem com materiais, etapas, tempos (média por peça × quantidade) e a máquina ou o serviço de cada etapa. O recurso vem do plano da última vez; se ela não tinha plano (antes de 24/10/2026), vem do recurso que os operadores mais usaram naquela etapa nas OS da peça. Só entra recurso ainda cadastrado, com o nome atual.
 - Horas previstas, valores por hora e totais compõem a estimativa. Não são apontamentos reais de trabalho.
 - Tipo Serviço ou Produto, origem Amostra/Desenho, Têmpera Sim/Não e descrição complementar opcional.
 - Quando Pintura está selecionada, aparece o campo Cor/Tipo.
 - Os recursos e o processo definidos na oferta acompanham a proposta e a OS.
+- Cada etapa marcada exige o **tempo previsto** e a **máquina ou o serviço** em que será feita (`resources.stageTimes` e `resources.stageResources`; a regra é `stagePlanProblem`, em `server/serviceStages.js`). Enquanto falta algum, os campos ficam marcados em vermelho, **Fazer proposta** não abre a proposta, o PDF não é gerado (rotas `/proposal` e `/proposal-document`) e a oferta não vira OS. A lista de máquinas desse campo vem agrupada por setor (a mesma Bancada em dois setores fica separada).
+- Na edição da OS, mudar etapas, tempos ou máquinas/serviços pede os dois para todas as etapas. Uma OS antiga, de antes da regra, continua editável nos outros campos; no tablet, a etapa dela sem máquina ou serviço fica bloqueada ("Sem máquina ou serviço definido") até o administrador definir na edição da OS.
 
 ### Etapas e processo
 
@@ -307,6 +314,7 @@ Exemplo: uma OS de 20 peças com Pintura = 20, Caldeiraria = 8 e Usinagem = 5 po
 - `osValueOf` devolve o valor cobrado de uma proposta salva: total do documento, depois `osValue`, depois (propostas antigas, sem `osValue`) o valor do serviço com o desconto aplicado. Recebimento da OS, margem real (`orderCosts`) e PDF genérico usam esse valor, nunca o custo.
 - No modal dos modelos A/B, o preço vem preenchido com o Valor da OS da opção. Se o total digitado no documento for diferente, aparece um aviso no rodapé; o recebimento da OS segue o total do documento.
 - A opção selecionada fica destacada.
+- **Salvar** guarda as quatro opções (prazo, % de lucro bruto e desconto) e a opção marcada em `proposalDraft` da oferta (`PUT /api/offers/:id/proposal-draft`), para outra pessoa terminar o orçamento. Ao abrir a tela, o que foi salvo volta como estava; uma proposta gerada em PDF depois desse salvamento prevalece para a sua opção e para a escolha. Abaixo dos botões aparece quem salvou por último e quando, ou "Alterações ainda não salvas". Cada salvamento gera a notificação "Proposta salva" para os outros administradores (quem salvou não a recebe). Oferta aceita ou recusada não pode mais ser salva.
 - Escolha de layout de PDF: Clássico, Executivo ou Compacto.
 - Gerar a proposta grava os dados e o PDF; a ação não deve ser confundida com envio automático por e-mail.
 - Aceitar a proposta gera a OS e efetua a baixa de materiais disponíveis.
@@ -371,7 +379,7 @@ A antiga área **Pré-cadastro / Produtos solicitados pendentes** foi retirada d
 ### Listagem e navegação
 
 - Código, material, especificação, quantidade a pedir, quantidade necessária, OS/oferta relacionada, data, ações e histórico.
-- Todo pedido tem código `PM-AAAA-NNNN`, na mesma sequência dos pedidos manuais. Pedidos vindos de oferta/OS recebem o código ao surgir (registrado em `materialRequestCodes` no JSON); os já existentes foram numerados em ordem cronológica. O código não muda depois de atribuído.
+- Todo pedido tem código `PM-AAAA-NNNN`, na mesma sequência dos pedidos manuais. Pedidos vindos de oferta/OS recebem o código ao surgir (registrado em `materialRequestCodes` no armazenamento do portal); os já existentes foram numerados em ordem cronológica. O código não muda depois de atribuído.
 - Clicar no nome do material leva ao **Estoque**, não aos detalhes da OS.
 - O link específico da OS/oferta continua levando ao registro relacionado.
 - **Adicionar material** abre o modal de entrada existente, pré-preenchido com os dados e a quantidade pendente; o usuário pode ajustar.
@@ -418,20 +426,19 @@ Pedido para uma OS com 10 kg pendentes
 
 - Lista projetos com busca e filtros de estado; consulta novas OS a cada 10 segundos.
 - Depois do código, a tela mostra só **Selecione uma OS** (lista com busca e filtros). Ao tocar numa OS, a lista some e aparece só a OS, com **← Voltar para as OS**.
-- Na OS, o trabalho segue três quadrados grandes, nesta ordem: **1 Selecionar máquina / serviço** (vermelho) abre uma tela própria com quadrados de todas as máquinas e, abaixo, de todos os serviços; escolher volta para a OS. **2 Iniciar trabalho** (cinza) só libera depois da escolha e, enquanto o operador identificado trabalha, vira **Pausar trabalho**; escolher outro recurso nesse momento troca o recurso da sessão. **3 Concluir serviço** (amarelo) segue a regra de antes (todas as peças em todas as etapas). Uma OS com um único serviço de hora homem previsto já abre com esse serviço escolhido.
+- Na OS, o trabalho segue três quadrados grandes, nesta ordem: **1 Selecionar etapa** abre a lista das etapas, cada uma com a máquina ou o serviço definido na oferta; escolher a etapa volta para a OS, já com o recurso dela. Não existe tela para escolher máquina ou serviço. Fica bloqueada a etapa concluída, a sem recurso definido (OS antiga) e a que tem a máquina em uso por outra pessoa ou em manutenção. **2 Iniciar trabalho** começa na etapa escolhida e, enquanto o operador identificado trabalha, vira **Pausar trabalho**; escolher outra etapa nesse momento leva a sessão para ela, com o recurso dela. **3 Concluir serviço** segue a regra de antes (todas as peças em todas as etapas). A OS abre na primeira etapa aberta.
 - Ao registrar a última peça da última etapa, abre sozinho o modal **Concluir serviço** (com **Agora não**).
 - Registro de etapas, funcionários trabalhando na OS e histórico continuam abaixo dos quadrados. Sair do funcionário volta para a tela do código.
 - Mostra material, responsável, prazo, etapa atual, quantidade, cliente, identificação da OS, tempos e grupos de etapas.
 - Cada grupo de etapas é um cartão discreto, na tela do operador e em **Informações do projeto**: fundo branco, uma linha fina lateral e um ponto em cor suave ao lado do nome (**Usinagem** azul, **Caldeiraria** laranja, **Pintura** violeta, **Outras etapas** cinza). O cabeçalho mostra o nome, o estado em texto simples (**Não iniciada**, **Em andamento** ou **Concluída**, esta em verde), as passagens registradas e uma barra fina de progresso do grupo. Evitar cores fortes, ícones e etiquetas nesse cartão: o usuário pediu um visual sóbrio. Os cartões se distribuem pela largura da tela (cada um precisa de cerca de 460 px): em tela larga ficam lado a lado, em largura média Usinagem e Pintura dividem a linha e a Caldeiraria usa a linha toda, e no celular ficam empilhados; um grupo sozinho na linha ocupa a linha inteira. Dentro do cartão, as etapas quebram em linhas (sem rolagem horizontal) fora do layout de celular. Em **Informações do projeto**, a partir de 1800 px a página tem duas colunas que se equilibram sozinhas e a seção **Andamento e etapas** ocupa a largura toda para os grupos ficarem lado a lado. A numeração das etapas continua sendo a da sequência da OS; o tom e o progresso vêm de `stageGroupTone` e `stageGroupProgress` (`src/serviceProgress.js`), com o cabeçalho em `src/OperatorStageGroup.jsx`.
 - Antes da lista, o funcionário clica em **Entrar** e digita o código de 4 dígitos (ver Perfis e acesso > Operador).
-- O funcionário escolhe **Máquina** ou **Serviço de hora homem**, nunca os dois ao mesmo tempo; a escolha de um deles é obrigatória na tela e o backend recusa os dois juntos.
+- A sessão usa a **máquina** ou o **serviço de hora homem** da etapa, nunca os dois. O backend recusa iniciar numa etapa planejada com outro recurso; a API ainda aceita escolher o recurso numa etapa sem plano, só para as OS antigas.
 - Havendo falta, abre **Material pendente**, informa os kg faltantes e pergunta se deseja começar mesmo assim.
 - A confirmação é validada no backend e fica registrada; a interface não pode simplesmente ignorar a pendência.
 - **Máquina é de uma pessoa por vez**, em qualquer OS: iniciar ou trocar para uma máquina em uso por outra pessoa é recusado (409 `MACHINE_BUSY`, "A máquina X está sendo usada por Fulano na OS-…"), e na tela do operador ela aparece tracejada e desabilitada com "Em uso por Fulano · OS". O próprio funcionário pode levar a sua máquina ao trocar de OS. Se alguém esquecer de pausar, o administrador encerra a sessão pelo painel. Os **serviços de hora homem** continuam compartilhados por várias pessoas ao mesmo tempo. `GET /machines` traz `inUseBy` (funcionário e OS).
 - Vários funcionários podem trabalhar na mesma OS ao mesmo tempo, cada um com sua sessão (`activeSessions`). O mesmo funcionário não pode ter duas sessões ativas na mesma OS, nem trabalhar em duas OS ao mesmo tempo: ao iniciar outra OS, a tela pergunta "Você já está trabalhando na OS X. Deseja alterar para esta?"; confirmando (`switchFrom` no `start`), o trabalho na OS anterior é pausado com a justificativa automática **Troca de serviço**, no mesmo instante em que o novo começa. Sem a confirmação o backend responde 409 `WORKING_ELSEWHERE`, e a OS anterior só é pausada depois que o novo início foi aceito.
-- Abaixo das etapas e acima do histórico fica **Funcionários trabalhando neste serviço**. Ao clicar no nome aparecem **Pausar trabalho** e **Troca de máquina ou serviço** daquele funcionário.
-- O botão único **Troca de máquina ou serviço** abre uma janela que já vem no tipo em uso (máquina ou serviço) e permite sair da máquina para um serviço de hora homem e vice-versa (evento `resource_changed`), além de trocar por outro recurso do mesmo tipo.
-- Pausar, trocar recurso ou concluir exige a credencial da sessão, guardada no navegador em que o trabalho foi iniciado. Sessões de outro dispositivo aparecem na lista, com as ações desativadas.
+- Abaixo das etapas e acima do histórico fica **Funcionários trabalhando neste serviço**, só com os nomes e o recurso de cada um.
+- Pausar, trocar de etapa ou concluir exige a credencial da sessão, guardada no navegador em que o trabalho foi iniciado. Sessões de outro dispositivo aparecem na lista, com as ações desativadas.
 - Com mais de um funcionário trabalhando, registrar uma etapa pergunta **Quem concluiu esta etapa?**; o registro é atribuído ao funcionário escolhido e guarda quem fez o lançamento.
 - Pausar um funcionário não pausa a OS enquanto houver outros trabalhando. Concluir a OS encerra também as sessões dos demais (evento `session_ended`), preservando as horas de cada um.
 - O tempo do projeto conta uma única vez os períodos com pelo menos um funcionário trabalhando; as horas por funcionário, máquina e serviço continuam vindo dos intervalos de cada sessão.
@@ -460,7 +467,7 @@ Pedido para uma OS com 10 kg pendentes
 - Lista mantém a apresentação do processo e o acesso à OS, do mais recente para o menos recente.
 - A coluna **Colaboradores** mostra todos que trabalharam na OS (eventos de início e retomada, campo `collaborators` de `GET /operations/orders`), e o filtro **Colaborador** mostra só as OS de uma pessoa. Os títulos ordenam a tabela: números e datas começam do maior, texto de A a Z; clicar de novo inverte.
 - Serviços concluídos e Ofertas e serviços atualizam a cada 10 segundos, como o painel em andamento.
-- Com o MySQL configurado, o estado da operação (status, sessões, conclusão) fica na tabela `order_operations`, e **não** em `operation` da OS no JSON. Qualquer regra do servidor fora de `operations.js` que precise saber se a OS está concluída deve ler essa tabela (como o recebimento faz com `operationStates`); ler `order.operation` só vale sem banco. Foi esse o motivo de "A OS precisa estar concluída para programar o recebimento" aparecer para uma OS já concluída pelo operador (`tests/receivable-os-status.mysql.mjs`).
+- Com o MySQL configurado, o estado da operação (status, sessões, conclusão) fica na tabela `order_operations`, e **não** em `operation` da OS. Qualquer regra do servidor fora de `operations.js` que precise saber se a OS está concluída deve ler essa tabela (como o recebimento faz com `operationStates`); ler `order.operation` só vale sem banco. Foi esse o motivo de "A OS precisa estar concluída para programar o recebimento" aparecer para uma OS já concluída pelo operador (`tests/receivable-os-status.mysql.mjs`).
 - Consultar um serviço concluído não apaga nem reinicia seu histórico.
 
 ### Detalhes, edição e reabertura
@@ -563,10 +570,11 @@ O sino fica no cabeçalho superior e é compartilhado pelas telas administrativa
 | Novo pedido de material | Notifica administradores, inclusive pedido manual sem OS |
 | Serviço concluído pelo operador | Notifica ao concluir, antes da confirmação administrativa para arquivar |
 | Estoque de material ficando baixo | Notifica a condição de baixo estoque, sem repetir a mesma condição a cada consulta |
-| Nova OS/serviço em andamento | Notifica quando a OS é adicionada |
+| Nova OS/serviço em andamento | Notifica quando a OS é adicionada; quem aceitou a oferta não recebe (`order.createdBy`) |
+| Proposta salva | Notifica os outros administradores a cada clique em Salvar na tela Fazer proposta, com a oferta, a opção marcada e quem salvou; quem salvou não recebe; o clique abre a proposta |
 | Conta a pagar a vencer | Usa o prazo escolhido na configuração da conta |
 
-- As quatro preferências operacionais vêm ativadas por padrão.
+- As cinco preferências operacionais vêm ativadas por padrão.
 - Cada administrador pode ativar/desativar por checkbox em Configurações. Texto deve ficar ao lado do checkbox.
 - Contas a pagar: 3, 5, 7 dias antes ou Nunca; padrão de 3 dias, com tratamento do dia do vencimento.
 - Leitura é individual por administrador, não global para toda a equipe.
@@ -671,25 +679,39 @@ Há uma auditoria histórica em `docs/responsive-audit.md` e testes de navegador
 
 ### Onde os dados são armazenados
 
-O portal possui **persistência híbrida**. Não afirmar que tudo está no MySQL nem que tudo está apenas no navegador.
+Todos os dados ficam no **MySQL**, que é obrigatório: sem `DB_HOST`, `DB_USER` e `DB_NAME` o servidor não sobe. Em disco ficam só os arquivos enviados.
 
 | Dados | Persistência atual |
 | --- | --- |
-| Estoque e movimentações compartilhadas | MySQL; existe modo local de demonstração no frontend, que não deve ser confundido com estoque compartilhado |
-| Funcionários, administradores e clientes | MySQL quando configurado; fallback de contas/cadastros em JSON no modo sem banco |
-| Estado operacional e eventos de trabalho | MySQL quando configurado; JSON no modo sem banco |
-| Ofertas, conteúdo principal das OS, propostas e recursos | `server/data/offers.json` |
-| Catálogos de máquinas e serviços de hora homem | `server/data/offers.json` |
-| Pedidos manuais, metadados de recebimento/recusa e preferências | `server/data/offers.json` |
-| Contas a pagar, fornecedores, classificações e auditoria financeira | `server/data/offers.json` |
-| Notificações operacionais e marcações de leitura | JSON compartilhado do servidor |
-| Arquivos, PDFs e anexos | Diretórios privados em `server/data/`, incluindo `server/data/files/` |
+| Estoque e movimentações | MySQL (`inventory_materials`, `inventory_movements`) |
+| Funcionários, administradores e clientes | MySQL (`employees`, `users`, `clients`) |
+| Estado operacional e eventos de trabalho | MySQL (`order_operations`, `order_operation_events`) |
+| Ofertas, OS, propostas, recursos, máquinas, serviços de hora homem, pedidos manuais, contas a pagar/receber, fornecedores, classificações, conciliação bancária, notificações e preferências | MySQL, pelo armazenamento do portal (`server/store.js`): uma tabela `portal_<coleção>` por lista com id (ex.: `portal_offers`, `portal_orders`, `portal_payables`), e `portal_values` para sequências, configurações e listas sem id |
+| Catálogo fiscal (CNAE, NCM, NBS, atividades dos CNPJs) | MySQL (`fiscal_codes`, `fiscal_catalog`) |
+| Arquivos, PDFs, anexos, comprovantes e extratos OFX | Diretórios privados em `DATA_DIR` (padrão `server/data/`); o banco guarda o nome e o id de cada arquivo. Os anexos não têm limite de tamanho: o arquivo vai da requisição direto para o disco (`server/uploads.js`), sem passar inteiro pela memória, e só depois o registro é gravado; o download também é enviado aos pedaços |
+| Sessões dos administradores | MySQL (`admin_sessions`, só o hash do token) |
+| Backup diário dos dados do portal | Exportação JSON em `DATA_DIR/backups/auto-AAAA-MM-DD.json` (30 dias) |
 | Sessões administrativas | Memória da API |
-| Cache visual, estado de navegação e tokens no cliente | `localStorage`/`sessionStorage`, conforme o tipo |
+| Preferências do aparelho e estado de navegação | `localStorage`/`sessionStorage` (cópia do tema, sons já tocados, abas, token) |
 
-- `mutateStore` serializa alterações do arquivo JSON e integra notificações dos eventos de negócio.
-- Transações SQL e metadados JSON precisam continuar alinhados nos fluxos de estoque; não trocar por escritas soltas sem proteção contra repetição.
-- Fazer backup do MySQL **e** de `server/data/`, incluindo anexos. Backup apenas do banco perde parte importante do portal.
+- `readStore`/`mutateStore` (exportados por `offers.js`) leem e alteram os dados do portal como um objeto único. `mutateStore` abre uma transação, trava `portal_store`, aplica a alteração, grava só as linhas que mudaram e integra as notificações dos eventos de negócio. A revisão em `portal_store` permite reaproveitar a cópia em memória enquanto ninguém mais gravou.
+- Uma lista cujos itens têm `id` (ou `code`, ou `key`) único vira tabela própria; as demais chaves vão para `portal_values`. Não é preciso criar tabela à mão para uma coleção nova.
+- Os ramos `if (!pool)` que ainda existem em alguns módulos servem só aos testes que montam rotas sem as tabelas SQL; em produção o pool sempre existe.
+
+### Regras acrescentadas em outubro de 2026
+
+- **Cadastros simples** (`server/registries.js`, tela `SimpleRegistryScreen.jsx`): Setores (vinculados ao funcionário; não exclui setor em uso), Razões de pausas (lista usada na pausa do operador; "Troca de serviço" é reservada ao sistema; gráfico de pizza com filtro em `PauseReasonsChart.jsx`) e Bancos (nome, agência e conta; não exclui banco com baixas).
+- **Funcionário**: só pode ser excluído enquanto não tiver nada no sistema (`employeesWithActivity`: eventos de OS ou autoria `employee-<id>` em registros). Depois disso, apenas desativar/reativar; desativado não entra com o código nem faz login administrativo.
+- **Unidade dos materiais** (`server/materialUnits.js`): `kg` (padrão) ou `un`. As colunas SQL `quantity_kg`, `minimum_kg` etc. guardam a quantidade na unidade do material (`inventory_materials.unit`). Unidade aceita só inteiros; a unidade de um material do estoque só muda com saldo zero; o vínculo por nome só acontece entre materiais da mesma unidade.
+- **Banco na baixa** (`server/banks.js`): pagamento, recebimento, baixa em massa, baixa em lote e Tesouraria gravam `bankId`/`bankName`. Com pelo menos um banco cadastrado, o banco é obrigatório; sem bancos, a baixa continua sem banco (comportamento anterior). Contas a Pagar, Contas a Receber e Tesouraria filtram por banco.
+- **Pedido de material**: só nasce quando a oferta é aceita (`server/materialRequestSources.js`).
+- **Dividir entre classificações** (contas a pagar e saídas da Tesouraria): uma conta, um lançamento, com `classificationSplit` = partes `{ classificationId, classificationName, valueCents }` que somam o valor. `classificationId` guarda a primeira parte e `classificationName` junta os nomes ("Energia + Combustível"). Parcelas recebem a divisão proporcional, e a última fecha o arredondamento (`splitInstallments`). Filtro por classificação, Business Intelligence e Baixa em Lote contam cada parte na sua classificação (`classificationParts`).
+- **Conciliação considerando o banco**: a opção `bankSettings.matchBank` ("Considerar o banco da baixa") tira das sugestões o que foi baixado em outro banco; o que ainda não tem banco continua. A conta do OFX se liga ao banco do cadastro pela agência e conta, ou pela escolha manual (`bankAccounts[].registryBankId`).
+- **Contas a receber**: `issCents` previsto na criação (dividido entre parcelas); valor líquido = valor − ISS.
+- **OS**: Interno/Externo (`server/serviceLocation.js`, trocas em `order.locationChanges`); máquina/serviço de cada etapa em `resources.stageResources`, obrigatório desde 24/10/2026: a etapa decide o recurso no tablet, que não tem mais tela de escolha.
+- **Acesso do operador** (`server/operatorAccount.js`): usuário e senha definidos por administradores em Configurações, com justificativa e histórico; o `.env` vale só até a primeira alteração. Uma nova senha invalida os tokens de operador já emitidos.
+- Nos fluxos de estoque, a transação SQL do estoque é confirmada logo antes da transação do armazenamento do portal (`commit`/`rollback` de `mutateStore`); uma falha desfaz as duas. Não trocar por escritas soltas sem proteção contra repetição.
+- Fazer backup do MySQL **e** de `DATA_DIR`: o banco tem todos os dados, a pasta tem os arquivos enviados.
 - `.env`, dados reais e resultados de teste não devem entrar no Git.
 - Vários computadores usam o mesmo backend e banco. Copiar dados/cache para cada navegador não é uma solução de compartilhamento.
 

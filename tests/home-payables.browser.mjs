@@ -11,7 +11,7 @@ page.on('pageerror', (error) => errors.push(error.message))
 // Cadastros and Gestão Financeira are menu groups that may start collapsed.
 const nav = async (name) => {
   const item = page.locator('.sidebar').getByRole('button', { name, exact: true })
-  if (!await item.isVisible()) await page.locator('.sidebar').getByRole('button', { name: ['Fornecedores', 'Administradores', 'Funcionários', 'Clientes'].includes(name) ? 'Cadastros' : 'Gestão Financeira', exact: true }).click()
+  if (!await item.isVisible()) await page.locator('.sidebar').getByRole('button', { name: ['Fornecedores', 'Administradores', 'Funcionários', 'Clientes'].includes(name) ? 'Cadastros' : ['Serviços em andamento', 'Serviços concluídos', 'Ofertas e serviços'].includes(name) ? 'Operação' : 'Gestão Financeira', exact: true }).click()
   await item.click()
 }
 const home = page.locator('.admin-home-main')

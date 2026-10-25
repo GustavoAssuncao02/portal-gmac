@@ -1,0 +1,175 @@
+/* BI of the machines (MachineUsageBI.jsx): use over a period and the day of one machine. The chart colors are tokens with
+   hand-picked dark values (validated for color blindness): green = in use, amber with stripes = maintenance, the light
+   track = idle. Texts never take the chart colors. */
+.machine-usage,
+.machine-usage-day {
+  --usage-use: #067437;
+  --usage-maintenance: #e6a634;
+  --usage-maintenance-stripe: #b97c12;
+  --usage-idle: #e3eaf2;
+  --usage-future: #f5f8fb;
+  --usage-neutral: #2f6aa8;
+  --usage-surface: #ffffff;
+  --usage-grid: #e6edf5;
+  --usage-text: #17385f;
+  --usage-muted: #627b95;
+  min-height: 0;
+  margin-top: 17px;
+}
+:root[data-theme="dark"] .machine-usage,
+:root[data-theme="dark"] .machine-usage-day {
+  --usage-use: #3aae6b;
+  --usage-maintenance: #a36c1d;
+  --usage-maintenance-stripe: #d39a45;
+  --usage-idle: #2a4562;
+  --usage-future: #1b3350;
+  --usage-neutral: #6fa3dc;
+  --usage-surface: #162b43;
+  --usage-grid: #284360;
+  --usage-text: #e1ebf6;
+  --usage-muted: #a9bccf;
+}
+
+.machine-usage-heading { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 14px 24px; }
+.machine-usage-heading h2 { margin: 0 0 4px; }
+.machine-usage-heading p { margin: 0; color: var(--usage-muted); font-size: 13px; }
+.machine-usage-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+.machine-usage-controls label { display: grid; gap: 4px; color: var(--usage-muted); font-size: 12px; font-weight: 600; }
+.machine-usage-controls select,
+.machine-usage-controls input { min-height: 38px; padding: 6px 10px; border: 1px solid #cfdbe7; border-radius: 8px; background: #ffffff; color: #17385f; font: inherit; font-size: 14px; }
+.machine-usage-controls select { min-width: 210px; }
+.machine-usage-day-picker { display: flex; align-items: flex-end; gap: 6px; }
+.machine-usage-day-picker > button { display: grid; place-items: center; min-width: 38px; height: 38px; padding: 0 10px; border: 1px solid #cfdbe7; border-radius: 8px; background: #ffffff; color: #17385f; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.machine-usage-day-picker > button:disabled { opacity: 0.45; cursor: default; }
+.machine-usage-period { margin: 14px 0 0; color: var(--usage-muted); font-size: 13px; }
+.machine-usage-period strong { color: var(--usage-text); }
+.machine-usage-error { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 12px 0 0; color: #b42318; font-size: 14px; }
+.machine-usage-error p { margin: 0; }
+.machine-usage-error button,
+.machine-usage-link { min-height: 32px; padding: 4px 12px; border: 1px solid #cfdbe7; border-radius: 8px; background: #ffffff; color: #0c4c91; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.machine-usage-note { margin: 10px 0 0; color: var(--usage-muted); font-size: 12px; }
+.machine-usage-day-anchor { scroll-margin-top: 16px; }
+
+/* Stat tiles. */
+.usage-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-top: 14px; }
+.usage-tile { display: grid; align-content: start; gap: 4px; min-width: 0; padding: 14px 16px; border: 1px solid #e0e8f2; border-radius: 10px; background: #f8fafd; }
+.usage-tile span { color: var(--usage-muted); font-size: 12px; font-weight: 600; }
+.usage-tile strong { overflow: hidden; color: var(--usage-text); font-size: 22px; font-weight: 700; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+.usage-tile small { color: var(--usage-muted); font-size: 12px; line-height: 1.35; }
+
+.machine-usage-block { min-width: 0; margin-top: 22px; }
+.machine-usage-block h3,
+.machine-usage-day-grid h3 { margin: 0 0 2px; color: var(--usage-text); font-size: 16px; }
+.machine-usage-block > p { margin: 0 0 10px; color: var(--usage-muted); font-size: 12px; }
+.machine-usage-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; }
+.usage-empty { margin: 8px 0 0; color: var(--usage-muted); font-size: 13px; }
+
+/* Chart pieces shared by the ranking, the columns and the day bar. */
+.usage-chart { position: relative; }
+.usage-part--use { background: var(--usage-use); }
+.usage-part--maintenance { background: repeating-linear-gradient(45deg, var(--usage-maintenance) 0 5px, var(--usage-maintenance-stripe) 5px 7px); }
+.usage-part--idle { background: var(--usage-idle); }
+.usage-part--future { background: repeating-linear-gradient(135deg, var(--usage-future) 0 6px, var(--usage-idle) 6px 7px); }
+.usage-part--neutral { background: var(--usage-neutral); }
+.usage-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0 0 10px; padding: 0; color: var(--usage-text); font-size: 12px; list-style: none; }
+.usage-legend li { display: flex; align-items: center; gap: 7px; }
+.usage-swatch { display: inline-block; width: 14px; height: 10px; border-radius: 3px; }
+.usage-tip { position: absolute; z-index: 5; display: grid; gap: 2px; min-width: 160px; max-width: 260px; padding: 9px 12px; border: 1px solid #d6e1ec; border-radius: 8px; background: #ffffff; box-shadow: 0 8px 22px rgba(11, 49, 93, 0.16); color: var(--usage-text); font-size: 12px; line-height: 1.35; pointer-events: none; transform: translate(-50%, calc(-100% - 12px)); }
+.usage-tip strong { font-size: 13px; }
+.usage-tip span { color: var(--usage-muted); }
+
+/* Ranking: one row per machine, the bar is the whole period. */
+.usage-ranking ol { display: grid; gap: 2px; max-height: 470px; margin: 0; padding: 0 4px 0 0; overflow-y: auto; list-style: none; scrollbar-width: thin; }
+.usage-ranking-row { display: grid; grid-template-columns: 26px minmax(130px, 220px) minmax(0, 1fr) 118px; align-items: center; gap: 12px; width: 100%; min-height: 44px; padding: 4px 8px; border: 0; border-radius: 8px; background: transparent; color: var(--usage-text); font: inherit; text-align: left; cursor: pointer; }
+.usage-ranking-row:hover:not(:disabled),
+.usage-ranking-row:focus-visible { background: #f2f6fb; outline: none; }
+.usage-ranking-row--selected { box-shadow: inset 3px 0 0 #0c4c91; background: #eef4fb; }
+.usage-ranking-row:disabled { cursor: default; }
+.usage-ranking-position { color: var(--usage-muted); font-size: 12px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+.usage-ranking-name { display: grid; min-width: 0; }
+.usage-ranking-name strong,
+.usage-ranking-name small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.usage-ranking-name strong { font-size: 14px; }
+.usage-ranking-name small { color: var(--usage-muted); font-size: 12px; }
+.usage-bar { display: flex; gap: 2px; height: 16px; overflow: hidden; border-radius: 4px; }
+.usage-bar i { flex: 0 0 auto; min-width: 2px; }
+.usage-bar i.usage-part--idle { flex: 1 1 auto; min-width: 0; }
+.usage-ranking-value { display: grid; justify-items: end; }
+.usage-ranking-value strong { font-size: 14px; font-variant-numeric: tabular-nums; }
+.usage-ranking-value small { color: var(--usage-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+/* Columns per day or per hour: bars up to 24px wide, rounded at the top, from one baseline. */
+.usage-columns-plot { position: relative; height: 210px; margin-left: 38px; }
+.usage-gridline { position: absolute; left: 0; right: 0; border-top: 1px solid var(--usage-grid); }
+.usage-gridline span { position: absolute; right: calc(100% + 8px); top: -8px; color: var(--usage-muted); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.usage-columns-bars { position: absolute; inset: 0; display: grid; align-items: end; }
+.usage-column { position: relative; display: flex; align-items: flex-end; justify-content: center; height: 100%; padding: 0 1px; border: 0; background: transparent; cursor: pointer; }
+.usage-column:disabled { cursor: default; }
+.usage-column:hover,
+.usage-column:focus-visible { background: rgba(12, 76, 145, 0.06); outline: none; }
+.usage-column i { display: block; width: min(24px, 80%); min-height: 2px; border-radius: 4px 4px 0 0; background: var(--usage-use); }
+.usage-column b { position: absolute; left: 50%; margin-bottom: 4px; color: var(--usage-text); font-size: 11px; font-weight: 700; transform: translateX(-50%); white-space: nowrap; }
+.usage-column--selected { background: rgba(12, 76, 145, 0.08); }
+.usage-columns-axis { display: grid; margin: 6px 0 0 38px; color: var(--usage-muted); font-size: 11px; text-align: center; font-variant-numeric: tabular-nums; }
+.usage-columns-axis span { overflow: visible; white-space: nowrap; }
+.usage-columns-axis .usage-axis--selected { color: var(--usage-text); font-weight: 700; }
+
+/* Lists with a thin bar (operators, pause reasons). */
+.usage-bar-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.usage-bar-list li { display: grid; gap: 5px; }
+.usage-bar-list-name { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; color: var(--usage-text); font-size: 14px; }
+.usage-bar-list-name small { color: var(--usage-muted); font-size: 12px; }
+.usage-bar-list-track { display: block; height: 8px; overflow: hidden; border-radius: 4px; background: var(--usage-idle); }
+.usage-bar-list-track i { display: block; height: 100%; border-radius: 4px; }
+
+/* Tables. */
+.usage-table-scroll { overflow-x: auto; border: 1px solid #e0e8f2; border-radius: 10px; }
+.usage-table { width: 100%; border-collapse: collapse; color: var(--usage-text); font-size: 13px; }
+.usage-table th { padding: 10px 12px; background: #f5f8fc; color: #48627d; font-size: 12px; font-weight: 700; text-align: left; white-space: nowrap; }
+.usage-table td { padding: 9px 12px; border-top: 1px solid #edf1f5; vertical-align: top; }
+.usage-table td small { display: block; color: var(--usage-muted); font-size: 12px; }
+.usage-table .usage-number { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* The day of one machine. */
+.usage-day-bar { margin-top: 18px; }
+.usage-day-track { position: relative; height: 34px; overflow: hidden; border-radius: 6px; background: var(--usage-surface); }
+.usage-segment { position: absolute; top: 0; bottom: 0; padding: 0; border: 0; border-radius: 3px; cursor: default; }
+.usage-segment:focus-visible { outline: 2px solid #0c4c91; outline-offset: 1px; }
+.usage-day-axis { position: relative; height: 18px; margin-top: 4px; color: var(--usage-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.usage-day-axis span { position: absolute; transform: translateX(-50%); }
+.usage-day-axis span:first-child { transform: none; }
+.usage-day-axis span:last-child { transform: translateX(-100%); }
+.machine-usage-day-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 28px; margin-top: 20px; }
+.machine-usage-day-grid h3 { margin-bottom: 10px; }
+.usage-events { display: grid; max-height: 560px; margin: 0; padding: 0 4px 0 0; overflow-y: auto; list-style: none; scrollbar-width: thin; }
+.usage-event { position: relative; display: grid; grid-template-columns: 44px 14px minmax(0, 1fr); gap: 10px; padding: 0 0 14px; }
+.usage-event::before { position: absolute; top: 14px; bottom: 0; left: 60px; width: 2px; background: var(--usage-grid); content: ""; }
+.usage-event:last-child::before { display: none; }
+.usage-event time { padding-top: 1px; color: var(--usage-text); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.usage-event i { position: relative; z-index: 1; width: 12px; height: 12px; margin-top: 3px; border: 2px solid var(--usage-surface); border-radius: 50%; background: #91a6c2; box-sizing: content-box; }
+.usage-event--use i { background: var(--usage-use); }
+.usage-event--piece i { background: var(--usage-neutral); }
+.usage-event--maintenance i { background: var(--usage-maintenance); }
+.usage-event--idle i { border-color: var(--usage-surface); background: var(--usage-idle); box-shadow: inset 0 0 0 2px #91a6c2; }
+.usage-event strong { color: var(--usage-text); font-size: 14px; }
+.usage-event p { margin: 2px 0 0; color: var(--usage-muted); font-size: 13px; line-height: 1.4; }
+.usage-event--idle strong { color: var(--usage-muted); font-weight: 600; }
+
+@media (max-width: 1100px) {
+  .machine-usage-pair,
+  .machine-usage-day-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .usage-ranking-row { grid-template-columns: 22px minmax(0, 1fr) 96px; }
+  .usage-ranking-value { grid-column: 3; grid-row: 1; }
+  .usage-bar { grid-column: 2 / -1; grid-row: 2; }
+  .machine-usage-controls,
+  .machine-usage-controls label,
+  .machine-usage-controls select { width: 100%; min-width: 0; }
+  .machine-usage-day-picker { width: 100%; }
+  .machine-usage-day-picker label { flex: 1 1 auto; width: auto; }
+  .machine-usage-day-picker input { width: 100%; min-width: 0; }
+  .usage-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .usage-tile { padding: 12px; }
+  .usage-tile strong { font-size: 18px; }
+}

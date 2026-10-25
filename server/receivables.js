@@ -1,6 +1,6 @@
 import express from 'express'
 import { randomUUID } from 'node:crypto'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { receiveFile, sendStoredFile } from './uploads.js'
 import path from 'node:path'
 import { dataDirectory } from './dataDirectory.js'
 import { readStore, mutateStore } from './offers.js'
@@ -11,6 +11,7 @@ import { assertNotReconciled, reconciledTransaction } from './bankStatements.js'
 import { normalizeText } from './ofx.js'
 import { osValueOf } from './proposalMath.js'
 import { operationStates } from './reportData.js'
+import { settlementBank } from './banks.js'
 
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), { status }) }
 const clean = (value, limit = 1000) => String(value ?? '').trim().slice(0, limit)
@@ -60,7 +61,22 @@ function assertDueDates(parts, issueDate) {
   }
 }
 // A single document can be received in installments; they must add up exactly to the total.
+// The ISS expected for the document follows its parts: each occurrence of a contract carries it whole; installments split
+// it in proportion to their values, the last one taking the rounding.
+function withIss(parts, common) {
+  const total = common.issCents || 0
+  if (common.kind !== 'installment') return parts.map((part) => ({ ...part, issCents: total }))
+  let given = 0
+  return parts.map((part, index) => {
+    const issCents = index === parts.length - 1 ? total - given : Math.round(total * part.valueCents / common.valueCents)
+    given += issCents
+    return { ...part, issCents }
+  })
+}
 function partsOf(body, common, creating = false) {
+  return withIss(splitParts(body, common, creating), common)
+}
+function splitParts(body, common, creating) {
   if (common.kind === 'recurring' && creating) {
     const ahead = Number(body.ahead ?? 0)
     if (!Number.isInteger(ahead) || ahead < 0 || ahead > 24) fail('Informe de 0 a 24 ocorrências futuras.')
@@ -94,8 +110,10 @@ export function filterReceivables(rows, filters = {}, today = todayBahia()) {
   return rows.filter((row) => {
     if (filters.start && row.dueDate < filters.start || filters.end && row.dueDate > filters.end) return false
     if (!matchesReceivable(row, filters.search)) return false
+    // Only received accounts have a bank: filtering by bank lists the receipts that entered it.
+    if (filters.bankId && row.receipt?.bankId !== filters.bankId) return false
     const status = receivableStatus(row, today)
-    if (filters.status === 'all') return true
+    if (filters.status === 'all' || filters.bankId && !filters.status) return true
     return filters.status ? status === filters.status : status !== 'received'
   })
 }
@@ -118,14 +136,20 @@ async function fields(store, body, accounts, current) {
   let valueCents
   try { valueCents = cents(body.value) } catch (error) { fail(error.message) }
   if (!valueCents) fail('O valor deve ser maior que zero.')
-  return { ...customer, description: clean(body.description, 5000), documentNumber: clean(body.documentNumber, 160), issueDate, dueDate: body.dueDate, valueCents, kind, recurrence: kind === 'recurring' ? body.recurrence : null }
+  // ISS the customer already said will be withheld: the account shows the net value before the money arrives.
+  let issCents = 0
+  try { issCents = cents(body.iss || '0') } catch (error) { fail(error.message) }
+  if (issCents >= valueCents) fail('O ISS deve ser menor que o valor da conta.')
+  return { ...customer, description: clean(body.description, 5000), documentNumber: clean(body.documentNumber, 160), issueDate, dueDate: body.dueDate, valueCents, issCents, kind, recurrence: kind === 'recurring' ? body.recurrence : null }
 }
 function duplicates(store, proposed, ignored = []) {
   const key = (row) => JSON.stringify([normalizeText(row.customerName), row.valueCents, row.dueDate])
   // Tesouraria entries are not checked: two equal sales on the same day are legitimate.
   if (store.receivables.some((row) => !ignored.includes(row.id) && !row.inactive && !row.treasury && key(row) === key(proposed))) fail('Conta duplicada: cliente, valor e vencimento já cadastrados.', 409)
 }
-function receipt(body, valueCents, bulk = false) {
+// `expectedIss`: the ISS registered with the account; a bulk receipt applies it, since it accepts no adjustment typed by hand.
+// With `store`, the bank of the settlement is required once banks are registered (Cadastros > Bancos).
+function receipt(body, valueCents, bulk = false, expectedIss = 0, store = null) {
   if (!validDate(body.date) || body.date > todayBahia()) fail('Data de recebimento inválida ou futura.')
   if (!Object.hasOwn(receiptMethods, body.method)) fail('Selecione a forma de recebimento.')
   // The ISS withheld by the customer is subtracted from what arrives, like the discount, and may come with interest or discount.
@@ -133,21 +157,22 @@ function receipt(body, valueCents, bulk = false) {
   try { interestCents = cents(body.interest || '0'); discountCents = cents(body.discount || '0'); issCents = cents(body.iss || '0') } catch (error) { fail(error.message) }
   if (interestCents && discountCents) fail('Juros e desconto são exclusivos.')
   if (bulk && (interestCents || discountCents || issCents || body.fileIds?.length)) fail('A baixa em massa não aceita juros, desconto, ISS ou comprovante; faça a baixa individual.')
+  if (bulk) issCents = expectedIss
   const finalCents = valueCents + interestCents - discountCents - issCents
   if (finalCents < 0) fail('O desconto e o ISS não podem ultrapassar o valor da conta.')
-  return { date: body.date, method: body.method, interestCents, discountCents, issCents, finalCents, note: clean(body.note, 5000), receipts: [] }
+  return { date: body.date, method: body.method, interestCents, discountCents, issCents, finalCents, note: clean(body.note, 5000), receipts: [], ...(store ? settlementBank(store, body.bankId) : {}) }
 }
 // Tesouraria posts money already received: a single account, issued, due and received on the same date.
 const treasuryBody = (body) => ({ ...body, kind: 'single', issueDate: body.date, dueDate: body.date, ahead: 0, count: 1, installments: undefined })
 // When the amount received (`received`) differs from the value of the account, the difference is interest (more) or discount (less).
-function treasuryReceipt(body, valueCents) {
-  const base = { date: body.date, method: body.method, note: body.note }
-  if (body.received === undefined || body.received === null || body.received === '') return receipt(base, valueCents)
+function treasuryReceipt(body, valueCents, store) {
+  const base = { date: body.date, method: body.method, note: body.note, bankId: body.bankId }
+  if (body.received === undefined || body.received === null || body.received === '') return receipt(base, valueCents, false, 0, store)
   let receivedCents
   try { receivedCents = cents(body.received) } catch (error) { fail(error.message) }
   if (!receivedCents) fail('O valor recebido deve ser maior que zero.')
   const difference = receivedCents - valueCents
-  return receipt({ ...base, interest: difference > 0 ? (difference / 100).toFixed(2) : '', discount: difference < 0 ? (-difference / 100).toFixed(2) : '' }, valueCents)
+  return receipt({ ...base, interest: difference > 0 ? (difference / 100).toFixed(2) : '', discount: difference < 0 ? (-difference / 100).toFixed(2) : '' }, valueCents, false, 0, store)
 }
 // Reminders mirror Contas a Pagar (N days before and on the day) plus one notice once the date has passed.
 export function activeReceivableNotices(store, userId) {
@@ -162,8 +187,8 @@ export function receivableNotificationItems(store, userId) {
   return activeReceivableNotices(store, userId).map(({ readBy, ...notice }) => ({ ...notice, readAt: readBy?.find((entry) => String(entry.userId) === String(userId))?.at || null, account: view(store.receivables.find((row) => row.id === notice.accountId), store) })).reverse()
 }
 function report(rows, filters = {}, individual = false) {
-  const columns = ['ID', 'Cliente', 'CPF/CNPJ', 'Descrição', 'Origem', 'Documento', 'Parcela', 'Emissão', 'Valor (R$)', 'Vencimento', 'Status', 'Recebimento', 'Forma', 'Juros (R$)', 'Desconto (R$)', 'ISS (R$)', 'Recebido (R$)', 'Observação']
-  return { title: individual ? `Conta ${rows[0]?.id || ''}` : 'Contas a receber', eyebrow: 'Financeiro', generatedAt: new Date().toISOString(), start: filters.start, end: filters.end, summary: [['Contas', rows.length], ['Valor original', money(rows.reduce((sum, row) => sum + row.valueCents, 0))]], notes: [`Situação: ${{ all: 'Todas', ...statusLabel }[filters.status] || 'Pendentes e vencidas'}`, ...(filters.search ? [`Busca: ${filters.search}`] : [])], sections: [{ name: 'Contas a receber', columns, rows: rows.map((row) => { const r = row.receipt; return [row.id, row.customerName, row.customerDocument, row.description, row.orderCode || 'Manual', row.documentNumber, row.groupId ? `${row.installmentNumber} de ${row.installmentCount}` : '', row.issueDate, row.valueCents / 100, row.dueDate, statusLabel[receivableStatus(row)], r?.date, receiptMethods[r?.method] || '', (r?.interestCents || 0) / 100, (r?.discountCents || 0) / 100, (r?.issCents || 0) / 100, r ? r.finalCents / 100 : '', r?.note] }) }] }
+  const columns = ['ID', 'Cliente', 'CPF/CNPJ', 'Descrição', 'Origem', 'Documento', 'Parcela', 'Emissão', 'Valor (R$)', 'Vencimento', 'Status', 'Recebimento', 'Forma', 'Banco', 'Juros (R$)', 'Desconto (R$)', 'ISS (R$)', 'Recebido (R$)', 'Observação']
+  return { title: individual ? `Conta ${rows[0]?.id || ''}` : 'Contas a receber', eyebrow: 'Financeiro', generatedAt: new Date().toISOString(), start: filters.start, end: filters.end, summary: [['Contas', rows.length], ['Valor original', money(rows.reduce((sum, row) => sum + row.valueCents, 0))]], notes: [`Situação: ${{ all: 'Todas', ...statusLabel }[filters.status] || 'Pendentes e vencidas'}`, ...(filters.search ? [`Busca: ${filters.search}`] : [])], sections: [{ name: 'Contas a receber', columns, rows: rows.map((row) => { const r = row.receipt; return [row.id, row.customerName, row.customerDocument, row.description, row.orderCode || 'Manual', row.documentNumber, row.groupId ? `${row.installmentNumber} de ${row.installmentCount}` : '', row.issueDate, row.valueCents / 100, row.dueDate, statusLabel[receivableStatus(row)], r?.date, receiptMethods[r?.method] || '', r?.bankName || '', (r?.interestCents || 0) / 100, (r?.discountCents || 0) / 100, (r?.issCents || 0) / 100, r ? r.finalCents / 100 : '', r?.note] }) }] }
 }
 
 export default function createReceivablesRouter(accounts, requireAdmin, pool = null) {
@@ -239,7 +264,7 @@ export default function createReceivablesRouter(accounts, requireAdmin, pool = n
         const existing = store.receivables.find((row) => row.orderCode === order.code && !row.inactive)
         if (existing) fail(`Esta OS já possui a conta a receber ${existing.id}.`, 409)
         const document = String(order.cnpj || '').replace(/\D/g, '')
-        common = await fields(store, { customerName: order.company, customerDocument: [11, 14].includes(document.length) ? document : '', description: body.description || `${order.code} · ${order.service}`, documentNumber: order.code, value: body.value, issueDate: treasury ? body.issueDate : undefined, dueDate: body.dueDate, kind: body.kind }, accounts)
+        common = await fields(store, { customerName: order.company, customerDocument: [11, 14].includes(document.length) ? document : '', description: body.description || `${order.code} · ${order.service}`, documentNumber: order.code, value: body.value, iss: body.iss, issueDate: treasury ? body.issueDate : undefined, dueDate: body.dueDate, kind: body.kind }, accounts)
         origin = 'order'
       }
       const parts = partsOf(body, common, true)
@@ -253,7 +278,7 @@ export default function createReceivablesRouter(accounts, requireAdmin, pool = n
       for (const [index, row] of rows.entries()) {
         // Installments share the document's files; a recurring contract keeps them on its first occurrence.
         row.attachments = common.kind === 'recurring' && index > 0 ? [] : [...attachments]
-        if (treasury) Object.assign(row, { treasury: true, receipt: treasuryReceipt(req.body, row.valueCents) })
+        if (treasury) Object.assign(row, { treasury: true, receipt: treasuryReceipt(req.body, row.valueCents, store) })
         store.receivableSequence = (store.receivableSequence || 0) + 1
         row.id = `REC-${String(store.receivableSequence).padStart(6, '0')}`
         row.lastStatus = receivableStatus(row)
@@ -276,7 +301,7 @@ export default function createReceivablesRouter(accounts, requireAdmin, pool = n
         const body = treasuryBody(req.body)
         const common = await fields(store, row.origin === 'order' ? { ...body, clientId: undefined, customerName: row.customerName, customerDocument: row.customerDocument ?? '' } : body, accounts, row)
         const before = { ...row }
-        Object.assign(row, common, { originalTotalCents: common.valueCents, receipt: { ...treasuryReceipt(req.body, common.valueCents), receipts: row.receipt.receipts || [] }, lastStatus: 'received' })
+        Object.assign(row, common, { originalTotalCents: common.valueCents, receipt: { ...treasuryReceipt(req.body, common.valueCents, store), receipts: row.receipt.receipts || [] }, lastStatus: 'received' })
         event(store, req.actor, 'edited', row.id, { changes: { before, after: { ...row } } })
         return [view(row, store)]
       }
@@ -285,7 +310,7 @@ export default function createReceivablesRouter(accounts, requireAdmin, pool = n
       // The payer of an OS receivable comes from the OS and stays fixed.
       const common = row.origin === 'order' ? await fields(store, { ...req.body, clientId: undefined, customerName: row.customerName, customerDocument: row.customerDocument ?? '' }, accounts, row) : await fields(store, req.body, accounts, row)
       if (group.some((item) => item.receipt)) {
-        const { valueCents, dueDate, kind, ...descriptive } = common
+        const { valueCents, dueDate, kind, issCents, ...descriptive } = common
         const before = { ...row }; Object.assign(row, descriptive); row.lastStatus = receivableStatus(row)
         event(store, req.actor, 'edited', row.id, { changes: { before, after: { ...row } }, details: { text: 'Parcelamento com parcela recebida: valores e datas preservados.' } })
         return [view(row, store)]
@@ -322,7 +347,7 @@ export default function createReceivablesRouter(accounts, requireAdmin, pool = n
     const item = await mutateStore((store) => {
       init(store); const row = find(store, req.params.id)
       if (row.receipt) fail('Esta conta já foi recebida.', 409)
-      const data = receipt(req.body, row.valueCents); data.receipts = claimFiles(store, req.body.fileIds || [], req.actor)
+      const data = receipt(req.body, row.valueCents, false, 0, store); data.receipts = claimFiles(store, req.body.fileIds || [], req.actor)
       row.receipt = data; row.lastStatus = 'received'; event(store, req.actor, 'received', row.id, { details: row.receipt })
       for (const file of data.receipts) event(store, req.actor, 'attachment_added', row.id, { details: { name: file.name, receipt: true } })
       return view(row, store)
@@ -336,29 +361,33 @@ export default function createReceivablesRouter(accounts, requireAdmin, pool = n
       if (!Array.isArray(req.body.ids) || !req.body.ids.length || new Set(req.body.ids).size !== req.body.ids.length) fail('Selecione contas válidas.')
       const rows = req.body.ids.map((id) => find(store, id))
       if (rows.some((row) => row.receipt || row.inactive)) fail('Selecione apenas contas ainda não recebidas.', 409)
-      const data = rows.map((row) => receipt(req.body, row.valueCents, true))
+      const data = rows.map((row) => receipt(req.body, row.valueCents, true, row.issCents || 0, store))
       rows.forEach((row, index) => { row.receipt = data[index]; row.lastStatus = 'received'; event(store, req.actor, 'received', row.id, { details: { ...data[index], bulk: true } }) })
       return rows.map((row) => view(row, store))
     })
     res.json({ items })
   }))
-  router.post('/receivables/uploads', express.raw({ type: 'application/octet-stream', limit: '20mb' }), handle(async (req, res) => {
-    if (!Buffer.isBuffer(req.body) || !req.body.length) fail('Selecione um arquivo, com até 20 MB.')
-    const file = { id: randomUUID(), name: path.basename(clean(req.query.name, 200)), contentType: clean(req.query.type, 160) || 'application/octet-stream', size: req.body.length, userId: req.actor.id }
+  // Files of any size: written to the disk first, then recorded; a record that is not saved removes its file.
+  router.post('/receivables/uploads', handle(async (req, res) => {
+    const file = { id: randomUUID(), name: path.basename(clean(req.query.name, 200)), contentType: clean(req.query.type, 160) || 'application/octet-stream', userId: req.actor.id }
     if (!file.name) fail('Nome de arquivo inválido.')
-    await mutateStore(async (store) => { init(store); await mkdir(directory, { recursive: true }); await writeFile(path.join(directory, file.id), req.body); store.receivableUploads.push(file) })
+    const received = await receiveFile(req, directory, file.id)
+    if (!received) fail('Selecione um arquivo.')
+    file.size = received.size
+    await mutateStore((store) => { init(store); store.receivableUploads.push(file) }).catch(async (error) => { await received.discard(); throw error })
     res.status(201).json({ item: { id: file.id } })
   }))
-  router.post('/receivables/:id/files', express.raw({ type: 'application/octet-stream', limit: '20mb' }), handle(async (req, res) => {
-    if (!Buffer.isBuffer(req.body) || !req.body.length) fail('Selecione um arquivo, com até 20 MB.')
-    const file = { id: randomUUID(), name: path.basename(clean(req.query.name, 200)), contentType: clean(req.query.type, 160) || 'application/octet-stream', size: req.body.length }
+  router.post('/receivables/:id/files', handle(async (req, res) => {
+    const file = { id: randomUUID(), name: path.basename(clean(req.query.name, 200)), contentType: clean(req.query.type, 160) || 'application/octet-stream' }
     if (!file.name) fail('Nome de arquivo inválido.')
-    await mutateStore(async (store) => {
+    const received = await receiveFile(req, directory, file.id)
+    if (!received) fail('Selecione um arquivo.')
+    file.size = received.size
+    await mutateStore((store) => {
       init(store); const row = find(store, req.params.id)
       if (row.receipt && !treasuryEntry(row)) fail('Estorne o recebimento antes de alterar os anexos.', 409)
-      await mkdir(directory, { recursive: true }); await writeFile(path.join(directory, file.id), req.body)
       row.attachments = [...(row.attachments || []), file]; event(store, req.actor, 'attachment_added', row.id, { details: { name: file.name } })
-    })
+    }).catch(async (error) => { await received.discard(); throw error })
     res.status(201).json({ item: file })
   }))
   router.get('/receivables/:id/files/:fileId', handle(async (req, res) => {
@@ -366,7 +395,7 @@ export default function createReceivablesRouter(accounts, requireAdmin, pool = n
     const file = [...(row.attachments || []), ...(row.receipt?.receipts || [])].find((item) => item.id === req.params.fileId)
     if (!file) fail('Arquivo não encontrado.', 404)
     res.setHeader('Content-Type', 'application/octet-stream'); res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(file.name)}`)
-    res.send(await readFile(path.join(directory, file.id)))
+    await sendStoredFile(res, path.join(directory, file.id))
   }))
   router.delete('/receivables/:id/files/:fileId', handle(async (req, res) => {
     await mutateStore((store) => {

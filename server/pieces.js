@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { productionStages } from './serviceStages.js'
+import { materialUnit } from './materialUnits.js'
+import { workIntervals } from './reportData.js'
 
 // A piece is identified only by its name (not by client): case, accents and extra spaces are ignored.
 export const pieceKey = (name) => String(name ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLocaleLowerCase('pt-BR').replace(/\s+/g, ' ').trim()
@@ -9,6 +11,22 @@ const materialKey = (material) => material.inventoryId != null ? `inventory:${ma
 const round = (value, digits) => Math.round(value * 10 ** digits) / 10 ** digits
 
 // Planned time of each stage, in minutes, for the whole OS: { [stage code]: minutes }.
+// Machine or labor service planned for each checked stage, chosen from the registrations: { stage: { type, id, name } }.
+// The name is kept so the plan still reads well if the registration is renamed or removed later.
+export function cleanStageResources(value, stages, { machines = [], laborServices = [] } = {}) {
+  if (value == null) return {}
+  if (typeof value !== 'object' || Array.isArray(value)) throw Object.assign(new Error('Máquinas e serviços das etapas inválidos.'), { status: 400 })
+  const result = {}
+  for (const [code, choice] of Object.entries(value)) {
+    if (!choice || !stages.includes(code)) continue
+    const catalog = choice.type === 'machine' ? machines : choice.type === 'labor-service' ? laborServices : null
+    const found = catalog?.find((item) => String(item.id) === String(choice.id))
+    if (!found) throw Object.assign(new Error('Selecione uma máquina ou um serviço cadastrado para a etapa.'), { status: 400 })
+    result[code] = { type: choice.type, id: found.id, name: found.name }
+  }
+  return result
+}
+
 export function cleanStageTimes(value, stages) {
   if (value == null) return {}
   if (typeof value !== 'object' || Array.isArray(value)) throw Object.assign(new Error('Tempos das etapas inválidos.'), { status: 400 })
@@ -89,9 +107,35 @@ export function pieceCatalog(offers, orders) {
   return [...pieces.values()].sort((left, right) => left.name.localeCompare(right.name, 'pt-BR'))
 }
 
+// The machine or labor service of each stage: the one planned the last time or, for a piece made before the plan became
+// mandatory, the one the operators used the longest on that stage in the OS of the piece. Only what is still registered
+// (`catalog`: { machine: [...], 'labor-service': [...] }), with its current name.
+function stagePlans(stages, planned = {}, history, catalog) {
+  const registered = (plan) => {
+    const item = plan && catalog[plan.type]?.find((entry) => String(entry.id) === String(plan.id))
+    return item ? { type: plan.type, id: item.id, name: item.name } : null
+  }
+  const used = new Map()
+  for (const interval of workIntervals(history)) {
+    const code = productionStages.find(([, label]) => label === interval.stageName)?.[0]
+    const plan = interval.machineId != null ? { type: 'machine', id: interval.machineId } : interval.laborServiceId != null ? { type: 'labor-service', id: interval.laborServiceId } : null
+    if (!code || !stages.includes(code) || !registered(plan)) continue
+    const key = `${code}|${plan.type}|${plan.id}`
+    used.set(key, { code, plan, ms: (used.get(key)?.ms || 0) + interval.end - interval.start })
+  }
+  const plans = {}
+  for (const code of stages) {
+    const longest = [...used.values()].filter((row) => row.code === code).sort((left, right) => right.ms - left.ms)[0]
+    const plan = registered(planned[code]) || registered(longest?.plan)
+    if (plan) plans[code] = plan
+  }
+  return plans
+}
+
 // Resources for a new offer of a piece made before. Choices (which materials, stages and their order, process options,
-// labor) come from the last time; material quantities and stage times come from the average per piece × the new quantity.
-export function pieceSuggestion({ offers, orders, name, quantity, prices = new Map(), excludeOfferId }) {
+// labor, the machine or service of each stage) come from the last time; material quantities and stage times come from
+// the average per piece × the new quantity. `history`: the OS of the piece with their operation events.
+export function pieceSuggestion({ offers, orders, name, quantity, prices = new Map(), excludeOfferId, catalog = {}, history = [] }) {
   const key = pieceKey(name), pieces = Math.max(1, Number(quantity) || 1)
   const source = key && lastPieceSource(offers, orders, key, excludeOfferId)
   if (!source?.resources) return null
@@ -99,7 +143,9 @@ export function pieceSuggestion({ offers, orders, name, quantity, prices = new M
   const sourcePieces = Math.max(1, Number(source.quantity) || 1), resources = source.resources, now = new Date().toISOString()
   const materials = (resources.materials || []).map((material) => {
     const perPiece = averages.materials[materialKey(material)] ?? (Number(material.quantity) || 0) / sourcePieces
-    return { id: randomUUID(), name: material.name, detail: material.detail || '', inventoryId: material.inventoryId ?? null, quantity: round(perPiece * pieces, 3), unitPrice: prices.get(String(material.inventoryId)) ?? Number(material.unitPrice || 0), icon: material.icon || '▰', requestedAt: now }
+    // Units are whole: a scaled quantity of units is rounded up.
+    const unit = materialUnit(material.unit), quantity = unit === 'un' ? Math.ceil(round(perPiece * pieces, 3)) : round(perPiece * pieces, 3)
+    return { id: randomUUID(), name: material.name, detail: material.detail || '', inventoryId: material.inventoryId ?? null, unit, quantity, unitPrice: prices.get(String(material.inventoryId)) ?? Number(material.unitPrice || 0), icon: material.icon || '▰', requestedAt: now }
   }).filter((material) => material.quantity > 0)
   const stages = [...(resources.stages || [])]
   const stageTimes = {}
@@ -108,9 +154,10 @@ export function pieceSuggestion({ offers, orders, name, quantity, prices = new M
     if (perPiece > 0) stageTimes[code] = Math.max(1, Math.round(perPiece * pieces))
   }
   const laborEntries = (resources.laborEntries || []).map(({ stockStatus, ...entry }) => ({ ...entry, id: randomUUID() }))
+  const stageResources = stagePlans(stages, resources.stageResources, history.filter(sameKey(key)), catalog)
   return {
     key, name: source.service, source: source.code, samples: averages.samples,
-    resources: { materials, laborEntries, stages, stageLayout: resources.stageLayout, kind: resources.kind || 'service', manufacturedFrom: resources.manufacturedFrom ?? null, tempering: resources.tempering ?? null, paintColor: resources.paintColor || '', serviceDescription: resources.serviceDescription || '', strictProcess: resources.strictProcess !== false, stageTimes },
+    resources: { materials, laborEntries, stages, stageLayout: resources.stageLayout, kind: resources.kind || 'service', manufacturedFrom: resources.manufacturedFrom ?? null, tempering: resources.tempering ?? null, paintColor: resources.paintColor || '', serviceDescription: resources.serviceDescription || '', strictProcess: resources.strictProcess !== false, stageTimes, stageResources },
   }
 }
 

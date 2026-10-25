@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto'
+import { materialRequestSources } from './materialRequestSources.js'
+import { formatQuantity, materialUnit } from './materialUnits.js'
 
 export function addNotification(store, notice) {
   store.operationalNotifications ||= []
@@ -7,12 +9,10 @@ export function addNotification(store, notice) {
 }
 
 function requests(store) {
-  const offers = store.offers || [], orders = store.orders || []
-  const sources = [...offers, ...orders.filter((order) => !offers.some((offer) => offer.id === order.offerId)).map((order) => ({ ...order, id: order.offerId, orderCode: order.code }))]
-  return sources.filter((offer) => offer.status !== 'rejected').flatMap((offer) => (offer.resources?.materials || []).flatMap((material) => {
+  return materialRequestSources(store.offers, store.orders).flatMap((offer) => (offer.resources?.materials || []).flatMap((material) => {
     const quantity = Number(material.purchaseQuantity ?? (material.stockStatus === 'available' ? 0 : Number(material.quantity) - Number(material.stockAvailable || 0)))
-    return quantity > 0 && !material.requestRejection ? [{ id: `${offer.id}-${material.id}`, materialName: material.name, quantity, detail: material.detail, offerId: offer.id, offerCode: offer.code, orderCode: offer.orderCode }] : []
-  })).concat((store.manualMaterialRequests || []).filter((material) => material.purchaseQuantity > 0 && !material.requestRejection).map((material) => ({ id: material.id, materialName: material.name, quantity: material.purchaseQuantity, detail: material.detail, manualRequestCode: material.code })))
+    return quantity > 0 && !material.requestRejection ? [{ id: `${offer.id}-${material.id}`, materialName: material.name, quantity, unit: materialUnit(material.unit), detail: material.detail, offerId: offer.id, offerCode: offer.code, orderCode: offer.orderCode }] : []
+  })).concat((store.manualMaterialRequests || []).filter((material) => material.purchaseQuantity > 0 && !material.requestRejection).map((material) => ({ id: material.id, materialName: material.name, quantity: material.purchaseQuantity, unit: materialUnit(material.unit), detail: material.detail, manualRequestCode: material.code })))
 }
 
 export function workflowSnapshot(store) {
@@ -27,7 +27,7 @@ export function inventorySignal(store, row, previousLow) {
   store.notificationInventory ||= {}
   const low = Number(row.quantity) <= Number(row.minimum)
   const previous = store.notificationInventory[String(row.id)]
-  if (low && (previous ? !previous.low : previousLow === false || store.notificationInventoryInitialized)) addNotification(store, { type: 'low-stock', materialId: row.id, title: 'Estoque baixo', description: row.name, quantity: Number(row.quantity), minimum: Number(row.minimum) })
+  if (low && (previous ? !previous.low : previousLow === false || store.notificationInventoryInitialized)) addNotification(store, { type: 'low-stock', materialId: row.id, title: 'Estoque baixo', description: row.name, quantity: Number(row.quantity), minimum: Number(row.minimum), unit: materialUnit(row.unit) })
   store.notificationInventory[String(row.id)] = { low, quantity: Number(row.quantity), minimum: Number(row.minimum), name: row.name }
 }
 
@@ -35,12 +35,12 @@ export function recordWorkflowNotifications(before, store) {
   // Requests that only came back (an acceptance undone clears its decisions) are not new: no notice for them.
   const silent = new Set(store.silentMaterialRequestIds || [])
   delete store.silentMaterialRequestIds
-  for (const request of requests(store)) if (!before.requests.has(request.id) && !silent.has(request.id)) addNotification(store, { ...request, id: randomUUID(), requestId: request.id, type: 'material-request', title: 'Novo pedido de material', description: `${request.materialName} · ${request.quantity.toLocaleString('pt-BR')} kg` })
+  for (const request of requests(store)) if (!before.requests.has(request.id) && !silent.has(request.id)) addNotification(store, { ...request, id: randomUUID(), requestId: request.id, type: 'material-request', title: 'Novo pedido de material', description: `${request.materialName} · ${formatQuantity(request.quantity, request.unit)}` })
   for (const order of store.orders || []) {
-    if (!before.orders.has(order.code)) addNotification(store, { id: `service-added:${order.code}`, type: 'service-added', at: order.createdAt || new Date().toISOString(), orderCode: order.code, title: 'Novo serviço em andamento', description: `${order.code} · ${order.service}` })
+    if (!before.orders.has(order.code)) addNotification(store, { id: `service-added:${order.code}`, type: 'service-added', at: order.createdAt || new Date().toISOString(), authorId: order.createdBy ?? null, orderCode: order.code, title: 'Novo serviço em andamento', description: `${order.code} · ${order.service}` })
     for (const event of order.operationEvents || []) if (event.type === 'completed' && !before.completions.has(event.id)) addNotification(store, completedServiceNotice(order, event))
     if (order.inventoryConsumption && !before.consumptions.has(`${order.code}:${order.inventoryConsumption.processedAt}`)) {
-      for (const row of order.inventoryConsumption.materials || []) if (row.inventoryId != null && row.minimum != null) inventorySignal(store, { id: row.inventoryId, name: row.name, quantity: row.balance, minimum: row.minimum }, Number(row.stockAvailable) <= Number(row.minimum))
+      for (const row of order.inventoryConsumption.materials || []) if (row.inventoryId != null && row.minimum != null) inventorySignal(store, { id: row.inventoryId, name: row.name, unit: row.unit, quantity: row.balance, minimum: row.minimum }, Number(row.stockAvailable) <= Number(row.minimum))
     }
   }
 }

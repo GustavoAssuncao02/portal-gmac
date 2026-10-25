@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import './employeeActivity.css'
 
 const periods = [['today', 'Hoje'], ['yesterday', 'Ontem'], ['7days', 'Últimos 7 dias'], ['30days', 'Últimos 30 dias'], ['all', 'Desde sempre'], ['date', 'Data específica']]
-const labels = { started: 'Trabalho iniciado', resumed: 'Trabalho retomado', paused: 'Trabalho pausado', machine_changed: 'Troca de máquina', labor_service_changed: 'Troca de serviço de hora homem', resource_changed: 'Troca entre máquina e serviço', session_ended: 'Sessão encerrada na conclusão da OS', stage_progress: 'Peças registradas', completed: 'OS concluída', admin_interrupted: 'Interrupção administrativa' }
+const labels = { started: 'Trabalho iniciado', resumed: 'Trabalho retomado', paused: 'Trabalho pausado', stage_completed: 'Etapa concluída', machine_changed: 'Troca de máquina', labor_service_changed: 'Troca de serviço de hora homem', resource_changed: 'Troca entre máquina e serviço', session_ended: 'Sessão encerrada na conclusão da OS', stage_progress: 'Peças registradas', completed: 'OS concluída', admin_interrupted: 'Interrupção administrativa' }
 const formatMoment = (at) => new Date(at).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })
 
 function details(event) {

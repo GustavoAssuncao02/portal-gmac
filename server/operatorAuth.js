@@ -17,8 +17,12 @@ export function operatorCredentialsMatch(username, password) {
   return operatorConfigured() && typeof username === 'string' && /^\d{11}$/.test(username) && sameText(username, configuredUsername) && sameText(password, process.env.OPERATOR_PASSWORD)
 }
 
+// Raised when an administrator sets a new operator password (operatorAccount.js): tokens of the previous one stop working.
+let tokenVersion = 0
+export function setOperatorTokenVersion(version) { tokenVersion = Number(version) || 0 }
+
 export function issueOperatorToken() {
-  const payload = Buffer.from(JSON.stringify({ role: 'operator', exp: Date.now() + 8 * 60 * 60 * 1000 })).toString('base64url')
+  const payload = Buffer.from(JSON.stringify({ role: 'operator', exp: Date.now() + 8 * 60 * 60 * 1000, v: tokenVersion })).toString('base64url')
   const signature = createHmac('sha256', signingKey).update(payload).digest('base64url')
   return `${payload}.${signature}`
 }
@@ -32,6 +36,7 @@ export function requireOperator(request, response, next) {
   try {
     const data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'))
     if (data.role !== 'operator' || data.exp < Date.now()) return response.status(401).json({ message: 'Sessão do operador expirada.' })
+    if ((data.v || 0) !== tokenVersion) return response.status(401).json({ message: 'A senha do operador foi alterada. Entre novamente.' })
     next()
   } catch {
     return response.status(401).json({ message: 'Sessão do operador inválida.' })

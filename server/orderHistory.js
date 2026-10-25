@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { stageLabel, serviceDetails } from './serviceStages.js'
+import { formatQuantity } from './materialUnits.js'
 
 // The same value written another way is not a change: CNPJ punctuation, blank fields, defaults of fields added later
 // (proposal type, stage times) and the gross profit, which is derived from the proposal values.
@@ -22,8 +23,8 @@ export const realChangedFields = (changes) => (changes?.changed || []).filter((k
 // order itself, and the accounts payable/receivable linked to it. Only administrators receive the last two groups.
 
 const fieldLabels = { company: 'Cliente', cnpj: 'CNPJ/CPF', service: 'Serviço', description: 'Descrição', labelNumber: 'Etiqueta', quantity: 'Quantidade da OS', deadline: 'Prazo solicitado', requestedAt: 'Data da solicitação', resources: 'Materiais e processo', proposal: 'Proposta', attachments: 'Anexos', stages: 'Etapas', stageCounts: 'Peças por etapa' }
-const resourceLabels = { kind: 'Tipo', manufacturedFrom: 'Fabricado a partir de', tempering: 'Têmpera', urgency: 'Tipo de proposta', paintColor: 'Cor/Tipo', serviceDescription: 'Descrição do serviço', strictProcess: 'Processo Injessado' }
-const valueLabels = { service: 'Serviço', product: 'Produto', sample: 'Amostra', drawing: 'Desenho', normal: 'Normal', emergency: 'Emergencial' }
+const resourceLabels = { kind: 'Tipo', manufacturedFrom: 'Fabricado a partir de', tempering: 'Têmpera', urgency: 'Tipo de proposta', serviceLocation: 'Tipo de serviço', paintColor: 'Cor/Tipo', serviceDescription: 'Descrição do serviço', strictProcess: 'Processo Injessado' }
+const valueLabels = { service: 'Serviço', product: 'Produto', sample: 'Amostra', drawing: 'Desenho', normal: 'Normal', emergency: 'Emergencial', internal: 'Interno', external: 'Externo' }
 const proposalLabels = { value: 'Valor', deadline: 'Prazo de entrega', margin: 'Margem (%)', discount: 'Desconto (%)', materials: 'Custo de materiais', labor: 'Custo de mão de obra', machine: 'Tempo de máquina', serviceTime: 'Tempo de serviço' }
 
 const shown = (value) => {
@@ -49,7 +50,7 @@ export function describeOrderChanges(changes) {
     if (key === 'stages') return [`Etapas: ${(left || []).map(stageLabel).join(' > ') || 'nenhuma'} → ${(right || []).map(stageLabel).join(' > ') || 'nenhuma'}`]
     if (key === 'stageCounts') return Object.keys({ ...left, ...right }).filter((stage) => Number(left?.[stage] || 0) !== Number(right?.[stage] || 0)).map((stage) => `Peças em ${stageLabel(stage)}: ${Number(left?.[stage] || 0)} → ${Number(right?.[stage] || 0)}`)
     if (key === 'resources') {
-      const material = (row) => `${row.name}${row.detail ? ` (${row.detail})` : ''} ${row.quantity ?? ''} kg`.trim()
+      const material = (row) => `${row.name}${row.detail ? ` (${row.detail})` : ''} ${row.quantity != null ? formatQuantity(row.quantity, row.unit) : ''}`.trim()
       const labor = (row) => `${row.resource || row.type} ${row.hours ?? ''} h`.trim()
       return [...listChange('Material', names(left?.materials, material), names(right?.materials, material)), ...listChange('Mão de obra', names(left?.laborEntries, labor), names(right?.laborEntries, labor)),
         ...Object.keys(resourceLabels).filter((field) => JSON.stringify(left?.[field] ?? null) !== JSON.stringify(right?.[field] ?? null)).map((field) => `${resourceLabels[field]}: ${shown(left?.[field])} → ${shown(right?.[field])}`),

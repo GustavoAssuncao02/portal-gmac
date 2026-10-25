@@ -1,72 +1,39 @@
 import { randomUUID } from 'node:crypto'
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { rm } from 'node:fs/promises'
 import path from 'node:path'
 import { dataDirectory } from './dataDirectory.js'
-import { setTimeout as delay } from 'node:timers/promises'
+import { readStore, mutateStore as changeStore } from './store.js'
+import { receiveFile } from './uploads.js'
 import express from 'express'
 import { exportPdf } from './documentExports.js'
 import { renderProposalDocument } from './proposalPdf.js'
-import { productionStages, stageLabel, serviceDetails, readStageLayout, validStageLayout } from './serviceStages.js'
+import { productionStages, stageLabel, serviceDetails, readStageLayout, validStageLayout, stagePlanProblem, stagePlanPlace } from './serviceStages.js'
 import { consumeOrderMaterials } from './orderMaterials.js'
-import { workflowSnapshot, recordWorkflowNotifications } from './notificationEvents.js'
+import { addNotification, workflowSnapshot, recordWorkflowNotifications } from './notificationEvents.js'
 import { assignMaterialRequestCodes } from './materialRequestCodes.js'
 import { adminIdentity } from './accounts.js'
 import { recordOrderEvent } from './orderHistory.js'
-import { cleanStageTimes, pieceTracking } from './pieces.js'
+import { cleanStageResources, cleanStageTimes, pieceTracking } from './pieces.js'
 import { proposalMargins, PROPOSAL_MARGIN_GAP, declineReasons } from './proposalMath.js'
 import { requireAdminOrOperator } from './access.js'
 import { documentKind, isClientDocument } from './clientDocument.js'
+import { currentServiceLocation, serviceLocationLabel, validServiceLocation } from './serviceLocation.js'
+import { formatQuantity, materialUnit, validMaterialUnit, validQuantityFor } from './materialUnits.js'
 
 const filesDirectory = path.join(dataDirectory, 'files')
-const storePath = path.join(dataDirectory, 'offers.json')
 const router = express.Router()
-let pendingWrite = Promise.resolve()
 
-export async function readStore() {
-  try {
-    return JSON.parse(await readFile(storePath, 'utf8'))
-  } catch (error) {
-    if (error.code === 'ENOENT') return { offers: [], orders: [], employees: [] }
-    throw error
-  }
-}
+export { readStore }
 
-async function writeStore(store) {
-  const temporaryPath = `${storePath}.${randomUUID()}.tmp`
-  await writeFile(temporaryPath, JSON.stringify(store, null, 2), 'utf8')
-  // Windows may temporarily lock the destination during reads or antivirus scans.
-  for (let attempt = 0; ; attempt++) {
-    try { await rename(temporaryPath, storePath); break } catch (error) {
-      if (!['EPERM', 'EACCES', 'EBUSY'].includes(error.code) || attempt >= 5) throw error
-      await delay(20 * (attempt + 1))
-    }
-  }
-}
-
-export function mutateStore(change, { commit, rollback } = {}) {
-  const operation = pendingWrite.catch(() => {}).then(async () => {
-    await mkdir(dataDirectory, { recursive: true })
-    const store = await readStore()
-    const previous = commit ? structuredClone(store) : null
+// Every change also records the workflow notifications it caused and numbers the new material requests.
+export function mutateStore(change, options) {
+  return changeStore(async (store) => {
     const notificationsBefore = workflowSnapshot(store)
-    try {
-      const result = await change(store)
-      recordWorkflowNotifications(notificationsBefore, store)
-      assignMaterialRequestCodes(store)
-      await writeStore(store)
-      try { await commit?.() } catch (error) {
-        // Keep the JSON metadata aligned if the SQL transaction cannot commit.
-        await writeStore(previous)
-        throw error
-      }
-      return result
-    } catch (error) {
-      await rollback?.()
-      throw error
-    }
-  })
-  pendingWrite = operation
-  return operation
+    const result = await change(store)
+    recordWorkflowNotifications(notificationsBefore, store)
+    assignMaterialRequestCodes(store)
+    return result
+  }, options)
 }
 
 const handleError = (response, error) => {
@@ -82,6 +49,16 @@ const stageKeys = productionStages.map(([key]) => key)
 
 function serviceSettings(offer) {
   return { stages: offer.resources?.stages ?? offer.proposal?.stages ?? [], kind: offer.resources?.kind ?? offer.proposal?.kind ?? 'service', strictProcess: serviceDetails(offer.resources).strictProcess }
+}
+
+const proposalKeys = ['A', 'B', 'C', 'D']
+const within = (value, min, max) => typeof value === 'number' && value >= min && value <= max
+
+// Only what is chosen on the proposal screen is kept: the costs come from the offer and are worked out again on opening.
+function proposalDraft(body) {
+  const options = proposalKeys.map((key) => (Array.isArray(body?.options) ? body.options : []).find((option) => option?.key === key))
+  if (!proposalKeys.includes(body?.selectedKey) || options.some((option) => !option || !within(option.margin, 0, 1000) || !within(option.discount, 0, 100) || typeof option.deadline !== 'string')) return null
+  return { selectedKey: body.selectedKey, options: options.map(({ key, margin, discount, deadline }) => ({ key, margin, discount, deadline: clean(deadline, 40) })) }
 }
 
 function nextCode(prefix, rows) {
@@ -102,7 +79,7 @@ export function proposalSections(offer, proposal, resources) {
   const sections = [
     facts('Dados da solicitação', [['Serviço', offer.service], ['Cliente', offer.company], [documentKind(offer.cnpj), offer.cnpj], ['Número da etiqueta', offer.labelNumber], ['Quantidade', offer.quantity], ['Prazo solicitado', date(offer.deadline)]]),
     facts('Descrição do serviço', [['Descrição', offer.description], ...(resources.serviceDescription ? [['Detalhes do serviço', resources.serviceDescription]] : [])]),
-    { name: 'Materiais necessários', columns: ['Material', 'Especificação', 'Quantidade (kg)'], rows: (resources.materials || []).map((item) => [item.name, item.detail, Number(item.quantity)]) },
+    { name: 'Materiais necessários', columns: ['Material', 'Especificação', 'Quantidade', 'Unidade'], rows: (resources.materials || []).map((item) => [item.name, item.detail, Number(item.quantity), materialUnit(item.unit)]) },
     { name: 'Mão de obra', columns: ['Recurso', 'Horas previstas'], rows: (resources.laborEntries || []).map((item) => [item.resource, Number(item.hours)]) },
     facts('Condições da proposta', [['Opção', `${proposal.key} · ${proposal.title || `Opção ${proposal.key}`}`], ['Prazo de entrega', proposal.deadline], ['Valor do serviço', chargedValue(proposal)], ['Desconto (%)', Number(proposal.discount || 0)], ['Tempo de máquina', proposal.machine], ['Tempo de serviço', proposal.serviceTime]]),
     facts('Processo de fabricação', [['Etapas', (proposal.stages || []).map(stageLabel).join(' > ') || 'A definir'], ['Processo', serviceDetails(resources).strictProcess ? 'Sequência obrigatória' : 'Etapas livres'], ['Tipo', proposal.kind === 'product' ? 'Produto' : 'Serviço'], ['Fabricado a partir de', resources.manufacturedFrom === 'sample' ? 'Amostra' : resources.manufacturedFrom === 'drawing' ? 'Desenho' : 'Não informado'], ['Têmpera', resources.tempering === true ? 'Sim' : resources.tempering === false ? 'Não' : 'Não informada'], ...(resources.stages?.includes('painting') ? [['Cor/Tipo', resources.paintColor || 'Não informado']] : [])]),
@@ -142,12 +119,16 @@ router.post('/offers', async (request, response) => {
 router.put('/offers/:id/resources', async (request, response) => {
   const resources = request.body ?? {}
   if (!Array.isArray(resources.materials) || !Array.isArray(resources.laborEntries)) return response.status(400).json({ message: 'Recursos inválidos.' })
+  // Each material is counted in kilos or in units; units are whole numbers.
+  if (resources.materials.some((material) => material?.unit != null && !validMaterialUnit(material.unit))) return response.status(400).json({ message: 'Escolha a unidade de cada material: quilo ou unidade.' })
+  if (resources.materials.some((material) => !validQuantityFor(material?.quantity, material?.unit))) return response.status(400).json({ message: 'Material contado por unidade aceita só quantidades inteiras.' })
   if (resources.stages !== undefined && (!Array.isArray(resources.stages) || resources.stages.some((stage) => !stageKeys.includes(stage)))) return response.status(400).json({ message: 'Etapas inválidas.' })
   if (resources.stageLayout !== undefined && !validStageLayout(resources.stageLayout)) return response.status(400).json({ message: 'Ordem dos grupos ou subetapas inválida.' })
   if (resources.kind !== undefined && !['service', 'product'].includes(resources.kind)) return response.status(400).json({ message: 'Tipo inválido.' })
   if (resources.manufacturedFrom != null && !['sample', 'drawing'].includes(resources.manufacturedFrom)) return response.status(400).json({ message: 'Origem de fabricação inválida.' })
   if (resources.tempering != null && typeof resources.tempering !== 'boolean') return response.status(400).json({ message: 'Têmpera inválida.' })
   if (resources.urgency != null && !['normal', 'emergency'].includes(resources.urgency)) return response.status(400).json({ message: 'Tipo de proposta inválido.' })
+  if (resources.serviceLocation != null && !validServiceLocation(resources.serviceLocation)) return response.status(400).json({ message: 'Tipo de serviço inválido: escolha interno ou externo.' })
   if (resources.strictProcess !== undefined && typeof resources.strictProcess !== 'boolean') return response.status(400).json({ message: 'Informe se o processo segue uma sequência obrigatória.' })
   if (['paintColor', 'serviceDescription'].some((field) => resources[field] != null && typeof resources[field] !== 'string')) return response.status(400).json({ message: 'Descrição inválida.' })
   try {
@@ -162,9 +143,11 @@ router.put('/offers/:id/resources', async (request, response) => {
       })
       const nextResources = { materials, laborEntries: resources.laborEntries, stages: [...new Set(resources.stages ?? settings.stages)], stageLayout: readStageLayout({ stages: resources.stages ?? settings.stages, stageLayout: resources.stageLayout ?? item.resources?.stageLayout }), kind: resources.kind ?? settings.kind, ...serviceDetails({ ...item.resources, ...resources }), paintColor: clean(resources.paintColor ?? item.resources?.paintColor, 160), serviceDescription: clean(resources.serviceDescription ?? item.resources?.serviceDescription, 5000) }
       nextResources.stageTimes = cleanStageTimes(resources.stageTimes ?? item.resources?.stageTimes, nextResources.stages)
+      nextResources.stageResources = cleanStageResources(resources.stageResources ?? item.resources?.stageResources, nextResources.stages, { machines: store.machines, laborServices: store.laborServices })
       // Normal/Emergencial only labels the offer inside the system; changing it keeps the proposal already made.
-      // The planned stage times only measure the team; they do not change the price, so the proposal is kept too.
-      const comparable = (value) => JSON.stringify({ ...value, urgency: undefined, stageTimes: undefined })
+      // The planned stage times and resources only guide the team; they do not change the price, so the proposal is kept too.
+      // Interno/Externo is a label as well: it does not change the price.
+      const comparable = (value) => JSON.stringify({ ...value, urgency: undefined, serviceLocation: undefined, stageTimes: undefined, stageResources: undefined })
       if (comparable(item.resources) !== comparable(nextResources)) {
         item.proposal = null
         item.status = 'review'
@@ -177,17 +160,18 @@ router.put('/offers/:id/resources', async (request, response) => {
   } catch (error) { handleError(response, error) }
 })
 
-router.post('/offers/:id/attachments', express.raw({ type: 'application/octet-stream', limit: '20mb' }), async (request, response) => {
+router.post('/offers/:id/attachments', async (request, response) => {
   const filename = clean(request.query.name, 180)
-  if (!filename || !Buffer.isBuffer(request.body) || !request.body.length) return response.status(400).json({ message: 'Selecione um arquivo válido.' })
+  if (!filename) return response.status(400).json({ message: 'Selecione um arquivo válido.' })
   try {
     const existing = (await readStore()).offers.find((entry) => entry.id === request.params.id)
     if (!existing || existing.status === 'rejected') return response.status(404).json({ message: 'Oferta não encontrada ou recusada.' })
-    await mkdir(filesDirectory, { recursive: true })
-    const attachment = { id: randomUUID(), name: path.basename(filename), size: request.body.length, contentType: clean(request.query.type, 100) || 'application/octet-stream' }
-    await writeFile(path.join(filesDirectory, attachment.id), request.body)
     // The file is written before the record; if the record is not saved, the file does not stay on the disk alone.
-    const discard = () => rm(path.join(filesDirectory, attachment.id), { force: true }).catch(() => {})
+    const id = randomUUID()
+    const received = await receiveFile(request, filesDirectory, id)
+    if (!received) return response.status(400).json({ message: 'Selecione um arquivo válido.' })
+    const attachment = { id, name: path.basename(filename), size: received.size, contentType: clean(request.query.type, 100) || 'application/octet-stream' }
+    const { discard } = received
     const offer = await mutateStore((store) => {
       const item = store.offers.find((entry) => entry.id === request.params.id)
       if (!item || item.status === 'rejected') return null
@@ -228,6 +212,8 @@ router.post('/offers/:id/proposal', async (request, response) => {
     if (!offer || offer.orderCode || offer.status === 'rejected') return response.status(404).json({ message: 'Oferta não encontrada, já aceita ou recusada.' })
     const settings = serviceSettings(offer)
     if (!settings.stages.length) return response.status(400).json({ message: 'Defina as etapas nos detalhes da oferta antes de gerar a proposta.' })
+    const problem = stagePlanProblem(settings.stages, offer.resources)
+    if (problem) return response.status(400).json({ message: `${problem} ${stagePlanPlace}` })
     const selectedProposal = { ...proposal, ...settings }
     // The PDF is built on every download; generating it once here makes a problem with the data show up now.
     await createPdf(offer, selectedProposal, offer.resources, layout)
@@ -240,6 +226,24 @@ router.post('/offers/:id/proposal', async (request, response) => {
     })
     if (!updated) return response.status(404).json({ message: 'Oferta não encontrada ou já aceita.' })
     response.json({ item: updated })
+  } catch (error) { handleError(response, error) }
+})
+
+// The four options and the one chosen stay as they were left, so another person can finish the quote; every save notifies
+// the other administrative accounts (the author already knows).
+router.put('/offers/:id/proposal-draft', async (request, response) => {
+  const draft = proposalDraft(request.body)
+  if (!draft) return response.status(400).json({ message: 'Proposta inválida: confira a opção escolhida, o % de lucro bruto, o desconto e o prazo.' })
+  try {
+    const offer = await mutateStore((store) => {
+      const item = store.offers.find((entry) => entry.id === request.params.id)
+      if (!item || item.orderCode || item.status === 'rejected') return null
+      item.proposalDraft = { ...draft, savedAt: new Date().toISOString(), savedBy: request.adminId ?? null, savedByName: request.adminName || 'Administrador' }
+      addNotification(store, { type: 'proposal-saved', at: item.proposalDraft.savedAt, authorId: item.proposalDraft.savedBy, offerId: item.id, title: 'Proposta salva', description: `${item.code} · ${item.service} · Proposta ${draft.selectedKey}`, employeeName: item.proposalDraft.savedByName })
+      return item
+    })
+    if (!offer) return response.status(404).json({ message: 'Oferta não encontrada, já aceita ou recusada.' })
+    response.json({ item: offer })
   } catch (error) { handleError(response, error) }
 })
 
@@ -269,19 +273,20 @@ export default function createOffersRouter(pool, requireAdmin) {
   // administrator.
   configured.get(['/offers', '/orders', '/offers/:id/proposal.pdf'], requireAdmin)
   configured.post(['/offers', '/offers/:id/attachments', '/offers/:id/proposal'], requireAdmin)
-  configured.put('/offers/:id/resources', requireAdmin)
+  configured.put(['/offers/:id/resources', '/offers/:id/proposal-draft'], requireAdmin)
   configured.get('/offers/:id/attachments/:attachmentId', requireAdminOrOperator)
   configured.use(router)
   // Purchase orders back the billing of a service. They belong to the OS only (not the offer) and never reach operators.
-  configured.post('/orders/:code/purchase-orders', requireAdmin, express.raw({ type: 'application/octet-stream', limit: '20mb' }), async (request, response) => {
+  configured.post('/orders/:code/purchase-orders', requireAdmin, async (request, response) => {
     const filename = clean(request.query.name, 180)
-    if (!filename || !Buffer.isBuffer(request.body) || !request.body.length) return response.status(400).json({ message: 'Selecione um arquivo válido, com até 20 MB.' })
+    if (!filename) return response.status(400).json({ message: 'Selecione um arquivo válido.' })
     try {
       if (!(await readStore()).orders.some((entry) => entry.code === request.params.code)) return response.status(404).json({ message: 'OS não encontrada.' })
-      const file = { id: randomUUID(), name: path.basename(filename), size: request.body.length, contentType: clean(request.query.type, 100) || 'application/octet-stream', uploadedAt: new Date().toISOString(), uploadedBy: request.adminName || 'Administrador' }
-      await mkdir(filesDirectory, { recursive: true })
-      await writeFile(path.join(filesDirectory, file.id), request.body)
-      const discard = () => rm(path.join(filesDirectory, file.id), { force: true }).catch(() => {})
+      const id = randomUUID()
+      const received = await receiveFile(request, filesDirectory, id)
+      if (!received) return response.status(400).json({ message: 'Selecione um arquivo válido.' })
+      const file = { id, name: path.basename(filename), size: received.size, contentType: clean(request.query.type, 100) || 'application/octet-stream', uploadedAt: new Date().toISOString(), uploadedBy: request.adminName || 'Administrador' }
+      const { discard } = received
       const order = await mutateStore((store) => {
         const item = store.orders.find((entry) => entry.code === request.params.code)
         if (!item) return null
@@ -312,6 +317,44 @@ export default function createOffersRouter(pool, requireAdmin) {
       })
       if (!removed) return response.status(404).json({ message: 'Anexo não encontrado.' })
       response.json({ ok: true })
+    } catch (error) { handleError(response, error) }
+  })
+  // Interno/Externo of the OS: each switch is kept with who made it, to measure the time spent in each one.
+  configured.put('/orders/:code/location', requireAdmin, async (request, response) => {
+    if (!validServiceLocation(request.body?.location)) return response.status(400).json({ message: 'Escolha se o serviço é interno ou externo.' })
+    try {
+      const order = await mutateStore((store) => {
+        const item = store.orders.find((entry) => entry.code === request.params.code)
+        if (!item) return null
+        const from = currentServiceLocation(item), to = request.body.location
+        if (from !== to) {
+          item.locationChanges = [...(item.locationChanges || []), { at: new Date().toISOString(), from, to, by: request.adminName || 'Administrador' }]
+          recordOrderEvent(item, 'location_changed', request.adminName, `Tipo de serviço alterado de ${serviceLocationLabel(from)} para ${serviceLocationLabel(to)}.`)
+        }
+        return item
+      })
+      if (!order) return response.status(404).json({ message: 'OS não encontrada.' })
+      response.json({ item: { code: order.code, serviceLocation: currentServiceLocation(order), locationChanges: order.locationChanges || [] } })
+    } catch (error) { handleError(response, error) }
+  })
+  // Files of the OS added by mistake are removed from the OS (and its offer) and from the disk.
+  configured.delete('/orders/:code/attachments/:attachmentId', requireAdmin, async (request, response) => {
+    try {
+      const removed = await mutateStore((store) => {
+        const order = store.orders.find((entry) => entry.code === request.params.code)
+        const file = order?.attachments?.find((item) => item.id === request.params.attachmentId)
+        if (!file) return null
+        order.attachments = order.attachments.filter((item) => item.id !== file.id)
+        const offer = store.offers.find((entry) => entry.id === order.offerId)
+        if (offer) offer.attachments = (offer.attachments || []).filter((item) => item.id !== file.id)
+        order.updatedAt = new Date().toISOString()
+        if (offer) offer.updatedAt = order.updatedAt
+        recordOrderEvent(order, 'attachment_removed', request.adminName, `Anexo da OS removido: ${file.name}`)
+        return file
+      })
+      if (!removed) return response.status(404).json({ message: 'Anexo não encontrado.' })
+      await rm(path.join(filesDirectory, removed.id), { force: true }).catch(() => {})
+      response.status(204).end()
     } catch (error) { handleError(response, error) }
   })
   // An atypical OS (redone piece, broken machine…) is left out of the averages of material and time of its piece.
@@ -398,7 +441,10 @@ export default function createOffersRouter(pool, requireAdmin) {
         const existing = item.orderCode && store.orders.find((entry) => entry.offerId === item.id)
         if (existing?.inventoryConsumption) return existing
         if (item.orderCode && !existing) { const error = new Error('OS vinculada não encontrada.'); error.status = 409; throw error }
-        const created = existing || { code: nextCode('OS', [...store.orders, ...(store.cancelledOrders || [])]), offerId: item.id, createdAt: new Date().toISOString(), status: 'Em andamento', company: item.company, cnpj: item.cnpj, service: item.service, description: item.description, labelNumber: item.labelNumber, quantity: item.quantity, deadline: item.deadline, requestedAt: item.requestedAt, attachments: [...item.attachments], resources: item.resources, proposal: item.proposal }
+        // A proposal generated before the planned times and resources became mandatory still needs them to become an OS.
+        const problem = existing ? '' : stagePlanProblem(serviceSettings(item).stages, item.resources)
+        if (problem) throw Object.assign(new Error(`${problem} Preencha nos detalhes da oferta antes de aceitar.`), { status: 400 })
+        const created = existing || { code: nextCode('OS', [...store.orders, ...(store.cancelledOrders || [])]), offerId: item.id, createdAt: new Date().toISOString(), createdBy: request.adminId ?? null, status: 'Em andamento', company: item.company, cnpj: item.cnpj, service: item.service, description: item.description, labelNumber: item.labelNumber, quantity: item.quantity, deadline: item.deadline, requestedAt: item.requestedAt, attachments: [...item.attachments], resources: item.resources, proposal: item.proposal }
         const materials = created.resources?.materials || []
         let consumption = []
         if (materials.length && pool) {
@@ -454,16 +500,16 @@ export default function createOffersRouter(pool, requireAdmin) {
           for (const [materialId, quantity] of net) {
             const amount = Number(quantity.toFixed(3))
             if (!(amount > 0)) continue
-            const [[material]] = await connection.execute('SELECT id, name, quantity_kg, unit_price FROM inventory_materials WHERE id = ? FOR UPDATE', [materialId])
+            const [[material]] = await connection.execute('SELECT id, name, unit, quantity_kg, unit_price FROM inventory_materials WHERE id = ? FOR UPDATE', [materialId])
             if (!material) continue
             const balance = Number((Number(material.quantity_kg) + amount).toFixed(3))
             await connection.execute('UPDATE inventory_materials SET quantity_kg = ? WHERE id = ?', [balance, materialId])
             await connection.execute("INSERT INTO inventory_movements (material_id, movement_type, quantity_kg, unit_price_kg, balance_after_kg, destination, order_code, notes) VALUES (?, 'entry', ?, ?, ?, ?, ?, ?)", [materialId, amount, Number(material.unit_price), balance, 'Estorno de OS', order.code, `Estorno da ${order.code}: aceite da oferta ${item.code} desfeito.`])
-            returned.push({ materialId, name: material.name, quantity: amount })
+            returned.push({ materialId, name: material.name, unit: material.unit, quantity: amount })
           }
         }
         const at = new Date().toISOString(), byName = request.adminName || 'Administrador'
-        recordOrderEvent(order, 'order_cancelled', byName, `Aceite desfeito: OS cancelada${returned.length ? `; devolvido ao estoque: ${returned.map((row) => `${row.name} ${row.quantity.toLocaleString('pt-BR')} kg`).join(', ')}` : ''}.`)
+        recordOrderEvent(order, 'order_cancelled', byName, `Aceite desfeito: OS cancelada${returned.length ? `; devolvido ao estoque: ${returned.map((row) => `${row.name} ${formatQuantity(row.quantity, row.unit)}`).join(', ')}` : ''}.`)
         store.cancelledOrders ||= []
         store.cancelledOrders.push({ ...order, cancelledAt: at, cancelledBy: request.adminId, cancelledByName: byName, returnedMaterials: returned })
         store.orders = store.orders.filter((entry) => entry !== order)

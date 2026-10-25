@@ -102,7 +102,7 @@
   .machine-actions > :not(.machine-action--primary) { display: none; }
   .machine-action { justify-content: center; padding: 8px; font-size: 13px; }
   .machine-action--primary { grid-column: 1 / -1; }
-  .machine-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .machine-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .machine-metric { min-width: 0; padding: 12px 8px; border-radius: 6px; }
   .machine-metric .metric-icon, .machine-metric small { display: none; }
   .machine-metric > div > span { font-size: 12px; line-height: 1.4; }
@@ -260,8 +260,8 @@
   .offer-status-cell { justify-items: start; align-self: end; }
   .offer-table-status strong { font-size: 13px; }
   .offer-table-status span { font-size: 12px; }
-  .offer-table-actions { flex-wrap: wrap; gap: 8px; }
-  .offer-table-actions button { flex: 1; font-size: 14px; }
+  .offer-table-actions { gap: 8px; }
+  .offer-table-actions button { font-size: 14px; }
 
   /* Offer details, proposals and purchase requests remain fully editable. */
   .offer-details-grid { margin-top: 18px; }
@@ -274,7 +274,7 @@
   .offer-resource-heading { gap: 10px; }
   .offer-resource-heading button { font-size: 13px; padding: 9px; }
   .offer-inline-form input, .offer-inline-form select { width: 100%; }
-  .offer-resource-remove { width: 44px; }
+  .offer-resource-remove, .offer-resource-edit { width: 44px; }
   .offer-material-row { grid-template-columns: 30px minmax(0, 1fr) 44px; }
   .offer-material-row--labor .material-visual svg { width: 22px; height: 22px; }
   .offer-material-row--labor > span:nth-child(3)::before { content: 'Tempo: '; }

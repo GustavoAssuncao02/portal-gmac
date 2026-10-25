@@ -21,7 +21,7 @@ async function login(cpf = env.DEMO_ADMIN_CPF) {
 }
 async function navigate(name) {
   const item = page.locator('.sidebar').getByRole('button', { name, exact: true })
-  if (!(await item.isVisible())) await page.locator('.sidebar').getByRole('button', { name: ['Fornecedores', 'Administradores', 'Funcionários', 'Clientes'].includes(name) ? 'Cadastros' : 'Gestão Financeira', exact: true }).click()
+  if (!(await item.isVisible())) await page.locator('.sidebar').getByRole('button', { name: ['Fornecedores', 'Administradores', 'Funcionários', 'Clientes'].includes(name) ? 'Cadastros' : ['Serviços em andamento', 'Serviços concluídos', 'Ofertas e serviços'].includes(name) ? 'Operação' : 'Gestão Financeira', exact: true }).click()
   await item.click()
   await page.waitForTimeout(100)
 }
@@ -46,7 +46,7 @@ try {
   await page.goto(fixture.url)
   await login()
   await navigate('Configurações')
-  const selectors = ['.account-appearance-settings h2', '.account-theme-option', '.account-settings-fields input', 'main h1']
+  const selectors = ['.account-appearance-settings h2', '.account-theme-option', '.account-summary dd', 'main h1']
   const baseline = await Promise.all(selectors.map(font))
   assert.ok(await page.getByRole('radio', { name: 'Padrão', exact: true }).isChecked())
   const snapshot = () => page.evaluate(() => [...document.querySelectorAll('h1,h2,h3,p,label,input,button,span')].map((el) => getComputedStyle(el).fontSize))
@@ -61,7 +61,8 @@ try {
   assert.deepEqual(await familySnapshot(), originalFamilies, 'Default font family preserves the original typography')
   await page.evaluate(() => { document.documentElement.dataset.fontFamily = 'default' })
   await page.route('**/account/appearance', (route) => route.request().method() === 'PATCH' ? route.fulfill({ status: 503, json: { message: 'Falha simulada na fonte.' } }) : route.continue())
-  await page.getByRole('radio', { name: 'Grande', exact: true }).check()
+  // The save fails on purpose and the choice rolls back, possibly before check() could see it marked: a plain click.
+  await page.getByRole('radio', { name: 'Grande', exact: true }).click()
   await page.getByRole('alert').getByText('Falha simulada na fonte.').waitFor()
   assert.ok(await page.getByRole('radio', { name: 'Padrão', exact: true }).isChecked())
   assert.deepEqual(await Promise.all(selectors.map(font)), baseline)

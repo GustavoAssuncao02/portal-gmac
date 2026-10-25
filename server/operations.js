@@ -4,24 +4,25 @@ import { mutateStore, readStore } from './offers.js'
 import { requireOperator } from './operatorAuth.js'
 import { requireAdminOrOperator } from './access.js'
 import { activityDateRange, employeeActivityQuery } from './employeeActivity.js'
-import { operationStates } from './reportData.js'
-import { stageLabel, serviceDetails } from './serviceStages.js'
-import { machineRows } from './machines.js'
+import { operationStates, ordersWithOperations } from './reportData.js'
+import { productionStages, stageLabel, serviceDetails } from './serviceStages.js'
+import { machineRows, sectorLabel } from './machines.js'
 import { laborServiceRows } from './laborServices.js'
 import { requireAdmin, adminIdentity, revokeAccountSessions } from './accounts.js'
 import { orderHistory } from './orderHistory.js'
-import { pieceCatalog, pieceSuggestion, pieceLeadTime } from './pieces.js'
-import { accessFields, employeeRecords, publicEmployee, staffAccountId } from './employeeAccess.js'
+import { pieceCatalog, pieceKey, pieceSuggestion, pieceLeadTime } from './pieces.js'
+import { accessFields, employeeRecords, employeesWithActivity, publicEmployee, staffAccountId } from './employeeAccess.js'
 import { editOrder } from './orderEditing.js'
 import { pendingOrderMaterials } from './pendingMaterials.js'
 import { addNotification, completedServiceNotice } from './notificationEvents.js'
 import { activeSessions, activeSince } from './operationSessions.js'
 import { editEventTime } from './operationEventTime.js'
 import { removeOrderReceivables } from './receivables.js'
+import { pauseReasonNames, sectorRows, SWITCH_PAUSE_REASON } from './registries.js'
+import { formatQuantity } from './materialUnits.js'
 
-const pauseReasons = ['Descanso', 'Horário de almoço', 'Jossenilson mandou parar', 'Troca de atividade']
-// Not chosen by the operator: recorded when starting another OS pauses the current one.
-const SWITCH_PAUSE_REASON = 'Troca de serviço'
+// The reasons to pause come from the registry (Cadastros > Razões de pausas). SWITCH_PAUSE_REASON is not chosen by the
+// operator: it is recorded when starting another OS pauses the current one.
 // The pause reason was registered with the wrong name; stored pauses are corrected once, at startup (it is safe to repeat).
 const LEGACY_PAUSE_REASON = 'Gilson mandou parar', PAUSE_REASON = 'Jossenilson mandou parar'
 export async function renameLegacyPauseReason(pool) {
@@ -82,6 +83,8 @@ function assertSession(state, sessionId, sessionToken) {
   return session
 }
 
+// Reason recorded when a stage reaches every piece and the people on it stop, to choose the next stage.
+const STAGE_DONE_REASON = 'Etapa concluída'
 const allStagesDone = (state, order) => state.stages.length > 0 && state.stages.every((stage) => Number(state.stageCounts[stage.key] || 0) === Number(order.quantity))
 
 // Time in each stage is the time of the people working on it, added up: every session is on one stage at a time.
@@ -132,6 +135,19 @@ function changeSessionResource(state, request, machine, service) {
   return event
 }
 
+// The machine or labor service planned in the offer for a stage, while it is still registered: the stage then decides
+// the resource and the operator cannot use another one. Without a plan the operator chooses.
+function stagePlan(order, stage, catalog) {
+  const code = productionStages.find(([, label]) => label === stage?.name)?.[0]
+  const plan = code && order?.resources?.stageResources?.[code]
+  const item = plan && catalog[plan.type]?.find((entry) => String(entry.id) === String(plan.id))
+  return item ? { type: plan.type, name: item.name, machine: plan.type === 'machine' ? item : null, laborService: plan.type === 'labor-service' ? item : null } : null
+}
+function assertFreeChoice(state, order, session, catalog) {
+  const plan = stagePlan(order, state.stages.find((stage) => stage.key === session.stageKey), catalog)
+  if (plan) throw new OperationError(409, `A etapa ${session.stageName} é feita em ${plan.name}. Para usar outro recurso, selecione outra etapa.`)
+}
+
 function publicOperation(order, stored) {
   const operation = liveOperation(order, stored)
   const sessions = activeSessions(operation).map(({ tokenHash, deviceTokenHashes, ...session }) => session)
@@ -155,6 +171,7 @@ function operatorOrder(order, operation) {
       materials: (order.resources?.materials || []).map(({ id, inventoryId, name, detail, quantity, stockStatus, stockAvailable, purchaseQuantity, inventoryConsumedQuantity }) => ({ id, inventoryId, name, detail, quantity, stockStatus, stockAvailable, purchaseQuantity, inventoryConsumedQuantity })),
       laborEntries: (order.resources?.laborEntries || []).map(({ id, type, resource, machineId, laborServiceId, hours }) => ({ id, type, resource, machineId, laborServiceId, hours })),
       stageTimes: order.resources?.stageTimes || {},
+      stageResources: order.resources?.stageResources || {},
     },
     operation,
   }
@@ -267,13 +284,17 @@ export default function createOperationsRouter(pool) {
 
   function sendError(response, error) {
     if (!error.status) console.error('Falha na operação da OS:', error)
-    response.status(error.status || 500).json({ message: error.status ? error.message : 'Não foi possível registrar a operação.', ...(error.code === 'PENDING_MATERIALS' ? { code: error.code, pendingMaterials: error.pendingMaterials } : {}), ...(error.code === 'COMPLETED_BY_REQUIRED' ? { code: error.code } : {}), ...(error.code === 'WORKING_ELSEWHERE' ? { code: error.code, busyOrder: error.busyOrder } : {}), ...(error.code === 'MACHINE_BUSY' ? { code: error.code } : {}) })
+    response.status(error.status || 500).json({ message: error.status ? error.message : 'Não foi possível registrar a operação.', ...(error.code === 'PENDING_MATERIALS' ? { code: error.code, pendingMaterials: error.pendingMaterials } : {}), ...(error.code === 'COMPLETED_BY_REQUIRED' ? { code: error.code } : {}), ...(error.code === 'WORKING_ELSEWHERE' ? { code: error.code, busyOrder: error.busyOrder } : {}), ...(['MACHINE_BUSY', 'MACHINE_MAINTENANCE'].includes(error.code) ? { code: error.code } : {}) })
   }
 
   // The registration of employees (CPF, e-mail, birth date and operator codes) is for the administrative portal only.
+  // `hasActivity`: the employee already worked or authored a record, so the registration can only be deactivated.
   router.get('/employees', requireAdmin, async (_request, response) => {
     try {
-      response.json({ items: (await employeeRows()).map((item) => publicEmployee(item, { withCode: true })) })
+      const [employees, active, sectors] = await Promise.all([employeeRows(), employeesWithActivity(pool), sectorRows()])
+      const sectorName = new Map(sectors.map((sector) => [sector.id, sector.name]))
+      const names = (item) => item.sectorIds.map((id) => sectorName.get(id)).filter(Boolean)
+      response.json({ items: employees.map((item) => ({ ...publicEmployee(item, { withCode: true }), sectorNames: names(item), sectorName: sectorLabel(names(item)) || null, hasActivity: active.has(String(item.id)) })), sectors })
     } catch (error) { sendError(response, error) }
   })
 
@@ -305,9 +326,14 @@ export default function createOperationsRouter(pool) {
 
   // The old 3-digit identification is no longer asked for; registrations that have one keep it.
   // Birth date and e-mail are optional: the payroll list has neither.
-  function employeeFields(body, current) {
+  // The sectors are optional, one or more of the registered ones (Cadastros > Setores); `sectorId` keeps the first.
+  async function employeeFields(body, current) {
     const { name, birthDate, cpf, email, identification } = body || {}
-    const normalized = { name: clean(name), birthDate: clean(birthDate, 10) || null, cpf: clean(cpf, 20).replace(/\D/g, ''), email: clean(email, 160) || null, identification: clean(identification, 3) || current?.identification || null }
+    const requested = Array.isArray(body?.sectorIds) ? body.sectorIds : body?.sectorId ? [body.sectorId] : []
+    const sectorIds = [...new Set(requested.map((id) => clean(id, 64)).filter(Boolean))].slice(0, 20)
+    const registered = await sectorRows()
+    if (sectorIds.some((id) => !registered.some((sector) => sector.id === id))) throw new OperationError(400, 'Selecione um setor cadastrado.')
+    const normalized = { name: clean(name), birthDate: clean(birthDate, 10) || null, cpf: clean(cpf, 20).replace(/\D/g, ''), email: clean(email, 160) || null, identification: clean(identification, 3) || current?.identification || null, sectorId: sectorIds[0] || null, sectorIds }
     if (!normalized.name || normalized.birthDate && !/^\d{4}-\d{2}-\d{2}$/.test(normalized.birthDate) || !/^\d{11}$/.test(normalized.cpf) || normalized.email && !normalized.email.includes('@')) throw new OperationError(400, 'Preencha os dados do funcionário.')
     if (normalized.identification && !/^\d{3}$/.test(normalized.identification)) throw new OperationError(400, 'A identificação deve ter 3 dígitos.')
     return normalized
@@ -321,10 +347,10 @@ export default function createOperationsRouter(pool) {
   router.post('/employees', requireAdmin, async (request, response) => {
     try {
       const access = await accessFields(request.body, null, await employeeRows())
-      const fields = { ...employeeFields(request.body), ...access }
+      const fields = { ...await employeeFields(request.body), ...access, active: true }
       let employee
       if (pool) {
-        const [result] = await pool.execute('INSERT INTO employees (name, birth_date, cpf, email, i_identificacao, employee_type, access_code, password_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [fields.name, fields.birthDate, fields.cpf, fields.email, fields.identification, fields.type, fields.accessCode, fields.passwordHash])
+        const [result] = await pool.execute('INSERT INTO employees (name, birth_date, cpf, email, i_identificacao, employee_type, access_code, password_hash, sector_id, sector_ids) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [fields.name, fields.birthDate, fields.cpf, fields.email, fields.identification, fields.type, fields.accessCode, fields.passwordHash, fields.sectorId, JSON.stringify(fields.sectorIds)])
         employee = { id: result.insertId, ...fields }
       } else {
         employee = await mutateStore((store) => {
@@ -345,12 +371,12 @@ export default function createOperationsRouter(pool) {
       const previous = employees.find((item) => String(item.id) === request.params.id)
       if (!previous) throw new OperationError(404, 'Funcionário não encontrado.')
       const access = await accessFields(request.body, previous, employees)
-      const fields = { ...employeeFields(request.body, previous), ...access }
+      const fields = { ...await employeeFields(request.body, previous), ...access }
       let employee
       if (pool) {
-        const [result] = await pool.execute('UPDATE employees SET name = ?, birth_date = ?, cpf = ?, email = ?, i_identificacao = ?, employee_type = ?, access_code = ?, password_hash = ? WHERE id = ?', [fields.name, fields.birthDate, fields.cpf, fields.email, fields.identification, fields.type, fields.accessCode, fields.passwordHash, request.params.id])
+        const [result] = await pool.execute('UPDATE employees SET name = ?, birth_date = ?, cpf = ?, email = ?, i_identificacao = ?, employee_type = ?, access_code = ?, password_hash = ?, sector_id = ?, sector_ids = ? WHERE id = ?', [fields.name, fields.birthDate, fields.cpf, fields.email, fields.identification, fields.type, fields.accessCode, fields.passwordHash, fields.sectorId, JSON.stringify(fields.sectorIds), request.params.id])
         if (!result.affectedRows) throw new OperationError(404, 'Funcionário não encontrado.')
-        employee = { id: Number(request.params.id), ...fields }
+        employee = { id: Number(request.params.id), ...fields, active: previous.active }
       } else {
         employee = await mutateStore((store) => {
           store.employees ||= []
@@ -362,7 +388,7 @@ export default function createOperationsRouter(pool) {
         })
       }
       // A new password or a change of type ends the administrative sessions already open.
-      if (fields.type !== previous.type || fields.passwordHash !== previous.passwordHash) revokeAccountSessions(staffAccountId(previous.id))
+      if (fields.type !== previous.type || fields.passwordHash !== previous.passwordHash) await revokeAccountSessions(staffAccountId(previous.id))
       response.json({ item: publicEmployee(employee, { withCode: true }) })
     } catch (error) { sendError(response, duplicateEntry(error)) }
   })
@@ -370,6 +396,7 @@ export default function createOperationsRouter(pool) {
   router.delete('/employees/:id', requireAdmin, async (request, response) => {
     try {
       if (request.adminId === staffAccountId(request.params.id)) throw new OperationError(409, 'Você não pode excluir sua própria conta.')
+      if ((await employeesWithActivity(pool)).has(String(request.params.id))) throw new OperationError(409, 'Este funcionário já tem registros no sistema. Desative o cadastro em vez de excluir.')
       if (pool) {
         const [result] = await pool.execute('DELETE FROM employees WHERE id = ?', [request.params.id])
         if (!result.affectedRows) throw new OperationError(404, 'Funcionário não encontrado.')
@@ -379,8 +406,24 @@ export default function createOperationsRouter(pool) {
         if (index < 0) throw new OperationError(404, 'Funcionário não encontrado.')
         store.employees.splice(index, 1)
       })
-      revokeAccountSessions(staffAccountId(request.params.id))
+      await revokeAccountSessions(staffAccountId(request.params.id))
       response.status(204).end()
+    } catch (error) { sendError(response, error) }
+  })
+
+  // A deactivated employee keeps the history but cannot identify as operator nor sign in as administrative employee.
+  router.patch('/employees/:id/active', requireAdmin, async (request, response) => {
+    try {
+      if (typeof request.body?.active !== 'boolean') throw new OperationError(400, 'Informe se o funcionário fica ativo.')
+      const active = request.body.active
+      if (!active && request.adminId === staffAccountId(request.params.id)) throw new OperationError(409, 'Você não pode desativar sua própria conta.')
+      const previous = (await employeeRows()).find((item) => String(item.id) === request.params.id)
+      if (!previous) throw new OperationError(404, 'Funcionário não encontrado.')
+      if (!active && (await operationOrders()).some((order) => activeSessions(order.operation).some((session) => String(session.employeeId) === String(previous.id)))) throw new OperationError(409, `${previous.name} está trabalhando em uma OS agora. Pause ou conclua o trabalho antes de desativar.`)
+      if (pool) await pool.execute('UPDATE employees SET active = ? WHERE id = ?', [active ? 1 : 0, request.params.id])
+      else await mutateStore((store) => { Object.assign(store.employees.find((item) => String(item.id) === request.params.id), { active }) })
+      if (!active) await revokeAccountSessions(staffAccountId(previous.id))
+      response.json({ item: publicEmployee({ ...previous, active }, { withCode: true }) })
     } catch (error) { sendError(response, error) }
   })
 
@@ -428,11 +471,11 @@ export default function createOperationsRouter(pool) {
       const lastStop = new Map()
       for (const event of events) {
         const at = Date.parse(event.at)
-        if (!['paused', 'completed', 'session_ended', 'admin_interrupted'].includes(event.type) || event.employeeId == null || !(at >= today.start)) continue
+        if (!['paused', 'stage_completed', 'completed', 'session_ended', 'admin_interrupted'].includes(event.type) || event.employeeId == null || !(at >= today.start)) continue
         const id = String(event.employeeId)
         if (!lastStop.has(id) || at > Date.parse(lastStop.get(id).at)) lastStop.set(id, event)
       }
-      const items = (await employeeRows()).filter((employee) => employee.type === 'operator' && !busy.has(String(employee.id))).map((employee) => {
+      const items = (await employeeRows()).filter((employee) => employee.type === 'operator' && employee.active && !busy.has(String(employee.id))).map((employee) => {
         const stop = lastStop.get(String(employee.id))
         return { id: employee.id, name: employee.name, idleSince: stop?.at || null, reason: stop ? stop.reason || (stop.type === 'completed' || stop.type === 'session_ended' ? 'OS concluída' : stop.type === 'admin_interrupted' ? 'Encerrado pelo admin' : null) : null, orderCode: stop?.orderCode || null }
       })
@@ -456,6 +499,7 @@ export default function createOperationsRouter(pool) {
       if (!/^\d{4}$/.test(code)) throw new OperationError(400, 'Digite o seu código de 4 dígitos.')
       const employee = (await employeeRows()).find((item) => item.type === 'operator' && item.accessCode === code)
       if (!employee) throw new OperationError(404, 'Código não encontrado. Confira os 4 dígitos.')
+      if (!employee.active) throw new OperationError(403, 'Este cadastro está desativado. Procure o administrador.')
       // The operator is who they say (their own code): this device receives a key to each work session they have open,
       // so a session started on another device or in a closed tab can be continued here. Existing keys keep working.
       const sessions = []
@@ -498,7 +542,7 @@ export default function createOperationsRouter(pool) {
     try {
       const result = await changeOperation(request.params.code, (state, order, store) => {
         const previousMaterialIds = new Set((order.resources?.materials || []).map((material) => material.id))
-        const changes = editOrder(order, state, { ...request.body, actorName: request.adminName })
+        const changes = editOrder(order, state, { ...request.body, actorName: request.adminName }, { machines: store.machines, laborServices: store.laborServices })
         for (const material of order.resources.materials) if (!previousMaterialIds.has(material.id)) Object.assign(material, { requestedBy: request.adminId, requestedByName: request.adminName || null, requestedAt: new Date().toISOString(), requestedQuantity: material.purchaseQuantity ?? material.quantity })
         const offer = store.offers.find((item) => item.id === order.offerId)
         if (!offer) throw new OperationError(409, 'A oferta vinculada à OS não foi encontrada.')
@@ -553,6 +597,7 @@ export default function createOperationsRouter(pool) {
   // the OS being changed is checked inside its own update, after the work session is authenticated (machineTakenIn).
   async function assertMachineFree(machine, mine, currentCode) {
     if (!machine) return
+    if (machine.maintenance) throw Object.assign(new OperationError(409, `A máquina ${machine.name} está em manutenção.`), { code: 'MACHINE_MAINTENANCE' })
     const orders = (await readStore()).orders.filter((order) => order.code !== currentCode)
     if (!orders.length) return
     const stored = pool ? new Map((await operationStates(orders, pool)).map((row) => [row.order_code, json(row.data)])) : null
@@ -566,6 +611,11 @@ export default function createOperationsRouter(pool) {
     }
   }
   const machineTakenIn = (state, machine, mine) => machine && state.activeSessions.find((session) => String(session.machineId) === String(machine.id) && !mine(session))
+
+  const resourceCatalog = async () => {
+    const [machines, laborServices] = await Promise.all([machineRows(), laborServiceRows()])
+    return { machine: machines, 'labor-service': laborServices }
+  }
 
   async function selectedResource(type, id) {
     if (id == null || id === '') return null
@@ -605,18 +655,24 @@ export default function createOperationsRouter(pool) {
     try {
       const employee = (await employeeRows()).find((item) => item.type === 'operator' && String(item.id) === String(request.body?.employeeId))
       if (!employee) throw new OperationError(400, 'Selecione um funcionário cadastrado.')
+      if (!employee.active) throw new OperationError(403, 'Este cadastro está desativado. Procure o administrador.')
       const machine = await selectedResource('machine', request.body?.machineId)
       const laborService = await selectedResource('labor-service', request.body?.laborServiceId)
       if (machine && laborService) throw new OperationError(400, 'Selecione a máquina ou o serviço de hora homem, não os dois.')
       const elsewhere = await workElsewhere(employee, request.params.code, request.body?.switchFrom)
       const ownSession = (session) => String(session.employeeId) === String(employee.id)
       await assertMachineFree(machine, ownSession, request.params.code)
+      const catalog = await resourceCatalog()
       const sessionToken = randomUUID()
       let session
       const result = await changeOperation(request.params.code, (state, order) => {
         if (!state.stages.length) throw new OperationError(409, 'Defina as etapas da OS antes de iniciar.')
         if (state.status === 'completed') throw new OperationError(409, 'Esta OS já foi concluída.')
         if (state.activeSessions.some((item) => String(item.employeeId) === String(employee.id))) throw new OperationError(409, `${employee.name} já está trabalhando nesta OS.`)
+        const stage = workStage(state, order, request.body?.stageKey)
+        // The stage decides the resource when the offer planned one for it.
+        const plan = stagePlan(order, stage, catalog)
+        if (plan && String((plan.machine ? machine : laborService)?.id ?? '') !== String((plan.machine || plan.laborService).id)) throw new OperationError(409, `A etapa ${stage.name} é feita em ${plan.name}. Selecione a etapa novamente.`)
         const taken = machineTakenIn(state, machine, ownSession)
         if (taken) throw Object.assign(new OperationError(409, `A máquina ${machine.name} está sendo usada por ${taken.employeeName || 'outro funcionário'} na ${order.code}.`), { code: 'MACHINE_BUSY' })
         const pending = pendingOrderMaterials(order)
@@ -630,12 +686,11 @@ export default function createOperationsRouter(pool) {
         const firstStart = !state.startedAt
         state.startedAt ||= now
         if (!state.activeSessions.length) state.activeSince = now
-        const stage = workStage(state, order, request.body?.stageKey)
         session = { id: randomUUID(), tokenHash: createHash('sha256').update(sessionToken).digest('hex'), employeeId: employee.id, employeeName: employee.name, machineId: machine?.id ?? null, machineName: machine?.name ?? null, laborServiceId: laborService?.id ?? null, laborServiceName: laborService?.name ?? null, startedAt: now, stageKey: stage.key, stageName: stage.name, stageSince: now }
         state.activeSessions.push(session)
         state.status = allStagesDone(state, order) ? 'finalizing' : 'running'
         state.lastPauseReason = null
-        return eventFor(firstStart ? 'started' : 'resumed', session, { workStageKey: stage.key, workStageName: stage.name, ...(pending.length ? { pendingMaterialsAccepted: true, pendingMaterials: pending, details: pending.map((material) => `Material pendente autorizado: ${material.name}, ${material.quantity.toLocaleString('pt-BR')} kg`) } : {}) })
+        return eventFor(firstStart ? 'started' : 'resumed', session, { workStageKey: stage.key, workStageName: stage.name, ...(pending.length ? { pendingMaterialsAccepted: true, pendingMaterials: pending, details: pending.map((material) => `Material pendente autorizado: ${material.name}, ${formatQuantity(material.quantity, material.unit)}`) } : {}) })
       })
       // The new work is already open: only now the other OS is paused, so a refused start leaves it running.
       const switched = elsewhere.length ? await pauseElsewhere(employee, elsewhere, session.startedAt) : []
@@ -653,8 +708,9 @@ export default function createOperationsRouter(pool) {
       const resource = await selectedResource(type, request.body.resourceId)
       const sameSession = (session) => session.id === request.body?.sessionId
       if (type === 'machine') await assertMachineFree(resource, sameSession, request.params.code)
+      const catalog = await resourceCatalog()
       const result = await changeOperation(request.params.code, (state, order) => {
-        assertSession(state, request.body?.sessionId, request.body?.sessionToken)
+        assertFreeChoice(state, order, assertSession(state, request.body?.sessionId, request.body?.sessionToken), catalog)
         const taken = type === 'machine' && machineTakenIn(state, resource, sameSession)
         if (taken) throw Object.assign(new OperationError(409, `A máquina ${resource.name} está sendo usada por ${taken.employeeName || 'outro funcionário'} na ${order.code}.`), { code: 'MACHINE_BUSY' })
         return changeSessionResource(state, request, type === 'machine' ? resource : null, type === 'labor-service' ? resource : null)
@@ -670,8 +726,9 @@ export default function createOperationsRouter(pool) {
       const machine = await selectedResource('machine', machineId)
       const sameSession = (session) => session.id === request.body?.sessionId
       await assertMachineFree(machine, sameSession, request.params.code)
+      const catalog = await resourceCatalog()
       const result = await changeOperation(request.params.code, (state, order) => {
-        assertSession(state, request.body?.sessionId, request.body?.sessionToken)
+        assertFreeChoice(state, order, assertSession(state, request.body?.sessionId, request.body?.sessionToken), catalog)
         const taken = machineTakenIn(state, machine, sameSession)
         if (taken) throw Object.assign(new OperationError(409, `A máquina ${machine.name} está sendo usada por ${taken.employeeName || 'outro funcionário'} na ${order.code}.`), { code: 'MACHINE_BUSY' })
         const current = state.activeSessions.find((item) => item.id === request.body?.sessionId)
@@ -687,7 +744,9 @@ export default function createOperationsRouter(pool) {
       const laborServiceId = request.body?.laborServiceId
       if (laborServiceId === undefined) throw new OperationError(400, 'Selecione o serviço ou a opção sem serviço de hora homem.')
       const service = await selectedResource('labor-service', laborServiceId)
-      const result = await changeOperation(request.params.code, (state) => {
+      const catalog = await resourceCatalog()
+      const result = await changeOperation(request.params.code, (state, order) => {
+        assertFreeChoice(state, order, assertSession(state, request.body?.sessionId, request.body?.sessionToken), catalog)
         const current = state.activeSessions.find((item) => item.id === request.body?.sessionId)
         const machine = service || current?.machineId == null ? null : { id: current.machineId, name: current.machineName }
         return changeSessionResource(state, request, machine, service)
@@ -697,16 +756,27 @@ export default function createOperationsRouter(pool) {
   })
 
   // The operator moves to another stage without closing the work session; the time so far stays with the previous stage.
+  // A stage with a planned resource moves the session to it (a planned machine must be free); without a plan the
+  // session keeps its resource and the operator may choose another one.
   router.post('/operations/orders/:code/work-stage', requireOperator, async (request, response) => {
     try {
+      const catalog = await resourceCatalog()
+      const sameSession = (session) => session.id === request.body?.sessionId
+      const current = (await operationOrders()).find((order) => order.code === request.params.code)
+      await assertMachineFree(stagePlan(current, current?.operation.stages.find((stage) => stage.key === request.body?.stageKey), catalog)?.machine, sameSession, request.params.code)
       const result = await changeOperation(request.params.code, (state, order) => {
         const session = assertSession(state, request.body?.sessionId, request.body?.sessionToken)
         const stage = workStage(state, order, request.body?.stageKey)
         if (stage.key === session.stageKey) throw new OperationError(409, 'Selecione uma etapa diferente da atual.')
+        const plan = stagePlan(order, stage, catalog)
+        const taken = machineTakenIn(state, plan?.machine, sameSession)
+        if (taken) throw Object.assign(new OperationError(409, `A máquina ${plan.name} está sendo usada por ${taken.employeeName || 'outro funcionário'} na ${order.code}.`), { code: 'MACHINE_BUSY' })
         const at = new Date().toISOString(), previous = session.stageName || 'Sem etapa'
         const durationMs = closeStageSegment(state, session, at)
         Object.assign(session, { stageKey: stage.key, stageName: stage.name, stageSince: at })
-        return { ...eventFor('stage_changed', session, { workStageKey: stage.key, workStageName: stage.name, durationMs, details: `${previous} → ${stage.name}` }), at }
+        const event = { ...eventFor('stage_changed', session, { workStageKey: stage.key, workStageName: stage.name, durationMs, details: `${previous} → ${stage.name}` }), at }
+        const moves = plan && (String(session.machineId ?? '') !== String(plan.machine?.id ?? '') || String(session.laborServiceId ?? '') !== String(plan.laborService?.id ?? ''))
+        return moves ? [event, changeSessionResource(state, request, plan.machine, plan.laborService)] : event
       })
       response.json({ ...result, order: operatorOrder(result.order, result.operation) })
     } catch (error) { sendError(response, error) }
@@ -729,14 +799,16 @@ export default function createOperationsRouter(pool) {
       if (pool) {
         try { const [rows] = await pool.execute('SELECT id, unit_price AS unitPrice FROM inventory_materials'); for (const row of rows) prices.set(String(row.id), Number(row.unitPrice || 0)) } catch { /* sem estoque: mantém o preço da última vez */ }
       }
-      const item = pieceSuggestion({ offers: store.offers || [], orders: await operationOrders(), name: request.query.name, quantity: request.query.quantity, prices, excludeOfferId: request.query.offerId })
+      // The operation events of the OS of this piece tell which machine or service each stage was made on.
+      const history = await ordersWithOperations((store.orders || []).filter((order) => pieceKey(order.service) === pieceKey(request.query.name)), pool)
+      const item = pieceSuggestion({ offers: store.offers || [], orders: await operationOrders(), name: request.query.name, quantity: request.query.quantity, prices, excludeOfferId: request.query.offerId, catalog: await resourceCatalog(), history })
       response.set('Cache-Control', 'no-store').json({ item })
     } catch (error) { sendError(response, error) }
   })
 
   router.post('/operations/orders/:code/pause', requireOperator, async (request, response) => {
     try {
-      if (!pauseReasons.includes(request.body?.reason)) throw new OperationError(400, 'Selecione uma justificativa para a pausa.')
+      if (!(await pauseReasonNames()).includes(request.body?.reason)) throw new OperationError(400, 'Selecione uma justificativa para a pausa.')
       const result = await changeOperation(request.params.code, (state) => {
         const session = assertSession(state, request.body?.sessionId, request.body?.sessionToken)
         const event = eventFor('paused', session, { reason: request.body.reason, durationMs: sessionDuration(session) })
@@ -757,17 +829,20 @@ export default function createOperationsRouter(pool) {
       if (!Number.isInteger(quantity) || quantity < 1) throw new OperationError(400, 'Informe uma quantidade inteira de peças.')
       const result = await changeOperation(request.params.code, (state, order) => {
         const session = assertSession(state, request.body?.sessionId, request.body?.sessionToken)
-        const completedBy = request.body?.completedBySessionId
-        if (state.activeSessions.length > 1 && !completedBy) {
-          const error = new OperationError(409, 'Há mais de um funcionário trabalhando nesta OS. Informe quem concluiu esta etapa.')
-          error.code = 'COMPLETED_BY_REQUIRED'
-          throw error
-        }
-        const worker = completedBy ? state.activeSessions.find((item) => item.id === completedBy) : session
-        if (!worker) throw new OperationError(409, 'O funcionário selecionado não está mais trabalhando nesta OS.')
         const index = state.stages.findIndex((stage) => stage.key === request.params.stageKey)
         if (index < 0) throw new OperationError(404, 'Etapa não encontrada.')
         const stage = state.stages[index]
+        // Pieces are registered by who works on the stage: an employee on another stage selects this one first.
+        const onStage = state.activeSessions.filter((item) => item.stageKey === stage.key)
+        if (!onStage.length) throw new OperationError(409, `Ninguém está trabalhando na etapa ${stage.name}. Selecione esta etapa antes de registrar.`)
+        const completedBy = request.body?.completedBySessionId
+        if (onStage.length > 1 && !completedBy) {
+          const error = new OperationError(409, 'Há mais de um funcionário trabalhando nesta etapa. Informe quem concluiu as peças.')
+          error.code = 'COMPLETED_BY_REQUIRED'
+          throw error
+        }
+        const worker = completedBy ? onStage.find((item) => item.id === completedBy) : onStage[0]
+        if (!worker) throw new OperationError(409, 'O funcionário selecionado não está mais trabalhando nesta etapa.')
         const next = Number(state.stageCounts[stage.key] || 0) + quantity
         if (next > Number(order.quantity)) throw new OperationError(409, 'A quantidade não pode ultrapassar o total da OS.')
         if (serviceDetails(order.resources).strictProcess && index > 0 && next > Number(state.stageCounts[state.stages[index - 1].key] || 0)) throw new OperationError(409, 'As peças precisam passar pela etapa anterior antes desta etapa.')
@@ -775,8 +850,20 @@ export default function createOperationsRouter(pool) {
         // Stages this work session has produced in; screens show them as in production while the session is open.
         if (!(worker.workedStages || []).includes(stage.key)) worker.workedStages = [...(worker.workedStages || []), stage.key]
         const event = eventFor('stage_progress', worker, { stageKey: stage.key, stageName: stage.name, quantity, stageTotal: next, ...(worker !== session ? { registeredBySessionId: session.id, registeredByEmployeeName: session.employeeName } : {}) })
-        if (allStagesDone(state, order)) state.status = 'finalizing'
-        return event
+        if (allStagesDone(state, order)) {
+          // The last stage keeps the work open until the service is completed.
+          state.status = 'finalizing'
+          return event
+        }
+        if (next < Number(order.quantity)) return event
+        // A finished stage ends the work of everyone on it: they become idle and select the next stage to start again.
+        const ended = onStage.map((item) => {
+          const done = { ...eventFor('stage_completed', item, { reason: STAGE_DONE_REASON, workStageKey: stage.key, workStageName: stage.name, durationMs: sessionDuration(item, event.at) }), at: event.at }
+          endSession(state, item, event.at)
+          return done
+        })
+        if (!state.activeSessions.length) Object.assign(state, { status: 'stage_done', lastPauseReason: STAGE_DONE_REASON })
+        return [event, ...ended]
       })
       response.json({ ...result, order: operatorOrder(result.order, result.operation) })
     } catch (error) { sendError(response, error) }

@@ -1,4 +1,4 @@
-import { payableStatus, daysUntil, filterPayables, todayBahia } from '../server/payableRules.js'
+import { payableStatus, daysUntil, filterPayables, todayBahia, classificationParts, scaleSplit } from '../server/payableRules.js'
 
 export function payableAnalytics(rows, filters, today = todayBahia()) {
   const selected = filterPayables(rows, { ...filters, status: 'all' }, today)
@@ -10,7 +10,7 @@ export function payableAnalytics(rows, filters, today = todayBahia()) {
     const status = payableStatus(row, today), amount = row.payment ? row.payment.finalCents : row.valueCents
     add('total', amount); add(status, amount)
     if (!row.payment && daysUntil(row.dueDate, today) >= 0 && daysUntil(row.dueDate, today) <= 3) add('soon', row.valueCents)
-    group(classifications, row.classificationId, row.classificationName, amount)
+    for (const part of scaleSplit(classificationParts(row), amount, row.valueCents)) group(classifications, part.classificationId, part.classificationName, part.valueCents)
     group(suppliers, row.supplierId, row.supplierName, amount)
     if (row.payment) {
       add('interest', row.payment.interestCents); add('discount', row.payment.discountCents)

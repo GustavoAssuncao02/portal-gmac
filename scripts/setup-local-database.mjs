@@ -1,6 +1,7 @@
 import 'dotenv/config'
 import mysql from 'mysql2/promise'
 import bcrypt from 'bcryptjs'
+import { existsSync } from 'node:fs'
 import { readFile, mkdir, copyFile } from 'node:fs/promises'
 import path from 'node:path'
 import { ensureInventoryAppearance } from '../server/inventoryAppearance.js'
@@ -17,6 +18,9 @@ try {
   const [done] = await connection.execute("SELECT name FROM local_imports WHERE name = 'json-workflow-v1'")
   if (done.length) {
     console.log('Banco ja preparado. Os dados atuais foram mantidos.')
+  } else if (!existsSync(path.join(dataDirectory, 'offers.json'))) {
+    // A new installation, or one whose offers.json the server already moved into the database: only the schema is needed.
+    console.log('Banco preparado. Nao ha offers.json antigo para importar.')
   } else {
     for (const table of ['users', 'employees', 'clients', 'order_operations', 'order_operation_events']) {
       const [[row]] = await connection.query(`SELECT COUNT(*) AS total FROM ${table}`)

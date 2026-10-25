@@ -21,7 +21,7 @@ async function login(cpf = '12345678901') {
 }
 async function navigate(name) {
   const button = page.locator('.sidebar').getByRole('button', { name, exact: true })
-  if (!(await button.isVisible())) await page.locator('.sidebar').getByRole('button', { name: ['Fornecedores', 'Administradores', 'Funcionários', 'Clientes'].includes(name) ? 'Cadastros' : 'Gestão Financeira', exact: true }).click()
+  if (!(await button.isVisible())) await page.locator('.sidebar').getByRole('button', { name: ['Fornecedores', 'Administradores', 'Funcionários', 'Clientes'].includes(name) ? 'Cadastros' : ['Serviços em andamento', 'Serviços concluídos', 'Ofertas e serviços'].includes(name) ? 'Operação' : 'Gestão Financeira', exact: true }).click()
   await button.click()
   await page.waitForTimeout(100)
 }
@@ -98,6 +98,26 @@ try {
   await writeFile('test-results/theme/contrast.json', JSON.stringify(contrasts, null, 2))
   console.log('Contrast issues:', JSON.stringify(contrasts.filter((entry) => entry.issues.length)))
   assert.deepEqual(contrasts.filter((entry) => entry.issues.length), [], 'Every sampled text/control must meet 4.5:1 contrast.')
+  // "Escuro intenso": the dark rules on true black, checked on the same screens.
+  await navigate('Configurações')
+  const black = page.getByRole('radio', { name: 'Escuro intenso', exact: true })
+  await black.check()
+  await page.getByRole('status').getByText('Aparência salva.').waitFor()
+  assert.deepEqual(await page.evaluate(() => ({ ...document.documentElement.dataset, meta: document.querySelector('meta[name="theme-color"]').content, body: getComputedStyle(document.body).backgroundColor })), { theme: 'dark', tone: 'black', fontSize: 'default', fontFamily: 'default', meta: '#0b0b0b', body: 'rgb(11, 11, 11)' })
+  contrasts.length = 0
+  for (const name of screens) {
+    await navigate(name)
+    await capture(`escuro-intenso ${name}`)
+  }
+  await writeFile('test-results/theme/contrast-escuro-intenso.json', JSON.stringify(contrasts, null, 2))
+  assert.deepEqual(contrasts.filter((entry) => entry.issues.length), [], 'Escuro intenso: every sampled text/control must meet 4.5:1 contrast.')
+  await page.reload()
+  await black.waitFor()
+  assert.ok(await black.isChecked())
+  assert.equal(await page.evaluate(() => document.documentElement.dataset.tone), 'black')
+  await dark.check()
+  await page.getByRole('status').getByText('Aparência salva.').waitFor()
+  assert.equal(await page.evaluate(() => document.documentElement.dataset.tone), undefined)
   await navigate('Configurações')
   await page.reload()
   await dark.waitFor()
@@ -122,5 +142,5 @@ try {
   await light.waitFor()
   assert.ok(await light.isChecked())
   assert.deepEqual(errors, [])
-  console.log('Account theme passed: light default even with dark OS, save/retry, account isolation, server persistence, reload, logout, all desktop screens and OS modal.')
+  console.log('Account theme passed: light default even with dark OS, save/retry, Escuro intenso, account isolation, server persistence, reload, logout, all desktop screens and OS modal.')
 } finally { await browser.close(); await fixture.close() }

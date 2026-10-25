@@ -1,0 +1,167 @@
+/* Planejamento: the calendar of the machines. Colors follow the status of each block: planned (light blue), running
+   (blue, with the pieces done), done (green) and late (orange); the real work is a thin bar at the bottom of the row. */
+.planning-main { display: grid; align-content: start; gap: 16px; }
+.planning-heading { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px 24px; }
+.planning-heading h1 { margin: 0; color: #17375e; font-size: 28px; }
+.planning-heading p { margin: 4px 0 0; color: #5d738b; font-size: 14px; }
+.planning-heading-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; }
+.planning-live { display: grid; grid-template-columns: auto auto; align-items: center; column-gap: 8px; color: #1f8a4c; font-size: 13px; font-weight: 700; }
+.planning-live i { grid-row: span 2; width: 10px; height: 10px; border-radius: 50%; background: #22a35a; box-shadow: 0 0 0 4px #22a35a26; }
+.planning-live small { grid-column: 2; color: #6b8096; font-weight: 400; }
+
+.planning-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; }
+.planning-views { display: inline-flex; overflow: hidden; border: 1px solid #cbd9e8; border-radius: 8px; background: #fff; }
+.planning-views button { min-width: 72px; min-height: 40px; padding: 0 16px; border: 0; border-right: 1px solid #cbd9e8; background: transparent; color: #31506f; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.planning-views button:last-child { border-right: 0; }
+.planning-views button[aria-pressed="true"] { background: #0c4c91; color: #fff; }
+.planning-date { display: inline-flex; align-items: center; gap: 6px; }
+.planning-date > button { display: grid; min-width: 40px; min-height: 40px; place-items: center; padding: 0 10px; border: 1px solid #cbd9e8; border-radius: 8px; background: #fff; color: #23476d; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.planning-date input { min-height: 40px; padding: 0 10px; border: 1px solid #cbd9e8; border-radius: 8px; background: #fff; color: #17375e; font: inherit; }
+.planning-period { color: #17375e; font-size: 15px; text-transform: capitalize; }
+.planning-filters { display: flex; flex-wrap: wrap; gap: 10px; margin-left: auto; }
+.planning-filters select { min-width: 180px; min-height: 40px; padding: 0 10px; border: 1px solid #cbd9e8; border-radius: 8px; background: #fff; color: #17375e; font: inherit; }
+.planning-loading, .planning-muted { margin: 0; color: #6b8096; font-size: 13px; }
+
+.planning-indicators { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.planning-indicators article { display: flex; align-items: flex-start; gap: 12px; min-width: 0; padding: 14px 16px; border: 1px solid #dce5ef; border-radius: 8px; background: #fff; color: #1d5fa3; }
+.planning-indicators article > div { display: grid; min-width: 0; gap: 2px; }
+.planning-indicators span { color: #5d738b; font-size: 12px; }
+.planning-indicators strong { color: #17375e; font-size: 22px; }
+.planning-indicators small { overflow: hidden; color: #6b8096; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.planning-indicators .planning-indicator--done { color: #1f8a4c; }
+.planning-indicators .planning-indicator--late { border-color: #f0b46a; background: #fff8ee; color: #c36a00; }
+
+.planning-agenda, .planning-backlog, .planning-snapshot, .planning-operator { min-width: 0; border: 1px solid #dce5ef; border-radius: 8px; background: #fff; }
+.planning-agenda > header, .planning-backlog > header, .planning-snapshot > header, .planning-operator > header { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 14px 16px; border-bottom: 1px solid #e4ebf3; }
+.planning-agenda h2, .planning-backlog h2, .planning-snapshot h2, .planning-operator h2 { margin: 0; color: #17375e; font-size: 17px; }
+.planning-agenda > header p, .planning-backlog > header p { flex: 1 1 260px; margin: 0; color: #6b8096; font-size: 13px; }
+.planning-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0; padding: 0; list-style: none; color: #4f6680; font-size: 12px; }
+.planning-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.planning-dot { display: inline-block; width: 12px; height: 12px; border-radius: 3px; }
+.planning-dot--planned { border: 1px solid #8db4e3; background: #e3eefb; }
+.planning-dot--running { background: #2f74d0; }
+.planning-dot--done { background: #2e9b5a; }
+.planning-dot--late { background: #e3870f; }
+.planning-dot--actual { height: 4px; border-radius: 2px; background: #22a35a; }
+
+.planning-scroll { overflow-x: auto; overscroll-behavior-x: contain; }
+.planning-grid { --label-width: 210px; position: relative; display: grid; grid-template-columns: var(--label-width) var(--timeline-width); width: max-content; }
+.planning-corner, .planning-label { position: sticky; left: 0; z-index: 3; background: #fff; }
+.planning-corner { display: flex; align-items: end; padding: 0 14px 8px; border-bottom: 1px solid #dce5ef; color: #5d738b; font-size: 12px; font-weight: 700; }
+.planning-ruler { position: relative; height: 44px; border-bottom: 1px solid #dce5ef; background: repeating-linear-gradient(90deg, #d5e0ec 0 1px, transparent 1px calc(var(--hour-width) / 4)), #f7fafd; background-size: 100% 8px, auto; background-position: bottom; background-repeat: repeat-x; cursor: pointer; }
+.planning-ruler:focus-visible { outline: 2px solid #0c4c91; outline-offset: -2px; }
+.planning-ruler span { position: absolute; bottom: 12px; padding-left: 4px; border-left: 1px solid #b9cadb; color: #4f6680; font-size: 12px; line-height: 1; }
+.planning-now-label, .planning-selected-label { position: absolute; top: 2px; z-index: 2; padding: 2px 6px; border-radius: 4px; transform: translateX(-50%); color: #fff; font-size: 11px; white-space: nowrap; }
+.planning-now-label { background: #c62f3a; }
+.planning-selected-label { top: 20px; background: #0c4c91; }
+/* The row spans the whole day; only its name stays at the left while the day scrolls. */
+.planning-group { grid-column: 1 / -1; padding: 10px 0 6px; border-bottom: 1px solid #e4ebf3; background: #f7fafd; color: #3d5876; font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.planning-group span { position: sticky; left: 14px; padding: 0 14px; }
+.planning-label { display: grid; align-content: center; gap: 3px; min-height: 72px; padding: 8px 14px; border-bottom: 1px solid #e4ebf3; border-right: 1px solid #dce5ef; }
+.planning-label strong { color: #17375e; font-size: 14px; }
+.planning-label > span { display: flex; flex-wrap: wrap; gap: 4px; }
+.planning-label em { padding: 1px 8px; border-radius: 999px; background: #e8f1fb; color: #0c4c91; font-size: 11px; font-style: normal; font-weight: 600; }
+.planning-label small { display: inline-flex; align-items: center; gap: 4px; color: #6b8096; font-size: 12px; }
+.planning-label--maintenance small { color: #9a5b00; font-weight: 700; }
+.planning-track { position: relative; min-height: 72px; border-bottom: 1px solid #e4ebf3; background: repeating-linear-gradient(90deg, #edf2f7 0 1px, transparent 1px var(--hour-width)); cursor: copy; }
+.planning-track:hover { background-color: #fbfdff; }
+.planning-track--maintenance { background: repeating-linear-gradient(135deg, #fff4e0 0 8px, #fffaf1 8px 16px); }
+.planning-block { position: absolute; top: 7px; bottom: 13px; display: grid; align-content: center; gap: 3px; overflow: hidden; padding: 4px 8px; border: 1px solid #8db4e3; border-left-width: 4px; border-radius: 6px; background: #e3eefb; color: #17406e; font: inherit; text-align: left; cursor: grab; touch-action: none; }
+.planning-block strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.planning-block span, .planning-block small { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.planning-block:focus-visible { outline: 2px solid #0c4c91; outline-offset: 2px; }
+.planning-block--running { border-color: #2f74d0; background: #d6e7fb; color: #0f3d73; }
+.planning-block--done { border-color: #2e9b5a; background: #e2f4e9; color: #1b5e37; }
+.planning-block--late { border-color: #e3870f; background: #fff1de; color: #7a4300; }
+.planning-block--late span b { color: #b55a00; }
+.planning-block--dragging { z-index: 4; box-shadow: 0 6px 18px #0f2a4733; cursor: grabbing; opacity: .92; }
+.planning-progress { position: absolute; left: 0; bottom: 0; height: 4px; background: #2f74d0; }
+.planning-actual { position: absolute; bottom: 4px; height: 5px; border-radius: 3px; background: #22a35a; }
+.planning-actual--outside { background: repeating-linear-gradient(135deg, #e3870f 0 4px, #f6c27a 4px 8px); }
+.planning-now, .planning-selected { position: absolute; top: 0; bottom: 0; z-index: 2; width: 2px; pointer-events: none; }
+.planning-now { background: #c62f3a; }
+.planning-selected { background: #0c4c91; opacity: .7; }
+.planning-empty { margin: 0; padding: 18px; color: #6b8096; font-size: 13px; text-align: center; }
+
+/* Positioned, so the hidden labels of the tables stay inside the scrolling area instead of widening the page. */
+.planning-table-scroll { position: relative; overflow-x: auto; }
+.planning-agenda table, .planning-backlog table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.planning-agenda th, .planning-agenda td, .planning-backlog th, .planning-backlog td { padding: 10px 12px; border-bottom: 1px solid #e4ebf3; color: #23476d; text-align: left; vertical-align: middle; }
+.planning-agenda thead th, .planning-backlog thead th { background: #f7fafd; color: #3d5876; font-size: 12px; white-space: nowrap; }
+.planning-backlog td small, .planning-agenda td small { display: block; margin-top: 2px; color: #6b8096; font-size: 12px; }
+.planning-backlog tbody tr[draggable] { cursor: grab; }
+.planning-backlog tbody tr:hover { background: #f9fbfe; }
+.planning-week thead button { padding: 6px 8px; border: 0; border-radius: 6px; background: transparent; color: #0c4c91; font: inherit; font-weight: 700; cursor: pointer; }
+.planning-week .planning-today-column { background: #e8f1fb; }
+.planning-cell { display: grid; width: 100%; min-width: 110px; gap: 4px; padding: 6px; border: 0; border-radius: 6px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.planning-cell:hover { background: #f1f6fc; }
+.planning-bar { display: block; overflow: hidden; height: 8px; border-radius: 999px; background: #e4ebf3; }
+.planning-bar i { display: block; height: 100%; border-radius: inherit; background: #2f74d0; }
+
+.planning-calendar { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; padding: 12px; }
+.planning-weekday { padding: 4px 6px; color: #5d738b; font-size: 12px; font-weight: 700; }
+.planning-day { display: grid; align-content: start; gap: 6px; min-width: 0; min-height: 118px; padding: 8px; border: 1px solid #dce5ef; border-radius: 8px; background: #fff; color: #23476d; font: inherit; text-align: left; cursor: pointer; }
+.planning-day:hover { border-color: #8db4e3; }
+.planning-day > strong { font-size: 14px; }
+.planning-day--other { background: #f7fafd; opacity: .6; }
+.planning-day--today { border-color: #0c4c91; box-shadow: inset 0 0 0 1px #0c4c91; }
+.planning-day-sector { display: grid; grid-template-columns: minmax(0, 1fr) 34px; align-items: center; gap: 2px 6px; font-size: 11px; }
+.planning-day-sector em { grid-column: 1 / -1; overflow: hidden; color: #4f6680; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
+.planning-day-sector small { color: #4f6680; text-align: right; }
+.planning-day-count { color: #6b8096; font-size: 11px; }
+.planning-day-count b { color: #b55a00; }
+
+.planning-lower { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(320px, 1fr); align-items: start; gap: 16px; }
+.planning-side { display: grid; gap: 16px; min-width: 0; }
+.planning-warning { display: inline-flex; align-items: center; gap: 6px; margin: 0; color: #9a5b00; font-size: 12px; font-weight: 700; }
+.planning-emergency { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 4px; background: #fde4e4; color: #b42318; font-size: 11px; font-weight: 700; }
+.planning-link { padding: 0; border: 0; background: transparent; color: #0c4c91; font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+
+.planning-snapshot > header select, .planning-operator > header select { min-height: 36px; margin-left: auto; padding: 0 8px; border: 1px solid #cbd9e8; border-radius: 6px; background: #fff; color: #17375e; font: inherit; }
+.planning-snapshot > .planning-muted { padding: 14px 16px; }
+.planning-snapshot-group { padding: 10px 16px 4px; }
+.planning-snapshot-group h3 { margin: 0 0 6px; font-size: 13px; }
+.planning-snapshot-group--busy h3 { color: #1d5fa3; }
+.planning-snapshot-group--idle h3 { color: #4f6680; }
+.planning-snapshot-group--unavailable h3 { color: #9a5b00; }
+.planning-snapshot-group ul { display: grid; gap: 8px; margin: 0 0 8px; padding: 0; list-style: none; }
+.planning-snapshot-group li { display: grid; gap: 2px; padding: 8px 10px; border-left: 3px solid #8db4e3; border-radius: 4px; background: #f7fafd; font-size: 13px; }
+.planning-snapshot-group--idle li { border-left-color: #b9cadb; }
+.planning-snapshot-group--unavailable li { border-left-color: #e3930b; }
+.planning-snapshot-group li strong { color: #17375e; }
+.planning-snapshot-group li span { color: #3d5876; }
+.planning-real { color: #1f8a4c; font-size: 12px; font-weight: 700; }
+.planning-real--none { color: #9a5b00; }
+
+.planning-operator h2 span { margin-left: 6px; padding: 1px 6px; border-radius: 4px; background: #e8f1fb; color: #0c4c91; font-size: 11px; vertical-align: middle; }
+.planning-operator ol { display: grid; gap: 8px; margin: 0; padding: 12px 16px 4px; list-style: none; }
+.planning-operator li { display: grid; grid-template-columns: 76px minmax(0, 1fr); align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid #dce5ef; border-radius: 6px; }
+.planning-operator li b { padding: 3px 0; border-radius: 4px; background: #eef3f8; color: #3d5876; font-size: 11px; text-align: center; text-transform: uppercase; }
+.planning-operator .planning-operator-now { border-color: #2f74d0; }
+.planning-operator .planning-operator-now b { background: #2f74d0; color: #fff; }
+.planning-operator li strong { display: block; color: #17375e; font-size: 13px; }
+.planning-operator li small { color: #6b8096; font-size: 12px; }
+.planning-operator > .planning-muted { padding: 8px 16px 14px; }
+
+.planning-modal { width: min(620px, calc(100vw - 24px)); }
+.planning-form fieldset { display: grid; gap: 14px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.planning-form label { display: grid; gap: 6px; color: #23476d; font-size: 13px; font-weight: 600; }
+.planning-form select, .planning-form input { min-height: 40px; padding: 0 10px; border: 1px solid #cbd9e8; border-radius: 6px; background: #fff; color: #17375e; font: inherit; font-weight: 400; }
+.planning-form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+.planning-form-summary { margin: 0; color: #3d5876; font-size: 13px; }
+.planning-remove { margin-right: auto; border-color: #f0b6b6; color: #b42318; }
+
+@media (max-width: 1100px) {
+  .planning-indicators { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .planning-lower { grid-template-columns: minmax(0, 1fr); }
+  .planning-filters { margin-left: 0; }
+}
+@media (max-width: 760px) {
+  .planning-heading h1 { font-size: 24px; }
+  .planning-indicators { grid-template-columns: minmax(0, 1fr); }
+  .planning-grid { --label-width: 140px; }
+  .planning-filters, .planning-filters select { width: 100%; }
+  .planning-calendar { gap: 3px; padding: 6px; }
+  .planning-day { min-height: 64px; padding: 4px; }
+  .planning-day-sector, .planning-day-count { display: none; }
+}

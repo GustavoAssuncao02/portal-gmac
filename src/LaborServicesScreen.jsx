@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Plus, Pencil, Trash2, Info, Search, Save, X, Wrench } from 'lucide-react'
 import AdminWorkspace from './AdminWorkspace.jsx'
+import SectorPicker from './SectorPicker.jsx'
 import MachineHistoryModal from './MachineHistoryModal.jsx'
 import { pollWhileVisible } from './polling.js'
 
@@ -15,7 +16,8 @@ const loadHistory = (id, query, signal) => request(`/${encodeURIComponent(id)}/h
 
 function ServiceDialog({ item, removing, onClose, onSave }) {
   const dialog = useRef(null)
-  const [draft, setDraft] = useState(item || { name: '', type: 'Hora homem', sector: '', hourlyRate: '' })
+  const [draft, setDraft] = useState(item ? { ...item, sectors: item.sectors?.length ? item.sectors : String(item.sector || '').split(/[,;]/).map((name) => name.trim()).filter(Boolean) } : { name: '', type: 'Hora homem', sectors: [], hourlyRate: '' })
+  const [sectorError, setSectorError] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   useEffect(() => {
@@ -24,7 +26,9 @@ function ServiceDialog({ item, removing, onClose, onSave }) {
     return () => { element.close(); document.body.style.overflow = overflow; focus?.focus({ preventScroll: true }) }
   }, [])
   async function submit(event) {
-    event.preventDefault(); setBusy(true); setError('')
+    event.preventDefault()
+    if (!removing && !draft.sectors.length) return setSectorError('Marque pelo menos um setor.')
+    setBusy(true); setError('')
     try { await onSave(draft, removing); onClose() }
     catch (caught) { setError(caught.message) }
     finally { setBusy(false) }
@@ -36,7 +40,7 @@ function ServiceDialog({ item, removing, onClose, onSave }) {
       {removing ? <p>Remover <strong>{item.name}</strong> do cadastro? O histórico das utilizações anteriores será preservado.</p> : <div className="labor-service-fields">
         <label>Nome do serviço<input value={draft.name} onChange={(event) => field('name', event.target.value)} maxLength={160} required autoFocus /></label>
         <label>Tipo<input value={draft.type} onChange={(event) => field('type', event.target.value)} maxLength={100} /></label>
-        <label>Setor<input value={draft.sector} onChange={(event) => field('sector', event.target.value)} maxLength={100} /></label>
+        <SectorPicker value={draft.sectors} onChange={(sectors) => { setSectorError(''); field('sectors', sectors) }} error={sectorError} />
         <label>Valor da hora (R$)<input type="number" min="0" step="0.01" value={draft.hourlyRate} onChange={(event) => field('hourlyRate', event.target.value)} required /></label>
       </div>}
       {error && <p className="admin-tool-error" role="alert">{error}</p>}

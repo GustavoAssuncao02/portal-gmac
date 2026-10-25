@@ -15,7 +15,7 @@ try {
   const employee = (await fixture.adminRequest('/employees', 'POST', { name: 'Ana Teste', cpf: '00000000001' })).data.item
   const order = async (service) => {
     const offer = (await fixture.adminRequest('/offers', 'POST', { ...offerDraft, service })).data.item
-    await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], kind: 'service', stages: ['turning'] })
+    await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], kind: 'service', stages: ['turning'], stageResources: { turning: { type: 'machine', id: 'torno' } } })
     await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', deadline: offerDraft.deadline, serviceValue: 100 } })
     return (await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')).data.item
   }
@@ -24,11 +24,11 @@ try {
   await page.goto(fixture.url)
   await enterOperatorCode(page, employee.accessCode)
   await openOrder(page, first.service)
-  await startWork(page, 'Máquina', 'Torno 01')
+  await startWork(page, 'Máquina: Torno 01')
   await page.getByRole('button', { name: /^Pausar trabalho/ }).waitFor()
   await page.getByRole('button', { name: '← Voltar para as OS', exact: true }).click()
   await openOrder(page, second.service)
-  await startWork(page, 'Máquina', 'Torno 01')
+  await startWork(page, 'Máquina: Torno 01')
   const dialog = page.getByRole('dialog')
   await dialog.getByRole('heading', { name: 'Trocar de OS?', exact: true }).waitFor()
   assert.match(await dialog.innerText(), new RegExp(`Você já está trabalhando na OS ${first.code} \\(Eixo da primeira OS\\)\\. Deseja alterar para a OS ${second.code}\\?`))

@@ -1,3 +1,5 @@
+import { materialRequestSources } from './materialRequestSources.js'
+
 // Every material request gets a permanent code (PM-YYYY-NNNN). Manual requests keep the code saved
 // with them; requests that come from an offer or OS are registered in `store.materialRequestCodes`.
 
@@ -12,9 +14,8 @@ export function nextMaterialRequestCode(store, at = new Date().toISOString()) {
 
 // Same rule used by the Pedidos de material screen to list offer and OS requests.
 function linkedRequests(store) {
-  const offers = store.offers || [], orders = store.orders || []
-  const sources = [...offers, ...orders.filter((order) => !offers.some((offer) => offer.id === order.offerId)).map((order) => ({ ...order, id: order.offerId }))]
-  return sources.filter((source) => source.status !== 'rejected').flatMap((source) => (source.resources?.materials || []).flatMap((material) => {
+  const orders = store.orders || []
+  return materialRequestSources(store.offers, orders).flatMap((source) => (source.resources?.materials || []).flatMap((material) => {
     const orderMaterial = orders.find((order) => order.offerId === source.id)?.resources?.materials?.find((entry) => entry.id === material.id)
     const quantity = material.purchaseQuantity ?? (material.stockStatus === 'available' ? 0 : Math.max(0, Number(material.quantity) - Number(material.stockAvailable || 0)))
     const handled = material.requestReceipt || material.requestRejection || orderMaterial?.requestReceipt || orderMaterial?.requestRejection

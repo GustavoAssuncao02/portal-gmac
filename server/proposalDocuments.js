@@ -7,6 +7,8 @@ import { defaultIssuers, nestleLabor, nestleMaterials, etiquetaLabor, etiquetaMa
 import { renderProposalDocument, tableTotals, letterTotal, round2 } from './proposalPdf.js'
 import { proposalCosts, proposalPricing, hoursText } from './proposalMath.js'
 import { todayBahia } from './payableRules.js'
+import { materialUnit } from './materialUnits.js'
+import { stagePlanPlace, stagePlanProblem } from './serviceStages.js'
 
 export const documentModels = ['model-a', 'model-b', 'nestle', 'etiqueta']
 const tableModels = ['nestle', 'etiqueta']
@@ -149,7 +151,7 @@ export function systemUsage(offer) {
   }
   const resources = offer?.resources || {}
   for (const entry of resources.laborEntries || []) add('labor', entry.resource, entry.hours, 'h', 'Oferta (previsto)')
-  for (const material of resources.materials || []) add('material', [material.name, material.detail].filter(Boolean).join(' '), material.quantity, 'kg', 'Oferta')
+  for (const material of resources.materials || []) add('material', [material.name, material.detail].filter(Boolean).join(' '), material.quantity, materialUnit(material.unit) === 'un' ? 'Un' : 'kg', 'Oferta')
   return usage
 }
 
@@ -368,6 +370,8 @@ export default function createProposalDocumentsRouter(requireAdmin) {
     if (!offer || offer.orderCode || offer.status === 'rejected') fail('Oferta não encontrada, já aceita ou recusada.', 404)
     const stages = offer.resources?.stages ?? offer.proposal?.stages ?? []
     if (!stages.length) fail('Defina as etapas nos detalhes da oferta antes de gerar a proposta.')
+    const problem = stagePlanProblem(stages, offer.resources)
+    if (problem) fail(`${problem} ${stagePlanPlace}`)
     const document = await normalizeDocument(model, input, before)
     await renderProposalDocument(document)
     const updated = await mutateStore((store) => {

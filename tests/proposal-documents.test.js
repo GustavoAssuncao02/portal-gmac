@@ -1,6 +1,5 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdir, writeFile, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
 import { moneyInWords } from '../server/moneyWords.js'
@@ -45,9 +44,7 @@ test('proposal models: drafts from the system, fiscal codes, Nestlé and etiquet
     const headers = { Authorization: `Bearer ${token}` }
     const request = (route, method, body) => f.request(route, method, body, headers)
 
-    // Fiscal catalog synchronized from (simulated) official sources; a failing source keeps the previous data.
-    const catalogPath = path.join(f.directory, 'data', 'fiscal-catalog.json')
-    await mkdir(path.dirname(catalogPath), { recursive: true })
+    // Fiscal catalog synchronized from (simulated) official sources into the database; a failing source keeps the previous data.
     const { syncFiscalCatalog: sync, readFiscalCatalog: read } = await import(new URL(`file:///${path.join(f.directory, 'fiscalCatalog.js').replace(/\\/g, '/')}`))
     const cnaeList = Array.from({ length: 1100 }, (_, index) => ({ id: String(1000000 + index), descricao: `ATIVIDADE ${index}`, classe: { descricao: 'CLASSE' } }))
     cnaeList.push({ id: '2539001', descricao: 'SERVIÇOS DE USINAGEM, TORNEARIA E SOLDA', classe: { descricao: 'SERVIÇOS DE USINAGEM, SOLDA, TRATAMENTO E REVESTIMENTO EM METAIS' } }, { id: '3321000', descricao: 'INSTALAÇÃO DE MÁQUINAS E EQUIPAMENTOS INDUSTRIAIS', classe: {} })

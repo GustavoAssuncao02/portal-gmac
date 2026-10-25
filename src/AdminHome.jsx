@@ -4,9 +4,10 @@ import { adminFirstName, adminOverview, payableOverview } from './adminOverview.
 import { money } from './payablesApi.js'
 import { pollWhileVisible } from './polling.js'
 import './adminHome.css'
+import { formatQuantity } from '../server/materialUnits.js'
 
 const number = (value) => Number(value || 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 })
-const operationLabels = { waiting: 'Aguardando', running: 'Em execução', paused: 'Pausado', finalizing: 'Finalizando' }
+const operationLabels = { waiting: 'Aguardando', running: 'Em execução', paused: 'Pausado', stage_done: 'Etapa concluída', finalizing: 'Finalizando' }
 const displayDate = (value) => value ? new Date(value).toLocaleDateString('pt-BR', { timeZone: /^\d{4}-\d{2}-\d{2}$/.test(value) ? 'UTC' : 'America/Bahia' }) : 'Não informado'
 
 const homeIcons = { expand: ArrowUpRight, calculator: Calculator, machines: CirclePlay, services: ClipboardList, offers: FileText, stock: Package, reports: RefreshCw, orders: ShoppingCart, info: TriangleAlert, open: CreditCard, overdue: TriangleAlert, today: CalendarDays, upcoming: CalendarClock }
@@ -15,10 +16,9 @@ function Icon({ name }) {
   return <Component className="icon" aria-hidden="true" strokeWidth={1.7} />
 }
 
-export default function AdminHome({ user, orders, offers, workflowError, workflowLoading, onRefresh, onNavigate, onSelectOrder, onOpenPayables, loadPayables, loadInventory, readInventory, Sidebar, WorkspaceTabs, navigationProps }) {
-  const [inventory, setInventory] = useState(readInventory)
+export default function AdminHome({ user, orders, offers, workflowError, workflowLoading, onRefresh, onNavigate, onSelectOrder, onOpenPayables, loadPayables, loadInventory, Sidebar, WorkspaceTabs, navigationProps }) {
+  const [inventory, setInventory] = useState([])
   const [inventoryLoading, setInventoryLoading] = useState(true)
-  const [inventorySource, setInventorySource] = useState('')
   const [inventoryError, setInventoryError] = useState('')
   const [refreshing, setRefreshing] = useState(false)
   const [retry, setRetry] = useState(0)
@@ -55,7 +55,7 @@ export default function AdminHome({ user, orders, offers, workflowError, workflo
       fetching = true
       try {
         const result = await loadInventory(controller.signal)
-        if (!controller.signal.aborted) { setInventory(result.items); setInventorySource(result.source); setInventoryError('') }
+        if (!controller.signal.aborted) { setInventory(result.items); setInventoryError('') }
       } catch (error) {
         if (!controller.signal.aborted) setInventoryError('Não foi possível atualizar o estoque. Exibindo os últimos dados disponíveis.')
       } finally {
@@ -105,7 +105,7 @@ export default function AdminHome({ user, orders, offers, workflowError, workflo
         {workflowLoading ? <p className="home-empty" role="status">Carregando ordens de serviço...</p> : !summary.openOrders.length && <p className="home-empty">{workflowError ? 'Ordens de serviço indisponíveis no momento.' : 'Nenhuma OS em aberto.'}</p>}
         {summary.openOrders.length > 6 && <button className="home-more-orders" type="button" onClick={() => onNavigate('Serviços em andamento')}>Ver mais {number(summary.openOrders.length - 6)} ordens de serviço<Icon name="expand" /></button>}
       </section>
-      <aside className="home-side"><button className="home-stock-widget" type="button" onClick={() => onNavigate('Estoque')} aria-label="Abrir estoque baixo"><span className="home-stock-title"><span className="home-stock-icon"><Icon name="stock" /></span><span><strong>Estoque baixo</strong><small>{inventoryLoading ? 'Carregando...' : `${summary.lowStock.length} ${summary.lowStock.length === 1 ? 'material' : 'materiais'}`}</small></span><Icon name="expand" /></span><span className="home-stock-list">{!inventoryLoading && (summary.lowStock.length ? summary.lowStock.slice(0, 3).map((item) => <span className="home-stock-item" key={item.id}><span><strong>{item.name}</strong><small>Mínimo: {number(item.minimum)} kg</small></span><b className={Number(item.quantity) <= 0 ? 'home-stock-zero' : ''}>{number(item.quantity)} kg</b></span>) : <span className="home-stock-empty">Nenhum material abaixo do mínimo.</span>)}</span><span className="home-stock-footer"><span>Ver estoque</span><small>{inventoryError ? 'Dados não atualizados' : inventorySource === 'local' ? 'Estoque local' : 'Disponibilidade atual'}</small></span></button>
+      <aside className="home-side"><button className="home-stock-widget" type="button" onClick={() => onNavigate('Estoque')} aria-label="Abrir estoque baixo"><span className="home-stock-title"><span className="home-stock-icon"><Icon name="stock" /></span><span><strong>Estoque baixo</strong><small>{inventoryLoading ? 'Carregando...' : `${summary.lowStock.length} ${summary.lowStock.length === 1 ? 'material' : 'materiais'}`}</small></span><Icon name="expand" /></span><span className="home-stock-list">{!inventoryLoading && (summary.lowStock.length ? summary.lowStock.slice(0, 3).map((item) => <span className="home-stock-item" key={item.id}><span><strong>{item.name}</strong><small>Mínimo: {formatQuantity(item.minimum, item.unit)}</small></span><b className={Number(item.quantity) <= 0 ? 'home-stock-zero' : ''}>{formatQuantity(item.quantity, item.unit)}</b></span>) : <span className="home-stock-empty">Nenhum material abaixo do mínimo.</span>)}</span><span className="home-stock-footer"><span>Ver estoque</span><small>{inventoryError ? 'Dados não atualizados' : 'Disponibilidade atual'}</small></span></button>
         {inventoryError && <p className="home-inventory-error" role="alert">{inventoryError}</p>}
         <button className="home-calculator" type="button" onClick={() => onNavigate('Calculadora de pesos e medidas')}><Icon name="calculator" /><span>Calculadora de<br />pesos e medidas</span><Icon name="expand" /></button>
       </aside></div>

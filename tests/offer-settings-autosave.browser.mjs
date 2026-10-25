@@ -44,7 +44,7 @@ try {
   await page.locator('.offer-review-button').click()
   await page.getByRole('button', { name: 'Adicionar material', exact: true }).click()
   const form = page.locator('.offer-inline-form').first()
-  await form.getByRole('combobox').fill('Rascunho preservado')
+  await form.getByRole('combobox', { name: /^Material/ }).fill('Rascunho preservado')
   await page.getByRole('checkbox', { name: 'Tornearia', exact: true }).scrollIntoViewIfNeeded()
   const buttonOpacity = await page.getByRole('button', { name: 'Adicionar m\u00e3o de obra', exact: true }).evaluate((element) => getComputedStyle(element).opacity)
   await page.evaluate(() => {
@@ -66,7 +66,7 @@ try {
   assert.equal(maxInFlight, 1)
   assert.deepEqual(await page.evaluate(() => window.disabledChanges), [])
   assert.ok(await page.evaluate(() => window.originalOfferFields === document.querySelector('.offer-resource-fields')))
-  assert.equal(await form.getByRole('combobox').inputValue(), 'Rascunho preservado')
+  assert.equal(await form.getByRole('combobox', { name: /^Material/ }).inputValue(), 'Rascunho preservado')
   let resources = (await fixture.adminRequest('/offers', 'GET', undefined, fixture.admin)).data.items.find((item) => item.id === offer.id).resources
   assert.deepEqual(resources.stages, stageKeys)
   assert.equal(resources.kind, 'product')
@@ -78,7 +78,7 @@ try {
   await waitSaved()
   await page.getByRole('alert').filter({ hasText: 'Falha simulada no salvamento.' }).waitFor()
   assert.equal(await page.getByRole('checkbox', { name: 'Tornearia', exact: true }).isChecked(), true)
-  assert.equal(await form.getByRole('combobox').inputValue(), 'Rascunho preservado')
+  assert.equal(await form.getByRole('combobox', { name: /^Material/ }).inputValue(), 'Rascunho preservado')
   await page.getByRole('checkbox', { name: 'Tornearia', exact: true }).uncheck()
   await page.getByRole('radio', { name: 'Servi\u00e7o', exact: true }).check()
   await waitSaved()

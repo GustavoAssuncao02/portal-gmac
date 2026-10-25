@@ -9,7 +9,7 @@ const errors = []
 page.on('pageerror', (error) => errors.push(error.message))
 const sidebar = page.locator('.sidebar')
 const group = sidebar.getByRole('button', { name: 'Cadastros', exact: true })
-const members = ['Fornecedores', 'Administradores', 'Funcion\u00e1rios', 'Clientes']
+const members = ['Fornecedores', 'Administradores', 'Funcion\u00e1rios', 'Setores', 'Clientes', 'Bancos', 'Raz\u00f5es de pausas']
 const navigate = (name) => sidebar.getByRole('button', { name: name === 'Dashboard' ? 'In\u00edcio' : name, exact: true }).click()
 
 try {
@@ -68,7 +68,7 @@ try {
   await group.click()
   assert.equal(await group.getAttribute('aria-expanded'), 'false')
   assert.deepEqual(errors, [])
-  console.log('Cadastros passed: exactly four ordered entries, routes/tabs, active highlight, toggle persistence, collapsed sidebar, keyboard and mobile.')
+  console.log('Cadastros passed: exactly seven ordered entries, routes/tabs, active highlight, toggle persistence, collapsed sidebar, keyboard and mobile.')
 } catch (error) {
   await page.screenshot({ path: 'test-results/sidebar-cadastros-failure.png' })
   throw error

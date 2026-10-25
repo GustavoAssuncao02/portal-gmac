@@ -5,14 +5,14 @@
 .operator-logo { display: flex; align-items: center; justify-content: center; height: 92px; border-bottom: 1px solid #edf1f5; }
 .operator-logo img { width: 85px; max-height: 78px; object-fit: contain; }
 .operator-sidebar nav { padding: 17px 8px; }
-.operator-nav-item { display: flex; align-items: center; gap: 7px; min-height: 48px; padding: 6px 8px; border-radius: 7px; color: #204366; font-size: 10px; }
+.operator-nav-item { display: flex; align-items: center; gap: 7px; min-height: 48px; padding: 6px 8px; border-radius: 7px; color: #204366; font-size: 12px; }
 .operator-nav-item--active { background: #eaf2fc; box-shadow: inset 3px 0 #164c8c; }
 .operator-sidebar-bottom { display: flex; align-items: center; gap: 6px; margin-top: auto; padding: 12px 7px; border-top: 1px solid #e9eef4; }
-.operator-avatar { display: grid; flex: 0 0 26px; height: 26px; place-items: center; border-radius: 50%; background: #e6effb; color: #174677; font-size: 10px; font-weight: 700; }
+.operator-avatar { display: grid; flex: 0 0 26px; height: 26px; place-items: center; border-radius: 50%; background: #e6effb; color: #174677; font-size: 11px; font-weight: 700; }
 .operator-sidebar-bottom div { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
-.operator-sidebar-bottom strong { font-size: 10px; }
-.operator-sidebar-bottom small { color: #718096; font-size: 8px; }
-.operator-sidebar-bottom button { margin-left: auto; border: 0; background: transparent; color: #5f748b; cursor: pointer; }
+.operator-sidebar-bottom strong { font-size: 12px; }
+.operator-sidebar-bottom small { color: #718096; font-size: 11px; }
+.operator-sidebar-bottom button { display: grid; min-width: 44px; min-height: 44px; place-items: center; margin-left: auto; border: 0; background: transparent; color: #5f748b; cursor: pointer; }
 .operator-sidebar-bottom button + button { margin-left: 0; }
 .operator-entry { display: grid; grid-template-columns: minmax(0, 1fr); place-items: center; padding: 24px 16px; }
 .operator-entry-card { width: min(380px, 100%); padding: 28px; border: 1px solid #dce5ef; border-radius: 11px; background: #fff; box-shadow: 0 10px 30px #0f2a4714; text-align: center; }
@@ -25,9 +25,9 @@
 .operator-entry-card button { min-height: 44px; padding: 10px 18px; border-radius: 6px; font-size: 14px; font-weight: 700; cursor: pointer; }
 .operator-entry-card > button { width: 100%; }
 .operator-entry-card button:disabled { opacity: .5; cursor: not-allowed; }
-.operator-back { min-height: 40px; padding: 8px 14px; border: 1px solid #cbd9e8; border-radius: 6px; background: #fff; color: #15508f; font-size: 13px; font-weight: 700; cursor: pointer; }
+.operator-back { min-height: 44px; padding: 8px 14px; border: 1px solid #cbd9e8; border-radius: 6px; background: #fff; color: #15508f; font-size: 13px; font-weight: 700; cursor: pointer; }
 .operator-detail-top { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
-.operator-detail-top .operator-outline { min-height: 40px; padding: 8px 14px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; }
+.operator-detail-top .operator-outline { min-height: 44px; padding: 8px 14px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; }
 .operator-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 14px 0; }
 .operator-step { display: grid; justify-items: start; align-content: center; gap: 3px; min-height: 64px; padding: 10px 14px; border: 1px solid #cbd9e8; border-radius: 6px; background: #fff; color: #24466a; text-align: left; cursor: pointer; }
 .operator-step strong { font-size: 13px; line-height: 1.25; }
@@ -59,6 +59,9 @@
 .operator-picker-option small { display: block; margin-top: 6px; color: #9a5b12; font-size: 12px; font-weight: 600; }
 :root[data-theme="dark"] .operator-picker-option--taken { background: #1b2b3c; color: #8fa3b8; }
 :root[data-theme="dark"] .operator-picker-option small { color: #f0b46a; }
+/* On the stage list: the machine or service of the stage, below its name. */
+.operator-picker-option .operator-picker-resource { color: #4c6784; }
+:root[data-theme="dark"] .operator-picker-option .operator-picker-resource { color: #a9c2da; }
 @media (max-width: 780px) { .operator-steps { grid-template-columns: minmax(0, 1fr); } .operator-step { min-height: 56px; } }
 .operator-code-dots { display: flex; justify-content: center; gap: 16px; margin: 4px 0 6px; }
 .operator-code-dots span { width: 16px; height: 16px; border: 2px solid #15508f; border-radius: 50%; }
@@ -68,7 +71,7 @@
 .operator-keypad button:active:not(:disabled) { background: #e3eefa; }
 .operator-keypad .operator-keypad-back { font-size: 14px; color: #5f748b; }
 .operator-keypad .operator-keypad-ok { border-color: #15508f; background: #15508f; color: #fff; font-size: 18px; }
-.operator-entry-card .operator-entry-cancel { min-height: 36px; border: 0; background: transparent; color: #5f748b; font-size: 13px; font-weight: 600; }
+.operator-entry-card .operator-entry-cancel { min-height: 44px; border: 0; background: transparent; color: #5f748b; font-size: 13px; font-weight: 600; }
 .operator-main { min-width: 0; flex: 1; padding: 14px 12px 22px 6px; }
 .operator-projects { position: relative; min-width: 0; }
 .operator-projects-toggle { position: absolute; top: 0; right: 0; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; border: 1px solid #dce4ed; border-radius: 5px; background: #fff; color: #15508f; cursor: pointer; }
@@ -83,13 +86,14 @@
 .operator-header h1 { margin: 0 0 4px; color: #142b47; font-size: 23px; letter-spacing: 0; }
 .operator-header p { margin: 0; color: #657588; font-size: 11px; }
 .operator-search { display: flex; align-items: center; gap: 6px; width: 100%; padding: 8px 10px; border: 1px solid #dce4ed; border-radius: 6px; background: #fff; color: #8b9caf; }
-.operator-search input { width: 100%; border: 0; outline: 0; color: #203c5a; font-size: 10px; }
+.operator-search input { width: 100%; border: 0; outline: 0; color: #203c5a; font-size: 14px; }
 .operator-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
-.operator-filters button { display: flex; align-items: center; gap: 6px; min-height: 28px; padding: 5px 8px; border: 1px solid #e1e8f0; border-radius: 5px; background: #fff; color: #40536b; font-size: 10px; cursor: pointer; }
+.operator-filters button { display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 6px 14px; border: 1px solid #e1e8f0; border-radius: 5px; background: #fff; color: #40536b; font-size: 13px; cursor: pointer; }
 .operator-filters button.active { border-color: #174e91; background: #174e91; color: #fff; }
 .operator-dot { width: 7px; height: 7px; border-radius: 50%; background: #b7c0cb; }
 .operator-dot--running { background: #16a34a; }
 .operator-dot--paused { background: #f3a32b; }
+.operator-dot--stage_done { background: #2e9d6c; }
 .operator-dot--finalizing { background: #8b57c5; }
 .operator-layout { display: grid; grid-template-columns: minmax(280px, .7fr) minmax(480px, 1.3fr); align-items: start; gap: 14px; }
 .operator-project-list { display: grid; gap: 9px; }
@@ -99,18 +103,19 @@
 .operator-project-content { min-width: 0; flex: 1; }
 .operator-project-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 5px; }
 .operator-project-top > strong { overflow: hidden; color: #183b69; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.operator-project-content > span, .operator-project-content > small { display: block; margin-top: 3px; color: #718397; font-size: 9px; }
+.operator-project-content > span, .operator-project-content > small { display: block; margin-top: 3px; color: #718397; font-size: 12px; }
 .operator-project-content > small { color: #25609b; }
-.operator-status { display: inline-flex; align-items: center; flex: 0 0 auto; padding: 4px 7px; border-radius: 4px; background: #f0f2f5; color: #677485; font-size: 9px; font-weight: 700; white-space: nowrap; }
+.operator-status { display: inline-flex; align-items: center; flex: 0 0 auto; padding: 4px 7px; border-radius: 4px; background: #f0f2f5; color: #677485; font-size: 12px; font-weight: 700; white-space: nowrap; }
 .operator-status--running { background: #e6f7ec; color: #18874b; }
 .operator-status--paused { background: #fff4de; color: #bb7418; }
+.operator-status--stage_done { background: #e2f4ec; color: #1d7a52; }
 .operator-status--finalizing { background: #f2eafa; color: #8051b5; }
 .operator-status--completed { background: #e6effa; color: #1d5e9d; }
 .operator-project-bottom { display: grid; grid-template-columns: 1.4fr .85fr .9fr .9fr; gap: 3px; margin-top: 8px; }
 .operator-project-bottom > div { min-width: 0; border-left: 1px solid #e5eaf0; padding-left: 5px; }
 .operator-project-bottom > div:first-child { border-left: 0; padding-left: 0; }
-.operator-project-bottom span { display: block; color: #7c8998; font-size: 8px; }
-.operator-project-bottom strong { display: block; overflow: hidden; color: #213850; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.operator-project-bottom span { display: block; color: #7c8998; font-size: 11px; }
+.operator-project-bottom strong { display: block; overflow: hidden; color: #213850; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .operator-project-bottom i { display: block; height: 3px; margin-top: 3px; overflow: hidden; border-radius: 4px; background: #e4eaf0; }
 .operator-project-bottom i b { display: block; height: 100%; background: #1b63a8; }
 .operator-detail { min-width: 0; padding: 18px; border: 1px solid #dfe7f0; border-radius: 8px; background: #fff; box-shadow: 0 1px 7px #1e426312; }
@@ -165,8 +170,9 @@
 .operator-stage-number.done { background: #15a052; }
 .operator-stage strong { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 32px; color: #32516f; font-size: 12px; line-height: 16px; overflow-wrap: anywhere; }.operator-stage small { color: #678098; font-size: 12px; }
 .operator-stage-action { display: flex; gap: 3px; width: 100%; }
-.operator-stage-action input { width: 40px; min-width: 0; min-height: 32px; padding: 4px 0; border: 1px solid #d5e0e9; border-radius: 4px; text-align: center; font-size: 12px; }
-.operator-stage-action button { flex: 1; min-width: 0; min-height: 32px; padding: 4px; border: 0; border-radius: 4px; background: #e8f2fc; color: #15548e; font-size: 11px; cursor: pointer; }
+.operator-stage-action input { width: 56px; min-width: 0; min-height: 44px; padding: 4px 0; border: 1px solid #d5e0e9; border-radius: 4px; text-align: center; font-size: 12px; }
+.operator-stage-action button { flex: 1; min-width: 0; min-height: 44px; padding: 4px; border: 0; border-radius: 4px; background: #e8f2fc; color: #15548e; font-size: 14px; font-weight: 700; cursor: pointer; }
+@media (max-width: 540px) { .operator-stage-action input { width: 44px; } .operator-stage-action button { font-size: 11px; } }
 .operator-stage-action button:disabled { opacity: .5; cursor: not-allowed; }
 .operator-time-banner { display: flex; align-items: center; gap: 12px; margin-top: 12px; padding: 14px; border: 1px solid #d8ecde; border-radius: 6px; background: #f4fcf6; }
 .operator-time-banner > span { color: #18a554; font-size: 25px; }
@@ -174,7 +180,7 @@
 .operator-time-banner > div:last-child { margin-left: auto; border-left: 1px solid #dae8df; padding-left: 10px; }
 .operator-time-banner small { color: #687f70; font-size: 11px; line-height: 1.35; }
 .operator-time-banner strong { color: #193858; font-size: 22px; }
-.operator-time-banner em { color: #548367; font-size: 10px; line-height: 1.4; font-style: normal; overflow-wrap: anywhere; }
+.operator-time-banner em { color: #548367; font-size: 12px; line-height: 1.4; font-style: normal; overflow-wrap: anywhere; }
 .operator-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
 .operator-actions button, .operator-dialog > button.operator-primary { min-height: 38px; padding: 8px 11px; border-radius: 5px; font-size: 12px; font-weight: 700; cursor: pointer; }
 .operator-outline { border: 1px solid #cbd9e8; background: #fff; color: #24466a; }
@@ -187,12 +193,12 @@
 .operator-history ol { display: grid; gap: 7px; max-height: 180px; overflow: auto; padding-left: 18px; }
 .operator-history li { font-size: 12px; line-height: 1.45; }
 .operator-history li span { display: block; color: #718296; }
-.operator-history p { font-size: 10px; }
+.operator-history p { font-size: 12px; }
 .operator-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 16px; }
 .operator-stats > div { display: grid; grid-template-columns: 28px 1fr; column-gap: 7px; min-height: 58px; align-content: center; border: 1px solid #e1e8ef; border-radius: 7px; padding: 8px; background: #fff; box-shadow: 0 1px 5px #1e42630d; }
 .operator-stats span { display: grid; grid-row: span 2; place-items: center; border-radius: 7px; background: #e9f2ff; color: #1363a3; font-size: 18px; }
 .operator-stats strong { color: #243b55; font-size: 16px; }
-.operator-stats small { color: #667b8f; font-size: 9px; }
+.operator-stats small { color: #667b8f; font-size: 12px; }
 .operator-empty { padding: 24px; border: 1px dashed #cfdae5; border-radius: 7px; background: #fff; color: #60758b; font-size: 12px; }
 .operator-error { padding: 9px 12px; border: 1px solid #e7b7b7; border-radius: 6px; background: #fff2f2; color: #a12b30; font-size: 11px; }
 .operator-dialog-backdrop { position: fixed; z-index: 90; display: grid; place-items: center; inset: 0; padding: 16px; background: #10243c8c; }
@@ -331,11 +337,61 @@
 .operator-stage .operator-stage-pieces { width: 100%; height: 8px; margin: 2px 0; }
 .operator-stage-target { color:#6b84a0; font-size:11px; }
 .operator-stage-target--alert { color:#b4524f; }
-.operator-stage-here { margin-top:2px; padding:3px 8px; border-radius:999px; background:#e6eef8; color:#173f7a; font-size:11px; font-weight:700; }
-.operator-stage-pick { margin-top:2px; padding:4px 10px; border:1px solid #c9d6e3; border-radius:999px; background:#fff; color:#0c4c91; font:inherit; font-size:11px; font-weight:600; cursor:pointer; }
+.operator-stage-here { margin-top:2px; padding:6px 12px; border-radius:999px; background:#e6eef8; color:#173f7a; font-size:11px; font-weight:700; }
+.operator-stage-pick { min-height:44px; margin-top:2px; padding:6px 16px; border:1px solid #c9d6e3; border-radius:999px; background:#fff; color:#0c4c91; font:inherit; font-size:11px; font-weight:600; cursor:pointer; }
 .operator-stage-pick:hover:not(:disabled) { border-color:#0c4c91; background:#f1f7fd; }
 .operator-stage-pick:disabled { opacity:.45; cursor:default; }
 :root[data-theme="dark"] .operator-stage-here { background:#1d3150; color:#cfe0f1; }
 :root[data-theme="dark"] .operator-stage-pick { border-color:#3b4d61; background:#18222d; color:#9cc3ec; }
 .operator-project--emergency { box-shadow: inset 3px 0 0 #ef8a2e, 0 1px 5px #1e42630d; }
 .operator-project--mine.operator-project--emergency { box-shadow: inset 4px 0 0 #15508f, inset 7px 0 0 #ef8a2e; }
+
+/* Entry with the live panel: every open OS on top, read-only, and the code entry below, kept in view while the list
+   scrolls. */
+.operator-entry--overview { display: flex; flex-direction: column; align-items: stretch; gap: 16px; padding: 18px 16px 16px 6px; place-items: initial; }
+.operator-overview { display: grid; gap: 12px; min-width: 0; }
+.operator-overview-header h1 { margin: 0; color: #173e68; font-size: 22px; }
+.operator-overview-header p { margin: 4px 0 0; color: #63778c; font-size: 13px; }
+/* The panel is read from a step away on the shop floor: below 1800px (where the administrators' table grows by itself)
+   its table is larger here than in the administrators' screen. */
+@media (max-width: 1799px) {
+  .operator-overview .admin-os-table :is(th, td) { padding: 12px 8px; font-size: 12px; }
+  .operator-overview .admin-os-table td:first-child small, .operator-overview .admin-os-stage-label { font-size: 11px; }
+}
+/* Idle, the entry is a bar under the list; with the keypad open it becomes the centered card. */
+.operator-entry--overview .operator-entry-card { position: sticky; bottom: 12px; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 18px; width: 100%; padding: 14px 18px; text-align: left; box-shadow: 0 -4px 22px #0f2a4714, 0 12px 30px #0f2a4724; }
+.operator-entry--overview .operator-entry-card p { margin: 0; }
+.operator-entry--overview .operator-entry-card .operator-error { flex-basis: 100%; order: -1; }
+.operator-entry--overview .operator-entry-card > button { width: auto; min-width: 220px; }
+.operator-entry--overview .operator-entry-card--keypad { display: block; align-self: center; width: min(380px, 100%); padding: 28px; text-align: center; }
+.operator-entry--overview .operator-entry-card--keypad p { margin: 0 0 18px; }
+@media (max-width: 540px) {
+  .operator-entry--overview .operator-entry-card { flex-direction: column; align-items: stretch; text-align: center; }
+  .operator-entry--overview .operator-entry-card > button { width: 100%; }
+}
+/* The plan of the employee's sectors, on top of the OS list: what to do now and next, a tap opens it ready to start. */
+.operator-plan { margin-bottom: 14px; padding: 14px; border: 1px solid #cfe0f3; border-radius: 8px; background: #fff; }
+.operator-plan h2 { margin: 0 0 10px; color: #173e68; font-size: 16px; }
+.operator-plan h2 span { color: #4f6a86; font-weight: 400; }
+.operator-plan ol { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
+.operator-plan-item { display: grid; grid-template-columns: 82px minmax(0, 1fr) auto; align-items: center; gap: 10px; width: 100%; min-height: 64px; padding: 10px 12px; border: 1px solid #d6e2ef; border-radius: 8px; background: #f8fbfe; color: #173e68; font: inherit; text-align: left; cursor: pointer; }
+.operator-plan-item b { padding: 5px 0; border-radius: 5px; background: #e6eef7; color: #36577a; font-size: 12px; text-align: center; text-transform: uppercase; }
+.operator-plan-item strong { display: block; font-size: 14px; overflow-wrap: anywhere; }
+.operator-plan-item small { display: block; overflow: hidden; margin-top: 2px; color: #5d738b; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.operator-plan-item time { color: #36577a; font-size: 13px; font-weight: 700; white-space: nowrap; }
+.operator-plan-item--now { border-color: #2f74d0; background: #eef5fe; }
+.operator-plan-item--now b { background: #2f74d0; color: #fff; }
+.operator-plan-item--late { border-color: #e3a14a; background: #fff8ee; }
+.operator-plan-item--late b { background: #e3870f; color: #fff; }
+.operator-plan-empty { margin: 0; color: #5d738b; font-size: 13px; }
+/* Production panels are 2560x1600. A tablet shows them at 2x (1280x800); at 100% scale the whole operator screen is
+   enlarged so it reads the same way (2560 / 1.4 = 1829px wide, still past the 1650px and 1800px layouts above). */
+@media (min-width: 2520px) {
+  .operator-app { zoom: 1.4; }
+  /* Inside the zoom the viewport units grow too, so the heights tied to the screen are divided back. */
+  .operator-app, .operator-sidebar { min-height: calc(100vh / 1.4); }
+  .operator-app .operator-dialog { max-height: calc(90vh / 1.4); }
+  .operator-app .pending-material-dialog { max-height: calc((100dvh - 32px) / 1.4); }
+  .operator-app .employee-activity-modal { max-height: calc((100dvh - 40px) / 1.4); }
+  .operator-app .employee-activity-content { max-height: calc(55dvh / 1.4); }
+}

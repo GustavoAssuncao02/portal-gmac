@@ -35,10 +35,10 @@ test('appearance schema migration adds only absent columns without replacing mat
   const calls = []
   const pool = { async execute(sql) { calls.push(sql); return [[{ name: 'id' }, { name: 'name' }]] } }
   await ensureInventoryAppearance(pool)
-  assert.equal(calls.filter((sql) => sql.startsWith('ALTER')).length, 2)
+  assert.equal(calls.filter((sql) => sql.startsWith('ALTER')).length, 3, 'icon, photo and the unit of measure')
   assert.ok(calls.every((sql) => !/DELETE|DROP|UPDATE|TRUNCATE/.test(sql)))
   calls.length = 0
-  pool.execute = async (sql) => { calls.push(sql); return [[{ name: 'id' }, { name: 'icon' }, { name: 'photo' }]] }
+  pool.execute = async (sql) => { calls.push(sql); return [[{ name: 'id' }, { name: 'icon' }, { name: 'photo' }, { name: 'unit' }]] }
   await ensureInventoryAppearance(pool)
   assert.equal(calls.length, 1)
 })

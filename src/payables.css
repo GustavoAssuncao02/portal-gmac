@@ -215,6 +215,8 @@
 .registry-badge--operator { background:#e8f1fb; color:#0c4c91; }
 .registry-badge--admin { background:#efe9fb; color:#5a3d99; }
 .registry-empty { color:#9aabbc; }
+.registry-name .registry-inactive { display:inline-flex; width:fit-content; margin-top:4px; padding:1px 8px; border-radius:999px; background:#fdecee; color:#a3283a; font-size:11px; font-weight:600; }
+:root[data-theme="dark"] .registry-name .registry-inactive { background:#3b1d26; color:#f3a9b4; }
 @media(min-width:761px) {
   .registry-table th, .registry-table td { padding:10px 14px; }
   .registry-table td { max-width:none; white-space:nowrap; }
@@ -230,3 +232,35 @@
 :root[data-theme="dark"] .registry-badge--operator { background:#173a5e; color:#a9d0ff; }
 :root[data-theme="dark"] .registry-badge--admin { background:#33295a; color:#d4c4ff; }
 :root[data-theme="dark"] .registry-empty { color:#7f93a8; }
+/* Receivables forecast: gross and net series validated against the white workspace (blue / orange, reference palette). */
+.receivable-forecast { margin-top:32px; padding-top:26px; border-top:1px solid #dce6ef; }
+.receivable-forecast > h2 { margin:0 0 14px; font-size:18px; color:#0b2f55; }
+.receivable-forecast-cards { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }
+.receivable-forecast-card { display:grid; gap:4px; padding:16px 18px; border:1px solid #dce6ef; border-radius:10px; background:#fff; }
+.receivable-forecast-card span { color:#4b6784; font-size:13px; font-weight:600; }
+.receivable-forecast-card strong { color:#0b2f55; font-size:22px; font-variant-numeric:tabular-nums; }
+.receivable-forecast-card small { color:#6b8299; font-size:12px; }
+.receivable-forecast-card--net { border-color:#9fc0e8; background:#f4f8fd; }
+.receivable-forecast-chart { --forecast-gross:#2a78d6; --forecast-net:#eb6834; }.receivable-forecast-chart.finance-trend { margin-top:24px; padding-top:0; border-top:0; }
+.receivable-forecast-chart h3 { margin:0 0 4px; font-size:16px; color:#0b2f55; }
+.forecast-line--gross { stroke:var(--forecast-gross); }.forecast-line--net { stroke:var(--forecast-net); }
+.forecast-dot--gross { fill:var(--forecast-gross); }.forecast-dot--net { fill:var(--forecast-net); }
+.forecast-key--gross { background:var(--forecast-gross); }.forecast-key--net { background:var(--forecast-net); }
+@media(max-width:760px) { .receivable-forecast-cards { grid-template-columns:minmax(0,1fr); } }
+/* Bank filter of Contas a Receber, in the toolbar next to the search. */
+.payable-bank-filter select { min-width: 190px; }
+.bank-select-empty { margin: 0; }
+/* Conciliação: registered bank of the statement account and the option to consider the bank of each settlement. */
+.bank-registered select { min-width: 220px; }
+.admin-tools-main .bank-match-bank { flex-direction: row; align-items: center; gap: 8px; white-space: nowrap; font-weight: 600; color: #31587f; }
+.admin-tools-main .bank-match-bank input { width: 16px; height: 16px; padding: 0; }
+/* Dividir entre classificações: one row per classification with its value, and the sum against the account value. */
+.classification-split { display: grid; gap: 8px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.classification-split legend { margin-bottom: 4px; padding: 0; font-size: 13px; }
+.classification-split-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(120px, 200px) auto; gap: 8px; align-items: center; }
+.classification-split-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; font-size: 13px; }
+.classification-split-ok { color: #1f7a4d; font-weight: 600; }
+:root[data-theme="dark"] .classification-split-ok { color: #6fd39b; }
+@media(max-width:760px) { .classification-split-row { grid-template-columns: minmax(0, 1fr) auto; } .classification-split-row > :nth-child(2) { grid-column: 1; } }
+.classification-split :is(select, input) { font-size: 12px; }
+.payable-modal--form .classification-split legend { font-size: 12px; }

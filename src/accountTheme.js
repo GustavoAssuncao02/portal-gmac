@@ -6,17 +6,21 @@ export const useAccountAppearance = () => useContext(ThemeContext)
 const key = (id) => `gmac-theme-${id}`
 const fontKey = (id) => `gmac-font-size-${id}`
 const familyKey = (id) => `gmac-font-family-${id}`
+// "black" is the "Escuro intenso": the dark mode on true black (data-theme stays "dark" and data-tone adds the black surfaces).
+const themes = ['light', 'dark', 'black']
+const normalizeTheme = (value) => themes.includes(value) ? value : 'light'
+const themeColors = { light: '#ffffff', dark: '#0d1c2e', black: '#0b0b0b' }
 const normalizeFont = (value) => ['small', 'large'].includes(value) ? value : 'default'
 const normalizeFamily = (value) => ['system', 'verdana', 'tahoma', 'inter', 'roboto', 'open-sans', 'montserrat', 'source-sans-3'].includes(value) ? value : 'default'
 const cached = (id) => {
-  try { return { theme: localStorage.getItem(key(id)) === 'dark' ? 'dark' : 'light', fontSize: normalizeFont(localStorage.getItem(fontKey(id))), fontFamily: normalizeFamily(localStorage.getItem(familyKey(id))) } } catch { return { theme: 'light', fontSize: 'default', fontFamily: 'default' } }
+  try { return { theme: normalizeTheme(localStorage.getItem(key(id))), fontSize: normalizeFont(localStorage.getItem(fontKey(id))), fontFamily: normalizeFamily(localStorage.getItem(familyKey(id))) } } catch { return { theme: 'light', fontSize: 'default', fontFamily: 'default' } }
 }
 const remember = (id, settings) => {
   try { localStorage.setItem(key(id), settings.theme); localStorage.setItem(fontKey(id), settings.fontSize); localStorage.setItem(familyKey(id), normalizeFamily(settings.fontFamily)) } catch { /* The server preference still works when browser storage is disabled. */ }
 }
 
 export function useAccountTheme(user, restoring) {
-  const [theme, setTheme] = useState(() => document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light')
+  const [theme, setTheme] = useState(() => document.documentElement.dataset.theme === 'dark' ? (document.documentElement.dataset.tone === 'black' ? 'black' : 'dark') : 'light')
   const [fontSize, setFontSize] = useState(() => normalizeFont(document.documentElement.dataset.fontSize))
   const [fontFamily, setFontFamily] = useState(() => normalizeFamily(document.documentElement.dataset.fontFamily))
   const [busy, setBusy] = useState(false)
@@ -26,13 +30,15 @@ export function useAccountTheme(user, restoring) {
   const [message, setMessage] = useState('')
   const identity = useRef(user?.id)
   identity.current = user?.id
-  function apply(settings) { setTheme(settings.theme); setFontSize(normalizeFont(settings.fontSize)); setFontFamily(normalizeFamily(settings.fontFamily)) }
+  function apply(settings) { setTheme(normalizeTheme(settings.theme)); setFontSize(normalizeFont(settings.fontSize)); setFontFamily(normalizeFamily(settings.fontFamily)) }
   useLayoutEffect(() => {
     if (!restoring) apply(user?.id == null ? { theme: 'light', fontSize: 'default' } : cached(user.id))
   }, [user?.id, restoring])
   useLayoutEffect(() => {
-    document.documentElement.dataset.theme = theme
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#0d1c2e' : '#ffffff')
+    document.documentElement.dataset.theme = theme === 'light' ? 'light' : 'dark'
+    if (theme === 'black') document.documentElement.dataset.tone = 'black'
+    else delete document.documentElement.dataset.tone
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', themeColors[theme])
   }, [theme])
   useLayoutEffect(() => { document.documentElement.dataset.fontSize = fontSize }, [fontSize])
   useLayoutEffect(() => { document.documentElement.dataset.fontFamily = fontFamily }, [fontFamily])
@@ -67,7 +73,7 @@ export function useAccountTheme(user, restoring) {
     } catch (caught) { if (identity.current === id) { apply(previous); setError(caught.message) } }
     finally { if (identity.current === id) setBusy(false) }
   }
-  const changeTheme = (next) => { if (['light', 'dark'].includes(next) && next !== theme) return changeAppearance({ theme: next }) }
+  const changeTheme = (next) => { if (themes.includes(next) && next !== theme) return changeAppearance({ theme: next }) }
   const changeFontSize = (next) => { if (['small', 'default', 'large'].includes(next) && next !== fontSize) return changeAppearance({ fontSize: next }) }
   const changeFontFamily = (next) => { if (next === normalizeFamily(next) && next !== fontFamily) return changeAppearance({ fontFamily: next }) }
   return { theme, fontSize, fontFamily, changeTheme, changeFontSize, changeFontFamily, busy, loading, error, message, retry: () => setRetry((value) => value + 1) }

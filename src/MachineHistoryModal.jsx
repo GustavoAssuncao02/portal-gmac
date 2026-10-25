@@ -5,7 +5,7 @@ import './employeeActivity.css'
 import './machineHistory.css'
 
 const periods = [['all', 'Desde sempre'], ['today', 'Hoje'], ['yesterday', 'Ontem'], ['7days', 'Últimos 7 dias'], ['30days', 'Últimos 30 dias'], ['date', 'Data específica']]
-const endings = { paused: 'Trabalho pausado', completed: 'OS concluída', machine_changed: 'Troca de máquina', labor_service_changed: 'Troca de serviço', resource_changed: 'Troca para serviço de hora homem', session_ended: 'OS concluída', admin_interrupted: 'Interrupção administrativa' }
+export const endings = { paused: 'Trabalho pausado', stage_completed: 'Etapa concluída', completed: 'OS concluída', machine_changed: 'Troca de máquina', labor_service_changed: 'Troca de serviço', resource_changed: 'Troca para serviço de hora homem', session_ended: 'OS concluída', admin_interrupted: 'Interrupção administrativa' }
 const moment = (value) => new Date(value).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })
 const duration = (ms) => {
   const seconds = Math.floor(ms / 1000)

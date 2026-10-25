@@ -15,7 +15,7 @@ const errors = []
 page.on('pageerror', (error) => errors.push(error.message))
 async function navigate(label) {
   const item = page.locator('.sidebar').getByRole('button', { name: label, exact: true })
-  if (!await item.isVisible()) await page.locator('.sidebar').getByRole('button', { name: ['Fornecedores', 'Administradores', 'Funcionários', 'Clientes'].includes(label) ? 'Cadastros' : 'Gestão Financeira', exact: true }).click()
+  if (!await item.isVisible()) await page.locator('.sidebar').getByRole('button', { name: ['Fornecedores', 'Administradores', 'Funcionários', 'Clientes'].includes(label) ? 'Cadastros' : ['Serviços em andamento', 'Serviços concluídos', 'Ofertas e serviços'].includes(label) ? 'Operação' : 'Gestão Financeira', exact: true }).click()
   await item.click()
 }
 const waitSaved = () => page.waitForFunction(() => !document.querySelector('.offer-proposal-button')?.disabled)
@@ -34,7 +34,7 @@ try {
   const machine = (await fixture.adminRequest('/machines', 'POST', { name: 'Torno teste', type: 'Torno', sector: 'Usinagem', hourlyRate: 80 }, headers)).data.item
   const offer = (await fixture.adminRequest('/offers', 'POST', offerDraft)).data.item
   await fixture.mutateStore((store) => {
-    store.orders.push({ code: 'OS-REPORT', offerId: 'old-offer', service: 'Estrutura de teste', company: 'Cliente Teste', cnpj: '12345678000190', labelNumber: '120', quantity: 10, requestedAt: '2026-10-01', createdAt: '2026-10-02T12:00:00-03:00', deadline: '2026-10-30', description: 'Registro antigo preservado.', resources: { materials: [], laborEntries: [] }, proposal: { kind: 'service', stages: ['welding', 'painting'], deadline: '2026-10-30', serviceValue: 600 }, operation: { status: 'paused', stages: [{ key: 'stage-1', name: 'Soldagem' }, { key: 'stage-2', name: 'Pintura' }], stageCounts: { 'stage-1': 7, 'stage-2': 7 }, accumulatedMs: 7200000, activeSession: null }, operationEvents: [
+    store.orders.push({ code: 'OS-REPORT', offerId: 'old-offer', service: 'Estrutura de teste', company: 'Cliente Teste', cnpj: '12345678000190', labelNumber: '120', quantity: 10, requestedAt: '2026-10-01', createdAt: '2026-10-02T12:00:00-03:00', deadline: '2026-10-30', description: 'Registro antigo preservado.', resources: { materials: [], laborEntries: [], stageResources: { welding: { type: 'machine', id: machine.id, name: machine.name }, painting: { type: 'machine', id: machine.id, name: machine.name } } }, proposal: { kind: 'service', stages: ['welding', 'painting'], deadline: '2026-10-30', serviceValue: 600 }, operation: { status: 'paused', stages: [{ key: 'stage-1', name: 'Soldagem' }, { key: 'stage-2', name: 'Pintura' }], stageCounts: { 'stage-1': 7, 'stage-2': 7 }, accumulatedMs: 7200000, activeSession: null }, operationEvents: [
       { id: 'start', type: 'started', sessionId: 'session', employeeId: ana.id, employeeName: ana.name, machineId: machine.id, machineName: machine.name, at: '2026-10-02T09:00:00-03:00' },
       { id: 'pause', type: 'paused', sessionId: 'session', employeeId: ana.id, employeeName: ana.name, machineId: machine.id, machineName: machine.name, at: '2026-10-02T11:00:00-03:00', durationMs: 7200000, reason: 'Descanso' },
     ] })
@@ -94,6 +94,12 @@ try {
   }
   await page.setViewportSize({ width: 1366, height: 900 })
   await navigate('Configurações')
+  // The account data is a summary; the form opens in a dialog.
+  assert.equal(await page.getByLabel('Senha atual', { exact: true }).count(), 0)
+  await page.getByRole('button', { name: 'Editar dados e senha', exact: true }).click()
+  const accountDialog = page.getByRole('dialog', { name: 'Dados da conta' })
+  await accountDialog.waitFor()
+  await page.screenshot({ path: 'test-results/account-settings-modal.png' })
   await page.getByLabel('Nome', { exact: true }).fill('Gustavo Novo')
   await page.getByLabel('Senha atual', { exact: true }).fill('errada')
   await page.getByRole('button', { name: 'Salvar alterações', exact: true }).click()
@@ -103,6 +109,8 @@ try {
   await page.getByLabel('Confirmar nova senha', { exact: true }).fill('novaSenha123')
   await page.getByRole('button', { name: 'Salvar alterações', exact: true }).click()
   await page.getByText('Conta atualizada com sucesso.', { exact: true }).waitFor()
+  await accountDialog.waitFor({ state: 'detached' })
+  assert.match(await page.locator('.account-summary-card').first().innerText(), /Gustavo Novo/)
   // Changing the password closes the earlier sessions, the one of these API checks included: a new one is opened.
   fixture.admin.Authorization = `Bearer ${(await fixture.request('/auth/login', 'POST', { cpf: env.DEMO_ADMIN_CPF, password: 'novaSenha123' })).data.token}`
   assert.equal(await page.locator('.account-copy strong').innerText(), 'Gustavo Novo')
@@ -154,7 +162,7 @@ try {
   await page.reload()
   await enterOperatorCode(page, ana.accessCode)
   await page.locator('.operator-project').filter({ hasText: 'OS-REPORT' }).click()
-  await startWork(page, 'Máquina', machine.name)
+  await startWork(page, machine.name)
   await page.getByRole('button', { name: /^Pausar trabalho/ }).waitFor()
   const running = (await fixture.request('/operations/orders', 'GET', undefined, fixture.admin)).data.items.find((item) => item.code === 'OS-REPORT')
   assert.equal(running.operation.activeSession.machineName, 'Torno teste')

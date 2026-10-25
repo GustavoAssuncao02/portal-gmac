@@ -4,6 +4,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { useEffect, useState } from 'react'
 import { GripVertical } from 'lucide-react'
 import { legacyStageGroup, stageLabel, orderedStageSelection } from '../server/serviceStages.js'
+import { bySector } from './machineSectors.js'
 
 function SortableStageItem({ id, label, disabled, group = false, legacy = false, selected = false, children }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, isDragging } = useSortable({ id, disabled, transition: null })
@@ -13,8 +14,10 @@ function SortableStageItem({ id, label, disabled, group = false, legacy = false,
   </div>
 }
 
-// Planned time of a checked stage, typed as hours and minutes and saved in minutes when the field is left.
+// Planned time of a checked stage, typed as hours and minutes and saved in minutes when the field is left. It is
+// mandatory (the planning is made from it): while empty it is marked.
 function StageTimeInput({ label, minutes, disabled, onChange }) {
+  const missing = !(minutes > 0)
   const split = (value) => ({ hours: value ? String(Math.floor(value / 60)) : '', mins: value ? String(value % 60) : '' })
   const [draft, setDraft] = useState(() => split(minutes))
   useEffect(() => { setDraft(split(minutes)) }, [minutes])
@@ -22,10 +25,27 @@ function StageTimeInput({ label, minutes, disabled, onChange }) {
     const total = Math.max(0, Math.floor(Number(draft.hours) || 0)) * 60 + Math.max(0, Math.floor(Number(draft.mins) || 0))
     if (total !== (minutes || 0)) onChange(total || null)
   }
-  return <span className="offer-stage-time" title="Tempo previsto para esta etapa na OS inteira" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) commit() }}>
-    <input type="number" min="0" step="1" inputMode="numeric" value={draft.hours} disabled={disabled} aria-label={`Horas previstas de ${label}`} placeholder="0" onChange={(event) => setDraft({ ...draft, hours: event.target.value })} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); commit() } }} /><small>h</small>
-    <input type="number" min="0" max="59" step="1" inputMode="numeric" value={draft.mins} disabled={disabled} aria-label={`Minutos previstos de ${label}`} placeholder="00" onChange={(event) => setDraft({ ...draft, mins: event.target.value })} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); commit() } }} /><small>min</small>
+  return <span className={`offer-stage-time${missing ? ' offer-stage-time--missing' : ''}`} title={missing ? 'Obrigatório: informe o tempo previsto desta etapa na OS inteira' : 'Tempo previsto para esta etapa na OS inteira'} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) commit() }}>
+    <input type="number" min="0" step="1" inputMode="numeric" value={draft.hours} disabled={disabled} aria-label={`Horas previstas de ${label}`} aria-invalid={missing || undefined} placeholder="0" onChange={(event) => setDraft({ ...draft, hours: event.target.value })} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); commit() } }} /><small>h</small>
+    <input type="number" min="0" max="59" step="1" inputMode="numeric" value={draft.mins} disabled={disabled} aria-label={`Minutos previstos de ${label}`} aria-invalid={missing || undefined} placeholder="00" onChange={(event) => setDraft({ ...draft, mins: event.target.value })} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); commit() } }} /><small>min</small>
   </span>
+}
+
+// Machine or labor service of the stage; the options come from Máquinas and Serviços. It is mandatory (the operator's
+// tablet takes it from the stage): while empty it is marked.
+function StageResourceSelect({ label, value, options, disabled, onChange }) {
+  const selected = value ? `${value.type}:${value.id}` : ''
+  const known = !value || [...options.machines.map((item) => `machine:${item.id}`), ...options.laborServices.map((item) => `labor-service:${item.id}`)].includes(selected)
+  return <select className={`offer-stage-resource${value ? '' : ' offer-stage-resource--missing'}`} value={selected} disabled={disabled} aria-label={`Máquina ou serviço de ${label}`} aria-invalid={!value || undefined} title={value ? 'Máquina ou serviço desta etapa' : 'Obrigatório: escolha a máquina ou o serviço desta etapa'} onChange={(event) => {
+    const [type, ...rest] = event.target.value.split(':'), id = rest.join(':')
+    onChange(event.target.value ? { type, id } : null)
+  }}>
+    <option value="">Máquina / serviço</option>
+    {!known && <option value={selected}>{value.name} (fora do cadastro)</option>}
+    {/* Machines come by sector: the same name (Bancada) can exist in more than one, and the group tells them apart. */}
+    {bySector(options.machines).map(([sector, group]) => <optgroup key={sector} label={`Máquinas · ${sector}`}>{group.map((item) => <option key={item.id} value={`machine:${item.id}`}>{item.name}{item.maintenance ? ' (em manutenção)' : ''}</option>)}</optgroup>)}
+    {options.laborServices.length > 0 && <optgroup label="Serviços (hora homem)">{options.laborServices.map((item) => <option key={item.id} value={`labor-service:${item.id}`}>{item.name}</option>)}</optgroup>}
+  </select>
 }
 
 function SortableStages({ ids, onMove, vertical = false, children }) {
@@ -41,11 +61,11 @@ function SortableStages({ ids, onMove, vertical = false, children }) {
 
 // The stages are a stack read from top to bottom: each checked stage shows its position in the execution (1, 2, 3…),
 // counted across the groups in their order. Dragging a stage or a group renumbers everything at once.
-export default function ServiceStageEditor({ layout, stages, onLayoutChange, onToggle, disabled, stageTimes, onStageTime }) {
+export default function ServiceStageEditor({ layout, stages, onLayoutChange, onToggle, disabled, stageTimes, onStageTime, stageResources, resourceOptions, onStageResource }) {
   const visibleGroups = layout.filter((entry) => entry.group !== legacyStageGroup || entry.stages.some((key) => stages.includes(key)))
   const sequence = orderedStageSelection(layout, stages), position = (key) => sequence.indexOf(key) + 1
   return <fieldset><legend>Etapas do serviço</legend>
-    <p className="offer-stage-hint">As etapas marcadas são feitas <strong>de cima para baixo</strong>, na ordem dos números. Arraste <GripVertical size={13} aria-hidden="true" /> para mudar a ordem de uma etapa ou de um grupo.{onStageTime && ' Ao lado de cada etapa marcada, informe o tempo previsto para a OS inteira: é a meta que o operador vê.'}</p>
+    <p className="offer-stage-hint">As etapas marcadas são feitas <strong>de cima para baixo</strong>, na ordem dos números. Arraste <GripVertical size={13} aria-hidden="true" /> para mudar a ordem de uma etapa ou de um grupo.{onStageTime && <> Ao lado de cada etapa marcada, informe o <strong>tempo previsto</strong> para a OS inteira (obrigatório): é a meta que o operador vê e a base do planejamento das máquinas.</>}{onStageResource && <> Escolha também a <strong>máquina ou o serviço</strong> de cada etapa (obrigatório): o operador não escolhe no tablet, a etapa já vem com ele.</>}</p>
     <div className="offer-stage-groups">
     <SortableStages ids={visibleGroups.map(({ group }) => group)} vertical onMove={(groups) => {
       let index = 0
@@ -69,6 +89,7 @@ export default function ServiceStageEditor({ layout, stages, onLayoutChange, onT
             {stages.includes(key) && <span className="sr-only" id={`stage-order-${key}`}>Etapa {position(key)} da execução</span>}
             <label><input type="checkbox" checked={stages.includes(key)} disabled={disabled} aria-describedby={stages.includes(key) ? `stage-order-${key}` : undefined} onChange={() => onToggle(key)} />{stageLabel(key)}</label>
             {onStageTime && stages.includes(key) && <StageTimeInput label={stageLabel(key)} minutes={stageTimes?.[key]} disabled={disabled} onChange={(minutes) => onStageTime(key, minutes)} />}
+            {onStageResource && stages.includes(key) && <StageResourceSelect label={stageLabel(key)} value={stageResources?.[key]} options={resourceOptions} disabled={disabled} onChange={(choice) => onStageResource(key, choice)} />}
           </SortableStageItem>)}</div>
         </SortableStages>
       </SortableStageItem>})}

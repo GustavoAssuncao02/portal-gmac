@@ -9,13 +9,15 @@
     <script>
       try {
         const account = JSON.parse(sessionStorage.getItem('gmac-admin-workspace') || 'null');
-        const dark = sessionStorage.getItem('gmac-admin-token') && account?.userId != null && localStorage.getItem('gmac-theme-' + account.userId) === 'dark';
+        const theme = sessionStorage.getItem('gmac-admin-token') && account?.userId != null ? localStorage.getItem('gmac-theme-' + account.userId) : 'light';
+        const dark = theme === 'dark' || theme === 'black';
         document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+        if (theme === 'black') document.documentElement.dataset.tone = 'black';
         const fontSize = sessionStorage.getItem('gmac-admin-token') && account?.userId != null ? localStorage.getItem('gmac-font-size-' + account.userId) : 'default';
         document.documentElement.dataset.fontSize = ['small', 'large'].includes(fontSize) ? fontSize : 'default';
         const fontFamily = sessionStorage.getItem('gmac-admin-token') && account?.userId != null ? localStorage.getItem('gmac-font-family-' + account.userId) : 'default';
         document.documentElement.dataset.fontFamily = ['system', 'verdana', 'tahoma', 'inter', 'roboto', 'open-sans', 'montserrat', 'source-sans-3'].includes(fontFamily) ? fontFamily : 'default';
-        if (dark) document.querySelector('meta[name="theme-color"]').content = '#0d1c2e';
+        if (dark) document.querySelector('meta[name="theme-color"]').content = theme === 'black' ? '#0b0b0b' : '#0d1c2e';
         // The account's web font starts downloading with the page, instead of waiting for the styles and the first render.
         if (['inter', 'roboto', 'open-sans', 'montserrat', 'source-sans-3'].includes(fontFamily)) document.head.appendChild(Object.assign(document.createElement('link'), { rel: 'preload', as: 'font', type: 'font/woff2', crossOrigin: 'anonymous', href: '/fonts/' + fontFamily + '.woff2' }));
       } catch { document.documentElement.dataset.theme = 'light'; document.documentElement.dataset.fontSize = 'default'; document.documentElement.dataset.fontFamily = 'default'; }

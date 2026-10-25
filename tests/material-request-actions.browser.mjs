@@ -24,7 +24,6 @@ try {
     let writes = 0, refusals = 0, failOnce = true
     const errors = []
     page.on('pageerror', (error) => errors.push(error.message))
-    await page.addInitScript(() => localStorage.setItem('gmac-inventory-migrated-v1', 'true'))
     await page.route('**/api/inventory**', (route) => { if (route.request().method() !== 'GET') writes++; return route.fulfill({ status: 200, json: { items: [], movements: [] } }) })
     await page.route('**/api/material-requests/*/reject', (route) => {
       refusals++

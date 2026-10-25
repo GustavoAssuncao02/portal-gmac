@@ -8,10 +8,34 @@ const fail = (status, message) => { throw Object.assign(new Error(message), { st
 // Administrative employees sign in like administrators; the prefix keeps their sessions and preferences apart from administrator ids.
 export const staffAccountId = (employeeId) => `employee-${employeeId}`
 
+// An employee may belong to more than one sector (`sectorIds`); `sectorId` keeps the first one for older readers.
+const sectorIdsOf = (list, single) => {
+  let ids = list
+  if (typeof ids === 'string') try { ids = JSON.parse(ids) } catch { ids = null }
+  return Array.isArray(ids) ? ids.map(String) : single ? [String(single)] : []
+}
 export async function employeeRecords(pool) {
-  if (!pool) return ((await readStore()).employees || []).map((item) => ({ ...item, type: item.type || 'operator' }))
-  const [rows] = await pool.execute("SELECT id, name, DATE_FORMAT(birth_date, '%Y-%m-%d') AS birthDate, cpf, email, i_identificacao AS identification, employee_type AS type, access_code AS accessCode, password_hash AS passwordHash FROM employees ORDER BY name")
-  return rows
+  if (!pool) return ((await readStore()).employees || []).map((item) => ({ ...item, type: item.type || 'operator', sectorId: item.sectorId ?? null, sectorIds: sectorIdsOf(item.sectorIds, item.sectorId), active: item.active !== false }))
+  const [rows] = await pool.execute("SELECT id, name, DATE_FORMAT(birth_date, '%Y-%m-%d') AS birthDate, cpf, email, i_identificacao AS identification, employee_type AS type, access_code AS accessCode, password_hash AS passwordHash, sector_id AS sectorId, sector_ids AS sectorIds, active FROM employees ORDER BY name")
+  return rows.map((row) => ({ ...row, sectorIds: sectorIdsOf(row.sectorIds, row.sectorId), active: Boolean(Number(row.active)) }))
+}
+
+// Preferences and read marks are not work: they do not stop an employee from being deleted.
+const notActivity = new Set(['employees', 'adminAppearancePreferences', 'adminNotificationPreferences', 'operationalNotifications', 'payableNotifications', 'receivableNotifications'])
+// Ids of the employees that already left a mark: work recorded in an OS, or, for administrative employees, their account
+// (employee-<id>) as the author of any record (bills, receivables, material requests, OS changes).
+export async function employeesWithActivity(pool) {
+  const ids = new Set()
+  const store = await readStore()
+  const marks = (text) => { for (const match of text.matchAll(/"employee-([^"]+)"/g)) ids.add(match[1]) }
+  marks(JSON.stringify(Object.fromEntries(Object.entries(store).filter(([key]) => !notActivity.has(key)))))
+  if (pool) {
+    const [rows] = await pool.query("SELECT DISTINCT JSON_UNQUOTE(JSON_EXTRACT(data, '$.employeeId')) AS id FROM order_operation_events")
+    for (const row of rows) if (row.id && row.id !== 'null') ids.add(String(row.id))
+    const [authored] = await pool.query(`SELECT data FROM order_operation_events WHERE data LIKE '%"employee-%'`)
+    for (const row of authored) marks(typeof row.data === 'string' ? row.data : JSON.stringify(row.data))
+  } else for (const order of store.orders || []) for (const event of order.operationEvents || []) if (event.employeeId != null) ids.add(String(event.employeeId))
+  return ids
 }
 
 export function publicEmployee({ accessCode, passwordHash, ...employee }, { withCode = false } = {}) {
@@ -56,7 +80,7 @@ export async function ensureEmployeeAccess(pool) {
   }
   const [columns] = await pool.execute("SELECT COLUMN_NAME AS name FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'employees'")
   const names = new Set(columns.map((column) => column.name))
-  for (const [name, definition] of [['employee_type', "ENUM('operator', 'administrative') NOT NULL DEFAULT 'operator'"], ['access_code', 'CHAR(4) NULL UNIQUE'], ['password_hash', 'VARCHAR(255) NULL']]) {
+  for (const [name, definition] of [['employee_type', "ENUM('operator', 'administrative') NOT NULL DEFAULT 'operator'"], ['access_code', 'CHAR(4) NULL UNIQUE'], ['password_hash', 'VARCHAR(255) NULL'], ['sector_id', 'VARCHAR(64) NULL'], ['sector_ids', 'TEXT NULL'], ['active', 'TINYINT(1) NOT NULL DEFAULT 1']]) {
     if (names.has(name)) continue
     try { await pool.execute(`ALTER TABLE employees ADD COLUMN ${name} ${definition}`) }
     catch (error) { if (error.code !== 'ER_DUP_FIELDNAME') throw error }

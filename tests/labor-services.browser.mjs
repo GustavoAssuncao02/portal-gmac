@@ -11,7 +11,8 @@ const auth = { Authorization: `Bearer ${fixture.adminToken}` }
 const request = (route, method, body) => fixture.request(route, method, body, auth)
 try {
   const service = (await request('/labor-services')).data.items[0]
-  const nextService = (await request('/labor-services')).data.items[1]
+  // The sector is marked from Cadastros > Setores.
+  await request('/sectors', 'POST', { name: 'Montagem' })
   const employee = (await request('/employees', 'POST', { name: 'Ana Teste', birthDate: '1990-01-01', cpf: '00000000001', email: 'ana@example.invalid', identification: '001' })).data.item
   for (const viewport of [{ width: 1920, height: 1080 }, { width: 1440, height: 900 }, { width: 393, height: 852 }, { width: 430, height: 932 }, { width: 1440, height: 900, theme: 'dark' }]) {
     const suffix = `${viewport.width}${viewport.theme ? '-dark' : ''}`
@@ -19,10 +20,9 @@ try {
     page.setDefaultTimeout(12000)
     const errors = []
     page.on('pageerror', (error) => errors.push(error.message))
-    await page.addInitScript(() => localStorage.setItem('gmac-inventory-migrated-v1', 'true'))
     await page.route('**/api/inventory**', (route) => route.fulfill({ status: 200, json: { items: [], movements: [] } }))
     const offer = (await request('/offers', 'POST', { ...offerDraft, service: `Teste hora homem ${suffix}` })).data.item
-    await request(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], kind: 'service', stages: ['painting'] })
+    await request(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], kind: 'service', stages: ['painting'], stageResources: { painting: { type: 'labor-service', id: service.id } } })
     await page.goto(fixture.url)
     await page.getByLabel('CPF', { exact: true }).fill(env.DEMO_ADMIN_CPF)
     await page.getByLabel('Senha', { exact: true }).fill(env.DEMO_ADMIN_PASSWORD)
@@ -40,7 +40,7 @@ try {
     await page.getByRole('button', { name: 'Adicionar servi\u00e7o', exact: true }).click()
     const modal = page.locator('.labor-service-dialog')
     await modal.getByLabel('Nome do servi\u00e7o', { exact: true }).fill(`Teste bancada ${suffix}`)
-    await modal.getByLabel('Setor', { exact: true }).fill('Montagem')
+    await modal.getByRole('button', { name: 'Montagem', exact: true }).click()
     await modal.getByLabel('Valor da hora (R$)', { exact: true }).fill('72.50')
     await modal.getByRole('button', { name: 'Salvar servi\u00e7o', exact: true }).click()
     await modal.waitFor({ state: 'hidden' })
@@ -89,10 +89,6 @@ try {
       const start = new Date(Date.now() - 3600000).toISOString()
       current.operation.activeSessions[0].startedAt = current.operation.activeSince = start; current.operationEvents[0].at = start
     })
-    await operatorPage.getByRole('button', { name: /Selecionar m\u00e1quina \/ servi\u00e7o/ }).click()
-    await operatorPage.getByRole('region', { name: 'Servi\u00e7o', exact: true }).getByRole('button', { name: nextService.name, exact: true }).click()
-    await operatorPage.locator('.operator-step--resource').getByText(`Servi\u00e7o: ${nextService.name}`, { exact: true }).waitFor()
-    assert.equal((await request('/operations/orders')).data.items.find((item) => item.code === order.code).operation.activeSession.laborServiceId, nextService.id)
     await operatorPage.getByRole('button', { name: /^Pausar trabalho/ }).click()
     await operatorPage.locator('.operator-dialog select').selectOption('Descanso')
     await operatorPage.getByRole('button', { name: 'Confirmar pausa', exact: true }).click()

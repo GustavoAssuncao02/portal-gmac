@@ -11,10 +11,6 @@ const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } })
 const inventory = [{ id: 1, name: 'A\u00e7o Inox 304', detail: 'Chapa inoxidavel', quantity: 24, minimum: 0, unitPrice: 38.4 }]
 const inventoryWrites = [], errors = []
 page.on('pageerror', (error) => errors.push(error.message))
-await page.addInitScript((items) => {
-  localStorage.setItem('gmac-inventory-migrated-v1', 'true')
-  localStorage.setItem('gmac-inventory', JSON.stringify(items))
-}, inventory)
 await mkdir('test-results', { recursive: true })
 try {
   const offer = (await fixture.adminRequest('/offers', 'POST', offerDraft)).data.item
@@ -38,7 +34,7 @@ try {
   assert.equal(await badges.innerText(), 'Dispon\u00edvel: 24 kg')
   await page.getByRole('button', { name: 'Adicionar material', exact: true }).click()
   const form = page.locator('.offer-inline-form').first()
-  await form.getByRole('combobox').fill('Inox')
+  await form.getByRole('combobox', { name: /^Material/ }).fill('Inox')
   await page.getByRole('option', { name: /Inox 304/ }).click()
   await form.getByLabel('Quantidade (kg)').fill('5')
   await form.getByRole('button', { name: 'Adicionar material', exact: true }).click()
@@ -46,7 +42,8 @@ try {
   assert.deepEqual(await badges.allTextContents(), ['Falta: 1 kg', 'Falta: 1 kg'])
   const saved = (await fixture.adminRequest('/offers', 'GET', undefined, fixture.admin)).data.items[0]
   assert.deepEqual(saved.resources.materials.map((row) => row.purchaseQuantity), [0, 1])
-  assert.equal(purchaseMaterialRequests([saved], [])[0].quantity, 1)
+  assert.equal(purchaseMaterialRequests([saved], []).length, 0, 'nothing is requested before the offer is accepted')
+  assert.equal(purchaseMaterialRequests([{ ...saved, orderCode: 'OS-TESTE' }], [])[0].quantity, 1)
   await page.screenshot({ path: 'test-results/offer-material-shared-stock.png', fullPage: true })
   await page.reload()
   await badges.first().waitFor()
