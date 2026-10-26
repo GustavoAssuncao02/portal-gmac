@@ -1,23 +1,14 @@
 // Each commit to main is a new version: add an entry at the top, with what changed in plain words for whoever uses the portal.
 export const releaseNotes = [
   {
-    version: '1.0.04',
-    date: '2026-10-25',
-    notes: [
-      'Planejamento: planejar a OS inteira de uma vez, máquina de cada etapa vinda da OS, agenda da máquina no dia ao escolher o horário',
-      'Ver OS: tempo previsto e máquina de cada etapa, edição direto na tela',
-      'Baixa em Lote: ajuste nos modos escuros',
-    ],
-  },
-  {
     version: '1.0.03',
     date: '2026-10-25',
     notes: [
       'Máquinas: novo painel de uso por período, histórico diário de cada máquina, manutenção com motivo',
-      'Planejamento: nova tela com a agenda das máquinas',
+      'Planejamento: nova tela com a agenda das máquinas, planejar a OS inteira de uma vez, máquina de cada etapa vinda da OS, agenda da máquina no dia ao escolher o horário',
       'Ofertas: tempo e máquina ou serviço obrigatórios em cada etapa, edição de materiais e mão de obra, peça já feita traz a máquina ou o serviço de cada etapa',
       'Ofertas e OS: serviço Interno ou Externo',
-      'OS: adicionar e remover anexos em Ver OS',
+      'Ver OS: adicionar e remover anexos, tempo previsto e máquina de cada etapa com edição direto na tela',
       'Fazer proposta: novo botão Salvar',
       'Notificações: novo aviso de proposta salva, quem salva ou aceita não recebe o próprio aviso',
       'Operador: a etapa já vem com a máquina ou o serviço, painel ao vivo e fila do setor no tablet, pausa com as razões cadastradas, etapa concluída ao registrar a última peça, telas ajustadas aos tablets',
@@ -27,6 +18,7 @@ export const releaseNotes = [
       'Estoque: materiais em quilos ou em unidades',
       'Pedidos de material: criados no aceite da oferta',
       'Financeiro: banco nas baixas e filtro por banco',
+      'Baixa em Lote: ajuste nos modos escuros',
       'Conciliação: considerar o banco da baixa',
       'Contas a pagar e Tesouraria: divisão entre classificações',
       'Contas a receber: ISS e previsão de recebimentos',
