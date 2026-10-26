@@ -12,3 +12,6 @@ test-results/
 
 # Exportacoes do banco com dados reais (CPF, CNPJ, hashes de senha).
 database/export/
+
+# Videos institucionais, capturas e gravacoes: arquivos grandes, fora do repositorio.
+video-institucional/
