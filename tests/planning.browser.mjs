@@ -3,7 +3,7 @@ import { mkdir } from 'node:fs/promises'
 import { chromium } from 'playwright'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
 import { enterOperatorCode } from './operatorEntry.js'
-import { SLOT_MS, clockTime, localDay } from '../server/planningRules.js'
+import { SLOT_MS, clockTime, dayStart, localDay } from '../server/planningRules.js'
 
 // Planejamento: the day of each machine, the moment clicked on the ruler, planning from the list (with the clash of a
 // machine), moving a block, the week and the month, and the queue of the operator's sector on the tablet.
@@ -115,7 +115,10 @@ try {
   // Week and month.
   await page.getByRole('group', { name: 'Período' }).getByRole('button', { name: 'Semana' }).click()
   await page.getByRole('heading', { name: 'Semana por máquina' }).waitFor()
-  assert.match(await page.locator('.planning-week tbody tr').filter({ hasText: 'Torno 01' }).innerText(), /2h · 8%/)
+  // The moved block runs from one to three hours from now: late in the evening part of it falls on the next day.
+  const todayMinutes = Math.max(0, Math.min(slot + 3 * 3600000, dayStart(today) + 86400000) - (slot + 3600000)) / 60000
+  const weekText = `${Math.floor(todayMinutes / 60) ? `${Math.floor(todayMinutes / 60)}h${todayMinutes % 60 ? String(todayMinutes % 60).padStart(2, '0') : ''}` : `${todayMinutes}min`} · ${Math.round(todayMinutes / 1440 * 100)}%`
+  if (todayMinutes) assert.match(await page.locator('.planning-week tbody tr').filter({ hasText: 'Torno 01' }).innerText(), new RegExp(weekText))
   await page.screenshot({ path: 'test-results/planning/semana.png', fullPage: true })
   await page.getByRole('group', { name: 'Período' }).getByRole('button', { name: 'Mês' }).click()
   await page.getByRole('heading', { name: 'Calendário do mês' }).waitFor()

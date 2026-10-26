@@ -194,7 +194,15 @@
 .planning-strip-new { background: #0c4c91; }
 .planning-strip-new--other { background: #86aed8; }
 .planning-strip-new--clash { background: #c42b3b; }
+.planning-strip-ruler { position: relative; height: 8px; margin-top: -1px; border-bottom: 1px solid #8ea2b7; }
+.planning-strip-tick { position: absolute; bottom: 0; width: 1px; height: 3px; background: #8ea2b7; }
+.planning-strip-tick--mid { height: 5px; }
+.planning-strip-tick--major { height: 8px; background: #5d7690; }
+:root[data-theme="dark"] .planning-strip-ruler { border-bottom-color: #7d93ab; }
+:root[data-theme="dark"] .planning-strip-tick { background: #7d93ab; }
+:root[data-theme="dark"] .planning-strip-tick--major { background: #b4c6d8; }
 .planning-strip-axis { position: relative; height: 14px; color: #6b8096; font-size: 11px; font-variant-numeric: tabular-nums; }
+@media (max-width: 640px) { .planning-strip-axis .planning-strip-hour--minor { display: none; } }
 .planning-strip-axis span { position: absolute; transform: translateX(-50%); }
 .planning-strip-axis span:first-child { transform: none; }
 .planning-strip-axis span:last-child { transform: translateX(-100%); }

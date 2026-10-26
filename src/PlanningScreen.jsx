@@ -328,7 +328,9 @@ function DayStrip({ day, resourceKeyValue, name, agenda, planned, current, clash
       {busy.map((block) => <i key={block.id} className="planning-strip-busy" style={place(blockStart(block), blockEnd(block))} title={`${block.orderCode} · ${block.stageName} · ${clockTime(blockStart(block))}–${clockTime(blockEnd(block))}`} />)}
       {mine.map((item) => <i key={item.stage.stageCode} className={`planning-strip-new${item === current ? clash ? ' planning-strip-new--clash' : '' : ' planning-strip-new--other'}`} style={place(item.start, item.end)} title={`${item.stage.stageName} · ${clockTime(item.start)}–${clockTime(item.end)}`} />)}
     </div>
-    <div className="planning-strip-axis" aria-hidden="true">{[0, 6, 12, 18, 24].map((hour) => <span key={hour} style={{ left: `${hour / 24 * 100}%` }}>{String(hour).padStart(2, '0')}h</span>)}</div>
+    {/* A line under the bar with a tick going up at every hour (taller every 3 and 6 hours), then the hours. */}
+    <div className="planning-strip-ruler" aria-hidden="true">{Array.from({ length: 25 }, (_, hour) => <i key={hour} className={`planning-strip-tick${hour % 6 === 0 ? ' planning-strip-tick--major' : hour % 3 === 0 ? ' planning-strip-tick--mid' : ''}`} style={{ left: `calc(${hour / 24 * 100}% - ${hour === 24 ? 1 : 0}px)` }} />)}</div>
+    <div className="planning-strip-axis" aria-hidden="true">{Array.from({ length: 9 }, (_, index) => index * 3).map((hour) => <span key={hour} className={hour % 6 ? 'planning-strip-hour--minor' : ''} style={{ left: `${hour / 24 * 100}%` }}>{String(hour).padStart(2, '0')}h</span>)}</div>
     <small>{name} em {shortDate(day)}: {busy.length ? `ocupada ${busyText}` : 'livre o dia todo'}</small>
   </div>
 }

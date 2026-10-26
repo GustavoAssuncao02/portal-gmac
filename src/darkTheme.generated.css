@@ -3166,6 +3166,24 @@
 :root[data-theme="dark"] .planning-strip-new--clash {
     background: #92202c
 }
+:root[data-theme="dark"] .planning-strip-ruler {
+    border-bottom: 1px solid #36516f
+}
+:root[data-theme="dark"] .planning-strip-tick {
+    background: #45596d
+}
+:root[data-theme="dark"] .planning-strip-tick--major {
+    background: #46596c
+}
+:root[data-theme="dark"][data-theme="dark"] .planning-strip-ruler {
+    border-bottom-color: #36516f
+}
+:root[data-theme="dark"][data-theme="dark"] .planning-strip-tick {
+    background: #46586c
+}
+:root[data-theme="dark"][data-theme="dark"] .planning-strip-tick--major {
+    background: #203c59
+}
 :root[data-theme="dark"] .planning-strip-axis {
     color: #b7c2cc
 }

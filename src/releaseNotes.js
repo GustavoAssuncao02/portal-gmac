@@ -5,7 +5,7 @@ export const releaseNotes = [
     date: '2026-10-25',
     notes: [
       'Máquinas: novo painel de uso por período, histórico diário de cada máquina, manutenção com motivo',
-      'Planejamento: nova tela com a agenda das máquinas, planejar a OS inteira de uma vez, máquina de cada etapa vinda da OS, agenda da máquina no dia ao escolher o horário',
+      'Planejamento: nova tela com a agenda das máquinas, planejar a OS inteira de uma vez, máquina de cada etapa vinda da OS, agenda da máquina no dia ao escolher o horário, com régua marcando cada hora',
       'Ofertas: tempo e máquina ou serviço obrigatórios em cada etapa, edição de materiais e mão de obra, peça já feita traz a máquina ou o serviço de cada etapa',
       'Ofertas e OS: serviço Interno ou Externo',
       'Ver OS: adicionar e remover anexos, tempo previsto e máquina de cada etapa com edição direto na tela',

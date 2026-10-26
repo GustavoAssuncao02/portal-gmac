@@ -2681,6 +2681,24 @@
 :root[data-theme="dark"][data-tone="black"] .planning-strip-busy {
     background: repeating-linear-gradient(45deg, #343537 0 4px, #232425 4px 7px)
 }
+:root[data-theme="dark"][data-tone="black"] .planning-strip-ruler {
+    border-bottom: 1px solid #303133
+}
+:root[data-theme="dark"][data-tone="black"] .planning-strip-tick {
+    background: #343537
+}
+:root[data-theme="dark"][data-tone="black"] .planning-strip-tick--major {
+    background: #343537
+}
+:root[data-theme="dark"][data-tone="black"][data-theme="dark"] .planning-strip-ruler {
+    border-bottom-color: #303133
+}
+:root[data-theme="dark"][data-tone="black"][data-theme="dark"] .planning-strip-tick {
+    background: #343537
+}
+:root[data-theme="dark"][data-tone="black"][data-theme="dark"] .planning-strip-tick--major {
+    background: #232425
+}
 :root[data-theme="dark"][data-tone="black"] .planning-strip-axis {
     color: #bec2c5
 }
@@ -5456,6 +5474,15 @@
     --usage-grid: #28292a;
     --usage-text: #ebebec;
     --usage-muted: #b9bcbf
+}
+:root[data-theme="dark"][data-tone="black"] .planning-strip-ruler {
+    border-bottom-color: #8f9499
+}
+:root[data-theme="dark"][data-tone="black"] .planning-strip-tick {
+    background: #8f9499
+}
+:root[data-theme="dark"][data-tone="black"] .planning-strip-tick--major {
+    background: #c3c6c9
 }
 :root[data-theme="dark"][data-tone="black"] .machine-sector-picker small {
     color: #c3c6c9
