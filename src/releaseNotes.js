@@ -1,6 +1,15 @@
 // Each commit to main is a new version: add an entry at the top, with what changed in plain words for whoever uses the portal.
 export const releaseNotes = [
   {
+    version: '1.0.04',
+    date: '2026-10-25',
+    notes: [
+      'Planejamento: planejar a OS inteira de uma vez, máquina de cada etapa vinda da OS, agenda da máquina no dia ao escolher o horário',
+      'Ver OS: tempo previsto e máquina de cada etapa, edição direto na tela',
+      'Baixa em Lote: ajuste nos modos escuros',
+    ],
+  },
+  {
     version: '1.0.03',
     date: '2026-10-25',
     notes: [

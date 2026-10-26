@@ -64,24 +64,38 @@ try {
   }
   await page.screenshot({ path: 'test-results/planning/dia.png', fullPage: true })
 
-  // Planning from the list: the plasma cut on the Plasma right after; on the Torno at the same time it clashes.
+  // Planning from the list: one row per OS with its stages; Planejar OS brings all of them, each with its machine.
   const backlog = page.getByRole('region', { name: 'Serviços para planejar' })
-  const row = backlog.locator('tr').filter({ hasText: 'Corte a plasma' })
-  assert.match(await row.innerText(), /1h30/)
-  assert.equal(await backlog.locator('tr').filter({ hasText: 'Tornearia' }).count(), 1, 'two of the four hours of turning are still to plan')
+  const row = backlog.locator('tr').filter({ hasText: order.code })
+  assert.match(await row.innerText(), /Tornearia · Torno 01[\s\S]*2h a planejar[\s\S]*Corte a plasma · Sem máquina definida[\s\S]*1h30 a planejar/, 'two of the four hours of turning are still to plan')
   await row.getByRole('button', { name: 'Planejar' }).click()
-  const modal = page.getByRole('dialog', { name: 'Planejar serviço' })
-  await modal.getByLabel('Máquina ou serviço').selectOption('machine:torno')
-  await modal.getByLabel('Início').selectOption(clockTime(slot))
-  await modal.getByLabel('Dia').fill(today)
+  const modal = page.getByRole('dialog', { name: 'Planejar OS' })
+  const stages = modal.locator('.planning-stage-row')
+  await modal.getByLabel('Início da etapa Tornearia').waitFor()
+  // The Tornearia stays on the Torno (no choice) and starts right after the block already planned on it.
+  assert.match(await stages.nth(0).innerText(), /Tornearia[\s\S]*Torno 01[\s\S]*falta planejar 2h/)
+  assert.equal(await modal.getByLabel('Máquina ou serviço da etapa Tornearia').count(), 0, 'the machine of a planned stage is not chosen again')
+  assert.equal(await modal.getByLabel('Início da etapa Tornearia').inputValue(), clockTime(slot + 2 * 3600000))
+  assert.match(await stages.nth(0).locator('.planning-strip-wrap').innerText(), new RegExp(`Torno 01 em .*: ocupada ${clockTime(slot)}`))
+  // The Corte a plasma has no machine in this older OS: it is chosen here, and on the same Torno it follows the Tornearia.
+  await modal.getByLabel('Máquina ou serviço da etapa Corte a plasma').selectOption('machine:torno')
+  assert.equal(await modal.getByLabel('Início da etapa Corte a plasma').inputValue(), clockTime(slot + 4 * 3600000))
+  await modal.getByLabel('Planejar a etapa Tornearia').uncheck()
+  assert.equal(await modal.getByLabel('Início da etapa Corte a plasma').inputValue(), clockTime(slot + 2 * 3600000), 'without the Tornearia it takes the first free time of the Torno')
+  // Put over the block of the Torno, the clash shows at once and the server refuses it too.
+  await modal.getByLabel('Dia da etapa Corte a plasma').fill(today)
+  await modal.getByLabel('Início da etapa Corte a plasma').selectOption(clockTime(slot))
+  await stages.nth(1).getByText(/Torno 01 já tem a .* das/).waitFor()
+  assert.equal(await stages.nth(1).locator('.planning-strip-new--clash').count(), 1)
   await page.screenshot({ path: 'test-results/planning/planejar.png' })
-  await modal.getByRole('button', { name: 'Planejar', exact: true }).click()
+  await modal.getByRole('button', { name: 'Planejar etapa', exact: true }).click()
   await modal.getByRole('alert').getByText(/Torno 01 já tem a .* das/).waitFor()
-  await modal.getByLabel('Máquina ou serviço').selectOption('machine:plasma')
-  await modal.getByRole('button', { name: 'Planejar', exact: true }).click()
+  await modal.getByLabel('Máquina ou serviço da etapa Corte a plasma').selectOption('machine:plasma')
+  assert.equal(await stages.nth(1).locator('.planning-strip-new--clash').count(), 0)
+  await modal.getByRole('button', { name: 'Planejar etapa', exact: true }).click()
   await modal.waitFor({ state: 'detached' })
   await agenda.getByLabel('Agenda de Plasma 01').locator('.planning-block').filter({ hasText: 'Corte a plasma' }).waitFor()
-  assert.equal(await backlog.locator('tr').filter({ hasText: 'Corte a plasma' }).count(), 0)
+  assert.doesNotMatch(await backlog.locator('tr').filter({ hasText: order.code }).innerText(), /Corte a plasma/, 'only the Tornearia is left to plan')
 
   // Dragging the Torno block one hour later moves it on the server.
   const box = await block.boundingBox()

@@ -48,13 +48,13 @@ export function planningBacklog(orders, blocks, now) {
     // A new OS has no production record until someone works on it: it is waiting, and fully to plan.
     if (order.operation?.status === 'completed') continue
     const quantity = Number(order.quantity) || 0
-    for (const stage of orderStages(order)) {
+    for (const [index, stage] of orderStages(order).entries()) {
       if (quantity && stage.done >= quantity) continue
       const remaining = stage.plannedMinutes ? Math.ceil(stage.plannedMinutes * (quantity ? (quantity - stage.done) / quantity : 1)) : null
       const scheduled = blocks.filter((block) => block.orderCode === order.code && block.stageCode === stage.code && blockEnd(block) > now).reduce((sum, block) => sum + Number(block.minutes), 0)
       const toPlan = remaining == null ? null : Math.max(0, Math.round(remaining - scheduled))
       if (toPlan === 0) continue
-      rows.push({ orderCode: order.code, service: order.service, company: order.company, deadline: order.deadline, urgency: order.resources?.urgency === 'emergency' ? 'emergency' : 'normal', stageCode: stage.code, stageName: stage.name, group: stage.group, suggested: stage.resource, plannedMinutes: stage.plannedMinutes, remainingMinutes: remaining, scheduledMinutes: Math.round(scheduled), toPlanMinutes: toPlan, done: stage.done, quantity })
+      rows.push({ orderCode: order.code, service: order.service, company: order.company, deadline: order.deadline, urgency: order.resources?.urgency === 'emergency' ? 'emergency' : 'normal', position: index + 1, stageCode: stage.code, stageName: stage.name, group: stage.group, suggested: stage.resource, plannedMinutes: stage.plannedMinutes, remainingMinutes: remaining, scheduledMinutes: Math.round(scheduled), toPlanMinutes: toPlan, done: stage.done, quantity })
     }
   }
   const rank = (row) => row.urgency === 'emergency' ? 0 : 1

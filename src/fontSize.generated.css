@@ -169,7 +169,7 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .os-operation-facts dd { font-size: calc(16px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .os-stage-number { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .os-stage-list strong { font-size: calc(12px * var(--account-font-scale)); }
-:root:is([data-font-size="small"], [data-font-size="large"]) .os-stage-list > div > div > span { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .os-stage-list > fieldset > div > div > span { font-size: calc(11px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .os-stage-setup label { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .os-stage-setup input { font-size: inherit; font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .os-description, :root:is([data-font-size="small"], [data-font-size="large"]) .os-empty { font-size: calc(13px * var(--account-font-scale)); }
@@ -219,6 +219,9 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .os-location-options label { font-size: calc(14px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .os-location-times dt { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .os-location-times dd { font-size: calc(16px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .os-stage-list .os-stage-plan { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .os-stage-plan-fields label { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .os-stage-plan-fields input, :root:is([data-font-size="small"], [data-font-size="large"]) .os-stage-plan-fields select { font-size: inherit; font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .home-eyebrow { font-size: calc(11px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .home-heading h1 { font-size: calc(28px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .home-heading p { font-size: calc(12px * var(--account-font-scale)); }
@@ -481,6 +484,15 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .usage-event strong { font-size: calc(14px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .usage-event p { font-size: calc(13px * var(--account-font-scale)); }
 @media (max-width: 640px) {:root:is([data-font-size="small"], [data-font-size="large"]) .usage-tile strong { font-size: calc(18px * var(--account-font-scale)); } }
+:root:is([data-font-size="small"], [data-font-size="large"]) .batch-card h2 { font-size: calc(17px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .batch-item { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .batch-total strong { font-size: calc(22px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .batch-notice { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .batch-pie ul { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .batch-legend { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .batch-axis { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .batch-check { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .batch-due { font-size: calc(11px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .planning-heading h1 { font-size: calc(28px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .planning-heading p { font-size: calc(14px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .planning-live { font-size: calc(13px * var(--account-font-scale)); }
@@ -532,6 +544,13 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .planning-form select, :root:is([data-font-size="small"], [data-font-size="large"]) .planning-form input { font-size: inherit; }
 :root:is([data-font-size="small"], [data-font-size="large"]) .planning-form-summary { font-size: calc(13px * var(--account-font-scale)); }
 @media (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .planning-heading h1 { font-size: calc(24px * var(--account-font-scale)); } }
+:root:is([data-font-size="small"], [data-font-size="large"]) .planning-backlog-stages b { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .planning-order-facts { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .planning-stage-check b { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .planning-stage-check strong { font-size: calc(15px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .planning-stage-check small { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .planning-strip-axis { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .planning-strip-wrap small { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) button, :root:is([data-font-size="small"], [data-font-size="large"]) input { font-size: inherit; }
 :root:is([data-font-size="small"], [data-font-size="large"]) .brand-panel__title { font-size: calc(34px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .brand-panel__subtitle { font-size: calc(19px * var(--account-font-scale)); }

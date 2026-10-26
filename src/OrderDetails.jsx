@@ -1,16 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import './orderDetails.css'
-import { stageLabel } from '../server/serviceStages.js'
-import OrderEditModal, { OrderActionModal } from './OrderEditModal.jsx'
+import { productionStages, stageLabel } from '../server/serviceStages.js'
+import OrderEditModal, { OrderActionModal, orderEditDraft } from './OrderEditModal.jsx'
 import { activeEmployeeNames, activeSessions } from '../server/operationSessions.js'
 import { timeEditableEvents } from '../server/operationEventTime.js'
 import { osValueOf, proposalCosts, hoursText } from '../server/proposalMath.js'
 import { pollWhileVisible } from './polling.js'
-import { Info } from 'lucide-react'
+import { Info, Pencil } from 'lucide-react'
 import PieceTrack, { workingStageKeys } from './PieceTrack.jsx'
 import { UndoAcceptModal } from './DeclineProposalModal.jsx'
 import DownloadLink from './DownloadLink.jsx'
-import { downloadFile } from './payablesApi.js'
+import { downloadFile, payableRequest } from './payablesApi.js'
 import { documentKind } from '../server/clientDocument.js'
 import { currentServiceLocation, serviceLocations, serviceLocationTimes } from '../server/serviceLocation.js'
 import { formatQuantity } from '../server/materialUnits.js'
@@ -298,6 +298,73 @@ function PurchaseOrders({ order, onChanged, Icon }) {
   </section>
 }
 
+const plannedTime = (minutes) => { const hours = Math.floor(minutes / 60), rest = minutes % 60; return hours ? `${hours}h${rest ? ` ${rest}min` : ''}` : `${rest}min` }
+
+// The stages of the OS with their pieces, the planned time and the machine or service of each one. "Editar tempos e
+// máquinas" turns the list into fields; every stage is saved together, because the OS needs both on all of them.
+function StageList({ order, operation, onSave }) {
+  const [editing, setEditing] = useState(null)
+  const [options, setOptions] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const codeOf = (stage) => productionStages.find(([, name]) => name === stage.name)?.[0] || stage.name
+  const times = order.resources?.stageTimes || {}, plans = order.resources?.stageResources || {}
+  const working = workingStageKeys(operation, order.quantity)
+  function start() {
+    setError('')
+    setEditing(Object.fromEntries(operation.stages.map((stage) => {
+      const code = codeOf(stage), minutes = Number(times[code]) || 0, plan = plans[code]
+      return [code, { hours: minutes ? String(Math.floor(minutes / 60)) : '', minutes: minutes ? String(minutes % 60) : '', resource: plan ? `${plan.type}:${plan.id}` : '' }]
+    })))
+    if (!options) Promise.all([payableRequest('/machines'), payableRequest('/labor-services')]).then(([machines, services]) => setOptions({ machines: machines.items || [], laborServices: services.items || [] })).catch((caught) => setError(caught.message))
+  }
+  const change = (code, field, value) => setEditing((current) => ({ ...current, [code]: { ...current[code], [field]: value } }))
+  async function save(event) {
+    event.preventDefault()
+    const stageTimes = {}, stageResources = {}
+    for (const stage of operation.stages) {
+      const code = codeOf(stage), row = editing[code]
+      const minutes = Math.max(0, Math.floor(Number(row.hours) || 0)) * 60 + Math.max(0, Math.floor(Number(row.minutes) || 0))
+      if (!minutes) return setError(`Informe o tempo previsto da etapa ${stage.name}.`)
+      if (!row.resource) return setError(`Escolha a máquina ou o serviço da etapa ${stage.name}.`)
+      const [type, ...rest] = row.resource.split(':'), id = rest.join(':')
+      const item = (type === 'machine' ? options?.machines : options?.laborServices)?.find((entry) => String(entry.id) === id)
+      stageTimes[code] = minutes
+      stageResources[code] = { type, id: item?.id ?? id, name: item?.name || plans[code]?.name || '' }
+    }
+    const draft = orderEditDraft(order)
+    draft.order.resources = { ...draft.order.resources, stageTimes: { ...draft.order.resources.stageTimes, ...stageTimes }, stageResources: { ...draft.order.resources.stageResources, ...stageResources } }
+    setBusy(true)
+    setError('')
+    try {
+      await onSave({ ...draft, deadlineReason: '', stageCounts: Object.fromEntries(draft.order.resources.stages.map((code) => [code, draft.stageCounts[code] ?? 0])), confirmCompleted: false })
+      setEditing(null)
+    } catch (caught) { setError(caught.message) } finally { setBusy(false) }
+  }
+  const option = (item, type) => <option key={`${type}:${item.id}`} value={`${type}:${item.id}`}>{item.name}{item.maintenance ? ' (em manutenção)' : ''}</option>
+  return <>
+    {operation.status !== 'completed' && !editing && <div className="os-stage-tools"><button className="os-button" type="button" onClick={start}><Pencil size={15} aria-hidden="true" />Editar tempos e máquinas</button></div>}
+    <form className={`os-stage-list${editing ? ' os-stage-list--editing' : ''}`} onSubmit={save} aria-label="Etapas da OS">
+      <fieldset disabled={busy}>{operation.stages.map((stage, index) => {
+        const code = codeOf(stage), minutes = Number(times[code]) || 0, plan = plans[code], row = editing?.[code]
+        return <div key={stage.key}><span className="os-stage-number">{index + 1}</span><div><strong>{stage.name}</strong><span>{number(operation.stageCounts[stage.key])}/{number(order.quantity)} peças</span>
+          {!row ? <span className="os-stage-plan">{minutes ? `${plannedTime(minutes)} previstas` : 'Sem tempo previsto'} · {plan?.name || 'Sem máquina ou serviço'}</span>
+            : <div className="os-stage-plan-fields">
+              <label>Horas<input type="number" min="0" step="1" inputMode="numeric" aria-label={`Horas previstas da etapa ${stage.name}`} value={row.hours} onChange={(event) => change(code, 'hours', event.target.value)} /></label>
+              <label>Minutos<input type="number" min="0" max="59" step="1" inputMode="numeric" aria-label={`Minutos previstos da etapa ${stage.name}`} value={row.minutes} onChange={(event) => change(code, 'minutes', event.target.value)} /></label>
+              <label>Máquina ou serviço<select aria-label={`Máquina ou serviço da etapa ${stage.name}`} value={row.resource} onChange={(event) => change(code, 'resource', event.target.value)}>
+                <option value="">Escolher</option>
+                {!options && plan && <option value={`${plan.type}:${plan.id}`}>{plan.name}</option>}
+                {options && <><optgroup label="Máquinas">{options.machines.map((item) => option(item, 'machine'))}</optgroup>{options.laborServices.length > 0 && <optgroup label="Serviços (hora homem)">{options.laborServices.map((item) => option(item, 'labor-service'))}</optgroup>}</>}
+              </select></label>
+            </div>}
+        </div><PieceTrack count={operation.stageCounts[stage.key]} quantity={order.quantity} working={working.has(stage.key)} label={stage.name} className="os-stage-pieces" /></div>
+      })}</fieldset>
+      {editing && <div className="os-stage-plan-actions">{error && <p className="workflow-error" role="alert">{error}</p>}<button className="os-button" type="button" disabled={busy} onClick={() => { setEditing(null); setError('') }}>Cancelar</button><button className="os-button os-edit-primary" type="submit" disabled={busy || !options}>{busy ? 'Salvando...' : 'Salvar etapas'}</button></div>}
+    </form>
+  </>
+}
+
 export default function OrderDetails({ order, activeTime, stageNamesInput, onChangeStages, onConfigureStages, onInterrupt, onEdit, onReopen, onUpload, onEditEventTime, onRefresh, operationError, onBack, Icon }) {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [unaccepting, setUnaccepting] = useState(false)
@@ -323,7 +390,7 @@ export default function OrderDetails({ order, activeTime, stageNamesInput, onCha
         <Facts className="os-operation-facts" items={[
           ['Tempo ativo acumulado', activeTime], ['Progresso total', `${number(operation.progress)}%`], [activeSessions(operation).length > 1 ? 'Operadores atuais' : 'Operador atual', activeEmployeeNames(operation) || 'Sem sessão ativa'],
         ]} />
-        {operation.stages.length ? <div className="os-stage-list">{operation.stages.map((stage, index) => <div key={stage.key}><span className="os-stage-number">{index + 1}</span><div><strong>{stage.name}</strong><span>{number(operation.stageCounts[stage.key])}/{number(order.quantity)} peças</span></div><PieceTrack count={operation.stageCounts[stage.key]} quantity={order.quantity} working={workingStageKeys(operation, order.quantity).has(stage.key)} label={stage.name} className="os-stage-pieces" /></div>)}</div> : operation.status === 'waiting' && <div className="os-stage-setup"><label htmlFor="os-stage-input">Etapas na ordem de produção</label><div><input id="os-stage-input" value={stageNamesInput} onChange={(event) => onChangeStages(event.target.value)} placeholder="Ex.: Corte, Usinagem, Soldagem" /><button className="os-button" type="button" onClick={onConfigureStages}><Icon name="plus" />Salvar etapas</button></div></div>}
+        {operation.stages.length ? <StageList order={order} operation={operation} onSave={onEdit} /> : operation.status === 'waiting' && <div className="os-stage-setup"><label htmlFor="os-stage-input">Etapas na ordem de produção</label><div><input id="os-stage-input" value={stageNamesInput} onChange={(event) => onChangeStages(event.target.value)} placeholder="Ex.: Corte, Usinagem, Soldagem" /><button className="os-button" type="button" onClick={onConfigureStages}><Icon name="plus" />Salvar etapas</button></div></div>}
         {activeSessions(operation).length > 0 && <button className="os-button os-interrupt-button" type="button" aria-haspopup="dialog" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setInterruptOpen(true) }}><Icon name="admins" />Encerrar sessão ativa com justificativa</button>}
         {operationError && <p className="workflow-error" role="alert">{operationError}</p>}
       </section>}

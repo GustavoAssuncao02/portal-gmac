@@ -422,6 +422,14 @@ Pedido para uma OS com 10 kg pendentes
 - **Modo de exibição** coloca o painel em tela cheia para acompanhamento na TV. Saída pelo controle da tela ou `Esc`.
 - Progresso deve aproveitar a largura disponível, com nomes legíveis, sem quebrar palavras. Processos longos podem distribuir etapas inteiras em linhas conforme o layout responsivo.
 
+### Planejamento
+
+- Tela **Planejamento** (`src/PlanningScreen.jsx`, API `server/planning.js`, regras em `server/planningRules.js`, compartilhadas com a tela): blocos de uma etapa de uma OS numa máquina ou serviço, na grade de 15 minutos, 24 horas por dia, em `planningBlocks`. Visões Dia (agenda por máquina, planejado × realizado, arrastar para mover), Semana e Mês; foto de um horário (ocupadas, ociosas, em manutenção); prévia da fila do operador por setor.
+- **Serviços para planejar** lista uma linha por OS, com as etapas pendentes na ordem da OS (máquina ou serviço definido na etapa e tempo que falta planejar). **Planejar** abre **Planejar OS** com todas as etapas: cada uma marcada para planejar, com a máquina da OS fixa (só uma etapa sem plano, de OS antiga, escolhe), dia, início e duração (padrão: o que falta planejar). Uma etapa não alterada à mão começa quando a anterior termina, na primeira hora livre da máquina (agenda dos próximos 62 dias); **Encadear de novo** desfaz as escolhas manuais. Cada etapa mostra a régua de 24 h da máquina no dia, com o que já está planejado nela, e avisa conflito, manutenção e prazo.
+- Clicar num espaço vazio da agenda (ou arrastar uma OS da lista para uma máquina) abre Planejar OS só com as OS que têm etapa naquela máquina, essa etapa marcada no horário clicado.
+- O servidor grava as etapas juntas (`POST /api/planning/blocks/batch`: todas ou nenhuma, cada uma conferida com as outras) e recusa planejar uma etapa em outra máquina que não a definida na OS (vale também para mover ou editar um bloco); uma máquina recebe um bloco por vez, serviço de hora homem aceita sobreposição.
+- **Bloco do planejamento** (clique no bloco): dia, início, duração e peças, com a máquina da OS fixa; **Tirar do plano** remove.
+
 ### Área do operador
 
 - Lista projetos com busca e filtros de estado; consulta novas OS a cada 10 segundos.
@@ -477,6 +485,7 @@ Pedido para uma OS com 10 kg pendentes
 - No histórico, o administrador pode corrigir o horário de operações de sessão (início, retomada, pausa, troca de recurso, peças registradas, encerramento e conclusão). O horário original fica guardado no evento (`originalAt`, `timeEdits`), a linha recebe a marca **Horário editado** e o botão de informação mostra o horário original e quem editou.
 - A correção respeita a sequência das operações do funcionário na OS, não aceita horário futuro e recalcula tempo da sessão, tempo ativo da OS e as horas de máquina, serviço e funcionário nos relatórios.
 - Encerrar uma sessão ativa administrativamente pede justificativa em modal próprio, não em `window.prompt`.
+- Em **Operação da OS**, cada etapa mostra as peças, o tempo previsto e a máquina ou o serviço. **Editar tempos e máquinas** transforma a lista em campos (horas, minutos, máquina ou serviço) e salva todas as etapas juntas pelo mesmo caminho do Editar OS (`PUT /api/operations/orders/:code`), porque a OS exige os dois em todas as etapas. Não aparece em OS concluída.
 - **Editar OS** permite alterar dados do serviço/cliente, prazos, quantidade, materiais, mão de obra, proposta, processo, etapas, quantidades produzidas e anexos associados.
 - Editar OS concluída exige confirmação explícita.
 - Há verificação de versão para impedir salvar sobre mudanças feitas enquanto o formulário estava aberto.

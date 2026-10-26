@@ -326,7 +326,7 @@
   .os-button { font-size: 14px; }
   .os-resource-table th { font-size: 12px; }
   .os-resource-table td { font-size: 13px; }
-  .os-stage-list > div { min-width: 0; }
+  .os-stage-list > fieldset > div { min-width: 0; }
   .os-stage-list strong { overflow-wrap: anywhere; }
 
   /* Finance: complete vertical accounts, selection and sorting stay available. */

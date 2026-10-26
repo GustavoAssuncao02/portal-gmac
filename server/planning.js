@@ -26,7 +26,9 @@ function decorate(blocks, orders, resources, now) {
     const order = orderOf.get(block.orderCode)
     if (!order) return []
     const resource = resources.find((item) => item.type === block.resourceType && item.id === String(block.resourceId))
-    return [{ ...block, end: new Date(blockEnd(block)).toISOString(), ...blockState(block, order, now), service: order.service, company: order.company, deadline: order.deadline, urgency: order.resources?.urgency === 'emergency' ? 'emergency' : 'normal', quantityTotal: Number(order.quantity) || 0, resourceName: resource?.name || 'Fora do cadastro' }]
+    // The machine or service defined in the OS for the stage: the block stays on it.
+    const stageResource = orderStages(order).find((item) => item.code === block.stageCode)?.resource || null
+    return [{ ...block, end: new Date(blockEnd(block)).toISOString(), ...blockState(block, order, now), stageResource, service: order.service, company: order.company, deadline: order.deadline, urgency: order.resources?.urgency === 'emergency' ? 'emergency' : 'normal', quantityTotal: Number(order.quantity) || 0, resourceName: resource?.name || 'Fora do cadastro' }]
   })
 }
 
@@ -60,21 +62,24 @@ export default function createPlanningRouter(requireAdmin, pool) {
   }))
 
   // A block is valid for an open OS, one of its stages and a registered resource; a machine takes one block at a time.
-  async function blockFrom(body, id) {
-    const { store, orders, resources } = await load()
+  // A stage with its machine or service defined in the OS is planned on it: it is where the operator will work.
+  function blockFrom(body, { orders, resources }) {
     const order = orders.find((item) => item.code === body?.orderCode)
     if (!order) fail(404, 'OS não encontrada.')
     if (order.operation?.status === 'completed') fail(409, 'Esta OS já foi concluída.')
-    if (!orderStages(order).some((stage) => stage.code === body?.stageCode)) fail(400, 'Selecione uma etapa desta OS.')
+    const stage = orderStages(order).find((item) => item.code === body?.stageCode)
+    if (!stage) fail(400, 'Selecione uma etapa desta OS.')
     const resource = resources.find((item) => item.type === body?.resourceType && item.id === String(body?.resourceId ?? ''))
     if (!resource) fail(400, 'Selecione uma máquina ou um serviço cadastrado.')
+    const planned = stage.resource && resources.find((item) => item.type === stage.resource.type && item.id === String(stage.resource.id))
+    if (planned && planned !== resource) fail(400, `A etapa ${stage.name} da ${order.code} é feita em ${planned.name}. Para trocar, edite a OS.`)
     const start = Date.parse(body?.start)
     if (!Number.isFinite(start) || start % SLOT_MS) fail(400, 'O início deve estar na grade de 15 em 15 minutos.')
     const minutes = Number(body?.minutes)
     if (!Number.isInteger(minutes) || minutes < 1 || minutes > 20160) fail(400, 'Informe a duração em minutos (até 14 dias).')
     const quantity = body?.quantity == null || body.quantity === '' ? null : Number(body.quantity)
     if (quantity != null && (!Number.isInteger(quantity) || quantity < 1 || quantity > Number(order.quantity))) fail(400, `As peças do bloco vão de 1 a ${order.quantity}.`)
-    return { store, block: { orderCode: order.code, stageCode: body.stageCode, resourceType: resource.type, resourceId: resource.id, start: new Date(start).toISOString(), minutes, quantity }, resource }
+    return { block: { orderCode: order.code, stageCode: body.stageCode, resourceType: resource.type, resourceId: resource.id, start: new Date(start).toISOString(), minutes, quantity }, resource }
   }
   const assertFree = (blocks, block, resource, id) => {
     if (block.resourceType !== 'machine') return
@@ -83,7 +88,7 @@ export default function createPlanningRouter(requireAdmin, pool) {
   }
 
   router.post('/planning/blocks', requireAdmin, handle(async (request, response) => {
-    const { block, resource } = await blockFrom(request.body)
+    const { block, resource } = blockFrom(request.body, await load())
     const at = new Date().toISOString(), by = request.adminName || 'Administrador'
     const item = await mutateStore((store) => {
       store.planningBlocks ||= []
@@ -94,8 +99,26 @@ export default function createPlanningRouter(requireAdmin, pool) {
     })
     response.status(201).json({ item })
   }))
+  // Several stages of an OS at once (Planejar OS): all are saved or none, each one also checked against the others.
+  router.post('/planning/blocks/batch', requireAdmin, handle(async (request, response) => {
+    const items = request.body?.items
+    if (!Array.isArray(items) || !items.length || items.length > 30) fail(400, 'Escolha as etapas para planejar.')
+    const loaded = await load()
+    const prepared = items.map((body) => blockFrom(body, loaded))
+    const at = new Date().toISOString(), by = request.adminName || 'Administrador'
+    const created = await mutateStore((store) => {
+      store.planningBlocks ||= []
+      return prepared.map(({ block, resource }) => {
+        assertFree(store.planningBlocks, block, resource)
+        const item = { id: randomUUID(), ...block, createdAt: at, createdBy: by, updatedAt: at, updatedBy: by }
+        store.planningBlocks.push(item)
+        return item
+      })
+    })
+    response.status(201).json({ items: created })
+  }))
   router.put('/planning/blocks/:id', requireAdmin, handle(async (request, response) => {
-    const { block, resource } = await blockFrom(request.body, request.params.id)
+    const { block, resource } = blockFrom(request.body, await load())
     const item = await mutateStore((store) => {
       const current = (store.planningBlocks || []).find((entry) => entry.id === request.params.id)
       if (!current) fail(404, 'Bloco do planejamento não encontrado.')

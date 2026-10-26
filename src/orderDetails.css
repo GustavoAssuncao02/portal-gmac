@@ -36,11 +36,12 @@
 .os-operation-facts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .os-operation-facts dd { font-size: 16px; font-variant-numeric: tabular-nums; }
 .os-stage-list { display: grid; gap: 13px; margin-top: 23px; }
-.os-stage-list > div { display: grid; grid-template-columns: 27px minmax(110px, 1fr) minmax(60px, .8fr); align-items: center; gap: 11px; }
+.os-stage-list > fieldset { display: grid; gap: 13px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.os-stage-list > fieldset > div { display: grid; grid-template-columns: 27px minmax(110px, 1fr) minmax(60px, .8fr); align-items: center; gap: 11px; }
 .os-stage-number { display: grid; width: 27px; height: 27px; place-items: center; border: 1px solid #cfdfec; border-radius: 4px; color: #326998; background: #f3f8fc; font-size: 12px; }
-.os-stage-list strong, .os-stage-list > div > div > span { display: block; }
+.os-stage-list strong, .os-stage-list > fieldset > div > div > span { display: block; }
 .os-stage-list strong { color: #31516d; font-size: 12px; }
-.os-stage-list > div > div > span { margin-top: 4px; color: #6a8094; font-size: 11px; }
+.os-stage-list > fieldset > div > div > span { margin-top: 4px; color: #6a8094; font-size: 11px; }
 .os-stage-list progress { width: 100%; height: 6px; border: 0; border-radius: 3px; background: #e8eef3; accent-color: #219559; }
 .os-stage-list progress::-webkit-progress-bar { border-radius: 3px; background: #e8eef3; }
 .os-stage-list progress::-webkit-progress-value { border-radius: 3px; background: #219559; }
@@ -211,3 +212,16 @@
 .os-location-times dt { color:#5d7792; font-size:12px; }
 .os-location-times dd { margin:4px 0 0; color:#0b2f55; font-size:16px; font-weight:600; font-variant-numeric:tabular-nums; }
 .os-stage-resource { color:#5d7792; font-weight:400; }
+
+/* Planned time and machine of each stage in Ver OS, and their editing in place. */
+.os-stage-tools { display: flex; justify-content: flex-end; margin-top: 18px; }
+.os-stage-tools + .os-stage-list { margin-top: 10px; }
+.os-stage-list .os-stage-plan { display: block; margin-top: 3px; color: #31516d; font-size: 11px; }
+.os-stage-list--editing > fieldset > div { grid-template-columns: 27px minmax(0, 1fr); align-items: start; }
+.os-stage-list--editing .os-stage-pieces { grid-column: 2; }
+.os-stage-plan-fields { display: grid; grid-template-columns: 90px 90px minmax(170px, 1fr); gap: 8px; margin-top: 8px; }
+.os-stage-plan-fields label { display: grid; gap: 4px; color: #4b6680; font-size: 11px; font-weight: 600; }
+.os-stage-plan-fields input, .os-stage-plan-fields select { min-height: 36px; padding: 0 8px; border: 1px solid #cbd9e8; border-radius: 6px; background: #ffffff; color: #17375e; font: inherit; font-size: 13px; font-weight: 400; }
+.os-stage-plan-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.os-stage-plan-actions .workflow-error { flex: 1 1 100%; margin: 0; }
+@media (max-width: 640px) { .os-stage-plan-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } .os-stage-plan-fields label:last-child { grid-column: 1 / -1; } }

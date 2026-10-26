@@ -913,7 +913,7 @@
 :root[data-theme="dark"] .os-stage-list strong {
     color: #e1ebf6
 }
-:root[data-theme="dark"] .os-stage-list > div > div > span {
+:root[data-theme="dark"] .os-stage-list > fieldset > div > div > span {
     color: #b8c2cc
 }
 :root[data-theme="dark"] .os-stage-list progress {
@@ -1195,6 +1195,17 @@
 }
 :root[data-theme="dark"] .os-stage-resource {
     color: #b4c2cf
+}
+:root[data-theme="dark"] .os-stage-list .os-stage-plan {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .os-stage-plan-fields label {
+    color: #b2c2d2
+}
+:root[data-theme="dark"] .os-stage-plan-fields input, :root[data-theme="dark"] .os-stage-plan-fields select {
+    border: 1px solid #36516f;
+    background: #162b43;
+    color: #e1ebf6
 }
 :root[data-theme="dark"] .dashboard-shell.admin-home-shell {
     background: #162b43
@@ -2687,6 +2698,79 @@
 :root[data-theme="dark"] .usage-event--idle i {
     box-shadow: inset 0 0 0 2px #06111d
 }
+:root[data-theme="dark"] .batch-card {
+    border: 1px solid #36516f;
+    background: #162b43
+}
+:root[data-theme="dark"] .batch-card h2 {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .batch-list {
+    border-top: 1px solid #36516f
+}
+:root[data-theme="dark"] .batch-item {
+    border-bottom: 1px solid #36516f
+}
+:root[data-theme="dark"] .batch-item span, :root[data-theme="dark"] .batch-item small {
+    color: #b4c2d0
+}
+:root[data-theme="dark"] .batch-total {
+    background: #203c59;
+    border-left: 3px solid #4778ae
+}
+:root[data-theme="dark"] .batch-total small {
+    color: #b4c2d0
+}
+:root[data-theme="dark"] .batch-total strong {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .batch-notice {
+    border-left: 3px solid #36516f;
+    background: #203c31;
+    color: #93e1ca
+}
+:root[data-theme="dark"] .batch-pie-slice {
+    stroke: #f2f6fc
+}
+:root[data-theme="dark"] .batch-legend {
+    color: #a9c2da
+}
+:root[data-theme="dark"] .batch-key--now {
+    background: #405972
+}
+:root[data-theme="dark"] .batch-key--after {
+    background: #167f3d
+}
+:root[data-theme="dark"] .batch-line--now {
+    stroke: #b1c1d3
+}
+:root[data-theme="dark"] .batch-line--after {
+    stroke: #89ecae
+}
+:root[data-theme="dark"] .batch-dot {
+    stroke: #f2f6fc
+}
+:root[data-theme="dark"] .batch-dot--now {
+    fill: #b1c1d3
+}
+:root[data-theme="dark"] .batch-dot--after {
+    fill: #89ecae
+}
+:root[data-theme="dark"] .batch-grid {
+    stroke: #a9c2da
+}
+:root[data-theme="dark"] .batch-axis {
+    fill: #b4c1cf
+}
+:root[data-theme="dark"] .batch-check {
+    color: #acc3d7
+}
+:root[data-theme="dark"] .batch-picker-table thead th {
+    background: #162b43
+}
+:root[data-theme="dark"] .batch-due {
+    color: #b4c2d0
+}
 :root[data-theme="dark"] .planning-heading h1 {
     color: #e1ebf6
 }
@@ -3038,6 +3122,57 @@
 }
 :root[data-theme="dark"] .planning-remove {
     border-color: #36516f;
+    color: #ec9089
+}
+:root[data-theme="dark"] .planning-backlog-stages b {
+    background: #203c59;
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .planning-backlog-stages strong {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .planning-order-facts {
+    color: #aec1d5
+}
+:root[data-theme="dark"] .planning-stage-row {
+    border: 1px solid #36516f;
+    background: #203c59
+}
+:root[data-theme="dark"] .planning-stage-row--off {
+    background: #162b43
+}
+:root[data-theme="dark"] .planning-stage-check b {
+    background: #184c85;
+    color: #f2f6fc
+}
+:root[data-theme="dark"] .planning-stage-check strong {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .planning-stage-check small {
+    color: #b7c2cc
+}
+:root[data-theme="dark"] .planning-strip {
+    background: #203c59
+}
+:root[data-theme="dark"] .planning-strip-busy {
+    background: repeating-linear-gradient(45deg, #415971 0 4px, #203c59 4px 7px)
+}
+:root[data-theme="dark"] .planning-strip-new {
+    background: #184c85
+}
+:root[data-theme="dark"] .planning-strip-new--other {
+    background: #2c5887
+}
+:root[data-theme="dark"] .planning-strip-new--clash {
+    background: #92202c
+}
+:root[data-theme="dark"] .planning-strip-axis {
+    color: #b7c2cc
+}
+:root[data-theme="dark"] .planning-strip-wrap small {
+    color: #b7c2cc
+}
+:root[data-theme="dark"] .planning-warning--clash {
     color: #ec9089
 }
 :root[data-theme="dark"] {

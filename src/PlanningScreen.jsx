@@ -66,7 +66,9 @@ export default function PlanningScreen({ Sidebar, WorkspaceTabs, navigationProps
   const machines = resources.filter((item) => item.type === 'machine')
   const keys = new Set(resources.map((item) => resourceKey(item.type, item.id)))
   const blocks = (data?.blocks || []).filter((block) => keys.has(resourceKey(block.resourceType, block.resourceId)))
-  const backlog = (data?.backlog || []).filter((row) => !sector || row.group === sector || (data?.resources || []).some((item) => row.suggested && item.type === row.suggested.type && item.id === String(row.suggested.id) && item.sectors.includes(sector)))
+  // An OS is listed whole when any of its stages belongs to the sector (by the group of the stage or the sector of its machine).
+  const inSector = new Set((data?.backlog || []).filter((row) => !sector || row.group === sector || (data?.resources || []).some((item) => row.suggested && item.type === row.suggested.type && item.id === String(row.suggested.id) && item.sectors.includes(sector))).map((row) => row.orderCode))
+  const backlog = (data?.backlog || []).filter((row) => inSector.has(row.orderCode))
   const allSectors = data?.sectors || []
   const move = (days) => setDate(view === 'month' ? addDays(`${date.slice(0, 8)}01`, days > 0 ? 32 : -1).slice(0, 8) + '01' : addDays(date, days * (view === 'week' ? 7 : 1)))
   const openDay = (day) => { setDate(day); setView('day') }
@@ -75,7 +77,7 @@ export default function PlanningScreen({ Sidebar, WorkspaceTabs, navigationProps
     <header className="planning-heading">
       <div><h1>Planejamento</h1><p>Organize os serviços por máquina e acompanhe a execução ao longo do dia.</p></div>
       <div className="planning-heading-actions"><span className="planning-live" role="status"><i aria-hidden="true" />Atualização a cada 10 s{updatedAt && <small>Última atualização {updatedAt.toLocaleTimeString('pt-BR', { timeZone: 'America/Bahia' })}</small>}</span>
-        <button className="admin-tool-button admin-tool-button--primary" type="button" disabled={!data} onClick={() => setEditing({ start: view === 'day' ? Math.max(dayStart(date), Math.ceil(now / SLOT_MS) * SLOT_MS) : null })}><Plus size={17} aria-hidden="true" />Planejar serviço</button></div>
+        <button className="admin-tool-button admin-tool-button--primary" type="button" disabled={!data} onClick={() => setEditing({ plan: {} })}><Plus size={17} aria-hidden="true" />Planejar OS</button></div>
     </header>
     <div className="planning-toolbar">
       <div className="planning-views" role="group" aria-label="Período">{[['day', 'Dia'], ['week', 'Semana'], ['month', 'Mês']].map(([value, label]) => <button key={value} type="button" aria-pressed={view === value} onClick={() => setView(value)}>{label}</button>)}</div>
@@ -89,18 +91,20 @@ export default function PlanningScreen({ Sidebar, WorkspaceTabs, navigationProps
     {error && <p className="admin-tool-error" role="alert">{error}</p>}
     {!data ? <p className="planning-loading">Carregando planejamento...</p> : <>
       <Indicators view={view} from={from} to={to} date={date} machines={machines} blocks={blocks} now={now} />
-      {view === 'day' && <DayAgenda date={date} today={today} now={now} resources={resources} blocks={blocks} actual={data.actual} selectedAt={selectedAt} onSelect={setSelectedAt} onPlan={(fields) => setEditing(fields)} onEdit={(block) => setEditing({ block })} onMoved={refresh} onError={setError} />}
+      {view === 'day' && <DayAgenda date={date} today={today} now={now} resources={resources} blocks={blocks} actual={data.actual} selectedAt={selectedAt} onSelect={setSelectedAt} onPlan={(fields) => setEditing({ plan: fields })} onEdit={(block) => setEditing({ block })} onMoved={refresh} onError={setError} />}
       {view === 'week' && <WeekTable from={from} machines={machines} blocks={blocks} today={today} onOpen={openDay} />}
       {view === 'month' && <MonthCalendar from={from} month={date.slice(0, 7)} sectors={sector ? [sector] : allSectors} resources={data.resources} blocks={blocks} today={today} onOpen={openDay} />}
       <div className="planning-lower">
-        <Backlog rows={backlog} resources={data.resources} fit={fit} onClearFit={() => setFit(null)} onPlan={(item) => setEditing({ item, resourceKey: fit?.resourceKey, start: fit?.start })} />
+        <Backlog rows={backlog} resources={data.resources} fit={fit} onClearFit={() => setFit(null)} onPlan={(item) => setEditing({ plan: { item, resourceKey: fit?.resourceKey, start: fit?.start } })} />
         <div className="planning-side">
           {view === 'day' && <Snapshot date={date} today={today} now={now} selectedAt={selectedAt} onSelect={setSelectedAt} resources={resources} blocks={blocks} actual={data.actual} onFit={setFit} />}
           <OperatorPreview sectors={allSectors} sector={preview || sector || allSectors[0] || ''} onSector={setPreview} resources={data.resources} blocks={data.blocks} now={now} />
         </div>
       </div>
     </>}
-    {editing && data && <PlanModal data={data} initial={editing} date={date} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); setFit(null); refresh() }} />}
+    {editing && data && (editing.block
+      ? <BlockModal data={data} block={editing.block} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); refresh() }} />
+      : <OrderPlanModal data={data} initial={editing.plan} date={date} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); setFit(null); refresh() }} />)}
   </main></div>
 }
 
@@ -153,7 +157,7 @@ function DayAgenda({ date, today, now, resources, blocks, actual, selectedAt, on
   const nowLeft = date === today ? (now - from) / 60000 * PX_PER_MINUTE : null
   const selectedLeft = selectedAt != null && selectedAt >= from && selectedAt < from + DAY_MS ? (selectedAt - from) / 60000 * PX_PER_MINUTE : null
   return <section className="planning-agenda" aria-labelledby="planning-agenda-title">
-    <header><h2 id="planning-agenda-title">Agenda por máquina</h2><p>Planejado × realizado · arraste um bloco para mudar o horário, ou clique num espaço vazio para planejar.</p>
+    <header><h2 id="planning-agenda-title">Agenda por máquina</h2><p>Planejado × realizado · arraste um bloco para mudar o horário, ou clique num espaço vazio para planejar uma OS nesta máquina.</p>
       <ul className="planning-legend"><li><i className="planning-dot planning-dot--done" />Concluído</li><li><i className="planning-dot planning-dot--running" />Em execução</li><li><i className="planning-dot planning-dot--planned" />Planejado</li><li><i className="planning-dot planning-dot--late" />Atrasado</li><li><i className="planning-dot planning-dot--actual" />Realizado</li></ul></header>
     <div className="planning-scroll" ref={scroller}>
       <div className="planning-grid" style={{ '--timeline-width': `${width}px`, '--hour-width': `${HOUR_WIDTH}px` }}>
@@ -233,22 +237,22 @@ function MonthCalendar({ from, month, sectors, resources, blocks, today, onOpen 
   </section>
 }
 
+// The OS waiting for a plan, each one with its stages in order: the machine or service defined for the stage and the time
+// still to plan. "Planejar" opens all of them together.
 function Backlog({ rows, resources, fit, onClearFit, onPlan }) {
-  const suggestedName = (row) => row.suggested ? resources.find((item) => item.type === row.suggested.type && item.id === String(row.suggested.id))?.name || row.suggested.name : '—'
-  const fits = (row) => !fit || (row.toPlanMinutes != null && row.toPlanMinutes <= fit.minutes)
+  const nameOf = (stage) => stage.suggested ? resources.find((item) => item.type === stage.suggested.type && item.id === String(stage.suggested.id))?.name || stage.suggested.name : 'Sem máquina definida'
+  const fits = (order) => !fit || order.stages.some((stage) => stageKeyOf(stage) === fit.resourceKey && stage.toPlanMinutes != null && stage.toPlanMinutes <= fit.minutes)
+  const orders = groupBacklog(rows).filter(fits)
   return <section className="planning-backlog" aria-labelledby="planning-backlog-title">
-    <header><h2 id="planning-backlog-title">Serviços para planejar</h2><p>{fit ? <>Cabem em <strong>{fit.name}</strong>, livre por {duration(fit.minutes)} a partir das {clockTime(fit.start)}. <button type="button" className="planning-link" onClick={onClearFit}>Mostrar todos</button></> : 'Arraste uma linha para a máquina na agenda, ou use Planejar.'}</p></header>
-    <div className="planning-table-scroll"><table><thead><tr><th>OS</th><th>Etapa</th><th>Setor</th><th>Máquina sugerida</th><th>A planejar</th><th>Prazo</th><th><span className="sr-only">Ação</span></th></tr></thead>
-      <tbody>{rows.filter(fits).map((row) => <tr key={`${row.orderCode}-${row.stageCode}`} draggable onDragStart={(event) => { event.dataTransfer.setData('text/plain', JSON.stringify(row)); event.dataTransfer.effectAllowed = 'copy' }}>
-        <td><strong>{row.orderCode}</strong><small>{row.service} · {row.company}</small></td>
-        <td>{row.stageName}<small>{row.done} de {row.quantity} peças</small></td>
-        <td>{row.group || '—'}</td>
-        <td>{suggestedName(row)}</td>
-        <td>{row.toPlanMinutes == null ? <span className="planning-warning">Sem tempo previsto</span> : duration(row.toPlanMinutes)}</td>
-        <td>{row.deadline ? shortDate(row.deadline) + '/' + row.deadline.slice(0, 4) : '—'}{row.urgency === 'emergency' && <span className="planning-emergency">Emergência</span>}</td>
-        <td><button className="admin-tool-button" type="button" onClick={() => onPlan(row)}>Planejar</button></td>
+    <header><h2 id="planning-backlog-title">Serviços para planejar</h2><p>{fit ? <>OS com etapa em <strong>{fit.name}</strong> que cabe no horário livre de {duration(fit.minutes)} a partir das {clockTime(fit.start)}. <button type="button" className="planning-link" onClick={onClearFit}>Mostrar todas</button></> : 'Cada OS com as suas etapas e a máquina de cada uma. Use Planejar, ou arraste a OS para uma máquina na agenda.'}</p></header>
+    <div className="planning-table-scroll"><table><thead><tr><th>OS</th><th>Etapas a planejar</th><th>Prazo</th><th><span className="sr-only">Ação</span></th></tr></thead>
+      <tbody>{orders.map((order) => <tr key={order.orderCode} draggable onDragStart={(event) => { event.dataTransfer.setData('text/plain', JSON.stringify({ orderCode: order.orderCode })); event.dataTransfer.effectAllowed = 'copy' }}>
+        <td><strong>{order.orderCode}</strong><small>{order.service} · {order.company}</small></td>
+        <td><ol className="planning-backlog-stages">{order.stages.map((stage) => <li key={stage.stageCode}><b>{stage.position}</b><span><strong>{stage.stageName}</strong> · {nameOf(stage)}<small>{stage.toPlanMinutes == null ? <span className="planning-warning">Sem tempo previsto</span> : `${duration(stage.toPlanMinutes)} a planejar`} · {stage.done} de {stage.quantity} peças</small></span></li>)}</ol></td>
+        <td>{order.deadline ? fullDate(order.deadline) : '—'}{order.urgency === 'emergency' && <span className="planning-emergency">Emergência</span>}</td>
+        <td><button className="admin-tool-button" type="button" onClick={() => onPlan({ orderCode: order.orderCode })}>Planejar</button></td>
       </tr>)}
-      {!rows.filter(fits).length && <tr><td colSpan={7} className="planning-empty">{fit ? 'Nenhuma etapa cabe nesse intervalo.' : 'Tudo planejado: nenhuma etapa aguardando.'}</td></tr>}</tbody></table></div>
+      {!orders.length && <tr><td colSpan={4} className="planning-empty">{fit ? 'Nenhuma etapa desta máquina cabe nesse intervalo.' : 'Tudo planejado: nenhuma OS aguardando.'}</td></tr>}</tbody></table></div>
   </section>
 }
 
@@ -286,47 +290,189 @@ function OperatorPreview({ sectors, sector, onSector, resources, blocks, now }) 
   </section>
 }
 
-// Plans a stage of an OS on a machine or service, or changes / removes a block.
-function PlanModal({ data, initial, date, onClose, onSaved }) {
-  const block = initial.block
-  const options = useMemo(() => {
-    const rows = [...data.backlog]
-    if (block && !rows.some((row) => row.orderCode === block.orderCode && row.stageCode === block.stageCode)) rows.unshift({ orderCode: block.orderCode, stageCode: block.stageCode, stageName: block.stageName, service: block.service, toPlanMinutes: null, suggested: null, deadline: block.deadline })
-    if (initial.item && !rows.some((row) => row.orderCode === initial.item.orderCode && row.stageCode === initial.item.stageCode)) rows.unshift(initial.item)
-    return rows
-  }, [data, block, initial.item])
-  const firstItem = block ? options.find((row) => row.orderCode === block.orderCode && row.stageCode === block.stageCode) : initial.item ? options.find((row) => row.orderCode === initial.item.orderCode && row.stageCode === initial.item.stageCode) : options[0]
-  const suggestedKey = (row) => row?.suggested ? resourceKey(row.suggested.type, row.suggested.id) : ''
-  const startMs = block ? blockStart(block) : initial.start ?? Math.max(dayStart(date), Math.ceil(Date.now() / SLOT_MS) * SLOT_MS)
-  const [choice, setChoice] = useState(firstItem ? `${firstItem.orderCode}|${firstItem.stageCode}` : '')
-  const [resource, setResource] = useState(block ? resourceKey(block.resourceType, block.resourceId) : initial.resourceKey || suggestedKey(firstItem) || resourceKey('machine', data.resources.find((item) => item.type === 'machine')?.id ?? ''))
-  const [day, setDay] = useState(localDay(startMs))
-  const [time, setTime] = useState(clockTime(startMs))
-  const initialMinutes = block?.minutes ?? (firstItem?.toPlanMinutes || 60)
-  const [hours, setHours] = useState(String(Math.floor(initialMinutes / 60)))
-  const [minutes, setMinutes] = useState(String(initialMinutes % 60))
-  const [quantity, setQuantity] = useState(block?.quantity ? String(block.quantity) : '')
+const fullDate = (date) => date.split('-').reverse().join('/')
+const roundUp = (ms) => Math.ceil(ms / SLOT_MS) * SLOT_MS
+const stageKeyOf = (stage) => stage?.suggested ? resourceKey(stage.suggested.type, stage.suggested.id) : ''
+// The stages still to plan, by OS, in the order of the OS.
+function groupBacklog(rows) {
+  const orders = new Map()
+  for (const row of rows) {
+    if (!orders.has(row.orderCode)) orders.set(row.orderCode, { orderCode: row.orderCode, service: row.service, company: row.company, deadline: row.deadline, urgency: row.urgency, stages: [] })
+    orders.get(row.orderCode).stages.push(row)
+  }
+  return [...orders.values()].map((order) => ({ ...order, stages: order.stages.sort((left, right) => (left.position || 0) - (right.position || 0)) }))
+}
+// The first start, from `from` on, when a machine is free for `minutes`. Labor services are people: any time works.
+function firstFree(blocks, key, from, minutes) {
+  let start = roundUp(from)
+  if (!key.startsWith('machine:')) return start
+  const own = blocks.filter((block) => resourceKey(block.resourceType, block.resourceId) === key)
+  for (let guard = 0; guard < 500; guard += 1) {
+    const clash = own.find((block) => blockStart(block) < start + minutes * 60000 && start < blockEnd(block))
+    if (!clash) return start
+    start = roundUp(blockEnd(clash))
+  }
+  return start
+}
+
+// The chosen day of the machine on a 24-hour bar: what is already planned on it, the other stages of this OS on it and
+// this stage (red when it clashes).
+function DayStrip({ day, resourceKeyValue, name, agenda, planned, current, clash }) {
+  const from = dayStart(day), to = from + DAY_MS
+  const place = (start, end) => ({ left: `${(Math.max(start, from) - from) / DAY_MS * 100}%`, width: `${Math.max(0.5, (Math.min(end, to) - Math.max(start, from)) / DAY_MS * 100)}%` })
+  const busy = agenda.filter((block) => resourceKey(block.resourceType, block.resourceId) === resourceKeyValue && blockStart(block) < to && blockEnd(block) > from).sort((left, right) => blockStart(left) - blockStart(right))
+  const mine = planned.filter((item) => item.key === resourceKeyValue && item.minutes && item.start < to && item.end > from)
+  const busyText = busy.map((block) => `${clockTime(Math.max(blockStart(block), from))}–${blockEnd(block) >= to ? '24:00' : clockTime(blockEnd(block))} (${block.orderCode})`).join(', ')
+  return <div className="planning-strip-wrap">
+    <div className="planning-strip" role="img" aria-label={`${name} em ${shortDate(day)}: ${busy.length ? `ocupada ${busyText}` : 'livre o dia todo'}`}>
+      {busy.map((block) => <i key={block.id} className="planning-strip-busy" style={place(blockStart(block), blockEnd(block))} title={`${block.orderCode} · ${block.stageName} · ${clockTime(blockStart(block))}–${clockTime(blockEnd(block))}`} />)}
+      {mine.map((item) => <i key={item.stage.stageCode} className={`planning-strip-new${item === current ? clash ? ' planning-strip-new--clash' : '' : ' planning-strip-new--other'}`} style={place(item.start, item.end)} title={`${item.stage.stageName} · ${clockTime(item.start)}–${clockTime(item.end)}`} />)}
+    </div>
+    <div className="planning-strip-axis" aria-hidden="true">{[0, 6, 12, 18, 24].map((hour) => <span key={hour} style={{ left: `${hour / 24 * 100}%` }}>{String(hour).padStart(2, '0')}h</span>)}</div>
+    <small>{name} em {shortDate(day)}: {busy.length ? `ocupada ${busyText}` : 'livre o dia todo'}</small>
+  </div>
+}
+
+// Plans the stages of one OS at once. Each stage keeps the machine or service defined in the OS; the administrator chooses
+// the day and the start of each one. A stage not changed by hand starts when the previous one ends, on the first moment
+// its machine is free. Opened from a machine row of the agenda, it brings only the stages of that machine checked.
+function OrderPlanModal({ data, initial, date, onClose, onSaved }) {
+  const orders = useMemo(() => groupBacklog(data.backlog), [data.backlog])
+  const focus = initial.resourceKey && initial.start != null ? { resourceKey: initial.resourceKey, start: initial.start } : null
+  const choices = focus && !initial.item ? orders.filter((order) => order.stages.some((stage) => stageKeyOf(stage) === focus.resourceKey)) : orders
+  const [orderCode, setOrderCode] = useState(initial.item?.orderCode ?? choices[0]?.orderCode ?? '')
+  const order = orders.find((item) => item.orderCode === orderCode)
+  const today = localDay(data.now)
+  const [agenda, setAgenda] = useState(null)
+  const [rows, setRows] = useState({})
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const selected = options.find((row) => `${row.orderCode}|${row.stageCode}` === choice)
-  const total = Math.max(0, Math.floor(Number(hours) || 0)) * 60 + Math.max(0, Math.floor(Number(minutes) || 0))
-  const start = Date.parse(`${day}T${time}:00-03:00`), end = start + total * 60000
-  const chosenResource = data.resources.find((item) => resourceKey(item.type, item.id) === resource)
-  function pick(value) {
-    setChoice(value)
-    const row = options.find((item) => `${item.orderCode}|${item.stageCode}` === value)
-    if (!block && row?.toPlanMinutes) { setHours(String(Math.floor(row.toPlanMinutes / 60))); setMinutes(String(row.toPlanMinutes % 60)) }
-    if (!block && !initial.resourceKey && suggestedKey(row)) setResource(suggestedKey(row))
+  // The plan of the next two months, to find the free time of each machine and the clashes.
+  useEffect(() => {
+    let active = true
+    const from = date < today ? date : today
+    payableRequest(`/planning?from=${from}&to=${addDays(from, 61)}`).then((result) => { if (active) setAgenda(result.blocks) }).catch(() => { if (active) setAgenda(data.blocks) })
+    return () => { active = false }
+  }, [])
+  const resourceName = (key) => data.resources.find((item) => resourceKey(item.type, item.id) === key)?.name || ''
+  const keyOf = (stage, row) => stageKeyOf(stage) || row?.resource || ''
+  const startOf = (row) => Date.parse(`${row.day}T${row.time}:00-03:00`)
+  const minutesOf = (row) => Math.max(0, Math.floor(Number(row.hours) || 0)) * 60 + Math.max(0, Math.floor(Number(row.minutes) || 0))
+  function schedule(current, plan = agenda) {
+    if (!order || !plan) return current
+    let cursor = Math.max(roundUp(data.now), dayStart(date)), focused = false
+    const next = { ...current }
+    for (const stage of order.stages) {
+      const row = current[stage.stageCode]
+      if (!row?.checked) continue
+      const key = keyOf(stage, row), minutes = minutesOf(row) || 60
+      let start
+      if (row.touched) start = startOf(row)
+      else if (focus && !focused && key === focus.resourceKey) { start = focus.start; focused = true }
+      else start = firstFree(plan, key, cursor, minutes)
+      if (!row.touched) next[stage.stageCode] = { ...row, day: localDay(start), time: clockTime(start) }
+      cursor = start + minutes * 60000
+    }
+    return next
+  }
+  useEffect(() => {
+    if (!order || !agenda) return
+    const onFocus = focus && order.stages.some((stage) => stageKeyOf(stage) === focus.resourceKey)
+    setRows(schedule(Object.fromEntries(order.stages.map((stage) => {
+      const minutes = stage.toPlanMinutes || 60
+      return [stage.stageCode, { checked: !onFocus || stageKeyOf(stage) === focus.resourceKey, hours: String(Math.floor(minutes / 60)), minutes: String(minutes % 60), day: date, time: '00:00', touched: false, resource: stageKeyOf(stage) ? '' : focus?.resourceKey || '' }]
+    }))))
+  }, [orderCode, agenda])
+  const change = (code, fields, touch = false) => setRows((current) => schedule({ ...current, [code]: { ...current[code], ...fields, ...(touch ? { touched: true } : {}) } }))
+  const rechain = () => setRows((current) => schedule(Object.fromEntries(Object.entries(current).map(([code, row]) => [code, { ...row, touched: false }]))))
+  const planned = order ? order.stages.filter((stage) => rows[stage.stageCode]?.checked).map((stage) => {
+    const row = rows[stage.stageCode], start = startOf(row), minutes = minutesOf(row)
+    return { stage, row, key: keyOf(stage, row), start, end: start + minutes * 60000, minutes }
+  }) : []
+  function clashOf(item) {
+    if (!item.key.startsWith('machine:') || !item.minutes) return ''
+    const block = (agenda || []).find((entry) => resourceKey(entry.resourceType, entry.resourceId) === item.key && blockStart(entry) < item.end && item.start < blockEnd(entry))
+    if (block) return `${resourceName(item.key)} já tem a ${block.orderCode} · ${block.stageName} das ${clockTime(blockStart(block))} às ${clockTime(blockEnd(block))}${localDay(blockStart(block)) !== localDay(item.start) ? ` de ${shortDate(localDay(blockStart(block)))}` : ''}.`
+    const other = planned.find((entry) => entry !== item && entry.key === item.key && entry.minutes && entry.start < item.end && item.start < entry.end)
+    return other ? `Ao mesmo tempo que a etapa ${other.stage.stageName}, na mesma máquina.` : ''
   }
   async function submit(event) {
     event.preventDefault()
-    if (!selected) return setError('Escolha a OS e a etapa.')
-    if (!total) return setError('Informe a duração.')
-    const [type, ...rest] = resource.split(':')
+    if (!planned.length) return setError('Marque pelo menos uma etapa para planejar.')
+    const missing = planned.find((item) => !item.key)
+    if (missing) return setError(`Escolha a máquina ou o serviço da etapa ${missing.stage.stageName}.`)
+    const empty = planned.find((item) => !item.minutes)
+    if (empty) return setError(`Informe a duração da etapa ${empty.stage.stageName}.`)
     setBusy(true); setError('')
     try {
-      const body = { orderCode: selected.orderCode, stageCode: selected.stageCode, resourceType: type, resourceId: rest.join(':'), start: new Date(start).toISOString(), minutes: total, quantity: quantity ? Number(quantity) : null }
-      await payableRequest(block ? `/planning/blocks/${block.id}` : '/planning/blocks', block ? 'PUT' : 'POST', body)
+      await payableRequest('/planning/blocks/batch', 'POST', { items: planned.map((item) => { const [type, ...id] = item.key.split(':'); return { orderCode: order.orderCode, stageCode: item.stage.stageCode, resourceType: type, resourceId: id.join(':'), start: new Date(item.start).toISOString(), minutes: item.minutes } }) })
+      onSaved()
+    } catch (caught) { setError(caught.message); setBusy(false) }
+  }
+  const machines = data.resources.filter((item) => item.type === 'machine'), services = data.resources.filter((item) => item.type === 'labor-service')
+  return <PayableModal title="Planejar OS" className="planning-modal planning-modal--order" busy={busy} onClose={onClose} footer={<>
+    <button className="admin-tool-button" type="button" disabled={busy} onClick={onClose}>Cancelar</button>
+    <button className="admin-tool-button admin-tool-button--primary" type="submit" form="planning-order-form" disabled={busy || !order || !agenda}><CalendarClock size={16} aria-hidden="true" />{busy ? 'Salvando...' : planned.length > 1 ? `Planejar ${planned.length} etapas` : 'Planejar etapa'}</button></>}>
+    <form id="planning-order-form" className="planning-form" onSubmit={submit}><fieldset disabled={busy}>
+      {!choices.length ? <p className="planning-muted">{focus ? `Nenhuma OS tem etapa aguardando em ${resourceName(focus.resourceKey) || 'este recurso'}.` : 'Nenhuma OS aguardando planejamento.'}</p> : <>
+        <label>OS<select value={orderCode} onChange={(event) => setOrderCode(event.target.value)}>{choices.map((item) => <option key={item.orderCode} value={item.orderCode}>{item.orderCode} · {item.service} · {item.company}</option>)}</select></label>
+        {order && <p className="planning-order-facts">{order.stages.length} {order.stages.length === 1 ? 'etapa' : 'etapas'} a planejar · prazo {order.deadline ? fullDate(order.deadline) : 'não informado'}{order.urgency === 'emergency' && <span className="planning-emergency">Emergência</span>}</p>}
+        {!agenda ? <p className="planning-muted">Carregando a agenda das máquinas...</p> : order && <>
+          <p className="planning-muted">Cada etapa já vem com a máquina ou o serviço da OS: escolha o dia e o horário. A etapa seguinte começa quando a anterior termina, na primeira hora livre da máquina, até você mudar o horário dela.{planned.some((item) => item.row.touched) && <> <button type="button" className="planning-link" onClick={rechain}>Encadear de novo</button></>}</p>
+          <ol className="planning-stage-rows">{order.stages.map((stage) => {
+            const row = rows[stage.stageCode]
+            if (!row) return null
+            const item = planned.find((entry) => entry.stage === stage)
+            const key = keyOf(stage, row), name = resourceName(key) || stage.suggested?.name || ''
+            const resource = data.resources.find((entry) => resourceKey(entry.type, entry.id) === key)
+            const clash = item ? clashOf(item) : ''
+            return <li key={stage.stageCode} className={`planning-stage-row${row.checked ? '' : ' planning-stage-row--off'}`}>
+              <label className="planning-stage-check"><input type="checkbox" checked={row.checked} onChange={(event) => change(stage.stageCode, { checked: event.target.checked })} aria-label={`Planejar a etapa ${stage.stageName}`} /><b>{stage.position}</b><span><strong>{stage.stageName}</strong><small>{stageKeyOf(stage) ? name : 'Sem máquina definida na OS'} · {stage.toPlanMinutes == null ? 'sem tempo previsto na OS' : `falta planejar ${duration(stage.toPlanMinutes)}`} · {stage.done} de {stage.quantity} peças</small></span></label>
+              {row.checked && <>
+                <div className="planning-stage-fields">
+                  {!stageKeyOf(stage) && <label>Máquina ou serviço<select aria-label={`Máquina ou serviço da etapa ${stage.stageName}`} value={row.resource} onChange={(event) => change(stage.stageCode, { resource: event.target.value })}><option value="">Escolher</option><optgroup label="Máquinas">{machines.map((entry) => <option key={entry.id} value={resourceKey(entry.type, entry.id)}>{entry.name}</option>)}</optgroup>{services.length > 0 && <optgroup label="Serviços (hora homem)">{services.map((entry) => <option key={entry.id} value={resourceKey(entry.type, entry.id)}>{entry.name}</option>)}</optgroup>}</select></label>}
+                  <label>Dia<input type="date" aria-label={`Dia da etapa ${stage.stageName}`} value={row.day} onChange={(event) => event.target.value && change(stage.stageCode, { day: event.target.value }, true)} required /></label>
+                  <label>Início<select aria-label={`Início da etapa ${stage.stageName}`} value={row.time} onChange={(event) => change(stage.stageCode, { time: event.target.value }, true)}>{slots.map((slot) => <option key={slot} value={slot}>{slot}</option>)}</select></label>
+                  <label>Horas<input type="number" min="0" step="1" inputMode="numeric" aria-label={`Horas da etapa ${stage.stageName}`} value={row.hours} onChange={(event) => change(stage.stageCode, { hours: event.target.value })} /></label>
+                  <label>Minutos<input type="number" min="0" max="59" step="1" inputMode="numeric" aria-label={`Minutos da etapa ${stage.stageName}`} value={row.minutes} onChange={(event) => change(stage.stageCode, { minutes: event.target.value })} /></label>
+                </div>
+                {key && <DayStrip day={row.day} resourceKeyValue={key} name={name} agenda={agenda} planned={planned} current={item} clash={Boolean(clash)} />}
+                {item?.minutes > 0 && <p className="planning-form-summary">Das <strong>{clockTime(item.start)}</strong> de {shortDate(localDay(item.start))} às <strong>{clockTime(item.end)}</strong> de {shortDate(localDay(item.end))} · {duration(item.minutes)}</p>}
+                {clash && <p className="planning-warning planning-warning--clash" role="status"><AlertTriangle size={14} aria-hidden="true" /> {clash}</p>}
+                {resource?.maintenance && <p className="planning-warning" role="status"><Wrench size={14} aria-hidden="true" /> {resource.name} está em manutenção: {resource.maintenance.reason}</p>}
+                {order.deadline && item?.minutes > 0 && localDay(item.end) > order.deadline && <p className="planning-warning" role="status"><AlertTriangle size={14} aria-hidden="true" /> Termina depois do prazo da OS ({fullDate(order.deadline)}).</p>}
+              </>}
+            </li>
+          })}</ol>
+        </>}
+      </>}
+      {error && <p className="admin-tool-error" role="alert">{error}</p>}
+    </fieldset></form>
+  </PayableModal>
+}
+
+// One block of the plan: its day, start, duration and pieces. The machine or service is the one defined in the OS for the
+// stage; only a stage without it (an older OS) lets the block choose.
+function BlockModal({ data, block, onClose, onSaved }) {
+  const fixed = block.stageResource && data.resources.find((item) => item.type === block.stageResource.type && item.id === String(block.stageResource.id))
+  const [resource, setResource] = useState(fixed ? resourceKey(fixed.type, fixed.id) : resourceKey(block.resourceType, block.resourceId))
+  const [day, setDay] = useState(localDay(blockStart(block)))
+  const [time, setTime] = useState(clockTime(blockStart(block)))
+  const [hours, setHours] = useState(String(Math.floor(block.minutes / 60)))
+  const [minutes, setMinutes] = useState(String(block.minutes % 60))
+  const [quantity, setQuantity] = useState(block.quantity ? String(block.quantity) : '')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const total = Math.max(0, Math.floor(Number(hours) || 0)) * 60 + Math.max(0, Math.floor(Number(minutes) || 0))
+  const start = Date.parse(`${day}T${time}:00-03:00`), end = start + total * 60000
+  const chosen = data.resources.find((item) => resourceKey(item.type, item.id) === resource)
+  async function submit(event) {
+    event.preventDefault()
+    if (!total) return setError('Informe a duração.')
+    const [type, ...id] = resource.split(':')
+    setBusy(true); setError('')
+    try {
+      await payableRequest(`/planning/blocks/${block.id}`, 'PUT', { orderCode: block.orderCode, stageCode: block.stageCode, resourceType: type, resourceId: id.join(':'), start: new Date(start).toISOString(), minutes: total, quantity: quantity ? Number(quantity) : null })
       onSaved()
     } catch (caught) { setError(caught.message); setBusy(false) }
   }
@@ -336,23 +482,21 @@ function PlanModal({ data, initial, date, onClose, onSaved }) {
     try { await payableRequest(`/planning/blocks/${block.id}`, 'DELETE'); onSaved() } catch (caught) { setError(caught.message); setBusy(false) }
   }
   const machines = data.resources.filter((item) => item.type === 'machine'), services = data.resources.filter((item) => item.type === 'labor-service')
-  return <PayableModal title={block ? 'Bloco do planejamento' : 'Planejar serviço'} className="planning-modal" busy={busy} onClose={onClose} footer={<>
-    {block && <button className="admin-tool-button planning-remove" type="button" disabled={busy} onClick={remove}><Trash2 size={16} aria-hidden="true" />Tirar do plano</button>}
+  return <PayableModal title="Bloco do planejamento" className="planning-modal" busy={busy} onClose={onClose} footer={<>
+    <button className="admin-tool-button planning-remove" type="button" disabled={busy} onClick={remove}><Trash2 size={16} aria-hidden="true" />Tirar do plano</button>
     <button className="admin-tool-button" type="button" disabled={busy} onClick={onClose}>Cancelar</button>
-    <button className="admin-tool-button admin-tool-button--primary" type="submit" form="planning-form" disabled={busy || !options.length}><CalendarClock size={16} aria-hidden="true" />{busy ? 'Salvando...' : block ? 'Salvar bloco' : 'Planejar'}</button></>}>
+    <button className="admin-tool-button admin-tool-button--primary" type="submit" form="planning-form" disabled={busy}><CalendarClock size={16} aria-hidden="true" />{busy ? 'Salvando...' : 'Salvar bloco'}</button></>}>
     <form id="planning-form" className="planning-form" onSubmit={submit}><fieldset disabled={busy}>
-      {!options.length ? <p className="planning-muted">Nenhuma etapa aguardando planejamento.</p> : <>
-        <label>OS e etapa<select value={choice} disabled={Boolean(block)} onChange={(event) => pick(event.target.value)}>{options.map((row) => <option key={`${row.orderCode}|${row.stageCode}`} value={`${row.orderCode}|${row.stageCode}`}>{row.orderCode} · {row.service} · {row.stageName}{row.toPlanMinutes ? ` (${duration(row.toPlanMinutes)} a planejar)` : ''}</option>)}</select></label>
-        <label>Máquina ou serviço<select value={resource} onChange={(event) => setResource(event.target.value)}>
-          <optgroup label="Máquinas">{machines.map((item) => <option key={item.id} value={resourceKey(item.type, item.id)}>{item.name}{item.maintenance ? ' (em manutenção)' : ''}{suggestedKey(selected) === resourceKey(item.type, item.id) ? ' · sugerida' : ''}</option>)}</optgroup>
-          {services.length > 0 && <optgroup label="Serviços (hora homem)">{services.map((item) => <option key={item.id} value={resourceKey(item.type, item.id)}>{item.name}{suggestedKey(selected) === resourceKey(item.type, item.id) ? ' · sugerido' : ''}</option>)}</optgroup>}
-        </select></label>
-        <div className="planning-form-row"><label>Dia<input type="date" value={day} onChange={(event) => event.target.value && setDay(event.target.value)} required /></label><label>Início<select value={time} onChange={(event) => setTime(event.target.value)}>{slots.map((slot) => <option key={slot} value={slot}>{slot}</option>)}</select></label></div>
-        <div className="planning-form-row"><label>Duração (horas)<input type="number" min="0" step="1" inputMode="numeric" value={hours} onChange={(event) => setHours(event.target.value)} /></label><label>Minutos<input type="number" min="0" max="59" step="1" inputMode="numeric" value={minutes} onChange={(event) => setMinutes(event.target.value)} /></label><label>Peças (opcional)<input type="number" min="1" step="1" inputMode="numeric" value={quantity} onChange={(event) => setQuantity(event.target.value)} /></label></div>
-        <p className="planning-form-summary">{total ? <>Termina às <strong>{clockTime(end)}</strong>{localDay(end) !== day ? ` de ${shortDate(localDay(end))}` : ''} · {duration(total)}</> : 'Informe a duração.'}{selected?.toPlanMinutes != null && !block && <> · faltam {duration(selected.toPlanMinutes)} desta etapa para planejar</>}</p>
-        {chosenResource?.maintenance && <p className="planning-warning" role="status"><Wrench size={14} aria-hidden="true" /> {chosenResource.name} está em manutenção: {chosenResource.maintenance.reason}</p>}
-        {selected?.deadline && total > 0 && localDay(end) > selected.deadline && <p className="planning-warning" role="status"><AlertTriangle size={14} aria-hidden="true" /> Termina depois do prazo da OS ({shortDate(selected.deadline)}/{selected.deadline.slice(0, 4)}).</p>}
-      </>}
+      <p className="planning-order-facts"><strong>{block.orderCode} · {block.stageName}</strong> · {block.service}</p>
+      {fixed ? <p className="planning-order-facts">Máquina ou serviço: <strong>{fixed.name}</strong> (definido na OS)</p> : <label>Máquina ou serviço<select value={resource} onChange={(event) => setResource(event.target.value)}>
+        <optgroup label="Máquinas">{machines.map((item) => <option key={item.id} value={resourceKey(item.type, item.id)}>{item.name}{item.maintenance ? ' (em manutenção)' : ''}</option>)}</optgroup>
+        {services.length > 0 && <optgroup label="Serviços (hora homem)">{services.map((item) => <option key={item.id} value={resourceKey(item.type, item.id)}>{item.name}</option>)}</optgroup>}
+      </select></label>}
+      <div className="planning-form-row"><label>Dia<input type="date" value={day} onChange={(event) => event.target.value && setDay(event.target.value)} required /></label><label>Início<select value={time} onChange={(event) => setTime(event.target.value)}>{slots.map((slot) => <option key={slot} value={slot}>{slot}</option>)}</select></label></div>
+      <div className="planning-form-row"><label>Duração (horas)<input type="number" min="0" step="1" inputMode="numeric" value={hours} onChange={(event) => setHours(event.target.value)} /></label><label>Minutos<input type="number" min="0" max="59" step="1" inputMode="numeric" value={minutes} onChange={(event) => setMinutes(event.target.value)} /></label><label>Peças (opcional)<input type="number" min="1" step="1" inputMode="numeric" value={quantity} onChange={(event) => setQuantity(event.target.value)} /></label></div>
+      <p className="planning-form-summary">{total ? <>Termina às <strong>{clockTime(end)}</strong>{localDay(end) !== day ? ` de ${shortDate(localDay(end))}` : ''} · {duration(total)}</> : 'Informe a duração.'}</p>
+      {chosen?.maintenance && <p className="planning-warning" role="status"><Wrench size={14} aria-hidden="true" /> {chosen.name} está em manutenção: {chosen.maintenance.reason}</p>}
+      {block.deadline && total > 0 && localDay(end) > block.deadline && <p className="planning-warning" role="status"><AlertTriangle size={14} aria-hidden="true" /> Termina depois do prazo da OS ({fullDate(block.deadline)}).</p>}
       {error && <p className="admin-tool-error" role="alert">{error}</p>}
     </fieldset></form>
   </PayableModal>

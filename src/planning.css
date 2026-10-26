@@ -165,3 +165,38 @@
   .planning-day { min-height: 64px; padding: 4px; }
   .planning-day-sector, .planning-day-count { display: none; }
 }
+
+/* Serviços para planejar: each OS with its stages, the machine of each one and the time to plan. */
+.planning-backlog-stages { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.planning-backlog-stages li { display: grid; grid-template-columns: 22px minmax(0, 1fr); align-items: start; gap: 8px; }
+.planning-backlog-stages b { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: #e8f1fb; color: #0c4c91; font-size: 11px; }
+.planning-backlog-stages strong { color: #17375e; }
+
+/* Planejar OS: one card per stage, with its day, start, duration and the day of its machine on a 24-hour bar. */
+.planning-modal--order { width: min(980px, calc(100vw - 24px)); }
+.planning-order-facts { margin: 0; color: #3d5876; font-size: 13px; }
+.planning-stage-rows { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.planning-stage-row { display: grid; gap: 10px; padding: 14px; border: 1px solid #dce5ef; border-radius: 8px; background: #fbfcfe; }
+.planning-stage-row--off { background: #ffffff; }
+.planning-stage-row--off .planning-stage-check span { opacity: 0.65; }
+/* Beats the column layout of the modal labels (.payable-modal label). */
+.planning-modal .planning-form label.planning-stage-check { display: grid; grid-template-columns: 18px 26px minmax(0, 1fr); align-items: center; justify-items: start; gap: 10px; text-align: left; cursor: pointer; }
+.planning-modal .planning-form label.planning-stage-check input { width: 18px; height: 18px; min-height: 0; margin: 0; padding: 0; }
+.planning-stage-check b { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: #0c4c91; color: #ffffff; font-size: 13px; }
+.planning-stage-check span { display: grid; gap: 2px; }
+.planning-stage-check strong { color: #17375e; font-size: 15px; }
+.planning-stage-check small { color: #6b8096; font-size: 12px; font-weight: 400; }
+.planning-stage-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+.planning-strip-wrap { display: grid; gap: 3px; }
+.planning-strip { position: relative; height: 18px; overflow: hidden; border-radius: 4px; background: #eef3f8; }
+.planning-strip i { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
+.planning-strip-busy { background: repeating-linear-gradient(45deg, #9fb3c8 0 4px, #c3d0de 4px 7px); }
+.planning-strip-new { background: #0c4c91; }
+.planning-strip-new--other { background: #86aed8; }
+.planning-strip-new--clash { background: #c42b3b; }
+.planning-strip-axis { position: relative; height: 14px; color: #6b8096; font-size: 11px; font-variant-numeric: tabular-nums; }
+.planning-strip-axis span { position: absolute; transform: translateX(-50%); }
+.planning-strip-axis span:first-child { transform: none; }
+.planning-strip-axis span:last-child { transform: translateX(-100%); }
+.planning-strip-wrap small { color: #6b8096; font-size: 12px; }
+.planning-warning--clash { color: #b42318; }
