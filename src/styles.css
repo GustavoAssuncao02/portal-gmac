@@ -1741,6 +1741,51 @@ button {
   font-style: normal;
 }
 
+.offer-detail-facts em + em {
+  grid-column: 2;
+  margin-top: 2px;
+}
+
+/* A short notice at the bottom right (e.g. "Solicitante cadastrado automaticamente"); it leaves after 4 seconds. */
+.app-toast {
+  position: fixed;
+  z-index: 1200;
+  right: 24px;
+  bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(360px, calc(100vw - 32px));
+  margin: 0;
+  padding: 11px 16px 11px 13px;
+  border: 1px solid #d3e1ee;
+  border-left: 3px solid #2e9577;
+  border-radius: 8px;
+  color: #173f6a;
+  background: #ffffff;
+  box-shadow: 0 10px 28px rgba(16, 43, 66, 0.16);
+  font-size: 13px;
+  font-weight: 600;
+  animation: app-toast-in 0.18s ease-out;
+}
+
+.app-toast svg {
+  flex-shrink: 0;
+  color: #2e9577;
+}
+
+@keyframes app-toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-toast { animation: none; }
+}
+
+@media (max-width: 760px) {
+  .app-toast { right: 16px; bottom: 16px; left: 16px; max-width: none; }
+}
+
 .offer-average-time {
   display: flex;
   align-items: center;

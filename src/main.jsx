@@ -16,11 +16,13 @@ import AccountSettings from './AccountSettings.jsx'
 import PayablesScreen from './PayablesScreen.jsx'
 import AdminWorkspace from './AdminWorkspace.jsx'
 import SimpleRegistryScreen from './SimpleRegistryScreen.jsx'
+import RequestersScreen from './RequestersScreen.jsx'
 import { RegistryToolbar, SortHeader, documentLabel, useRegistryList } from './RegistryList.jsx'
 import { bySector, parseSectors, sectorsOf } from './machineSectors.js'
 import ServicePanelRow, { collaboratorNames, panelDeadline, panelDuration } from './ServicePanelRow.jsx'
 import PieceNameInput from './PieceNameInput.jsx'
 import ClientNameInput from './ClientNameInput.jsx'
+import RequesterNameInput from './RequesterNameInput.jsx'
 import { documentDigits, documentKind, maskClientDocument } from '../server/clientDocument.js'
 import DownloadLink from './DownloadLink.jsx'
 import { downloadFile } from './payablesApi.js'
@@ -43,7 +45,7 @@ import { useMobileModal } from './useMobileModal.js'
 import { ThemeContext, useAccountTheme } from './accountTheme.js'
 import { pollWhileVisible } from './polling.js'
 import { newId } from './newId.js'
-import { Monitor, Minimize2, Plus, Pencil, Trash2, Clock3, CreditCard, HandCoins, Banknote, Landmark, ChartColumn, Tags, Truck, WalletCards, ChevronLeft, ChevronRight, ChevronDown, UsersRound, Menu, X, Info, ArrowLeft, ListChecks, Layers, CircleCheck, CircleX, ArrowUpDown, ArrowUp, ArrowDown, Building2, CirclePause, Power, Factory, Wrench, CalendarClock, Save } from 'lucide-react'
+import { Monitor, Minimize2, Plus, Pencil, Trash2, Clock3, CreditCard, HandCoins, Banknote, Landmark, ChartColumn, Tags, Truck, WalletCards, ChevronLeft, ChevronRight, ChevronDown, UsersRound, Menu, X, Info, ArrowLeft, ListChecks, Layers, CircleCheck, CircleX, ArrowUpDown, ArrowUp, ArrowDown, Building2, CirclePause, Power, Factory, Wrench, CalendarClock, Save, Contact } from 'lucide-react'
 import { proposalCosts, proposalPricing, hoursText, marginLimits, PROPOSAL_MARGIN_GAP } from '../server/proposalMath.js'
 import { stageLabel, serviceDetails, readStageLayout, orderedStageSelection, stagePlanProblem, stagePlanPlace } from '../server/serviceStages.js'
 import { findInventoryMaterial, materialsStock, normalizeSearch, purchaseMaterialRequests } from './offerResources.js'
@@ -160,6 +162,7 @@ const navigation = [
   ['Ofertas e serviços', 'offers'],
   ['Planejamento', 'planning'],
   ['Clientes', 'clients'],
+  ['Solicitantes', 'requesters'],
   ['Contas a Pagar', 'payables'],
   ['Contas a Receber', 'receivables'],
   ['Tesouraria', 'treasury'],
@@ -172,7 +175,7 @@ const navigation = [
   ['Configurações', 'settings'],
 ]
 
-const registrationNavigation = ['Fornecedores', 'Administradores', 'Funcionários', 'Setores', 'Clientes', 'Bancos', 'Razões de pausas'].map((label) => navigation.find(([name]) => name === label))
+const registrationNavigation = ['Fornecedores', 'Administradores', 'Funcionários', 'Setores', 'Clientes', 'Solicitantes', 'Bancos', 'Razões de pausas'].map((label) => navigation.find(([name]) => name === label))
 const isRegistrationPage = (label) => registrationNavigation.some(([name]) => name === label)
 const financialNavigation = ['Contas a Pagar', 'Contas a Receber', 'Tesouraria', 'Baixa em Lote', 'Conciliação bancária', 'Business Intelligence', 'Classificações'].map((label) => navigation.find(([name]) => name === label))
 const isFinancialPage = (label) => financialNavigation.some(([name]) => name === label)
@@ -320,7 +323,7 @@ function Sidebar({ collapsed, onToggle, activeNav, onNavigate, onLogout }) {
   }
   function navigationItem([label, icon]) {
     return <button className={`nav-item ${activeNav === label ? 'nav-item--active' : ''}`} key={label} type="button" title={pageLabel(label)} aria-label={pageLabel(label)} onClick={() => { setMobileOpen(false); onNavigate(label) }}>
-      {['payables', 'receivables', 'treasury', 'batch', 'bank', 'bi', 'classifications', 'suppliers', 'completed-services', 'sectors', 'pause-reasons', 'banks', 'planning'].includes(icon) ? (() => { const NavIcon = { planning: CalendarClock, payables: CreditCard, receivables: HandCoins, treasury: Banknote, batch: Layers, bank: Landmark, bi: ChartColumn, classifications: Tags, suppliers: Truck, 'completed-services': ListChecks, sectors: Building2, 'pause-reasons': CirclePause, banks: Landmark }[icon]; return <NavIcon className="icon nav-icon" size={20} /> })() : <Icon name={icon} className="nav-icon" />}
+      {['payables', 'receivables', 'treasury', 'batch', 'bank', 'bi', 'classifications', 'suppliers', 'completed-services', 'sectors', 'pause-reasons', 'banks', 'planning', 'requesters'].includes(icon) ? (() => { const NavIcon = { planning: CalendarClock, payables: CreditCard, receivables: HandCoins, treasury: Banknote, batch: Layers, bank: Landmark, bi: ChartColumn, classifications: Tags, suppliers: Truck, 'completed-services': ListChecks, sectors: Building2, 'pause-reasons': CirclePause, banks: Landmark, requesters: Contact }[icon]; return <NavIcon className="icon nav-icon" size={20} /> })() : <Icon name={icon} className="nav-icon" />}
       <span>{pageLabel(label)}</span>
     </button>
   }
@@ -1243,16 +1246,27 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
   useMobileModal(manualOpen, '.offer-manual-modal', () => setManualOpen(false))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const emptyForm = { cnpj: '', company: '', deadline: '', service: '', quantity: '', description: '', labelNumber: '', attachment: null }
+  const emptyForm = { cnpj: '', company: '', requester: '', deadline: '', service: '', quantity: '', description: '', labelNumber: '', attachment: null }
   const [manualForm, setManualForm] = useState(emptyForm)
   const [pieces, setPieces] = useState([])
   const [clients, setClients] = useState([])
+  const [requesters, setRequesters] = useState([])
+  // "Solicitante cadastrado automaticamente": a discreet notice for 4 seconds after the offer is added.
+  const [requesterNotice, setRequesterNotice] = useState(false)
+  useEffect(() => {
+    if (!requesterNotice) return
+    const timer = setTimeout(() => setRequesterNotice(false), 4000)
+    return () => clearTimeout(timer)
+  }, [requesterNotice])
+  // The client whose requesters are offered: the registered client with the typed CPF/CNPJ.
+  const manualClient = documentDigits(manualForm.cnpj) ? clients.find((item) => documentDigits(item.document) === documentDigits(manualForm.cnpj)) : null
   // Shown on the list itself: the creation modal is already closed when something after the creation fails.
   const [pageNotice, setPageNotice] = useState('')
   useEffect(() => {
     if (!manualOpen) return
     apiRequest('/api/pieces').then((data) => setPieces(data.items || [])).catch(() => setPieces([]))
     apiRequest('/api/clients').then((data) => setClients(data.items || [])).catch(() => setClients([]))
+    apiRequest('/api/requesters').then((data) => setRequesters(data.items || [])).catch(() => setRequesters([]))
   }, [manualOpen])
   const filteredOffers = offers.filter((offer) => {
     const query = search.trim().toLocaleLowerCase()
@@ -1279,8 +1293,9 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
     let created = false
     try {
       const { attachment, ...fields } = manualForm
-      const { item } = await apiRequest('/api/offers', jsonOptions('POST', fields))
+      const { item, requesterCreated } = await apiRequest('/api/offers', jsonOptions('POST', fields))
       created = true
+      if (requesterCreated) setRequesterNotice(true)
       if (attachment) await uploadOfferAttachment(item.id, attachment)
       try { await applyPieceSuggestion(item) } catch (caught) { setPageNotice(`A oferta ${item.code} foi criada, mas não foi possível preencher com o histórico da peça (${caught.message}). Abra a oferta e use "Preencher com o histórico".`) }
       await onRefresh()
@@ -1357,8 +1372,9 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
           <form onSubmit={addOffer}><div className="offer-form-grid">
             <label>CNPJ/CPF *<input value={manualForm.cnpj} onChange={(event) => changeManualDocument(event.target.value)} inputMode="numeric" placeholder="CNPJ ou CPF do cliente" required /></label>
             <label>Empresa *<ClientNameInput label="Empresa *" value={manualForm.company} documentValue={manualForm.cnpj} clients={clients} onChange={(value) => updateManualForm('company', value)} onSelect={(client) => setManualForm((current) => ({ ...current, company: client.name, cnpj: maskClientDocument(client.document) }))} required /></label>
+            <label>Solicitante<RequesterNameInput label="Solicitante" value={manualForm.requester} client={manualClient} requesters={requesters} onChange={(value) => updateManualForm('requester', value)} /></label>
             <label>Prazo solicitado *<input type="date" value={manualForm.deadline} onChange={(event) => updateManualForm('deadline', event.target.value)} required /></label>
-            <label>Peça/Serviço *<PieceNameInput label="Peça/Serviço *" value={manualForm.service} onChange={(value) => updateManualForm('service', value)} pieces={pieces} required /></label>
+            <label className="offer-form-field--full">Peça/Serviço *<PieceNameInput label="Peça/Serviço *" value={manualForm.service} onChange={(value) => updateManualForm('service', value)} pieces={pieces} required /></label>
             <label>Quantidade *<input type="number" min="1" step="1" value={manualForm.quantity} onChange={(event) => updateManualForm('quantity', event.target.value)} required /></label>
             <label>Número da etiqueta<input value={manualForm.labelNumber} onChange={(event) => updateManualForm('labelNumber', event.target.value)} placeholder="Opcional" /></label>
             <label className="offer-form-field--full">Descrição do serviço *<textarea value={manualForm.description} onChange={(event) => updateManualForm('description', event.target.value)} rows="4" required /></label>
@@ -1366,6 +1382,7 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
           </div>{error && <p className="workflow-error" role="alert">{error}</p>}<div className="offer-modal-actions"><button className="offer-modal-cancel" type="button" onClick={() => setManualOpen(false)}>Cancelar</button><button className="manual-offer-button" type="submit" disabled={saving}>{saving ? 'Salvando...' : 'Adicionar solicitação'}</button></div></form>
         </section>
       </div>}
+      {requesterNotice && <p className="app-toast" role="status"><CircleCheck size={16} aria-hidden="true" />Solicitante cadastrado automaticamente</p>}
     </div>
   )
 }
@@ -1706,7 +1723,7 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
         <WorkspaceTabs tabs={tabs} activeNav={activeNav} onNavigate={onNavigate} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} />
         <div className="offer-details-header"><button className="offer-back-button" type="button" onClick={() => onNavigate('Ofertas e serviços')} aria-label="Voltar para ofertas"><ArrowLeft size={24} aria-hidden="true" /></button><h1>Detalhes da oferta {offer.code}</h1></div>
         <div className="offer-details-grid">
-          <section className="offer-information-card"><span className="offer-details-section-title">Informações do serviço</span><h2>{offer.service}</h2><p className="offer-details-description">{offer.description}</p><div className="offer-detail-facts"><div><span>▥</span><small>Cliente solicitante</small><strong>{offer.company}</strong><em>{documentKind(offer.cnpj)}: {offer.cnpj}</em></div><div><span>▣</span><small>Data da solicitação</small><strong>{displayDate(offer.requestedAt)}</strong></div><div><span>◇</span><small>Quantidade solicitada</small><strong>{offer.quantity} unidades</strong></div><div><span>◷</span><small>Prazo solicitado pelo cliente</small><strong>{displayDate(offer.deadline)}</strong></div></div><PieceLeadTime offer={offer} /><div className="offer-detail-text"><h3>Número da etiqueta</h3><p>{offer.labelNumber || 'Não informado'}</p></div><div className="offer-detail-text"><h3>Anexos da solicitação</h3>{offer.attachments?.length ? <ul>{offer.attachments.map((attachment) => <li key={attachment.id}><DownloadLink url={attachmentUrl(offer.id, attachment.id)} name={attachment.name}>{attachment.name}</DownloadLink></li>)}</ul> : <p>Nenhum anexo adicionado.</p>}</div>{offer.proposal && <div className="offer-detail-text"><h3>Proposta gerada</h3><p><DownloadLink url={`/api/offers/${offer.id}/proposal.pdf`} name={`proposta-${offer.code}.pdf`}>Baixar PDF da proposta</DownloadLink></p></div>}</section>
+          <section className="offer-information-card"><span className="offer-details-section-title">Informações do serviço</span><h2>{offer.service}</h2><p className="offer-details-description">{offer.description}</p><div className="offer-detail-facts"><div><span>▥</span><small>Cliente solicitante</small><strong>{offer.company}</strong><em>{documentKind(offer.cnpj)}: {offer.cnpj}</em>{offer.requester && <em>Solicitante: {offer.requester}</em>}</div><div><span>▣</span><small>Data da solicitação</small><strong>{displayDate(offer.requestedAt)}</strong></div><div><span>◇</span><small>Quantidade solicitada</small><strong>{offer.quantity} unidades</strong></div><div><span>◷</span><small>Prazo solicitado pelo cliente</small><strong>{displayDate(offer.deadline)}</strong></div></div><PieceLeadTime offer={offer} /><div className="offer-detail-text"><h3>Número da etiqueta</h3><p>{offer.labelNumber || 'Não informado'}</p></div><div className="offer-detail-text"><h3>Anexos da solicitação</h3>{offer.attachments?.length ? <ul>{offer.attachments.map((attachment) => <li key={attachment.id}><DownloadLink url={attachmentUrl(offer.id, attachment.id)} name={attachment.name}>{attachment.name}</DownloadLink></li>)}</ul> : <p>Nenhum anexo adicionado.</p>}</div>{offer.proposal && <div className="offer-detail-text"><h3>Proposta gerada</h3><p><DownloadLink url={`/api/offers/${offer.id}/proposal.pdf`} name={`proposta-${offer.code}.pdf`}>Baixar PDF da proposta</DownloadLink></p></div>}</section>
           <section className="offer-materials-card offer-resources-card">
             <fieldset className="offer-resource-fields" disabled={Boolean(offer.orderCode)}>
             <div className="offer-resource-heading"><div><span className="offer-details-section-title">Materiais necessários</span><p>Adicione os materiais e informe a quantidade, em quilos (kg) ou em unidades (un).</p></div><button className="offer-add-resource-button" type="button" onClick={() => { if (editingMaterialId == null && materialFormOpen) return closeMaterialForm(); closeMaterialForm(); setMaterialFormOpen(true) }}><Icon name="plus" />Adicionar material</button></div>
@@ -1896,7 +1913,7 @@ function ProposalBuilder({ collapsed, onToggle, activeNav, onNavigate, onLogout,
       <main className="proposal-main">
         <WorkspaceTabs tabs={tabs} activeNav={activeNav} onNavigate={onNavigate} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} />
         <div className="proposal-header"><div><button className="proposal-back-button" type="button" onClick={() => onNavigate('Detalhes da oferta')} aria-label="Voltar para detalhes"><ArrowLeft size={24} aria-hidden="true" /></button><div><h1>Fazer proposta</h1><p>Escolha uma das quatro opções e ajuste os valores para esta solicitação.</p></div></div></div>
-        <section className="proposal-service-summary"><div className="proposal-service-image">▰</div><div className="proposal-service-client"><h2>{offer.service}</h2><span>Cliente solicitante</span><strong>{offer.company}</strong><small>{documentKind(offer.cnpj)}: {offer.cnpj}</small><small>Etiqueta: {offer.labelNumber || 'não informada'}</small></div><div className="proposal-service-fact"><span>▣</span><div><small>Prazo solicitado</small><strong>{displayDate(offer.deadline)}</strong></div><span>◇</span><div><small>Quantidade</small><strong>{offer.quantity} unidades</strong></div></div><div className="proposal-service-summary-copy"><strong>Resumo do serviço</strong><p>{offer.description}</p></div><div className="proposal-material-summary"><span>Materiais informados</span><strong>{formatMoney(materialCost)}</strong><button type="button" onClick={() => onNavigate('Detalhes da oferta')}>Ver detalhamento <span>›</span></button></div></section>
+        <section className="proposal-service-summary"><div className="proposal-service-image">▰</div><div className="proposal-service-client"><h2>{offer.service}</h2><span>Cliente solicitante</span><strong>{offer.company}</strong><small>{documentKind(offer.cnpj)}: {offer.cnpj}</small>{offer.requester && <small>Solicitante: {offer.requester}</small>}<small>Etiqueta: {offer.labelNumber || 'não informada'}</small></div><div className="proposal-service-fact"><span>▣</span><div><small>Prazo solicitado</small><strong>{displayDate(offer.deadline)}</strong></div><span>◇</span><div><small>Quantidade</small><strong>{offer.quantity} unidades</strong></div></div><div className="proposal-service-summary-copy"><strong>Resumo do serviço</strong><p>{offer.description}</p></div><div className="proposal-material-summary"><span>Materiais informados</span><strong>{formatMoney(materialCost)}</strong><button type="button" onClick={() => onNavigate('Detalhes da oferta')}>Ver detalhamento <span>›</span></button></div></section>
         <h2 className="proposal-section-heading">Escolha uma das propostas abaixo ou personalize os valores</h2>
         <div className="proposal-card-grid">{visibleProposals.map((proposal) => <article className={`proposal-card proposal-card--${proposal.tone} ${selectedKey === proposal.key ? 'proposal-card--selected' : ''}`} key={proposal.key} onClick={() => { setSelectedKey(proposal.key); if (proposal.key !== selectedKey) { setGenerated(false); setUnsaved(true) } }}><div className="proposal-card-heading"><div><span className="proposal-card-label">PROPOSTA {proposal.key}</span><div className="proposal-card-intro"><span className="proposal-card-icon">{proposal.icon}</span><div><strong>{proposal.title}</strong><p>{proposal.description}</p></div></div></div><span className="proposal-card-tag">{proposal.tag}</span></div><div className="proposal-card-content"><div className="proposal-card-column"><div><span>◇</span><label>Materiais</label><strong>{formatMoney(proposal.materials)}</strong></div><div><span>♧</span><label>Mão de obra</label><strong>{formatMoney(proposal.labor)}</strong></div><div><span>＄</span><label>Valor do serviço</label><strong>{formatMoney(proposal.serviceValue)}</strong></div><div><span>▥</span><label>% de lucro bruto</label>{renderEditable(proposal, 'margin', `${Number(proposal.margin).toFixed(1).replace('.', ',')}%`, 'number')}</div>{marginStats && (() => { const stat = marginStats.find((item) => item.key === proposal.key); return stat && <small className="proposal-margin-hint">{stat.accepted ? `Média de ${stat.accepted} ${stat.accepted === 1 ? 'proposta aceita' : 'propostas aceitas'}` : 'Ainda sem propostas aceitas'}{stat.rate != null ? ` · ${stat.rate}% de aceite (${stat.won} de ${stat.won + stat.declined})` : ''}</small> })()}<div><span>◇</span><label>Desconto</label>{renderEditable(proposal, 'discount', `${Number(proposal.discount).toFixed(1).replace('.', ',')}%`, 'number')}</div></div><div className="proposal-card-column"><div><span>◷</span><label>Prazo de entrega</label>{renderEditable(proposal, 'deadline', proposal.deadline)}</div><div><span>⚙</span><label>Tempo de máquina</label><strong>{proposal.machine}</strong></div><div><span>◷</span><label>Tempo de serviço</label><strong>{proposal.serviceTime}</strong></div><div><span>◔</span><label>Horas totais</label><strong>{proposal.totalTime}</strong></div></div></div><div className="proposal-price"><strong>Valor da OS<small>valor cobrado do cliente</small></strong><b>{formatMoney(proposal.osValue)}</b></div><div className="proposal-profit"><strong>Lucro bruto esperado</strong><b>{formatMoney(proposal.profit)}</b></div></article>)}</div>
         <div className="proposal-bottom"><div className="proposal-notice"><span>ⓘ</span><div><strong>Confira os valores</strong><p>Materiais, mão de obra e horas vêm dos detalhes da oferta. Ajuste o prazo, o % de lucro bruto e o desconto: o Valor da OS é o que será cobrado do cliente no PDF.</p></div></div><div className="proposal-actions"><button className="proposal-cancel-button" type="button" onClick={() => onNavigate('Detalhes da oferta')}>× <strong>Cancelar</strong></button><button className="proposal-cancel-button" type="button" disabled={draftSaving || Boolean(offer.orderCode) || offer.status === 'rejected'} onClick={saveDraft}><Save size={17} aria-hidden="true" /><strong>{draftSaving ? 'Salvando...' : 'Salvar'}</strong></button><button className="proposal-send-button" type="button" onClick={openModels}><Icon name="send" /><strong>Gerar proposta em PDF</strong></button></div></div>
@@ -2176,6 +2193,7 @@ function Dashboard({ user, onUpdateUser, collapsed, onToggle, activeNav, onNavig
   if (activeNav === 'Serviços') return <LaborServicesScreen {...toolProps} />
   if (activeNav === 'Planejamento') return <PlanningScreen {...toolProps} />
   if (activeNav === 'Setores') return <SimpleRegistryScreen key="sectors" {...toolProps} title="Setores" singular="setor" endpoint="/sectors" nameLabel="Nome do setor" countLabel="Em uso por" count={(item) => [[item.employees, 'funcionário', 'funcionários'], [item.machines, 'máquina', 'máquinas'], [item.laborServices, 'serviço', 'serviços']].filter(([total]) => total).map(([total, one, many]) => `${total} ${total === 1 ? one : many}`).join(' · ') || '—'} />
+  if (activeNav === 'Solicitantes') return <RequestersScreen {...toolProps} />
   if (activeNav === 'Bancos') return <SimpleRegistryScreen key="banks" {...toolProps} title="Bancos" singular="banco" endpoint="/banks" nameLabel="Nome do banco" fields={[['agency', 'Agência', 20], ['account', 'Conta', 30]]} countLabel="Baixas registradas" count={(item) => item.settlements} />
   if (activeNav === 'Razões de pausas') return <SimpleRegistryScreen key="pause-reasons" {...toolProps} title="Razões de pausas" singular="razão de pausa" article="a" endpoint="/pause-reasons" nameLabel="Razão da pausa" chart />
   if (activeNav === 'Configurações') return <AccountSettings {...toolProps} user={user} onUpdateUser={onUpdateUser} />

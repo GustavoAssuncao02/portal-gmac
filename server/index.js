@@ -13,6 +13,8 @@ import createOperatorAccountRouter, { loadOperatorAccount } from './operatorAcco
 import createMachinesRouter from './machines.js'
 import createLaborServicesRouter, { ensureLaborServices } from './laborServices.js'
 import createRegistriesRouter, { ensurePauseReasons, ensureSectors } from './registries.js'
+import createRequestersRouter from './requesters.js'
+import { createSiteQuotes } from './siteQuotes/index.js'
 import createPlanningRouter from './planning.js'
 import createReportsRouter from './reports.js'
 import createPayablesRouter from './payables.js'
@@ -42,6 +44,10 @@ const corsOrigins = String(process.env.CORS_ORIGIN || '').split(',').map((origin
 
 app.set('trust proxy', trustProxySetting(process.env.TRUST_PROXY))
 configureWeb(app)
+// The quote form of the main site (gmacmetalurgica.com.br) posts to /gmac/api/quotes. It comes before the portal's CORS and
+// request limit: it answers only the sites in QUOTES_ALLOWED_ORIGINS, with its own limit of attempts.
+const siteQuotes = createSiteQuotes()
+app.use('/gmac', siteQuotes.app)
 // The interface and the API share one address, so a published portal answers other sites only when CORS_ORIGIN lists them.
 if (corsOrigins.length) app.use(cors({ origin: corsOrigins }))
 else if (!production) app.use(cors())
@@ -76,15 +82,16 @@ await loadOperatorAccount()
 // The administrators keep their logins across a restart of the API: the open sessions come back from the database.
 await loadAdminSessions()
 app.use('/api', restrictStaffFinance)
-app.use('/api', createOffersRouter(pool, requireAdmin))
-app.use('/api', createOperationsRouter(pool))
 const accounts = createAccountService(pool)
+app.use('/api', createOffersRouter(pool, requireAdmin, accounts))
+app.use('/api', createOperationsRouter(pool))
 app.use('/api', createAccountsRouter(accounts))
 app.use('/api', createLoginRouter(accounts))
 app.use('/api', createOperatorAccountRouter(requireAdmin))
 app.use('/api', createMachinesRouter(requireAdmin, pool))
 app.use('/api', createLaborServicesRouter(requireAdmin, pool))
 app.use('/api', createRegistriesRouter(requireAdmin, pool))
+app.use('/api', createRequestersRouter(accounts, requireAdmin))
 app.use('/api', createPlanningRouter(requireAdmin, pool))
 app.use('/api', createReportsRouter(pool, accounts, requireAdmin))
 app.use('/api', createInventoryImportRouter(pool, requireAdmin))
@@ -134,6 +141,7 @@ const server = app.listen(port, host, () => {
   if (interfacePublished) console.log('Interface publicada no mesmo endereço, a partir de dist/.')
   else if (production) console.warn('ATENCAO: dist/ não encontrado. Execute "npm run build" para publicar a interface.')
   if (testLoginEnabled()) console.warn('ATENCAO: acesso sem senha ativado para testes. Desative TEST_LOGIN_ENABLED antes de publicar o portal.')
+  siteQuotes.start()
 })
 // Attachments have no size limit: a big file on a slow connection takes as long as it needs. Node would end any request
 // after 5 minutes; the headers still have their own short limit.

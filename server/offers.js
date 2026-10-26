@@ -16,7 +16,8 @@ import { recordOrderEvent } from './orderHistory.js'
 import { cleanStageResources, cleanStageTimes, pieceTracking } from './pieces.js'
 import { proposalMargins, PROPOSAL_MARGIN_GAP, declineReasons } from './proposalMath.js'
 import { requireAdminOrOperator } from './access.js'
-import { documentKind, isClientDocument } from './clientDocument.js'
+import { documentDigits, documentKind, isClientDocument } from './clientDocument.js'
+import { registerOfferRequester } from './requesters.js'
 import { currentServiceLocation, serviceLocationLabel, validServiceLocation } from './serviceLocation.js'
 import { formatQuantity, materialUnit, validMaterialUnit, validQuantityFor } from './materialUnits.js'
 
@@ -102,17 +103,20 @@ router.get('/orders', async (_request, response) => {
 })
 
 router.post('/offers', async (request, response) => {
-  const { cnpj, company, deadline, service, quantity, description, labelNumber } = request.body ?? {}
+  const { cnpj, company, deadline, service, quantity, description, labelNumber, requester } = request.body ?? {}
   if (!isClientDocument(cnpj) || !clean(company) || !/^\d{4}-\d{2}-\d{2}$/.test(String(deadline || '')) || !clean(service) || !Number.isInteger(Number(quantity)) || Number(quantity) < 1 || !clean(description)) {
     return response.status(400).json({ message: 'Preencha CNPJ (14 dígitos) ou CPF (11), empresa, prazo, peça/serviço, quantidade e descrição.' })
   }
   try {
+    let requesterCreated = false
     const offer = await mutateStore((store) => {
-      const item = { id: randomUUID(), code: nextCode('OF', store.offers), cnpj: clean(cnpj, 18), company: clean(company, 160), deadline, service: clean(service, 160), quantity: Number(quantity), description: clean(description, 5000), labelNumber: clean(labelNumber, 80), requestedAt: new Date().toISOString(), origin: 'Inserida Manualmente', status: 'review', attachments: [], resources: { materials: [], laborEntries: [] }, proposal: null, orderCode: null }
+      const link = registerOfferRequester(store, request.offerClient, requester)
+      requesterCreated = link.created
+      const item = { id: randomUUID(), code: nextCode('OF', store.offers), cnpj: clean(cnpj, 18), company: clean(company, 160), requester: link.name, requesterId: link.id, deadline, service: clean(service, 160), quantity: Number(quantity), description: clean(description, 5000), labelNumber: clean(labelNumber, 80), requestedAt: new Date().toISOString(), origin: 'Inserida Manualmente', status: 'review', attachments: [], resources: { materials: [], laborEntries: [] }, proposal: null, orderCode: null }
       store.offers.unshift(item)
       return item
     })
-    response.status(201).json({ item: offer })
+    response.status(201).json({ item: offer, requesterCreated })
   } catch (error) { handleError(response, error) }
 })
 
@@ -261,7 +265,7 @@ router.get('/offers/:id/proposal.pdf', async (request, response) => {
   } catch (error) { handleError(response, error) }
 })
 
-export default function createOffersRouter(pool, requireAdmin) {
+export default function createOffersRouter(pool, requireAdmin, accounts) {
   const configured = express.Router()
   configured.use((request, _response, next) => {
     const actor = adminIdentity(request)
@@ -273,6 +277,14 @@ export default function createOffersRouter(pool, requireAdmin) {
   // administrator.
   configured.get(['/offers', '/orders', '/offers/:id/proposal.pdf'], requireAdmin)
   configured.post(['/offers', '/offers/:id/attachments', '/offers/:id/proposal'], requireAdmin)
+  // The registered client of a new offer (same CPF/CNPJ), whose requesters the offer's requester joins.
+  configured.post('/offers', async (request, _response, next) => {
+    try {
+      const document = documentDigits(request.body?.cnpj)
+      request.offerClient = accounts && document ? (await accounts.clients()).find((client) => documentDigits(client.document) === document) || null : null
+      next()
+    } catch (error) { next(error) }
+  })
   configured.put(['/offers/:id/resources', '/offers/:id/proposal-draft'], requireAdmin)
   configured.get('/offers/:id/attachments/:attachmentId', requireAdminOrOperator)
   configured.use(router)

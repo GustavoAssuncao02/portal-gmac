@@ -75,3 +75,8 @@
 :root[data-theme="dark"] .receivable-forecast-chart { --forecast-gross: #3987e5; --forecast-net: #d95926; }
 :root[data-theme="dark"] .receivable-forecast-card { background: #112239; border-color: #30485f; }
 :root[data-theme="dark"] .receivable-forecast-card--net { background: #162b43; border-color: #36516f; }
+/* The auto-registration notice follows the account theme (escuro and escuro intenso). */
+:root[data-theme="dark"] .app-toast { border-color: #36516f; border-left-color: #4fbf99; color: #e1ebf6; background: #162b43; box-shadow: 0 10px 28px #06111d; }
+:root[data-theme="dark"] .app-toast svg { color: #4fbf99; }
+:root[data-theme="dark"][data-tone="black"] .app-toast { border-color: #333336; border-left-color: #4fbf99; color: #ececec; background: #1a1a1a; box-shadow: 0 10px 28px #000000; }
+:root[data-theme="dark"][data-tone="black"] .app-toast svg { color: #4fbf99; }

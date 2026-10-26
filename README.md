@@ -169,6 +169,18 @@ Confirme no painel da hospedagem a porta encaminhada e quantos proxies ficam à 
 - Ambiente de teste igual ao local (login sem senha): não defina `NODE_ENV`, use `TEST_LOGIN_ENABLED=true` e `BUILD_ON_START=true`. Qualquer pessoa com o endereço entra como administrador: não use assim com o portal em uso real.
 - Uma reimplantação do contêiner (troca de versão do Node) mantém só as pastas declaradas como volume: inclua a pasta de `DATA_DIR` nos volumes do nó.
 
+**Orçamentos do site gmacmetalurgica.com.br**
+
+O formulário de orçamento do site principal envia para o portal (antes ia para o programa separado "GMAC BACKEND"). O código fica em `server/siteQuotes/` e roda no mesmo processo, publicado em `/gmac`:
+
+- `POST /gmac/api/quotes` (multipart): valida os campos e os anexos e envia um e-mail para comercial@gmacmetalurgica.com.br, com o e-mail do cliente no "Responder para". Nada é gravado no banco nem em disco.
+- `GET /gmac/api/health`: `200` com `smtpReady: true` quando o e-mail foi verificado; `503` com `smtpError` (`SMTP_CONFIG_MISSING`, `SMTP_AUTH_DISABLED`, `SMTP_AUTH_FAILED`, `SMTP_CONNECTION_FAILED`) enquanto não puder enviar.
+- No site principal, `VITE_API_URL` é o endereço do portal seguido de `/gmac` (o formulário acrescenta `/api/quotes`).
+- Variáveis: `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` e `QUOTES_ALLOWED_ORIGINS` (veja `.env.example`). Sem `SMTP_PASS` o portal sobe normalmente e só os orçamentos ficam indisponíveis. O SMTP é verificado na partida e, se falhar, de novo a cada minuto.
+- Só os sites de `QUOTES_ALLOWED_ORIGINS` podem enviar (padrão: `https://gmacmetalurgica.com.br` e `https://www.gmacmetalurgica.com.br`). Essa rota não usa o `CORS_ORIGIN` nem o limite geral da API: tem limite próprio de 5 envios por IP a cada 15 minutos e 2 envios simultâneos.
+- Anexos: até 10 arquivos PDF, DWG, DXF, JPG, JPEG ou PNG, 10 MB cada e 25 MB no total. O balanceador da hospedagem precisa aceitar requisições desse tamanho.
+- `npm run check:smtp` testa a conexão, o TLS e o login do e-mail sem enviar nada. `tests/site-quotes.test.js` testa a rota com um envio simulado.
+
 **Desempenho no navegador**
 
 - Respostas de texto (JSON, JavaScript, CSS, HTML) são comprimidas com Brotli ou gzip. Imagens, vídeos, PDFs e planilhas seguem como estão.
@@ -186,7 +198,7 @@ Confirme no painel da hospedagem a porta encaminhada e quantos proxies ficam à 
 
 **Antes de abrir o portal para a internet**
 
-- Todas as rotas que alteram ou mostram dados internos exigem sessão. A conta do operador alcança só o que o painel de produção usa: arquivos e histórico da OS, máquinas e serviços de mão de obra. Ficam abertos apenas o login, a configuração do login e `/api/health`. O teste `tests/access-control.test.js` confere isso.
+- Todas as rotas que alteram ou mostram dados internos exigem sessão. A conta do operador alcança só o que o painel de produção usa: arquivos e histórico da OS, máquinas e serviços de mão de obra. Ficam abertos apenas o login, a configuração do login, `/api/health` e os orçamentos do site principal (`/gmac/api/quotes`, só para os sites de `QUOTES_ALLOWED_ORIGINS`, e `/gmac/api/health`). O teste `tests/access-control.test.js` confere isso.
 - Sessões e o limite de requisições ficam na memória do processo: use uma única instância. Reiniciar o servidor exige novo login.
 - Todos os dados ficam no MySQL. `server/data/` (ou a pasta de `DATA_DIR`) guarda só os arquivos enviados (anexos, comprovantes, extratos) e os backups diários. A pasta precisa sobreviver a cada deploy e entrar no backup, junto com o MySQL.
 

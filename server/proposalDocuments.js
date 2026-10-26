@@ -188,7 +188,7 @@ export async function buildDraft({ model, store, offer, value, deadline }) {
     const total = Number(value) > 0 ? round2(value) : 0
     const quantityValue = Number(source?.quantity) > 0 ? Number(source.quantity) : 1
     return {
-      ...base, quoteNumber: nextQuoteNumber(store, settings), customer: source?.company || '', customerDocument: formatDocument(source?.cnpj), requester: '', attention: '', subject: `serviço de ${source?.service || ''}`.trim(),
+      ...base, quoteNumber: nextQuoteNumber(store, settings), customer: source?.company || '', customerDocument: formatDocument(source?.cnpj), requester: String(source?.requester || '').slice(0, 80), attention: '', subject: `serviço de ${source?.service || ''}`.trim(),
       scope: String(source?.description || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
       items: [{ description: source?.service || 'Serviço', quantity: quantityValue, unit: 'Un', unitPrice: round2(total / quantityValue) }],
       deliveryTerm: /^\d{4}-\d{2}-\d{2}$/.test(String(deadline || '').trim()) ? String(deadline).trim().split('-').reverse().join('/') : String(deadline || '').trim(), payment: '', validityDays: settings.validityDays, important: settings.important,
@@ -201,7 +201,7 @@ export async function buildDraft({ model, store, offer, value, deadline }) {
   const totalOf = (rowId) => round2(usage.filter((item) => item.rowId === rowId).reduce((total, item) => total + item.quantity, 0))
   return {
     ...base, number: source?.labelNumber || '', labelNumber: source?.labelNumber || '', componentName: source?.service || '', description: source?.description || '', quantity: source?.quantity || 1, quantityUnit: 'Un',
-    requester: '', responsible: '', equipment: '', component: '', contact: issuer.contact,
+    requester: String(source?.requester || '').slice(0, 80), responsible: '', equipment: '', component: '', contact: issuer.contact,
     labor: table.labor.map((row) => ({ id: row.id, quantity: totalOf(row.id) || null, situation: 'normal' })),
     materials: table.materials.map((row) => ({ id: row.id, quantity: totalOf(row.id) || null })),
     ...(model === 'etiqueta' ? { freight: { place: table.freight.at(-1)?.name || '', charge: false } } : {}),

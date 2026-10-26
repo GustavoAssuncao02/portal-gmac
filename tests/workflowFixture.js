@@ -15,7 +15,7 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   const directory = await mkdtemp(path.join(results, 'workflow-'))
   // The copied modules keep their data next to them; a DATA_DIR from the shell would point them at real data.
   delete process.env.DATA_DIR
-  for (const name of ['planning.js', 'planningRules.js', 'offers.js', 'orderHistory.js', 'pieces.js', 'access.js', 'orderMaterials.js', 'pendingMaterials.js', 'operations.js', 'orderEditing.js', 'operatorAuth.js', 'employeeAccess.js', 'employeeActivity.js', 'serviceStages.js', 'machines.js', 'laborServices.js', 'accounts.js', 'reports.js', 'reportData.js', 'documentExports.js', 'payables.js', 'payableRules.js', 'receivables.js', 'bankStatements.js', 'ofx.js', 'materialRequests.js', 'notificationRules.js', 'notificationEvents.js', 'operationSessions.js', 'operationEventTime.js','materialRequestCodes.js', 'notifications.js', 'fiscalCatalog.js', 'dataDirectory.js', 'proposalDocuments.js', 'clientDocument.js', 'proposalDefaults.js', 'proposalPdf.js', 'proposalBrand.js', 'proposalMath.js', 'moneyWords.js', 'store.js', 'materialUnits.js', 'banks.js', 'operatorAccount.js', 'registries.js', 'serviceLocation.js', 'materialRequestSources.js', 'inventory.js', 'inventoryAppearance.js', 'materialIcons.js', 'uploads.js', 'machineUsage.js']) {
+  for (const name of ['planning.js', 'planningRules.js', 'offers.js', 'orderHistory.js', 'pieces.js', 'access.js', 'orderMaterials.js', 'pendingMaterials.js', 'operations.js', 'orderEditing.js', 'operatorAuth.js', 'employeeAccess.js', 'employeeActivity.js', 'serviceStages.js', 'machines.js', 'laborServices.js', 'accounts.js', 'reports.js', 'reportData.js', 'documentExports.js', 'payables.js', 'payableRules.js', 'receivables.js', 'bankStatements.js', 'ofx.js', 'materialRequests.js', 'notificationRules.js', 'notificationEvents.js', 'operationSessions.js', 'operationEventTime.js','materialRequestCodes.js', 'notifications.js', 'fiscalCatalog.js', 'dataDirectory.js', 'proposalDocuments.js', 'clientDocument.js', 'proposalDefaults.js', 'proposalPdf.js', 'proposalBrand.js', 'proposalMath.js', 'moneyWords.js', 'store.js', 'materialUnits.js', 'banks.js', 'operatorAccount.js', 'registries.js', 'requesters.js','serviceLocation.js', 'materialRequestSources.js', 'inventory.js', 'inventoryAppearance.js', 'materialIcons.js', 'uploads.js', 'machineUsage.js']) {
     await copyFile(path.join(root, 'server', name), path.join(directory, name))
   }
   // PDFs use the bundled logo and fonts.
@@ -41,6 +41,7 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   const { default: proposalDocumentsRouter } = await import(pathToFileURL(path.join(directory, 'proposalDocuments.js')))
   const { default: operatorAccountRouter } = await import(pathToFileURL(path.join(directory, 'operatorAccount.js')))
   const { default: registriesRouter } = await import(pathToFileURL(path.join(directory, 'registries.js')))
+  const { default: requestersRouter } = await import(pathToFileURL(path.join(directory, 'requesters.js')))
   const { default: planningRouter } = await import(pathToFileURL(path.join(directory, 'planning.js')))
   const { default: inventoryRouter } = await import(pathToFileURL(path.join(directory, 'inventory.js')))
   // The stock screens use the real SQL routes, on the tests' own MySQL pool or on the fixture database (simulated pools only answer execute).
@@ -107,12 +108,13 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
     }
     next()
   })
-  app.use('/api', createOffersRouter(inventoryPool, requireAdmin))
+  app.use('/api', createOffersRouter(inventoryPool, requireAdmin, accounts))
   app.use('/api', operationsRouter(pool))
   app.use('/api', createAccountsRouter(accounts))
   app.use('/api', machinesRouter(requireAdmin, pool))
   app.use('/api', laborServicesRouter(requireAdmin, pool))
   app.use('/api', registriesRouter(requireAdmin, pool))
+  app.use('/api', requestersRouter(accounts, requireAdmin))
   app.use('/api', planningRouter(requireAdmin, pool))
   app.use('/api', operatorAccountRouter(requireAdmin))
   app.use('/api', reportsRouter(pool, accounts, requireAdmin))

@@ -3685,6 +3685,16 @@
 :root[data-theme="dark"] .offer-detail-facts em, :root[data-theme="dark"] .offer-average-time em {
     color: #b7c1cc
 }
+:root[data-theme="dark"] .app-toast {
+    border: 1px solid #36516f;
+    border-left: 3px solid #36516f;
+    color: #e1ebf6;
+    background: #162b43;
+    box-shadow: 0 10px 28px #06111d29
+}
+:root[data-theme="dark"] .app-toast svg {
+    color: #96dfc9
+}
 :root[data-theme="dark"] .offer-average-time {
     border: 1px solid #36516f;
     background: #203c59

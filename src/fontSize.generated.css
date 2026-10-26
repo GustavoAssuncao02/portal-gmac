@@ -627,6 +627,7 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .offer-detail-facts small, :root:is([data-font-size="small"], [data-font-size="large"]) .offer-average-time small { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .offer-detail-facts strong, :root:is([data-font-size="small"], [data-font-size="large"]) .offer-average-time strong { font-size: calc(14px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .offer-detail-facts em, :root:is([data-font-size="small"], [data-font-size="large"]) .offer-average-time em { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .app-toast { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .offer-average-time > span { font-size: calc(31px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .offer-detail-text h3 { font-size: calc(15px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .offer-detail-text ul { font-size: calc(12px * var(--account-font-scale)); }

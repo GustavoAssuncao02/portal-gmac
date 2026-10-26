@@ -222,6 +222,9 @@
   .registry-table td { max-width:none; white-space:nowrap; }
   .registry-table td.registry-name { width:42%; min-width:280px; white-space:normal; }
   .registry-table--suppliers td.registry-name, .registry-table--client td.registry-name { width:48%; }
+  /* Solicitantes: the person and the client share the room. */
+  .registry-table--requester td.registry-name { width:26%; min-width:200px; }
+  .registry-table--requester td.registry-client { width:30%; min-width:200px; white-space:normal; }
   .registry-table .registry-col-actions, .registry-table td.registry-actions { width:1%; text-align:right; }
   .registry-table td.registry-actions .payable-registry-actions { justify-content:flex-end; }
 }

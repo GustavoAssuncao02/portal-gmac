@@ -5,6 +5,7 @@ import { readStore, mutateStore } from './offers.js'
 import { storePool } from './store.js'
 import { notificationDefaults, notificationOptions, notificationSoundDefault, validNotificationSound } from './notificationRules.js'
 import { employeeRecords, staffAccountId } from './employeeAccess.js'
+import { clientRequesters } from './requesters.js'
 
 const sessions = new Map()
 const safe = ({ id, name, birthDate, cpf, email, createdAt, role }) => ({ id, name, birthDate, cpf, email, createdAt, role: role || 'admin' })
@@ -227,6 +228,8 @@ export function createAccountService(pool, env = process.env) {
   }
   async function remove(kind, id) {
     if (kind === 'admins' && String(id) === '0') fail(409, 'A conta local principal não pode ser excluída.')
+    const requesters = kind === 'clients' ? clientRequesters(await readStore(), id) : 0
+    if (requesters) fail(409, `Este cliente tem ${requesters} ${requesters === 1 ? 'solicitante vinculado' : 'solicitantes vinculados'}. Exclua ou troque o cliente deles em Cadastros > Solicitantes antes de excluir.`)
     if (pool) {
       const [result] = await pool.execute(kind === 'clients' ? 'DELETE FROM clients WHERE id = ?' : "DELETE FROM users WHERE id = ? AND role = 'admin'", [id])
       if (!result.affectedRows) fail(404, 'Cadastro não encontrado.')

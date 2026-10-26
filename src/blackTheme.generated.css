@@ -3172,6 +3172,13 @@
 :root[data-theme="dark"][data-tone="black"] .offer-detail-facts em, :root[data-theme="dark"][data-tone="black"] .offer-average-time em {
     color: #bec1c5
 }
+:root[data-theme="dark"][data-tone="black"] .app-toast {
+    border: 1px solid #303133;
+    border-left: 3px solid #303133;
+    color: #ebebec;
+    background: #1a1b1c;
+    box-shadow: 0 10px 28px #0a0a0b29
+}
 :root[data-theme="dark"][data-tone="black"] .offer-average-time {
     border: 1px solid #303133;
     background: #232425
@@ -5643,4 +5650,10 @@
 :root[data-theme="dark"][data-tone="black"] .receivable-forecast-card--net {
     background: #1a1b1c;
     border-color: #303133
+}
+:root[data-theme="dark"][data-tone="black"] .app-toast {
+    border-color: #303133;
+    color: #ebebec;
+    background: #1a1b1c;
+    box-shadow: 0 10px 28px #0a0a0b
 }
