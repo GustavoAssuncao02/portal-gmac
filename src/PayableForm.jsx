@@ -5,6 +5,7 @@ import MoneyInput from './MoneyInput.jsx'
 import { payableRequest, uploadPayableFiles, decimal, money, dateLabel } from './payablesApi.js'
 import { todayBahia, makeInstallments, cents, shiftMonth, settlementMethods, treasuryEntry, scaleSplit } from '../server/payableRules.js'
 import BankSelect from './BankSelect.jsx'
+import ClassificationSelect from './ClassificationSelect.jsx'
 
 const empty = () => ({ supplierId: '', description: '', classificationId: '', split: [], documentNumber: '', issueDate: todayBahia(), value: '', dueDate: '', kind: 'normal', recurrence: 'monthly', ahead: 11, orderCode: '', count: 1, installments: [], date: todayBahia(), method: 'pix' })
 const safeCents = (value) => { try { return cents(value) } catch { return null } }
@@ -76,7 +77,8 @@ export default function PayableForm({ suppliers, classifications, orders = [], i
   // Dividir entre classificações: one account, the value spread over two or more classifications.
   const divided = draft.split.length > 1
   const splitCents = draft.split.reduce((sum, part) => sum + safeCents(part.value), 0)
-  const options = (current) => classifications.filter((c) => !c.inactive || c.id === current || edit && (c.id === source.classificationId || source.classificationSplit?.some((part) => part.classificationId === c.id)))
+  // Expense classifications (and the ones outside the result); an account being edited keeps the ones it has.
+  const kept = edit ? [source.classificationId, ...(source.classificationSplit || []).map((part) => part.classificationId)] : []
   const setSplit = (split) => setDraft({ ...draft, split })
   const changePart = (index, key, value) => setSplit(draft.split.map((part, i) => i === index ? { ...part, [key]: value } : part))
   const remaining = () => Math.max(0, safeCents(draft.value) - splitCents)
@@ -102,13 +104,13 @@ export default function PayableForm({ suppliers, classifications, orders = [], i
       <label className="payable-form-wide">Descrição<textarea aria-label="Descrição" rows={1} value={draft.description} maxLength={5000} onChange={(event) => change('description', event.target.value)} /></label>
       {divided ? <fieldset className="payable-form-wide classification-split"><legend>Classificações</legend>
         {draft.split.map((part, index) => <div className="classification-split-row" key={index}>
-          <select aria-label={`Classificação ${index + 1}`} required value={part.classificationId} onChange={(event) => changePart(index, 'classificationId', event.target.value)}><option value="">Selecione</option>{options(part.classificationId).filter((c) => c.id === part.classificationId || !draft.split.some((other) => other.classificationId === c.id)).map((c) => <option key={c.id} value={c.id}>{c.name}{c.inactive ? ' (D)' : ''}</option>)}</select>
+          <ClassificationSelect classifications={classifications} use="payable" keep={kept} exclude={draft.split.map((other) => other.classificationId)} label={`Classificação ${index + 1}`} value={part.classificationId} onChange={(id) => changePart(index, 'classificationId', id)} />
           <MoneyInput aria-label={`Valor da classificação ${index + 1}`} required positive value={part.value} onChange={(value) => changePart(index, 'value', value)} />
           <button type="button" className="payable-icon" title="Remover classificação" aria-label={`Remover classificação ${index + 1}`} onClick={() => removePart(index)}><Trash2 size={16} /></button>
         </div>)}
         <div className="classification-split-footer"><button type="button" className="payable-link" disabled={draft.split.length >= 20} onClick={() => setSplit([...draft.split, { classificationId: '', value: remaining() ? decimal(remaining()) : '' }])}>+ Adicionar classificação</button><span className={splitCents === safeCents(draft.value) ? 'classification-split-ok' : 'receivable-sum--off'}>{money(splitCents)} de {money(safeCents(draft.value))}{splitCents < safeCents(draft.value) ? ` · faltam ${money(safeCents(draft.value) - splitCents)}` : splitCents > safeCents(draft.value) ? ` · passou ${money(splitCents - safeCents(draft.value))}` : ''}</span></div>
       </fieldset>
-      : <div className="payable-supplier-field"><label>Classificação<select aria-label="Classificação" required value={draft.classificationId} onChange={(event) => { setSuggested(false); change('classificationId', event.target.value) }}><option value="">Selecione</option>{options(draft.classificationId).map((c) => <option key={c.id} value={c.id}>{c.name}{c.inactive ? ' (D)' : ''}</option>)}</select>{suggested && <small className="payable-hint">Sugerida pelo último lançamento deste fornecedor.</small>}</label><button type="button" className="payable-link" onClick={startSplit}>Dividir entre classificações</button></div>}
+      : <div className="payable-supplier-field"><label>Classificação<ClassificationSelect classifications={classifications} use="payable" keep={kept} value={draft.classificationId} onChange={(id) => { setSuggested(false); change('classificationId', id) }} />{suggested && <small className="payable-hint">Sugerida pelo último lançamento deste fornecedor.</small>}</label><button type="button" className="payable-link" onClick={startSplit}>Dividir entre classificações</button></div>}
       <label>Número do documento / boleto / nota fiscal<input value={draft.documentNumber} maxLength={160} onChange={(event) => change('documentNumber', event.target.value)} /></label>
       {!treasury && <label>Data de emissão<input type="date" required value={draft.issueDate} onChange={(event) => change('issueDate', event.target.value)} /></label>}
       <label>{edit && source.groupId ? 'Valor total original' : 'Valor'}<MoneyInput aria-label={edit && source.groupId ? 'Valor total original' : 'Valor'} required positive value={draft.value} disabled={edit && Boolean(source.groupId)} onChange={(value) => change('value', value)} /></label>

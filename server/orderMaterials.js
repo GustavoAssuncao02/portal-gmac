@@ -26,7 +26,7 @@ export function orderMaterialPlan(materials, inventory) {
   for (const [index, material] of materials.entries()) {
     const quantity = Number(material.quantity)
     if (!Number.isFinite(quantity) || quantity <= 0) fail(400, `Quantidade inválida para ${material.name || 'o material'}.`)
-    // Without the link, a material is matched by name among the ones counted in the same unit (kg or un).
+    // Without the link, a material is matched by name among the ones counted in the same unit (kg, m or un).
     const item = inventory.find((row) => material.inventoryId != null && String(row.id) === String(material.inventoryId))
       || inventory.find((row) => normalize(row.name) === normalize(material.name) && materialUnit(row.unit) === materialUnit(material.unit))
     const unit = materialUnit(item ? item.unit : material.unit)

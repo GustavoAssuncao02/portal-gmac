@@ -52,3 +52,10 @@ export function orderedStageSelection(layout, selected) {
   return [...keys.filter((key) => selected.includes(key)), ...selected.filter((key) => !keys.includes(key))]
 }
 export const serviceDetails = (resources = {}) => ({ manufacturedFrom: resources.manufacturedFrom ?? null, tempering: resources.tempering ?? null, urgency: resources.urgency === 'emergency' ? 'emergency' : 'normal', serviceLocation: resources.serviceLocation === 'external' ? 'external' : 'internal', paintColor: resources.paintColor || '', serviceDescription: resources.serviceDescription || '', strictProcess: resources.strictProcess !== false })
+// The service description of an offer is a single text: the one typed when it was created. Older offers kept a second
+// text in resources.serviceDescription; it is read at the end of the description, so nothing typed there is lost.
+export function serviceDescriptionText(description, details) {
+  const main = String(description ?? '').trim(), extra = String(details ?? '').trim()
+  if (!extra || main.includes(extra)) return main
+  return main ? `${main}\n\n${extra}` : extra
+}

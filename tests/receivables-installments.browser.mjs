@@ -36,6 +36,7 @@ try {
   const form = page.getByRole('dialog', { name: 'Nova conta a receber', exact: true })
   await form.getByLabel('Cliente cadastrado', { exact: true }).selectOption({ label: 'Nestlé Nordeste Alimentos e Bebidas Ltda' })
   await form.getByLabel('Descrição', { exact: true }).fill('Acordo de manutenção anual')
+  await form.getByLabel('Classificação', { exact: true }).selectOption({ label: '98.01 · Receita de teste' })
   await form.getByLabel('Número do documento / boleto / nota fiscal', { exact: true }).fill('NF 5501')
   // A date before the issue date is refused before reaching the server; past dates after the issue are fine.
   await form.getByLabel('Valor', { exact: true }).fill('10.000,00')
@@ -82,6 +83,7 @@ try {
   assert.equal(await schedule.getByLabel('Valor total a receber', { exact: true }).inputValue(), '9.000,00')
   await schedule.getByLabel('Data da 1ª parcela', { exact: true }).fill(first)
   await schedule.getByLabel('Quantidade de parcelas', { exact: true }).fill('3')
+  await schedule.getByLabel('Classificação da receita', { exact: true }).selectOption({ label: '98.01 · Receita de teste' })
   await page.screenshot({ path: 'test-results/receivables-installments-os.png' })
   await schedule.getByRole('button', { name: 'Programar e concluir', exact: true }).click()
   await schedule.waitFor({ state: 'hidden' })

@@ -1,17 +1,17 @@
 // Correction of the time of an operation already recorded, e.g. an employee who forgot to press "pause".
 // The original time is kept in the event, and every value derived from it is recalculated.
 
-const sessionStarts = ['started', 'resumed']
-const sessionEnds = ['paused', 'stage_completed', 'completed', 'session_ended', 'admin_interrupted']
-const resourceChanges = ['machine_changed', 'labor_service_changed', 'resource_changed']
+export const sessionStarts = ['started', 'resumed']
+export const sessionEnds = ['paused', 'stage_completed', 'completed', 'session_ended', 'admin_interrupted']
+export const resourceChanges = ['machine_changed', 'labor_service_changed', 'resource_changed']
 export const timeEditableEvents = [...sessionStarts, ...sessionEnds, ...resourceChanges, 'stage_progress']
 
 const fail = (status, message) => { const error = new Error(message); error.status = status; throw error }
 const moment = (ms) => new Date(ms).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })
-const chronological = (events) => [...events].sort((a, b) => Date.parse(a.at) - Date.parse(b.at))
+export const chronological = (events) => [...events].sort((a, b) => Date.parse(a.at) - Date.parse(b.at))
 
 // Period worked by each session; `end` stays open while the employee is still working.
-function sessionSpans(events, openIds) {
+export function sessionSpans(events, openIds) {
   const spans = new Map()
   const span = (id) => spans.get(id) || spans.set(id, { start: null, end: null }).get(id)
   for (const event of events) if (event.sessionId && sessionStarts.includes(event.type)) span(event.sessionId).start = Date.parse(event.at)
@@ -26,7 +26,7 @@ function sessionSpans(events, openIds) {
 }
 
 // Project time: periods with someone working count once, even with several employees together.
-function projectTime(spans) {
+export function projectTime(spans) {
   let closedMs = 0, openSince = null, start = null, end = null
   const close = () => { if (start == null) return; if (end === Infinity) openSince = start; else closedMs += end - start }
   for (const item of [...spans].sort((a, b) => a.start - b.start)) {

@@ -151,7 +151,7 @@ export function systemUsage(offer) {
   }
   const resources = offer?.resources || {}
   for (const entry of resources.laborEntries || []) add('labor', entry.resource, entry.hours, 'h', 'Oferta (previsto)')
-  for (const material of resources.materials || []) add('material', [material.name, material.detail].filter(Boolean).join(' '), material.quantity, materialUnit(material.unit) === 'un' ? 'Un' : 'kg', 'Oferta')
+  for (const material of resources.materials || []) add('material', [material.name, material.detail].filter(Boolean).join(' '), material.quantity, ({ kg: 'kg', m: 'm', un: 'Un' })[materialUnit(material.unit)], 'Oferta')
   return usage
 }
 
@@ -273,7 +273,7 @@ export async function normalizeDocument(model, input, store) {
   const items = (Array.isArray(input.items) ? input.items : []).map((item, index) => ({
     description: text(item?.description, 300, `a descrição do item ${index + 1}`, { required: true }),
     quantity: (() => { const value = quantity(item?.quantity, `item ${index + 1}`); if (!value) fail(`Informe a quantidade do item ${index + 1}.`); return value })(),
-    unit: { un: 'Un', unidade: 'Un', kg: 'kg' }[text(item?.unit, 20, `a unidade do item ${index + 1}`).toLowerCase()] || fail(`Escolha a unidade do item ${index + 1}: unidade ou kg.`), unitPrice: amount(item?.unitPrice, `valor unitário do item ${index + 1}`),
+    unit: { un: 'Un', unidade: 'Un', kg: 'kg', m: 'm', metro: 'm' }[text(item?.unit, 20, `a unidade do item ${index + 1}`).toLowerCase()] || fail(`Escolha a unidade do item ${index + 1}: unidade, kg ou metro.`), unitPrice: amount(item?.unitPrice, `valor unitário do item ${index + 1}`),
     ...(model === 'model-b' && text(item?.group, 60, `o grupo do item ${index + 1}`) ? { group: text(item.group, 60, 'o grupo') } : {}),
   }))
   if (!items.length) fail('Inclua pelo menos um item na composição.')

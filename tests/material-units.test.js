@@ -56,3 +56,27 @@ test('a material is linked by name only to the stock counted in the same unit', 
   const pending = pendingOrderMaterials({ resources: { materials: [{ name: 'Porca', unit: 'un', quantity: 8, purchaseQuantity: 8 }, { name: 'Porca', quantity: 1, purchaseQuantity: 1 }] } })
   assert.deepEqual(pending.map((row) => formatQuantity(row.quantity, row.unit)), ['8 un', '1 kg'])
 })
+
+test('metres: decimal quantities in stock, offers and requests, kept apart from kilos and units', async () => {
+  const fixture = await createWorkflowFixture()
+  try {
+    const cable = (await fixture.adminRequest('/inventory', 'POST', { name: 'Cabo de aço', detail: '', unit: 'm', quantity: 12.5, minimum: 2.25, unitPrice: 8 })).data
+    assert.equal((await fixture.adminRequest(`/inventory/${cable.id}/movements`, 'POST', { type: 'exit', quantityKg: 1.75 })).status, 201, 'metres keep decimals')
+    const item = (await fixture.adminRequest('/inventory')).data.items.find((row) => row.id === cable.id)
+    assert.deepEqual([item.unit, Number(item.quantity)], ['m', 10.75])
+    assert.equal((await fixture.adminRequest(`/inventory/${cable.id}`, 'PATCH', { name: 'Cabo de aço', unit: 'kg', minimum: 2, unitPrice: 8 })).status, 409, 'the unit does not change with balance')
+    const offer = (await fixture.adminRequest('/offers', 'POST', offerDraft)).data.item
+    const saved = (await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { laborEntries: [], kind: 'service', stages: ['turning'], materials: [{ id: 'a', name: 'Cabo de aço', unit: 'm', quantity: 3.5, unitPrice: 8 }] })).data.item
+    assert.deepEqual(saved.resources.materials.map((row) => [row.unit, row.quantity]), [['m', 3.5]])
+    assert.equal((await fixture.adminRequest('/material-requests', 'POST', { name: 'Mangueira', unit: 'm', quantity: 4.2 })).data.item.unit, 'm')
+  } finally { await fixture.close() }
+})
+
+test('a material in metres links only to the stock counted in metres', () => {
+  const inventory = [{ id: 1, name: 'Cabo', unit: 'kg', quantity: 3 }, { id: 2, name: 'Cabo', unit: 'm', quantity: 5 }]
+  assert.equal(findInventoryMaterial({ name: 'Cabo', unit: 'm' }, inventory).id, 2)
+  const plan = orderMaterialPlan([{ name: 'Cabo', unit: 'm', quantity: 7.5 }], inventory)
+  assert.deepEqual(plan.map((row) => [row.inventoryId, row.unit, row.consumedQuantity, row.purchaseQuantity]), [[2, 'm', 5, 2.5]])
+  const pending = pendingOrderMaterials({ resources: { materials: [{ name: 'Cabo', unit: 'm', quantity: 2.5, purchaseQuantity: 2.5 }, { name: 'Cabo', quantity: 1, purchaseQuantity: 1 }] } })
+  assert.deepEqual(pending.map((row) => formatQuantity(row.quantity, row.unit)), ['2,5 m', '1 kg'], 'metres are not added to kilos')
+})

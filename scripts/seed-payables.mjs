@@ -6,6 +6,8 @@ const prefix = 'DEMO-CP-2026'
 const classifications = ['Mat\u00e9ria-prima', 'Ferramentas e consum\u00edveis', 'Manuten\u00e7\u00e3o de m\u00e1quinas', 'Energia el\u00e9trica', '\u00c1gua e utilidades', 'Fretes e log\u00edstica', 'Servi\u00e7os terceirizados', 'Aluguel e estrutura', 'Tecnologia e sistemas', 'EPIs e seguran\u00e7a']
 const suppliers = ['MetalSul Materiais', 'Precis\u00e3o Ferramentas', 'Oficina Industrial', 'Energia Industrial', 'Utilidades Bahia', 'Rota Cargas', 'Acabamentos T\u00e9cnicos', 'Galp\u00e3o Empresarial', 'Sistemas Oficina', 'Prote\u00e7\u00e3o Industrial']
 const descriptions = ['Chapas e barras para fabrica\u00e7\u00e3o', 'Pastilhas e brocas para usinagem', 'Manuten\u00e7\u00e3o preventiva de equipamentos', 'Consumo de energia do galp\u00e3o', 'Abastecimento e utilidades', 'Transporte de materiais e pe\u00e7as', 'Tratamento e acabamento de pe\u00e7as', 'Loca\u00e7\u00e3o da estrutura industrial', 'Licen\u00e7as e suporte de sistemas', 'Equipamentos de prote\u00e7\u00e3o individual']
+// With GMAC's plan of accounts installed, the demo uses its classifications (same order as the names above).
+const planCodes = ['1.01', '1.06', '1.21', '1.23', '2.15', '1.25', '1.07', '1.24', '2.07', '1.19']
 const date = (month, day) => `2026-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 
 export async function populatePayables(request, today = todayBahia()) {
@@ -13,7 +15,7 @@ export async function populatePayables(request, today = todayBahia()) {
   const supplierIds = [], classificationIds = []
   for (let index = 0; index < classifications.length; index++) {
     const classificationName = `${classifications[index]} (Teste)`
-    const existing = catalog.classifications.find((row) => row.name === classificationName)
+    const existing = catalog.classifications.find((row) => row.code === planCodes[index]) || catalog.classifications.find((row) => row.name === classificationName)
     classificationIds.push(existing?.id || (await request('/classifications', 'POST', { name: classificationName })).item.id)
     const document = String(101 + index).padStart(14, '0')
     const current = catalog.suppliers.find((row) => row.document === document)

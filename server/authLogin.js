@@ -3,12 +3,18 @@ import { issueAdminToken } from './accounts.js'
 import { enabled, isProduction } from './envFlags.js'
 import { issueOperatorToken } from './operatorAuth.js'
 import { operatorAccountConfigured, operatorLoginMatches } from './operatorAccount.js'
+import { createLoginThrottle } from './loginThrottle.js'
 
 export function testLoginEnabled(env = process.env) {
   return enabled(env.TEST_LOGIN_ENABLED) && !isProduction(env)
 }
 
-export default function createLoginRouter(accounts, env = process.env) {
+const blockedMessage = (retryAfterMs) => {
+  const minutes = Math.max(1, Math.ceil(retryAfterMs / 60000))
+  return `Muitas tentativas de senha. Aguarde ${minutes === 1 ? 'um minuto' : `${minutes} minutos`} e tente novamente.`
+}
+
+export default function createLoginRouter(accounts, env = process.env, throttle = createLoginThrottle()) {
   const router = express.Router()
   router.get('/auth/config', (_request, response) => {
     response.set('Cache-Control', 'no-store').json({ testLoginEnabled: testLoginEnabled(env) })
@@ -30,6 +36,13 @@ export default function createLoginRouter(accounts, env = process.env) {
       if (!cpf || !password) return response.status(400).json({ message: 'Informe seu CPF e sua senha.' })
       if (typeof cpf !== 'string' || !/^\d{11}$/.test(cpf)) return response.status(400).json({ message: 'Informe os 11 dígitos do CPF, sem pontos ou traços.' })
     }
+    // Brute-force guard (real credential path only): up to 5 wrong passwords per hour, per IP and CPF. A correct login
+    // clears the count. The test access has no password, so it is not throttled.
+    const throttleKey = testing ? null : `${request.ip}|${cpf}`
+    if (throttleKey) {
+      const blocked = throttle.check(throttleKey)
+      if (blocked.blocked) return response.status(429).json({ message: blockedMessage(blocked.retryAfterMs), attemptsRemaining: 0 })
+    }
     try {
       let user
       if (testing) {
@@ -48,7 +61,14 @@ export default function createLoginRouter(accounts, env = process.env) {
       } else {
         user = await accounts.authenticate(cpf, password)
       }
-      if (!user) return response.status(401).json({ message: 'CPF ou senha inválidos.' })
+      if (!user) {
+        if (!throttleKey) return response.status(401).json({ message: 'CPF ou senha inválidos.' })
+        // This wrong password still answers 401 (with how many tries are left); the next request, if the limit is
+        // reached, is stopped by the check above with 429.
+        const result = throttle.fail(throttleKey)
+        return response.status(401).json({ message: 'CPF ou senha inválidos.', attemptsRemaining: result.remaining })
+      }
+      if (throttleKey) throttle.succeed(throttleKey)
       return response.json({ user, token: await issueAdminToken(user) })
     } catch (error) {
       console.error('Falha no login:', error)

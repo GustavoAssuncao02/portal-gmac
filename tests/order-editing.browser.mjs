@@ -62,7 +62,8 @@ for (const device of ['desktop', 'iPhone 15', 'iPhone 15 Pro Max']) {
     await dialog.getByLabel('Cor/Tipo', { exact: true }).fill('Azul industrial')
     await dialog.getByLabel('Fabricado a partir de', { exact: true }).selectOption('drawing')
     await dialog.getByLabel('Têmpera', { exact: true }).selectOption('true')
-    await dialog.getByLabel('Descrição do serviço', { exact: true }).fill('Detalhes revisados')
+    // The service description is the one of the OS data; the second text only shows on older OS that have it.
+    assert.equal(await dialog.getByLabel('Descrição do serviço', { exact: true }).count(), 0)
     await dialog.getByRole('checkbox', { name: 'Processo Injessado', exact: true }).uncheck()
     const count = dialog.locator('label').filter({ hasText: /^Tornearia$/ }).locator('input[type=number]')
     await count.fill('8')

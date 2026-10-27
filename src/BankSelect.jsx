@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
-import { payableRequest } from './payablesApi.js'
+import { cachedResource } from './payablesApi.js'
 
-// Banks of Cadastros > Bancos, read once per form.
+// Banks of Cadastros > Bancos, read once per form (cache no navegador acelera a abertura; a rede sempre confirma).
 export function useBanks() {
   const [banks, setBanks] = useState(null)
   useEffect(() => {
     let active = true
-    payableRequest('/banks').then((result) => { if (active) setBanks(result.items) }).catch(() => { if (active) setBanks([]) })
+    cachedResource('/banks', (result) => { if (active) setBanks(result.items) }).catch(() => { if (active) setBanks((current) => current ?? []) })
     return () => { active = false }
   }, [])
   return banks

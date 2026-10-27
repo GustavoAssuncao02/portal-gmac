@@ -1,6 +1,25 @@
 // Each commit to main is a new version: add an entry at the top, with what changed in plain words for whoever uses the portal.
 export const releaseNotes = [
   {
+    version: '1.0.04',
+    date: '2026-10-27',
+    notes: [
+      'Fluxo de caixa: nova funcionalidade com entradas e saídas para análise',
+      'DRE: nova funcionalidade do sistema',
+      'Ajustes da DRE: lançamento de depreciação e provisões',
+      'Grupos de contas: plano de contas da GMAC',
+      'Contas a Pagar, Contas a Receber e Tesouraria: classificação obrigatória',
+      'Cadastros: Solicitantes por cliente',
+      'Ofertas: novo campo Solicitante e descrição do serviço unificada',
+      'Propostas: solicitante da oferta e itens em metro',
+      'Estoque: materiais em metros',
+      'Histórico de operações: adicionar operações manualmente',
+      'Funcionários: setores só para operadores',
+      'Acesso: limite de tentativas de senha',
+      'Melhorias gerais: correções de problemas, desempenho e segurança',
+    ],
+  },
+  {
     version: '1.0.03',
     date: '2026-10-25',
     notes: [

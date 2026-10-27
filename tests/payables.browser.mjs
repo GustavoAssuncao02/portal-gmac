@@ -21,7 +21,7 @@ const req = (route, method, body) => fixture.request(route, method, body, header
 async function fillAccount({ value = '300', date = todayBahia(), description = 'Energia do mes' } = {}) {
   await modal().getByLabel('Fornecedor', { exact: true }).selectOption({ label: 'Fornecedor teste' })
   await modal().getByLabel('Descrição', { exact: true }).fill(description)
-  await modal().getByLabel('Classificação', { exact: true }).selectOption({ label: 'Energia' })
+  await modal().getByLabel('Classificação', { exact: true }).selectOption({ label: '1.01 · Energia' })
   await modal().getByLabel('Número do documento / boleto / nota fiscal', { exact: true }).fill('NF-001')
   await modal().getByLabel('Valor', { exact: true }).fill(value)
   await modal().getByLabel('Vencimento', { exact: true }).fill(date)
@@ -42,7 +42,14 @@ try {
   await modal().getByLabel('E-mail', { exact: true }).fill('supplier@example.invalid')
   await modal().getByLabel('Telefone', { exact: true }).fill('71999999999')
   await modal().getByRole('button', { name: 'Salvar', exact: true }).click(); await page.locator('.payable-table tbody tr').filter({ hasText: 'Fornecedor teste' }).waitFor()
+  // Every classification belongs to a group of accounts: the group first, then the classification with the group's next code.
+  await nav('Grupos de contas'); await page.getByRole('button', { name: 'Novo grupo', exact: true }).click()
+  await modal().getByLabel('Código', { exact: true }).fill('1'); await modal().getByLabel('Nome do grupo', { exact: true }).fill('Custos de produção')
+  await modal().getByLabel('Linha da DRE', { exact: true }).selectOption({ label: 'Custos de produção' }); await modal().getByRole('button', { name: 'Salvar', exact: true }).click()
+  await page.locator('.payable-table tbody tr').filter({ hasText: 'Custos de produção' }).first().waitFor()
   await nav('Classificações'); await page.getByRole('button', { name: 'Nova classificação', exact: true }).click()
+  await modal().getByLabel('Grupo de contas', { exact: true }).selectOption({ label: '1 · Custos de produção' })
+  assert.equal(await modal().getByLabel('Código', { exact: true }).inputValue(), '1.01')
   await modal().getByLabel('Nome da classificação', { exact: true }).fill('Energia'); await modal().getByRole('button', { name: 'Salvar', exact: true }).click()
   await page.locator('.payable-table tbody tr').filter({ hasText: 'Energia' }).waitFor()
   await nav('Contas a Pagar'); await page.getByRole('button', { name: 'Nova conta a pagar', exact: true }).click()

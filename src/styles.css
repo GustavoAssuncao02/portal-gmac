@@ -335,6 +335,11 @@ button {
   text-align: center;
 }
 
+.form-message--error {
+  color: #c42b3b;
+  font-weight: 600;
+}
+
 /* Dashboard */
 .dashboard-shell {
   display: flex;

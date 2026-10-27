@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { TriangleAlert, X } from 'lucide-react'
-import { formatQuantity, materialUnit } from '../server/materialUnits.js'
+import { formatQuantity, materialUnit, materialUnits } from '../server/materialUnits.js'
 
 export default function PendingMaterialsModal({ orderCode, materials, busy, error, onConfirm, onClose, onOpenRequest }) {
   const inspection = Boolean(onOpenRequest)
@@ -16,7 +16,7 @@ export default function PendingMaterialsModal({ orderCode, materials, busy, erro
   }, [])
   const close = () => { if (!busy) onClose() }
   // Kilos and units are totalled apart.
-  const totals = ['kg', 'un'].map((unit) => [unit, Number(materials.filter((material) => materialUnit(material.unit) === unit).reduce((sum, material) => sum + material.quantity, 0).toFixed(3))]).filter(([, total]) => total > 0)
+  const totals = materialUnits.map(([unit]) => [unit, Number(materials.filter((material) => materialUnit(material.unit) === unit).reduce((sum, material) => sum + material.quantity, 0).toFixed(3))]).filter(([, total]) => total > 0)
   return <dialog ref={dialog} className="pending-material-dialog" aria-labelledby="pending-material-title" onCancel={(event) => { event.preventDefault(); close() }}>
     <header><div><h2 id="pending-material-title"><TriangleAlert size={22} aria-hidden="true" />Material pendente</h2><p>{orderCode}</p></div><button type="button" className="pending-material-close" onClick={close} disabled={busy} aria-label={inspection ? 'Fechar' : 'Fechar confirmação'} title={inspection ? 'Fechar' : 'Fechar confirmação'}><X size={20} /></button></header>
     <dl className="pending-material-quantities">{materials.map((material) => <div key={material.key}><dt>{material.name}{material.detail && <small>{material.detail}</small>}</dt><dd>{formatQuantity(material.quantity, material.unit)}</dd></div>)}</dl>

@@ -7,6 +7,21 @@ export async function payableRequest(route, method = 'GET', body) {
   if (!response.ok) throw new Error(result.message || 'Não foi possível concluir a operação.')
   return result
 }
+
+// Cache "mostra o que já tinha, confirma no servidor" (stale-while-revalidate) para dados de referência que mudam pouco
+// (bancos, setores, máquinas, serviços). Entrega na hora o último valor guardado neste aparelho (localStorage) para a
+// tela abrir sem espera e, em paralelo, busca no servidor e substitui. A rede sempre roda, então nada fica velho de
+// verdade: o valor guardado só acelera a primeira pintura. `onValue` pode ser chamado duas vezes (cache e depois servidor).
+export function cachedResource(route, onValue) {
+  const key = `gmac-cache:${route}`
+  let hadCache = false
+  try { const raw = localStorage.getItem(key); if (raw) { onValue(JSON.parse(raw)); hadCache = true } } catch { /* sem cache utilizável */ }
+  return payableRequest(route).then((data) => {
+    try { localStorage.setItem(key, JSON.stringify(data)) } catch { /* cota cheia ou indisponível: segue sem guardar */ }
+    onValue(data)
+    return data
+  }).catch((error) => { if (!hadCache) throw error /* já mostramos o cache: não quebra a tela por uma falha de rede */ })
+}
 export async function uploadPayableFiles(files, accountId) {
   const ids = []
   for (const file of files) {

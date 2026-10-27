@@ -11,7 +11,7 @@ const sidebar = page.locator('.sidebar')
 const group = sidebar.getByRole('button', { name: 'Gest\u00e3o Financeira', exact: true })
 const submenu = sidebar.locator('#sidebar-finance-menu')
 const registrations = sidebar.getByRole('button', { name: 'Cadastros', exact: true })
-const members = ['Contas a Pagar', 'Contas a Receber', 'Tesouraria', 'Baixa em Lote', 'Concilia\u00e7\u00e3o banc\u00e1ria', 'Business Intelligence', 'Classifica\u00e7\u00f5es']
+const members = ['Contas a Pagar', 'Contas a Receber', 'Tesouraria', 'Fluxo de caixa', 'Baixa em Lote', 'Concilia\u00e7\u00e3o banc\u00e1ria', 'Business Intelligence', 'DRE', 'Ajustes da DRE', 'Grupos de contas', 'Classifica\u00e7\u00f5es']
 const navigate = (name) => sidebar.getByRole('button', { name, exact: true }).click()
 try {
   await page.goto(fixture.url)

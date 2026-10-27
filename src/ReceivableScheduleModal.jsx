@@ -7,6 +7,7 @@ import { InstallmentFields, withInstallments, installmentPayload } from './Recei
 import { todayBahia, cents, settlementMethods } from '../server/payableRules.js'
 import './payables.css'
 import BankSelect from './BankSelect.jsx'
+import ClassificationSelect, { RevenueTermHint } from './ClassificationSelect.jsx'
 
 // A quiet line under the amount field: more than the value of the OS is interest, less is discount.
 const differenceNote = (orderCents, difference) => difference ? <small className="payable-hint receivable-difference">{difference > 0 ? 'Juros' : 'Desconto'} de <strong>{money(Math.abs(difference))}</strong> sobre o valor da OS ({money(orderCents)}).</small> : null
@@ -15,7 +16,7 @@ const differenceNote = (orderCents, difference) => difference ? <small className
 // Receber, single or in installments) or already received (posted to Tesouraria, settled); then the service is archived.
 export default function ReceivableScheduleModal({ orderCode, onClose, onAcknowledge }) {
   const formId = useId(), today = todayBahia()
-  const [info, setInfo] = useState(null), [mode, setMode] = useState(null), [draft, setDraft] = useState({ value: '', dueDate: '', description: '', kind: 'single', count: 2, installments: [], date: today, method: 'pix', bankId: '' }), [busy, setBusy] = useState(false), [error, setError] = useState(''), [loadError, setLoadError] = useState('')
+  const [info, setInfo] = useState(null), [mode, setMode] = useState(null), [draft, setDraft] = useState({ classificationId: '', value: '', dueDate: '', description: '', kind: 'single', count: 2, installments: [], date: today, method: 'pix', bankId: '' }), [busy, setBusy] = useState(false), [error, setError] = useState(''), [loadError, setLoadError] = useState('')
   useEffect(() => {
     let active = true
     payableRequest(`/receivables/order/${encodeURIComponent(orderCode)}`).then((result) => { if (!active) return; setInfo(result); setDraft((current) => ({ ...current, value: decimal(result.order.valueCents), description: `${result.order.code} · ${result.order.service || 'Serviço'}` })) }).catch((caught) => { if (active) setLoadError(caught.message) })
@@ -33,7 +34,7 @@ export default function ReceivableScheduleModal({ orderCode, onClose, onAcknowle
       if (post && !info.item) {
         if (received && draft.date > today) throw new Error('O recebimento não pode ter data futura.')
         if (installment && draft.installments.reduce((sum, row) => sum + cents(row.value || '0'), 0) !== cents(draft.value)) throw new Error('A soma das parcelas deve ser exatamente igual ao valor total.')
-        await payableRequest('/receivables', 'POST', received ? { orderCode, treasury: true, value: decimal(info.order.valueCents), received: draft.value, date: draft.date, method: draft.method, bankId: draft.bankId, description: draft.description } : { orderCode, ...draft, ...installmentPayload(draft) }); created = true
+        await payableRequest('/receivables', 'POST', received ? { orderCode, treasury: true, value: decimal(info.order.valueCents), received: draft.value, date: draft.date, method: draft.method, bankId: draft.bankId, description: draft.description, classificationId: draft.classificationId } : { orderCode, ...draft, ...installmentPayload(draft) }); created = true
       }
       await onAcknowledge(orderCode)
       onClose()
@@ -74,6 +75,7 @@ export default function ReceivableScheduleModal({ orderCode, onClose, onAcknowle
             <label>{installment ? 'Data da 1ª parcela' : 'Data prevista de recebimento'}<input type="date" aria-label={installment ? 'Data da 1ª parcela' : 'Data prevista de recebimento'} required min={today} value={draft.dueDate} onChange={(event) => change('dueDate', event.target.value)} /></label>
             {installment && <InstallmentFields draft={draft} setDraft={setDraft} minDate={today} />}
           </>}
+          <label>Classificação da receita<ClassificationSelect classifications={info.classifications || []} use="receivable" label="Classificação da receita" value={draft.classificationId} onChange={(id) => setDraft({ ...draft, classificationId: id })} /><RevenueTermHint classifications={info.classifications || []} value={draft.classificationId} onChange={(id) => setDraft({ ...draft, classificationId: id })} context={{ treasury: received, kind: draft.kind, issueDate: today, dueDate: draft.dueDate }} /></label>
           <label>Descrição<input maxLength={5000} value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} /></label>
         </fieldset></form>}
       </>}

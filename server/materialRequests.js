@@ -2,7 +2,7 @@ import express from 'express'
 import { randomUUID } from 'node:crypto'
 import { readStore, mutateStore } from './offers.js'
 import { missingMaterialRequestCodes, nextMaterialRequestCode } from './materialRequestCodes.js'
-import { materialUnit, validMaterialUnit, validQuantityFor } from './materialUnits.js'
+import { invalidUnitMessage, materialUnit, validMaterialUnit, validQuantityFor } from './materialUnits.js'
 
 const requestIds = (store) => new Set([
   ...(store.offers || []),
@@ -86,7 +86,7 @@ export default function createMaterialRequestsRouter(requireAdmin, pool, account
   router.post('/material-requests', async (request, response, next) => {
     const body = request.body || {}, quantity = Number(body.quantity)
     if (typeof body.name !== 'string' || !body.name.trim() || body.name.length > 160 || body.detail != null && (typeof body.detail !== 'string' || body.detail.length > 500) || !Number.isFinite(quantity) || quantity < .001 || quantity > 1000000000) return response.status(400).json({ message: 'Informe o material, a especificação e uma quantidade válida.' })
-    if (body.unit != null && !validMaterialUnit(body.unit)) return response.status(400).json({ message: 'Escolha a unidade do material: quilo ou unidade.' })
+    if (body.unit != null && !validMaterialUnit(body.unit)) return response.status(400).json({ message: invalidUnitMessage })
     if (body.inventoryId != null && (!Number.isInteger(Number(body.inventoryId)) || Number(body.inventoryId) <= 0)) return response.status(400).json({ message: 'Selecione um material válido do estoque.' })
     try {
       let inventory

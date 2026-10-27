@@ -1,0 +1,91 @@
+/* Fluxo de caixa. Chart colors are tokens with their own dark steps (validated palette); the cards reuse the finance styles. */
+.cash-flow {
+  --cash-in: #2a78d6; --cash-out: #eb6834; --cash-surface: #ffffff; --cash-grid: #d6e0ea; --cash-baseline: #9fb3c7; --cash-axis: #6b84a0; --cash-ink: #243746; --cash-hover: #eef4fb;
+  --cash-good: #166534; --cash-bad: #b42318; --cash-none: #6b7f92; --cash-tooltip: #ffffff; --cash-tooltip-line: #d3dfeb;
+  --slice-1: #2a78d6; --slice-2: #eb6834; --slice-3: #1baf7a; --slice-4: #eda100; --slice-5: #e87ba4; --slice-6: #008300; --slice-other: #b8c3ce; --slice-none: #8794a3;
+  display: grid; gap: 22px;
+}
+:root[data-theme="dark"] .cash-flow {
+  --cash-in: #3987e5; --cash-out: #d95926; --cash-surface: #0d1c2e; --cash-grid: #22374d; --cash-baseline: #4d6680; --cash-axis: #8ea5bd; --cash-ink: #d3e0ee; --cash-hover: #15283d;
+  --cash-good: #4ade80; --cash-bad: #f87171; --cash-none: #8ea5bd; --cash-tooltip: #0f2133; --cash-tooltip-line: #2b4560;
+  --slice-1: #3987e5; --slice-2: #d95926; --slice-3: #199e70; --slice-4: #c98500; --slice-5: #d55181; --slice-6: #008300; --slice-other: #4b5d70; --slice-none: #6b7c8e;
+}
+:root[data-theme="dark"][data-tone="black"] .cash-flow { --cash-surface: #0b0b0b; --cash-grid: #262626; --cash-baseline: #4a4a4a; --cash-hover: #171717; --cash-tooltip: #141414; --cash-tooltip-line: #333333; }
+
+.cash-flow-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 22px; margin-bottom: 20px; }
+.cash-flow-period { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cash-flow-period input { min-height: 38px; padding: 6px 10px; border: 1px solid #c9d7e5; border-radius: 5px; background: #fff; color: #1f2937; font: inherit; }
+.cash-flow-period strong { margin-left: 6px; font-size: 14px; color: #0b2545; }
+.cash-flow-period .payable-link { padding: 0; }
+.cash-flow-bank { display: flex; align-items: center; gap: 8px; margin-left: auto; font-size: 13px; color: #4d6378; }
+.cash-flow-bank select { min-width: 220px; }
+.cash-flow .treasury-summary { margin-bottom: 0; }
+.cash-flow .payable-metric small { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px; }
+
+.cash-flow-card { min-width: 0; }
+.cash-flow-card h2 { color: #284b6c; font-size: 17px; }
+.cash-flow-chart-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 18px; margin-bottom: 8px; }
+.cash-flow-chart-heading h2 { margin: 0; }
+.cash-flow-chart-heading > div { display: flex; align-items: center; gap: 16px; }
+.cash-flow-legend { display: flex; gap: 16px; margin: 0; padding: 0; list-style: none; font-size: 12.5px; color: var(--cash-ink); }
+.cash-flow-legend li { display: flex; align-items: center; gap: 6px; }
+.cash-key { display: inline-block; width: 11px; height: 11px; border-radius: 3px; flex: 0 0 auto; }
+.cash-key--in { background: var(--cash-in); }
+.cash-key--out { background: var(--cash-out); }
+.cash-flow-plot { position: relative; width: 100%; overflow: hidden; }
+.cash-flow-plot svg { display: block; }
+.cash-grid { stroke: var(--cash-grid); stroke-width: 1; stroke-dasharray: 2 4; }
+.cash-baseline { stroke: var(--cash-baseline); stroke-width: 1; shape-rendering: crispEdges; }
+.cash-axis { fill: var(--cash-axis); font-size: 11px; font-variant-numeric: tabular-nums; }
+.cash-label { fill: var(--cash-ink); font-size: 12.5px; font-weight: 600; }
+.cash-group--future .cash-label { fill: var(--cash-axis); font-weight: 400; }
+.cash-bar--in { fill: var(--cash-in); }
+.cash-bar--out { fill: var(--cash-out); }
+.cash-hover { fill: var(--cash-hover); }
+.cash-hit { fill: transparent; cursor: default; outline: none; }
+.cash-hit:focus-visible { stroke: var(--cash-in); stroke-width: 2; }
+.cash-chip { font-size: 11.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.cash-chip--good { fill: var(--cash-good); }
+.cash-chip--bad { fill: var(--cash-bad); }
+.cash-chip--none { fill: var(--cash-none); font-weight: 400; }
+.cash-change { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cash-change--good { color: var(--cash-good); }
+.cash-change--bad { color: var(--cash-bad); }
+.cash-change--none { color: var(--cash-none); font-weight: 400; }
+.cash-tooltip { position: absolute; z-index: 2; display: grid; gap: 5px; min-width: 200px; padding: 10px 12px; border: 1px solid var(--cash-tooltip-line); border-radius: 6px; background: var(--cash-tooltip); color: var(--cash-ink); font-size: 12px; box-shadow: 0 6px 18px #12345820; pointer-events: none; }
+.cash-tooltip span { display: flex; align-items: center; gap: 6px; }
+.cash-tooltip b { margin-left: auto; font-variant-numeric: tabular-nums; }
+.cash-flow-bucket-table tbody tr { cursor: default; }
+.cash-flow-bucket-table .cash-value { text-align: right; white-space: nowrap; }
+
+.cash-flow-pies { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
+.cash-flow-pie h2 { margin: 0; }
+.cash-flow-pie > .payable-muted { margin: 4px 0 14px; }
+.cash-flow-empty { padding: 24px 0; }
+.cash-pie-body { display: flex; flex-wrap: wrap; align-items: center; gap: 18px 24px; }
+.cash-pie-body svg { flex: 0 0 auto; }
+.cash-slice { stroke: var(--cash-surface); stroke-width: 2; transition: opacity .15s; }
+.cash-slice--dim { opacity: .3; }
+.cash-pie-center-label { fill: var(--cash-axis); font-size: 12px; }
+.cash-pie-center-value { fill: var(--cash-ink); font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.cash-pie-legend { flex: 1 1 240px; display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; min-width: 0; }
+.cash-pie-legend li { display: grid; grid-template-columns: 11px minmax(0, 1fr) auto 52px; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 4px; font-size: 12.5px; color: var(--cash-ink); outline: none; transition: opacity .15s; }
+.cash-pie-legend li:hover, .cash-pie-legend li:focus-visible { background: var(--cash-hover); }
+.cash-pie-legend span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cash-pie-legend b { font-variant-numeric: tabular-nums; font-weight: 600; }
+.cash-pie-legend small { text-align: right; color: var(--cash-axis); font-variant-numeric: tabular-nums; }
+.cash-pie-legend--dim { opacity: .45; }
+
+.cash-flow-list h2 { margin: 0 0 12px; font-size: 16px; color: #0b2545; }
+.cash-flow-toolbar { grid-template-columns: minmax(0, 1fr) auto; }
+.cash-flow-table tbody tr { cursor: default; }
+.cash-flow-table td small { display: block; color: #6b7f92; font-size: 11.5px; }
+
+@media (max-width: 1100px) { .cash-flow-pies { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 760px) {
+  .cash-flow-controls { gap: 12px; }
+  .cash-flow-bank { margin-left: 0; width: 100%; }
+  .cash-flow-bank select { flex: 1; min-width: 0; }
+  .cash-flow-toolbar { grid-template-columns: minmax(0, 1fr); }
+  .cash-pie-body { justify-content: center; }
+}

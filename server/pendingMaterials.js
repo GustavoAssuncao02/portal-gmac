@@ -9,7 +9,7 @@ export function pendingOrderMaterials(order) {
     const quantity = kg(pending)
     if (!quantity) continue
     const unit = materialUnit(material.unit)
-    const key = material.inventoryId != null ? `inventory-${material.inventoryId}` : `${normalize(material.name)}|${normalize(material.detail)}${unit === 'un' ? '|un' : ''}`
+    const key = material.inventoryId != null ? `inventory-${material.inventoryId}` : `${normalize(material.name)}|${normalize(material.detail)}${unit === 'kg' ? '' : `|${unit}`}`
     if (!groups.has(key)) groups.set(key, { key, name: material.name || 'Material', detail: material.detail || '', unit, quantity: 0 })
     const group = groups.get(key)
     group.quantity = kg(group.quantity + quantity)

@@ -18,7 +18,7 @@ A busca encontra contas também pelo valor ("1.234,56", "1234,56" ou "1234.56") 
 
 Validação isolada, sem alterar dados locais: `npm run test:payables`, `node --test tests/payables-improvements.test.js` e `node tests/payables-improvements.browser.mjs` (após `npm run build`).
 
-Para popular a demonstração local solicitada de setembro a dezembro de 2026, com a API em execução e as credenciais administrativas locais configuradas, execute `node scripts/seed-payables.mjs`. O script cria 120 contas (30 por mês), 10 fornecedores fictícios e 10 classificações de teste. Registros são identificados por `DEMO-CP-2026`; executar novamente não duplica os lançamentos. As baixas nunca usam data futura. A execução não é automática na inicialização do sistema.
+Para popular a demonstração local solicitada de setembro a dezembro de 2026, com a API em execução e as credenciais administrativas locais configuradas, execute `node scripts/seed-payables.mjs`. O script cria 120 contas (30 por mês) e 10 fornecedores fictícios; as contas usam classificações do plano de contas (Gestão Financeira > Classificações) e, sem o plano instalado, 10 classificações de teste. Registros são identificados por `DEMO-CP-2026`; executar novamente não duplica os lançamentos. As baixas nunca usam data futura. A execução não é automática na inicialização do sistema.
 
 ## Contas a Receber e conciliação bancária
 

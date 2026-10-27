@@ -85,6 +85,7 @@ try {
   assert.equal(await schedule.getByLabel('Valor a receber', { exact: true }).inputValue(), '1.125,45', 'Defaults to the OS value after discount')
   await schedule.getByLabel('Valor a receber', { exact: true }).fill('1100')
   await schedule.getByLabel('Data prevista de recebimento', { exact: true }).fill(nextMonth)
+  await schedule.getByLabel('Classificação da receita', { exact: true }).selectOption({ label: '98.01 · Receita de teste' })
   await schedule.getByRole('button', { name: 'Programar e concluir', exact: true }).click()
   await row.waitFor({ state: 'detached' })
 
@@ -98,6 +99,7 @@ try {
   await form.getByLabel('Nome do pagador', { exact: true }).fill('Cliente avulso')
   await form.getByLabel('Valor', { exact: true }).fill('250.10')
   await form.getByLabel('Data prevista de recebimento', { exact: true }).fill(later)
+  await form.getByLabel('Classificação', { exact: true }).selectOption({ label: '98.01 · Receita de teste' })
   await form.getByRole('button', { name: 'Salvar conta', exact: true }).click()
   const details = page.getByRole('dialog', { name: 'REC-000002', exact: true })
   await details.getByRole('button', { name: 'Dar baixa', exact: true }).click()

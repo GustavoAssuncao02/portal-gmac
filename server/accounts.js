@@ -1,6 +1,6 @@
 import express from 'express'
 import bcrypt from 'bcryptjs'
-import { createHash, randomUUID } from 'node:crypto'
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto'
 import { readStore, mutateStore } from './offers.js'
 import { storePool } from './store.js'
 import { notificationDefaults, notificationOptions, notificationSoundDefault, validNotificationSound } from './notificationRules.js'
@@ -95,7 +95,7 @@ export function requireAdmin(request, response, next) {
 
 // Administrative employees keep the finance steps embedded in other screens (OS costs and completion, stock purchases),
 // but not the Gestão Financeira screens themselves.
-const financeArea = /^\/(payables|receivables|classifications|bank-statements|ai-reconciliations)(\/|$)/
+const financeArea = /^\/(payables|receivables|classifications|account-groups|dre|dre-adjustments|bank-statements|ai-reconciliations)(\/|$)/
 const staffFinanceRoutes = [['GET', /^\/payables$/], ['POST', /^\/payables(\/uploads)?$/], ['GET', /^\/payables\/order-costs\/[^/]+$/], ['GET', /^\/receivables\/order\/[^/]+$/], ['POST', /^\/receivables$/]]
 export function restrictStaffFinance(request, response, next) {
   if (!financeArea.test(request.path) || adminIdentity(request)?.role !== 'staff') return next()
@@ -130,7 +130,16 @@ export function createAccountService(pool, env = process.env) {
     const user = (await accounts()).find((item) => digits(item.cpf) === digits(cpf))
     return user ? safe(user) : null
   }
-  const passwordMatches = async (user, password) => user.passwordHash ? bcrypt.compare(password, user.passwordHash) : user.id === 0 && password === env.DEMO_ADMIN_PASSWORD
+  // A senha definida ou alterada vira sempre um hash bcrypt (updateAccount/save). O DEMO_ADMIN_PASSWORD serve só como
+  // bootstrap da conta local principal (id 0) enquanto ela ainda não tem hash: comparação de tempo constante e nunca com
+  // valor em branco, para não vazar o tempo da comparação nem aceitar senha vazia.
+  const plainMatches = (left, right) => {
+    const a = createHash('sha256').update(String(left)).digest(), b = createHash('sha256').update(String(right)).digest()
+    return timingSafeEqual(a, b)
+  }
+  const passwordMatches = async (user, password) => user.passwordHash
+    ? bcrypt.compare(password, user.passwordHash)
+    : user.id === 0 && Boolean(env.DEMO_ADMIN_PASSWORD) && plainMatches(password, env.DEMO_ADMIN_PASSWORD)
   async function authenticate(cpf, password) {
     for (const user of (await accounts()).filter((item) => digits(item.cpf) === cpf)) if (await passwordMatches(user, password)) return safe(user)
     return null

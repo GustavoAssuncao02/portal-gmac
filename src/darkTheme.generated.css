@@ -1110,6 +1110,58 @@
     border-color: #4777ae;
     background: #143f70
 }
+:root[data-theme="dark"] .os-history-add-button, :root[data-theme="dark"] .os-history-add .os-history-add-save {
+    border-color: #4776ae;
+    background: #194f8f;
+    color: #f2f6fc
+}
+:root[data-theme="dark"] .os-history-add-button:hover, :root[data-theme="dark"] .os-history-add .os-history-add-save:hover {
+    border-color: #4777ae;
+    background: #143f70
+}
+:root[data-theme="dark"] .os-history-add-button[aria-expanded="true"] {
+    border-color: #4777ae;
+    background: #143f70
+}
+:root[data-theme="dark"] .os-history-add {
+    border-bottom: 1px solid #36516f;
+    background: #203c59
+}
+:root[data-theme="dark"] .os-history-add-intro {
+    color: #b6c3cd
+}
+:root[data-theme="dark"] .os-history-add label {
+    color: #b2c3d1
+}
+:root[data-theme="dark"] .os-history-add input, :root[data-theme="dark"] .os-history-add select {
+    border: 1px solid #36516f;
+    background: #162b43;
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .os-history-add input:focus-visible, :root[data-theme="dark"] .os-history-add select:focus-visible {
+    outline: 2px solid #477dae
+}
+:root[data-theme="dark"] .os-history-add-details legend {
+    color: #b2c3d1
+}
+:root[data-theme="dark"] .os-history-add-details small {
+    color: #b8c2cc
+}
+:root[data-theme="dark"] .os-history-add-preview {
+    color: #b2c3d1
+}
+:root[data-theme="dark"] .os-history-add-preview strong {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .os-history-edited b.os-history-manual {
+    background: #203c59;
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .os-history-manual-note {
+    border-left-color: #36516f;
+    background: #203c59;
+    color: #e1ebf6
+}
 :root[data-theme="dark"] .os-missing {
     color: #b2c3d2
 }
@@ -2771,6 +2823,176 @@
 :root[data-theme="dark"] .batch-due {
     color: #b4c2d0
 }
+:root[data-theme="dark"] .account-plan-table .account-plan-code {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .account-plan-group-row th {
+    background: #203c59;
+    color: #e1ebf6;
+    border-top: 1px solid #36516f
+}
+:root[data-theme="dark"] .account-plan-group-row th small {
+    color: #c1cfde
+}
+:root[data-theme="dark"] .account-plan-row--inactive td {
+    color: #b7c1cd
+}
+:root[data-theme="dark"] .account-plan-toolbar > label {
+    color: #b4c2cf
+}
+:root[data-theme="dark"] .account-plan-settings {
+    border: 1px solid #36516f;
+    background: #162b43
+}
+:root[data-theme="dark"] .account-plan-settings h2 {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .account-plan-settings-grid label {
+    color: #b4c2cf
+}
+:root[data-theme="dark"] .dre-control-label {
+    color: #b4c2cf
+}
+:root[data-theme="dark"] .dre-month-picker label {
+    color: #b4c2cf
+}
+:root[data-theme="dark"] .dre-month-picker input {
+    border: 1px solid #36516f;
+    background: #162b43;
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .dre-zero-toggle {
+    color: #b4c2cf
+}
+:root[data-theme="dark"] .dre-report {
+    border: 1px solid #36516f;
+    background: #162b43
+}
+:root[data-theme="dark"] .dre-report-heading {
+    border-bottom: 1px solid #36516f
+}
+:root[data-theme="dark"] .dre-report-heading h2 {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .dre-report-heading span {
+    color: #c1cfde
+}
+:root[data-theme="dark"] .dre-table th, :root[data-theme="dark"] .dre-table td {
+    border-top: 1px solid #36516f
+}
+:root[data-theme="dark"] .dre-table thead th {
+    background: #184c85;
+    color: #f2f6fc
+}
+:root[data-theme="dark"] .dre-table .dre-label {
+    background: #162b43;
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .dre-table thead .dre-label {
+    background: #184c85;
+    color: #f2f6fc
+}
+:root[data-theme="dark"] .dre-code {
+    color: #c1cfde
+}
+:root[data-theme="dark"] .dre-row--section > *, :root[data-theme="dark"] .dre-row--info > * {
+    background: #203c59;
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .dre-row--section .dre-label, :root[data-theme="dark"] .dre-row--info .dre-label {
+    background: #203c59;
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .dre-row--group > * {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .dre-row--group .dre-label {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .dre-row--result > *, :root[data-theme="dark"] .dre-row--result .dre-label {
+    background: #203c59;
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .dre-row--final > *, :root[data-theme="dark"] .dre-row--final .dre-label {
+    background: #0c2544;
+    color: #f2f6fc
+}
+:root[data-theme="dark"] .dre-row--final .dre-negative {
+    color: #ec9389
+}
+:root[data-theme="dark"] .dre-row--info {
+    border-top: 2px solid #36516f
+}
+:root[data-theme="dark"] .dre-row--openable:hover > *, :root[data-theme="dark"] .dre-row--openable:hover .dre-label, :root[data-theme="dark"] .dre-row--openable:focus-visible > * {
+    background: #203c59
+}
+:root[data-theme="dark"] .dre-row--openable:focus-visible {
+    outline: 2px solid #4778ae
+}
+:root[data-theme="dark"] .dre-negative {
+    color: #ec9089
+}
+:root[data-theme="dark"] .dre-percent {
+    color: #b4c2cf
+}
+:root[data-theme="dark"] .dre-change--good {
+    color: #8ee6b0
+}
+:root[data-theme="dark"] .dre-change--bad {
+    color: #ec9089
+}
+:root[data-theme="dark"] .dre-change--neutral {
+    color: #c1cfde
+}
+:root[data-theme="dark"] .dre-row--final .dre-percent, :root[data-theme="dark"] .dre-row--final .dre-change--neutral {
+    color: #a9bdda
+}
+:root[data-theme="dark"] .dre-row--final .dre-change--good {
+    color: #89ecae
+}
+:root[data-theme="dark"] .dre-row--final .dre-change--bad {
+    color: #ec9389
+}
+:root[data-theme="dark"] .dre-entries-table td small {
+    color: #c1cfde
+}
+:root[data-theme="dark"] .dre-tag {
+    background: #203c59;
+    color: #b4c2cf
+}
+:root[data-theme="dark"] .dre-adjustment-preview {
+    border: 1px solid #36516f;
+    background: #203c59
+}
+:root[data-theme="dark"] .dre-adjustment-preview li {
+    color: #b4c2cf
+}
+:root[data-theme="dark"] .dre-adjustment-preview li strong {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .cash-flow-period input {
+    border: 1px solid #36516f;
+    background: #162b43;
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .cash-flow-period strong {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .cash-flow-bank {
+    color: #b4c2cf
+}
+:root[data-theme="dark"] .cash-flow-card h2 {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .cash-tooltip {
+    box-shadow: 0 6px 18px #06111d20
+}
+:root[data-theme="dark"] .cash-flow-list h2 {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .cash-flow-table td small {
+    color: #c1cfde
+}
 :root[data-theme="dark"] .planning-heading h1 {
     color: #e1ebf6
 }
@@ -3252,6 +3474,9 @@
 }
 :root[data-theme="dark"] .form-message {
     color: #a9c3da
+}
+:root[data-theme="dark"] .form-message--error {
+    color: #e68e97
 }
 :root[data-theme="dark"] .dashboard-shell {
     color: #e1ebf6;

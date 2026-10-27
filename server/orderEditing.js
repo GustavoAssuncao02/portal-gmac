@@ -4,7 +4,7 @@ import { cleanStageResources, cleanStageTimes } from './pieces.js'
 import { realChangedFields } from './orderHistory.js'
 import { activeSessions } from './operationSessions.js'
 import { isClientDocument } from './clientDocument.js'
-import { materialUnit, unitPriceLabel, validMaterialUnit, validQuantityFor } from './materialUnits.js'
+import { invalidUnitMessage, materialUnit, unitPriceLabel, validMaterialUnit, validQuantityFor } from './materialUnits.js'
 
 const fail = (status, message) => { const error = new Error(message); error.status = status; throw error }
 const text = (value, limit = 160) => {
@@ -82,7 +82,7 @@ export function editOrder(order, state, body, catalog = {}) {
       const detail = text(item.detail || '', 500)
       // A material linked to the stock keeps the unit of the stock; a new one uses the unit typed in the OS.
       const unit = materialUnit(previous?.inventoryId != null && previous.name === name ? previous.unit : item.unit)
-      if (item.unit != null && !validMaterialUnit(item.unit)) fail(400, 'Escolha a unidade do material: quilo ou unidade.')
+      if (item.unit != null && !validMaterialUnit(item.unit)) fail(400, invalidUnitMessage)
       const unchangedMaterial = previous?.name === name && (previous.detail || '') === detail && materialUnit(previous.unit) === unit
       const quantity = numeric(item.quantity, 'Quantidade do material', { min: 0.001 })
       if (!validQuantityFor(quantity, unit)) fail(400, `${name}: material contado por unidade aceita só quantidades inteiras.`)

@@ -4,9 +4,9 @@ import ServiceStageEditor from './ServiceStageEditor.jsx'
 import { productionStages, stageLabel, serviceDetails, readStageLayout, orderedStageSelection } from '../server/serviceStages.js'
 import { activeSessions } from '../server/operationSessions.js'
 import { newId } from './newId.js'
-import { payableRequest, money, dateLabel } from './payablesApi.js'
+import { cachedResource, payableRequest, money, dateLabel } from './payablesApi.js'
 import './orderEditing.css'
-import { materialUnit, materialUnits } from '../server/materialUnits.js'
+import { materialUnit, materialUnits, quantityStep } from '../server/materialUnits.js'
 
 function useDialog(dialog) {
   useEffect(() => {
@@ -89,7 +89,9 @@ export default function OrderEditModal({ order, confirmCompleted, onSave, onUplo
   const [resourceOptions, setResourceOptions] = useState({ machines: [], laborServices: [] })
   useEffect(() => {
     let active = true
-    Promise.all([payableRequest('/machines'), payableRequest('/labor-services')]).then(([machines, laborServices]) => { if (active) setResourceOptions({ machines: machines.items || [], laborServices: laborServices.items || [] }) }).catch(() => {})
+    // Cache no navegador deixa os menus de máquina/serviço abrirem na hora; a rede confirma logo em seguida.
+    cachedResource('/machines', (data) => { if (active) setResourceOptions((current) => ({ ...current, machines: data.items || [] })) }).catch(() => {})
+    cachedResource('/labor-services', (data) => { if (active) setResourceOptions((current) => ({ ...current, laborServices: data.items || [] })) }).catch(() => {})
     return () => { active = false }
   }, [])
   useDialog(dialog)
@@ -155,7 +157,7 @@ export default function OrderEditModal({ order, confirmCompleted, onSave, onUplo
               <label className="os-edit-field">Especificação<input value={item.detail || ''} maxLength={500} onChange={(event) => row('materials', item.id, 'detail', event.target.value)} /></label>
               {/* A material linked to the stock keeps the unit of its registration. */}
               <label className="os-edit-field">Unidade<select value={materialUnit(item.unit)} disabled={item.inventoryId != null} onChange={(event) => row('materials', item.id, 'unit', event.target.value)}>{materialUnits.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
-              <label className="os-edit-field">{`Quantidade (${materialUnit(item.unit)})`}<input type="number" min={materialUnit(item.unit) === 'un' ? '1' : '0.001'} step={materialUnit(item.unit) === 'un' ? '1' : '0.001'} value={item.quantity} onChange={(event) => row('materials', item.id, 'quantity', event.target.value)} required /></label>
+              <label className="os-edit-field">{`Quantidade (${materialUnit(item.unit)})`}<input type="number" min={quantityStep(item.unit)} step={quantityStep(item.unit)} value={item.quantity} onChange={(event) => row('materials', item.id, 'quantity', event.target.value)} required /></label>
               <label className="os-edit-field">{`Valor/${materialUnit(item.unit)} (R$)`}<input type="number" min="0" step="0.01" value={item.unitPrice} onChange={(event) => row('materials', item.id, 'unitPrice', event.target.value)} required /></label>
               <button className="os-icon-button" type="button" title="Remover material" aria-label={`Remover material ${item.name || 'sem nome'}`} onClick={() => resource('materials', resources.materials.filter((entry) => entry.id !== item.id))}><Trash2 size={16} /></button>
             </div>)}
@@ -176,7 +178,8 @@ export default function OrderEditModal({ order, confirmCompleted, onSave, onUplo
               <label className="os-edit-field">Fabricado a partir de<select aria-label="Fabricado a partir de" value={resources.manufacturedFrom || ''} onChange={(event) => resource('manufacturedFrom', event.target.value || null)}><option value="">Não informado</option><option value="sample">Amostra</option><option value="drawing">Desenho</option></select></label>
               <label className="os-edit-field">Têmpera<select aria-label="Têmpera" value={resources.tempering == null ? '' : String(resources.tempering)} onChange={(event) => resource('tempering', event.target.value === '' ? null : event.target.value === 'true')}><option value="">Não informada</option><option value="true">Sim</option><option value="false">Não</option></select></label>
               {resources.stages.includes('painting') && <label className="os-edit-field">Cor/Tipo<input value={resources.paintColor} maxLength={160} onChange={(event) => resource('paintColor', event.target.value)} /></label>}
-              <label className="os-edit-field os-edit-wide">Descrição do serviço<textarea aria-label="Descrição do serviço" rows={3} maxLength={5000} value={resources.serviceDescription} onChange={(event) => resource('serviceDescription', event.target.value)} /></label>
+              {/* The service description is the one of the OS data; only older OS kept a second text here. */}
+              {order.resources?.serviceDescription && <label className="os-edit-field os-edit-wide">Descrição do serviço<textarea aria-label="Descrição do serviço" rows={3} maxLength={5000} value={resources.serviceDescription} onChange={(event) => resource('serviceDescription', event.target.value)} /></label>}
             </div>
             <label className="os-edit-checkbox"><input type="checkbox" checked={resources.strictProcess} onChange={(event) => resource('strictProcess', event.target.checked)} />Processo Injessado</label>
             <h3>Peças registradas por etapa</h3><div className="os-edit-grid">{resources.stages.map((code) => <label className="os-edit-field" key={code}>{stageLabel(code)}<input type="number" min="0" max={data.quantity} step="1" value={draft.stageCounts[code] ?? 0} onChange={(event) => setDraft((current) => ({ ...current, stageCounts: { ...current.stageCounts, [code]: event.target.value } }))} /></label>)}</div>

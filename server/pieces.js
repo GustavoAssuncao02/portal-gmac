@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { productionStages } from './serviceStages.js'
-import { materialUnit } from './materialUnits.js'
+import { materialUnit, wholeUnit } from './materialUnits.js'
 import { workIntervals } from './reportData.js'
 
 // A piece is identified only by its name (not by client): case, accents and extra spaces are ignored.
@@ -144,7 +144,7 @@ export function pieceSuggestion({ offers, orders, name, quantity, prices = new M
   const materials = (resources.materials || []).map((material) => {
     const perPiece = averages.materials[materialKey(material)] ?? (Number(material.quantity) || 0) / sourcePieces
     // Units are whole: a scaled quantity of units is rounded up.
-    const unit = materialUnit(material.unit), quantity = unit === 'un' ? Math.ceil(round(perPiece * pieces, 3)) : round(perPiece * pieces, 3)
+    const unit = materialUnit(material.unit), quantity = wholeUnit(unit) ? Math.ceil(round(perPiece * pieces, 3)) : round(perPiece * pieces, 3)
     return { id: randomUUID(), name: material.name, detail: material.detail || '', inventoryId: material.inventoryId ?? null, unit, quantity, unitPrice: prices.get(String(material.inventoryId)) ?? Number(material.unitPrice || 0), icon: material.icon || '▰', requestedAt: now }
   }).filter((material) => material.quantity > 0)
   const stages = [...(resources.stages || [])]

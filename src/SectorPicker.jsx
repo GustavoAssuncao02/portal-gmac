@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from 'react'
-import { payableRequest } from './payablesApi.js'
+import { cachedResource } from './payablesApi.js'
 
 // Sectors are only marked, from Cadastros > Setores (read when the window opens, so a sector just created is there).
 // Machines and services keep the names (`by="name"`), employees the ids (`by="id"`). A name kept by a machine but no
@@ -9,7 +9,7 @@ export default function SectorPicker({ value = [], onChange, by = 'name', error 
   const id = useId()
   useEffect(() => {
     let active = true
-    payableRequest('/sectors').then((data) => { if (active) setRegistered(data.items) }).catch(() => { if (active) setRegistered([]) })
+    cachedResource('/sectors', (data) => { if (active) setRegistered(data.items) }).catch(() => { if (active) setRegistered((current) => current ?? []) })
     return () => { active = false }
   }, [])
   const options = (registered || []).map((sector) => ({ key: by === 'id' ? sector.id : sector.name, name: sector.name }))

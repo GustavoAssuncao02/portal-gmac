@@ -135,12 +135,18 @@ try {
   await page.getByRole('radio', { name: 'Desenho', exact: true }).check()
   await page.getByRole('radio', { name: 'Sim', exact: true }).check()
   await page.getByLabel('Cor/Tipo', { exact: true }).fill('Azul epoxi')
-  await page.getByLabel('Descrição do serviço', { exact: true }).fill('Acabamento conforme desenho. Sem rebarbas.')
-  await page.getByLabel('Descrição do serviço', { exact: true }).blur()
+  // The service description is the one typed when the offer was created: the details screen opens with it and edits it.
+  const serviceDescription = page.getByLabel('Descrição do serviço', { exact: true })
+  assert.equal(await serviceDescription.inputValue(), offerDraft.description)
+  await serviceDescription.fill('Acabamento conforme desenho. Sem rebarbas.')
+  await serviceDescription.blur()
   await waitSaved()
-  const settings = (await fixture.adminRequest('/offers', 'GET', undefined, fixture.admin)).data.items.find((item) => item.id === offer.id).resources
+  await page.locator('.offer-details-description').filter({ hasText: 'Acabamento conforme desenho. Sem rebarbas.' }).waitFor()
+  const savedOffer = (await fixture.adminRequest('/offers', 'GET', undefined, fixture.admin)).data.items.find((item) => item.id === offer.id)
+  const settings = savedOffer.resources
   assert.equal(settings.paintColor, 'Azul epoxi')
-  assert.equal(settings.serviceDescription, 'Acabamento conforme desenho. Sem rebarbas.')
+  assert.equal(savedOffer.description, 'Acabamento conforme desenho. Sem rebarbas.')
+  assert.equal(settings.serviceDescription, '')
   assert.equal(settings.manufacturedFrom, 'drawing')
   assert.equal(settings.tempering, true)
   await page.screenshot({ path: 'test-results/offer-process-groups.png', fullPage: true })

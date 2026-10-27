@@ -17,6 +17,7 @@ import { pendingOrderMaterials } from './pendingMaterials.js'
 import { addNotification, completedServiceNotice } from './notificationEvents.js'
 import { activeSessions, activeSince } from './operationSessions.js'
 import { editEventTime } from './operationEventTime.js'
+import { addManualEvent, manualEventTypes } from './operationManualEvents.js'
 import { removeOrderReceivables } from './receivables.js'
 import { pauseReasonNames, sectorRows, SWITCH_PAUSE_REASON } from './registries.js'
 import { formatQuantity } from './materialUnits.js'
@@ -249,15 +250,17 @@ export default function createOperationsRouter(pool) {
     }
   }
 
-  // Corrects the time of one recorded operation, keeping the original time in the event.
-  async function changeEventTime(code, eventId, at, editor) {
-    await orderByCode(code)
+  // Changes the recorded operations themselves: a corrected time, or an operation typed in from an employee's notes.
+  // `apply(state, events, order)` returns the event, the recorded events it adjusted and, for a new one, `added`.
+  async function rewriteEvents(code, apply) {
+    const order = await orderByCode(code)
     const result = (current, state, event) => ({ order: current, operation: publicOperation(current, state), event })
     if (!pool) return mutateStore((store) => {
       const current = store.orders.find((item) => item.code === code)
       const state = normalizeSessions(current.operation || defaultOperation(current))
       current.operationEvents ||= []
-      const { event } = editEventTime(state, current.operationEvents, eventId, at, editor)
+      const { event, added } = apply(state, current.operationEvents, current)
+      if (added) current.operationEvents.push(added)
       current.operation = state
       return result(current, state, event)
     })
@@ -265,12 +268,13 @@ export default function createOperationsRouter(pool) {
     const connection = await pool.getConnection()
     try {
       await connection.beginTransaction()
+      await connection.execute('INSERT IGNORE INTO order_operations (order_code, data) VALUES (?, ?)', [code, JSON.stringify(defaultOperation(order))])
       const [rows] = await connection.execute('SELECT data FROM order_operations WHERE order_code = ? FOR UPDATE', [code])
-      if (!rows.length) throw new OperationError(404, 'Operação não encontrada no histórico desta OS.')
       const state = normalizeSessions(json(rows[0].data))
       const [eventRows] = await connection.execute('SELECT data FROM order_operation_events WHERE order_code = ? ORDER BY seq', [code])
-      const { event, changed } = editEventTime(state, eventRows.map((row) => json(row.data)), eventId, at, editor)
+      const { event, changed, added } = apply(state, eventRows.map((row) => json(row.data)), order)
       await connection.execute('UPDATE order_operations SET data = ? WHERE order_code = ?', [JSON.stringify(state), code])
+      if (added) await connection.execute('INSERT INTO order_operation_events (id, order_code, data, occurred_at) VALUES (?, ?, ?, ?)', [added.id, code, JSON.stringify(added), new Date(added.at)])
       for (const item of changed) await connection.execute('UPDATE order_operation_events SET data = ?, occurred_at = ? WHERE id = ? AND order_code = ?', [JSON.stringify(item), new Date(item.at), item.id, code])
       await connection.commit()
       return result(await orderByCode(code), state, event)
@@ -533,8 +537,60 @@ export default function createOperationsRouter(pool) {
 
   router.put('/operations/orders/:code/events/:eventId/time', requireAdmin, async (request, response) => {
     try {
-      const result = await changeEventTime(request.params.code, request.params.eventId, request.body?.at, { id: request.adminId, name: request.adminName })
+      const result = await rewriteEvents(request.params.code, (state, events) => editEventTime(state, events, request.params.eventId, request.body?.at, { id: request.adminId, name: request.adminName }))
       response.json({ item: result.event, operation: result.operation })
+    } catch (error) { sendError(response, error) }
+  })
+
+  // The lists of the "Adicionar operação" form: only registered employees, stages, resources and pause reasons are used.
+  router.get('/operations/orders/:code/manual-options', requireAdmin, async (request, response) => {
+    try {
+      const order = (await operationOrders()).find((item) => item.code === request.params.code)
+      if (!order) throw new OperationError(404, 'OS não encontrada.')
+      const [employees, pauseReasons, catalog] = await Promise.all([employeeRows(), pauseReasonNames(), resourceCatalog()])
+      const option = (item) => ({ id: item.id, name: item.name })
+      const byName = (left, right) => left.name.localeCompare(right.name, 'pt-BR')
+      response.set('Cache-Control', 'no-store').json({
+        employees: employees.filter((item) => item.type === 'operator' && item.active).map(option).sort(byName),
+        pauseReasons,
+        machines: catalog.machine.map(option).sort(byName),
+        laborServices: catalog['labor-service'].map(option).sort(byName),
+        quantity: Number(order.quantity),
+        stages: order.operation.stages.map((stage) => {
+          const plan = stagePlan(order, stage, catalog)
+          return { key: stage.key, name: stage.name, count: Number(order.operation.stageCounts?.[stage.key] || 0), plan: plan ? { type: plan.type, id: (plan.machine || plan.laborService).id, name: plan.name } : null }
+        }),
+      })
+    } catch (error) { sendError(response, error) }
+  })
+
+  // An operation typed in from an employee's notes (Histórico de operações > Adicionar operação).
+  router.post('/operations/orders/:code/events', requireAdmin, async (request, response) => {
+    try {
+      const body = request.body || {}
+      if (!manualEventTypes.includes(body.type)) throw new OperationError(400, 'Selecione a operação.')
+      const employee = (await employeeRows()).find((item) => item.type === 'operator' && String(item.id) === String(body.employeeId))
+      if (!employee) throw new OperationError(400, 'Selecione o funcionário responsável.')
+      const input = { type: body.type, at: body.at, employee: { id: employee.id, name: employee.name }, stageKey: body.stageKey, quantity: body.quantity }
+      if (body.type === 'pause') {
+        if (!(await pauseReasonNames()).includes(body.reason)) throw new OperationError(400, 'Selecione o motivo da pausa.')
+        input.reason = body.reason
+      }
+      if (body.type === 'start') {
+        input.machine = await selectedResource('machine', body.machineId)
+        input.laborService = await selectedResource('labor-service', body.laborServiceId)
+        if (input.machine && input.laborService) throw new OperationError(400, 'Selecione a máquina ou o serviço de hora homem, não os dois.')
+      }
+      const catalog = await resourceCatalog()
+      const result = await rewriteEvents(request.params.code, (state, events, order) => {
+        // As on the operator screen, a stage planned in the offer decides the resource.
+        const stage = body.type === 'start' && state.stages.find((item) => item.key === body.stageKey)
+        const plan = stage && stagePlan(order, stage, catalog)
+        if (plan && String((plan.machine ? input.machine : input.laborService)?.id ?? '') !== String((plan.machine || plan.laborService).id)) throw new OperationError(409, `A etapa ${stage.name} é feita em ${plan.name}.`)
+        const { event, changed } = addManualEvent(state, events, order, input, { id: request.adminId, name: request.adminName })
+        return { event, changed, added: event }
+      })
+      response.status(201).json({ item: result.event, operation: result.operation })
     } catch (error) { sendError(response, error) }
   })
 

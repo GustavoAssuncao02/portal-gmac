@@ -7,7 +7,7 @@ import { receiveFile } from './uploads.js'
 import express from 'express'
 import { exportPdf } from './documentExports.js'
 import { renderProposalDocument } from './proposalPdf.js'
-import { productionStages, stageLabel, serviceDetails, readStageLayout, validStageLayout, stagePlanProblem, stagePlanPlace } from './serviceStages.js'
+import { productionStages, stageLabel, serviceDetails, serviceDescriptionText, readStageLayout, validStageLayout, stagePlanProblem, stagePlanPlace } from './serviceStages.js'
 import { consumeOrderMaterials } from './orderMaterials.js'
 import { addNotification, workflowSnapshot, recordWorkflowNotifications } from './notificationEvents.js'
 import { assignMaterialRequestCodes } from './materialRequestCodes.js'
@@ -124,7 +124,7 @@ router.put('/offers/:id/resources', async (request, response) => {
   const resources = request.body ?? {}
   if (!Array.isArray(resources.materials) || !Array.isArray(resources.laborEntries)) return response.status(400).json({ message: 'Recursos inválidos.' })
   // Each material is counted in kilos or in units; units are whole numbers.
-  if (resources.materials.some((material) => material?.unit != null && !validMaterialUnit(material.unit))) return response.status(400).json({ message: 'Escolha a unidade de cada material: quilo ou unidade.' })
+  if (resources.materials.some((material) => material?.unit != null && !validMaterialUnit(material.unit))) return response.status(400).json({ message: 'Escolha a unidade de cada material: quilo, metro ou unidade.' })
   if (resources.materials.some((material) => !validQuantityFor(material?.quantity, material?.unit))) return response.status(400).json({ message: 'Material contado por unidade aceita só quantidades inteiras.' })
   if (resources.stages !== undefined && (!Array.isArray(resources.stages) || resources.stages.some((stage) => !stageKeys.includes(stage)))) return response.status(400).json({ message: 'Etapas inválidas.' })
   if (resources.stageLayout !== undefined && !validStageLayout(resources.stageLayout)) return response.status(400).json({ message: 'Ordem dos grupos ou subetapas inválida.' })
@@ -135,27 +135,35 @@ router.put('/offers/:id/resources', async (request, response) => {
   if (resources.serviceLocation != null && !validServiceLocation(resources.serviceLocation)) return response.status(400).json({ message: 'Tipo de serviço inválido: escolha interno ou externo.' })
   if (resources.strictProcess !== undefined && typeof resources.strictProcess !== 'boolean') return response.status(400).json({ message: 'Informe se o processo segue uma sequência obrigatória.' })
   if (['paintColor', 'serviceDescription'].some((field) => resources[field] != null && typeof resources[field] !== 'string')) return response.status(400).json({ message: 'Descrição inválida.' })
+  if (resources.description !== undefined && typeof resources.description !== 'string') return response.status(400).json({ message: 'Descrição inválida.' })
   try {
     const offer = await mutateStore((store) => {
       const item = store.offers.find((entry) => entry.id === request.params.id)
       if (!item || item.orderCode || item.status === 'rejected') return null
       const settings = serviceSettings(item)
+      // The details screen edits the same description typed when the offer was created. A separate text of an older offer
+      // (or of a caller that still sends it) joins the end of the description.
+      const currentDescription = serviceDescriptionText(item.description, item.resources?.serviceDescription)
+      const description = clean(resources.description ?? serviceDescriptionText(item.description, resources.serviceDescription ?? item.resources?.serviceDescription), 5000)
+      if (!description && currentDescription) throw Object.assign(new Error('Preencha a descrição do serviço.'), { status: 400 })
       const materials = resources.materials.map((material) => {
         const previous = item.resources?.materials?.find((entry) => entry.id === material.id)
         const { requestedBy, requestedByName, requestedAt, requestedQuantity, requestRejection, requestReceipt, requestReceipts, ...fields } = material
         return { ...fields, requestedAt: previous?.requestedAt || (previous ? item.requestedAt : new Date().toISOString()), requestedBy: previous?.requestedBy ?? (previous ? null : request.adminId ?? null), requestedByName: previous?.requestedByName ?? (previous ? null : request.adminName || null), requestedQuantity: previous?.requestedQuantity ?? Number(material.purchaseQuantity ?? material.quantity), ...(previous?.requestRejection ? { requestRejection: previous.requestRejection } : {}), ...(previous?.requestReceipt ? { requestReceipt: previous.requestReceipt, requestReceipts: previous.requestReceipts } : {}) }
       })
-      const nextResources = { materials, laborEntries: resources.laborEntries, stages: [...new Set(resources.stages ?? settings.stages)], stageLayout: readStageLayout({ stages: resources.stages ?? settings.stages, stageLayout: resources.stageLayout ?? item.resources?.stageLayout }), kind: resources.kind ?? settings.kind, ...serviceDetails({ ...item.resources, ...resources }), paintColor: clean(resources.paintColor ?? item.resources?.paintColor, 160), serviceDescription: clean(resources.serviceDescription ?? item.resources?.serviceDescription, 5000) }
+      const nextResources = { materials, laborEntries: resources.laborEntries, stages: [...new Set(resources.stages ?? settings.stages)], stageLayout: readStageLayout({ stages: resources.stages ?? settings.stages, stageLayout: resources.stageLayout ?? item.resources?.stageLayout }), kind: resources.kind ?? settings.kind, ...serviceDetails({ ...item.resources, ...resources }), paintColor: clean(resources.paintColor ?? item.resources?.paintColor, 160), serviceDescription: '' }
       nextResources.stageTimes = cleanStageTimes(resources.stageTimes ?? item.resources?.stageTimes, nextResources.stages)
       nextResources.stageResources = cleanStageResources(resources.stageResources ?? item.resources?.stageResources, nextResources.stages, { machines: store.machines, laborServices: store.laborServices })
       // Normal/Emergencial only labels the offer inside the system; changing it keeps the proposal already made.
       // The planned stage times and resources only guide the team; they do not change the price, so the proposal is kept too.
       // Interno/Externo is a label as well: it does not change the price.
-      const comparable = (value) => JSON.stringify({ ...value, urgency: undefined, serviceLocation: undefined, stageTimes: undefined, stageResources: undefined })
-      if (comparable(item.resources) !== comparable(nextResources)) {
+      // The description goes in the proposal: only a different text discards it, not the older details joining it.
+      const comparable = (value) => JSON.stringify({ ...value, urgency: undefined, serviceLocation: undefined, stageTimes: undefined, stageResources: undefined, serviceDescription: undefined })
+      if (description !== currentDescription || comparable(item.resources) !== comparable(nextResources)) {
         item.proposal = null
         item.status = 'review'
       }
+      item.description = description
       item.resources = nextResources
       return item
     })
@@ -223,7 +231,7 @@ router.post('/offers/:id/proposal', async (request, response) => {
     await createPdf(offer, selectedProposal, offer.resources, layout)
     const updated = await mutateStore((store) => {
       const item = store.offers.find((entry) => entry.id === request.params.id)
-      if (!item || item.orderCode || item.status === 'rejected' || JSON.stringify(item.resources) !== JSON.stringify(offer.resources)) return null
+      if (!item || item.orderCode || item.status === 'rejected' || item.description !== offer.description || JSON.stringify(item.resources) !== JSON.stringify(offer.resources)) return null
       item.proposal = { ...selectedProposal, layout, generatedAt: new Date().toISOString() }
       item.status = 'proposed'
       return item

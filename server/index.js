@@ -19,6 +19,8 @@ import createPlanningRouter from './planning.js'
 import createReportsRouter from './reports.js'
 import createPayablesRouter from './payables.js'
 import createReceivablesRouter from './receivables.js'
+import createAccountPlanRouter, { ensureAccountPlan } from './accountPlan.js'
+import createDreRouter from './dre.js'
 import createBankStatementsRouter from './bankStatements.js'
 import createFiscalRouter, { startFiscalCatalogSchedule, importJsonFiscalCatalog } from './fiscalCatalog.js'
 import createProposalDocumentsRouter from './proposalDocuments.js'
@@ -78,6 +80,7 @@ await ensureEmployeeAccess(pool)
 await ensureLaborServices()
 await ensureSectors()
 await ensurePauseReasons()
+await ensureAccountPlan()
 await loadOperatorAccount()
 // The administrators keep their logins across a restart of the API: the open sessions come back from the database.
 await loadAdminSessions()
@@ -100,6 +103,8 @@ const payablesRouter = createPayablesRouter(accounts, requireAdmin)
 app.use('/api', payablesRouter)
 const receivablesRouter = createReceivablesRouter(accounts, requireAdmin, pool)
 app.use('/api', receivablesRouter)
+app.use('/api', createAccountPlanRouter(accounts, requireAdmin))
+app.use('/api', createDreRouter(accounts, requireAdmin))
 app.use('/api', createBankStatementsRouter(accounts, requireAdmin))
 app.use('/api', createFiscalRouter(requireAdmin))
 app.use('/api', createProposalDocumentsRouter(requireAdmin))

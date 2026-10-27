@@ -85,3 +85,31 @@ test('test mode does not create an administrator when none is registered', async
   const request = await fixture(t, { TEST_LOGIN_ENABLED: 'true' }, [])
   assert.equal((await request('/auth/login', {})).status, 503)
 })
+
+test('wrong passwords are limited: five tries, then a temporary block; a correct login clears the count', async (t) => {
+  const request = await fixture(t, {})
+  const wrong = () => request('/auth/login', { cpf: '12345678901', password: 'nope' })
+  assert.equal((await wrong()).data.attemptsRemaining, 4)
+  assert.equal((await wrong()).data.attemptsRemaining, 3)
+  // After the third wrong password, two tries remain — this is what the screen warns about in red.
+  assert.equal((await wrong()).data.attemptsRemaining, 2)
+  assert.equal((await wrong()).data.attemptsRemaining, 1)
+  const fifth = await wrong()
+  assert.equal(fifth.status, 401)
+  assert.equal(fifth.data.attemptsRemaining, 0)
+  const sixth = await wrong()
+  assert.equal(sixth.status, 429)
+  assert.match(sixth.data.message, /Muitas tentativas/)
+  // The correct password is blocked while the window is open.
+  assert.equal((await request('/auth/login', { cpf: '12345678901', password: 'correct-password' })).status, 429)
+})
+
+test('a correct password within the limit resets the counter for that CPF', async (t) => {
+  const request = await fixture(t, {})
+  await request('/auth/login', { cpf: '12345678901', password: 'nope' })
+  await request('/auth/login', { cpf: '12345678901', password: 'nope' })
+  assert.equal((await request('/auth/login', { cpf: '12345678901', password: 'correct-password' })).status, 200)
+  // Cleared: four fresh wrong tries still leave one (would be blocked if the earlier two had stuck).
+  for (let i = 0; i < 4; i += 1) await request('/auth/login', { cpf: '12345678901', password: 'nope' })
+  assert.equal((await request('/auth/login', { cpf: '12345678901', password: 'correct-password' })).status, 200)
+})

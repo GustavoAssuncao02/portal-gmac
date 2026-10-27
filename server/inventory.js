@@ -2,7 +2,7 @@ import express from 'express'
 import { inventoryAppearance } from './inventoryAppearance.js'
 import { saveRequestedMaterial } from './materialRequests.js'
 import { allocateReceivedMaterial } from './orderMaterials.js'
-import { materialUnit, validMaterialUnit, validQuantityFor } from './materialUnits.js'
+import { invalidUnitMessage, materialUnit, validMaterialUnit, validQuantityFor } from './materialUnits.js'
 
 // Materials and movements of the shared stock (tables inventory_materials and inventory_movements).
 // `recordInventoryNotification(row, previousLow)` registers a low-stock notice after a movement;
@@ -49,7 +49,7 @@ export default function createInventoryRouter(pool, requireAdmin, { recordInvent
   router.post('/inventory', requireAdmin, async (request, response) => {
     const { name, detail, quantity, minimum, unitPrice } = request.body ?? {}
     const initialQuantity = Number(quantity)
-    if (request.body?.unit != null && !validMaterialUnit(request.body.unit)) return response.status(400).json({ message: 'Escolha a unidade do material: quilo ou unidade.' })
+    if (request.body?.unit != null && !validMaterialUnit(request.body.unit)) return response.status(400).json({ message: invalidUnitMessage })
     const unit = materialUnit(request.body?.unit)
     if (!String(name || '').trim() || !Number.isFinite(initialQuantity) || initialQuantity < 0) {
       return response.status(400).json({ message: 'Informe o nome e uma quantidade inicial válida.' })
@@ -90,7 +90,7 @@ export default function createInventoryRouter(pool, requireAdmin, { recordInvent
 
   router.patch('/inventory/:materialId', requireAdmin, async (request, response) => {
     const { name, detail, minimum, unitPrice } = request.body ?? {}
-    if (request.body?.unit != null && !validMaterialUnit(request.body.unit)) return response.status(400).json({ message: 'Escolha a unidade do material: quilo ou unidade.' })
+    if (request.body?.unit != null && !validMaterialUnit(request.body.unit)) return response.status(400).json({ message: invalidUnitMessage })
     try {
       const [[current]] = await pool.execute('SELECT unit, quantity_kg AS quantity FROM inventory_materials WHERE id = ?', [request.params.materialId])
       if (!current) return response.status(404).json({ message: 'Material não encontrado.' })

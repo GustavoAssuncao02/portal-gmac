@@ -9,13 +9,13 @@ import { configureWeb, serveInterface } from '../server/webServer.js'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
-export async function createWorkflowFixture({ pool, inventoryPool = pool, accountsEnv, notificationInventory, fillStageTimes = true } = {}) {
+export async function createWorkflowFixture({ pool, inventoryPool = pool, accountsEnv, notificationInventory, fillStageTimes = true, fillClassifications = true } = {}) {
   const results = path.join(root, 'test-results')
   await mkdir(results, { recursive: true })
   const directory = await mkdtemp(path.join(results, 'workflow-'))
   // The copied modules keep their data next to them; a DATA_DIR from the shell would point them at real data.
   delete process.env.DATA_DIR
-  for (const name of ['planning.js', 'planningRules.js', 'offers.js', 'orderHistory.js', 'pieces.js', 'access.js', 'orderMaterials.js', 'pendingMaterials.js', 'operations.js', 'orderEditing.js', 'operatorAuth.js', 'employeeAccess.js', 'employeeActivity.js', 'serviceStages.js', 'machines.js', 'laborServices.js', 'accounts.js', 'reports.js', 'reportData.js', 'documentExports.js', 'payables.js', 'payableRules.js', 'receivables.js', 'bankStatements.js', 'ofx.js', 'materialRequests.js', 'notificationRules.js', 'notificationEvents.js', 'operationSessions.js', 'operationEventTime.js','materialRequestCodes.js', 'notifications.js', 'fiscalCatalog.js', 'dataDirectory.js', 'proposalDocuments.js', 'clientDocument.js', 'proposalDefaults.js', 'proposalPdf.js', 'proposalBrand.js', 'proposalMath.js', 'moneyWords.js', 'store.js', 'materialUnits.js', 'banks.js', 'operatorAccount.js', 'registries.js', 'requesters.js','serviceLocation.js', 'materialRequestSources.js', 'inventory.js', 'inventoryAppearance.js', 'materialIcons.js', 'uploads.js', 'machineUsage.js']) {
+  for (const name of ['planning.js', 'planningRules.js', 'offers.js', 'orderHistory.js', 'pieces.js', 'access.js', 'orderMaterials.js', 'pendingMaterials.js', 'operations.js', 'orderEditing.js', 'operatorAuth.js', 'employeeAccess.js', 'employeeActivity.js', 'serviceStages.js', 'machines.js', 'laborServices.js', 'accounts.js', 'reports.js', 'reportData.js', 'documentExports.js', 'payables.js', 'payableRules.js', 'receivables.js', 'bankStatements.js', 'ofx.js', 'materialRequests.js', 'notificationRules.js', 'notificationEvents.js', 'operationSessions.js', 'operationEventTime.js', 'operationManualEvents.js', 'materialRequestCodes.js', 'notifications.js', 'fiscalCatalog.js', 'dataDirectory.js', 'proposalDocuments.js', 'clientDocument.js', 'proposalDefaults.js', 'proposalPdf.js', 'proposalBrand.js', 'proposalMath.js', 'moneyWords.js', 'store.js', 'materialUnits.js', 'banks.js', 'operatorAccount.js', 'registries.js', 'requesters.js','serviceLocation.js', 'materialRequestSources.js', 'inventory.js', 'inventoryAppearance.js', 'materialIcons.js', 'uploads.js', 'machineUsage.js', 'accountPlan.js', 'accountPlanRules.js', 'dre.js', 'dreRules.js', 'dreExport.js']) {
     await copyFile(path.join(root, 'server', name), path.join(directory, name))
   }
   // PDFs use the bundled logo and fonts.
@@ -44,6 +44,8 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   const { default: requestersRouter } = await import(pathToFileURL(path.join(directory, 'requesters.js')))
   const { default: planningRouter } = await import(pathToFileURL(path.join(directory, 'planning.js')))
   const { default: inventoryRouter } = await import(pathToFileURL(path.join(directory, 'inventory.js')))
+  const { default: accountPlanRouter } = await import(pathToFileURL(path.join(directory, 'accountPlan.js')))
+  const { default: dreRouter } = await import(pathToFileURL(path.join(directory, 'dre.js')))
   // The stock screens use the real SQL routes, on the tests' own MySQL pool or on the fixture database (simulated pools only answer execute).
   const stockPool = typeof inventoryPool?.query === 'function' ? inventoryPool : storeDatabase.pool
   for (const statement of await inventorySchema()) await stockPool.query(statement)
@@ -53,6 +55,33 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   configureWeb(app)
   app.use(express.json())
   app.use('/api', restrictStaffFinance)
+  // Every classification belongs to a group of accounts and every receivable has a revenue classification. Most tests are
+  // not about it: a classification created without a group goes to a test group (with the next free code), and a
+  // receivable created without a classification gets a test revenue classification ("98.01 · Receita de teste", also
+  // offered by the receivable forms once Contas a Receber, Tesouraria or the OS receipt is opened).
+  // `fillClassifications: false` keeps the requests as sent (tests of the plan itself, which install GMAC's plan).
+  if (fillClassifications) app.use('/api', async (request, _response, next) => {
+    try {
+      const classification = request.method === 'POST' && request.path === '/classifications' && request.body && !request.body.groupId
+      const receivable = (request.method === 'POST' && request.path === '/receivables' || request.method === 'GET' && /^\/receivables(\/order\/[^/]+)?$/.test(request.path))
+      if (!classification && !receivable) return next()
+      await mutateStore((store) => {
+        store.accountGroups ||= []; store.classifications ||= []
+        const group = (code, name, dreLine) => store.accountGroups.find((row) => row.code === code) || store.accountGroups[store.accountGroups.push({ id: randomUUID(), code, name, dreLine, inactive: false }) - 1]
+        if (classification) {
+          const own = group('99', 'Grupo de testes', 'operating'), used = store.classifications.filter((row) => row.groupId === own.id).length
+          Object.assign(request.body, { groupId: own.id, code: request.body.code || `99.${String(used + 1).padStart(2, '0')}`, behavior: request.body.behavior || 'variable' })
+        }
+        if (receivable) {
+          const own = group('98', 'Receitas de teste', 'gross_revenue')
+          let item = store.classifications.find((row) => row.groupId === own.id)
+          if (!item) store.classifications.push(item = { id: randomUUID(), code: '98.01', name: 'Receita de teste', groupId: own.id, behavior: 'variable', dreLine: 'gross_revenue', inactive: false })
+          if (request.method === 'POST' && request.body && !request.body.classificationId) request.body.classificationId = item.id
+        }
+      })
+      next()
+    } catch (error) { next(error) }
+  })
   // The planned time and the machine or service of every stage are mandatory. Most tests are not about it: stages they
   // send without a time get 60 minutes, as a detailed offer has, and stages without a machine or service get the first
   // labor service. Once the offer is accepted, the OS loses those filled resources again, like an OS from before the
@@ -122,6 +151,8 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   app.use('/api', payables)
   const receivables = receivablesRouter(accounts, requireAdmin, pool)
   app.use('/api', receivables)
+  app.use('/api', accountPlanRouter(accounts, requireAdmin))
+  app.use('/api', dreRouter(accounts, requireAdmin))
   app.use('/api', bankStatementsRouter(accounts, requireAdmin))
   // Tests never reach the Anthropic API; they pass a fake analysis.
   app.use('/api', fiscalRouter(requireAdmin))

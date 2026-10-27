@@ -56,6 +56,8 @@ try {
   let form = admin.getByRole('dialog', { name: 'Novo funcionário' })
   await fillEmployee(form, 1, 'Ana Operadora')
   assert.equal(await form.getByLabel(/^Senha/).count(), 0, 'operators have no password')
+  // Sectors are the operator's tablet queue, so the picker is only for operators.
+  assert.equal(await form.getByRole('group', { name: 'Setor' }).count(), 1, 'operators pick sectors')
   await form.getByRole('button', { name: 'Gerar código', exact: true }).click()
   const code = await form.getByLabel(/^Código de acesso/).inputValue()
   assert.match(code, /^\d{4}$/)
@@ -70,6 +72,7 @@ try {
   await admin.getByRole('button', { name: 'Novo funcionário', exact: true }).click()
   form = admin.getByRole('dialog', { name: 'Novo funcionário' })
   await form.getByLabel(/^Tipo de funcionário/).selectOption('administrative')
+  assert.equal(await form.getByRole('group', { name: 'Setor' }).count(), 0, 'administrative employees have no sector: it is only the operator tablet queue')
   assert.equal(await form.getByLabel(/^Identificação/).count(), 0, 'administrative employees have no 3-digit identification')
   await fillEmployee(form, 2, 'Bruno Administrativo')
   assert.equal(await form.getByLabel(/^Código de acesso/).count(), 0, 'administrative employees have no operator code')

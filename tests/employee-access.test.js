@@ -86,7 +86,7 @@ test('administrative employees sign in with CPF and password and use everything 
     const admin = (await fixture.request('/auth/login', 'POST', { cpf: env.DEMO_ADMIN_CPF, password: env.DEMO_ADMIN_PASSWORD })).data
     assert.equal(admin.user.role, 'admin')
 
-    for (const route of ['/receivables', '/receivables/history', '/payables/history', '/payables/order-costs', '/classifications', '/bank-statements', '/ai-reconciliations']) {
+    for (const route of ['/receivables', '/receivables/history', '/payables/history', '/payables/order-costs', '/classifications', '/account-groups', '/dre', '/dre-adjustments', '/bank-statements', '/ai-reconciliations']) {
       const result = await fixture.request(route, 'GET', undefined, staff)
       assert.equal(result.status, 403, route)
       assert.equal(result.data.message, 'Seu acesso não inclui a Gestão Financeira.')

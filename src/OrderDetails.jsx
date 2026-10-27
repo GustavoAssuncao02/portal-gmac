@@ -6,11 +6,11 @@ import { activeEmployeeNames, activeSessions } from '../server/operationSessions
 import { timeEditableEvents } from '../server/operationEventTime.js'
 import { osValueOf, proposalCosts, hoursText } from '../server/proposalMath.js'
 import { pollWhileVisible } from './polling.js'
-import { Info, Pencil } from 'lucide-react'
+import { Info, Pencil, Plus } from 'lucide-react'
 import PieceTrack, { workingStageKeys } from './PieceTrack.jsx'
 import { UndoAcceptModal } from './DeclineProposalModal.jsx'
 import DownloadLink from './DownloadLink.jsx'
-import { downloadFile, payableRequest } from './payablesApi.js'
+import { cachedResource, downloadFile, payableRequest } from './payablesApi.js'
 import { documentKind } from '../server/clientDocument.js'
 import { currentServiceLocation, serviceLocations, serviceLocationTimes } from '../server/serviceLocation.js'
 import { formatQuantity } from '../server/materialUnits.js'
@@ -63,7 +63,90 @@ function Facts({ items, className = '' }) {
   return <dl className={`os-facts ${className}`}>{items.map(([label, value, detail]) => <div key={label}><dt>{label}</dt><dd>{value ?? 'Não informado'}{detail && <small>{detail}</small>}</dd></div>)}</dl>
 }
 
-function OrderHistoryModal({ order, onClose, onEditTime, Icon }) {
+const manualTypes = [['start', 'Início da operação'], ['pieces', 'Peças registradas'], ['pause', 'Pausa']]
+// Stage the employee was working on at a moment, from the starts and stage changes already in the history.
+function stageAt(items, employeeId, value) {
+  if (!employeeId || !value) return ''
+  const time = Date.parse(bahiaInstant(value))
+  return items.filter((event) => String(event.employeeId) === String(employeeId) && event.workStageKey && ['started', 'resumed', 'stage_changed'].includes(event.type) && Date.parse(event.at) <= time)
+    .sort((left, right) => Date.parse(left.at) - Date.parse(right.at)).at(-1)?.workStageKey || ''
+}
+
+// An operation the employee wrote down (e.g. a service outside without access to the portal) typed in by the
+// administrator. Every field is a list of what is registered, so the record reads like the ones made on the operator screen.
+function ManualOperationForm({ order, items, onSave, onCancel }) {
+  const [options, setOptions] = useState(null)
+  const [loadError, setLoadError] = useState('')
+  const [form, setForm] = useState({ at: '', type: 'start', employeeId: '', stageKey: '', resource: '', quantity: '', reason: '' })
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  useEffect(() => {
+    let active = true
+    fetch(`/api/operations/orders/${encodeURIComponent(order.code)}/manual-options`, { cache: 'no-store', headers: { Authorization: `Bearer ${sessionStorage.getItem('gmac-admin-token') || ''}` } }).then(async (response) => {
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(body.message || 'Não foi possível carregar as listas da operação.')
+      if (active) setOptions(body)
+    }).catch((caught) => { if (active) setLoadError(caught.message) })
+    return () => { active = false }
+  }, [order.code])
+  const stages = options?.stages || []
+  const stage = stages.find((item) => item.key === form.stageKey)
+  const remaining = stage ? Math.max(0, options.quantity - stage.count) : 0
+  const set = (changes) => {
+    setError('')
+    setForm((current) => {
+      const next = { ...current, ...changes }
+      // Pieces go to the stage the employee was on at that moment, as on the operator screen.
+      if (next.type === 'pieces' && ('employeeId' in changes || 'at' in changes || 'type' in changes)) { const key = stageAt(items, next.employeeId, next.at); if (key) next.stageKey = key }
+      if ('stageKey' in changes || 'type' in changes) next.quantity = ''
+      // A stage planned in the offer decides the machine or labor service.
+      if (next.type === 'start' && ('stageKey' in changes || 'type' in changes)) { const plan = stages.find((item) => item.key === next.stageKey)?.plan; next.resource = plan ? `${plan.type}:${plan.id}` : '' }
+      return next
+    })
+  }
+  async function submit(event) {
+    event.preventDefault()
+    if (saving) return
+    setSaving(true)
+    setError('')
+    const split = form.resource.indexOf(':'), resourceType = form.resource.slice(0, split), resourceId = form.resource.slice(split + 1)
+    try {
+      await onSave({ type: form.type, at: bahiaInstant(form.at), employeeId: form.employeeId,
+        ...(form.type === 'start' ? { stageKey: form.stageKey, machineId: resourceType === 'machine' ? resourceId : null, laborServiceId: resourceType === 'labor-service' ? resourceId : null } : {}),
+        ...(form.type === 'pieces' ? { stageKey: form.stageKey, quantity: Number(form.quantity) } : {}),
+        ...(form.type === 'pause' ? { reason: form.reason } : {}) })
+    } catch (caught) {
+      setError(caught.message || 'Não foi possível adicionar a operação. Tente novamente.')
+      setSaving(false)
+    }
+  }
+  const quantity = Number(form.quantity)
+  const preview = form.type === 'pieces' && stage && quantity ? `${stage.name}: +${number(quantity)} peça(s), ${number(stage.count + quantity)}/${number(options.quantity)} no total` : ''
+  return <form className="os-history-add" onSubmit={submit} aria-label="Adicionar operação" aria-busy={saving}>
+    <p className="os-history-add-intro">Lance as anotações do funcionário na ordem em que aconteceram: primeiro o início, depois as peças e por fim a pausa.</p>
+    {loadError ? <p className="os-interrupt-error" role="alert">{loadError}</p> : !options ? <p className="os-history-add-intro" role="status">Carregando listas...</p> : <>
+      <div className="os-history-add-grid">
+        <label>Data e hora<input type="datetime-local" step="1" required value={form.at} max={bahiaInput(Date.now())} disabled={saving} onChange={(change) => set({ at: change.target.value })} /></label>
+        <label>Operação<select required value={form.type} disabled={saving} onChange={(change) => set({ type: change.target.value })}>{manualTypes.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+        <label>Responsável<select required value={form.employeeId} disabled={saving} onChange={(change) => set({ employeeId: change.target.value })}><option value="">Selecione o funcionário</option>{options.employees.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+        <fieldset className="os-history-add-details" disabled={saving}><legend>Detalhes</legend>
+          {form.type !== 'pause' && <label>Etapa<select required value={form.stageKey} onChange={(change) => set({ stageKey: change.target.value })}><option value="">Selecione a etapa</option>{stages.map((item) => <option key={item.key} value={item.key}>{item.name}</option>)}</select></label>}
+          {form.type === 'start' && <label>Máquina ou serviço<select value={form.resource} disabled={Boolean(stage?.plan)} onChange={(change) => set({ resource: change.target.value })}><option value="">Sem máquina ou serviço</option>
+            {options.machines.length > 0 && <optgroup label="Máquinas">{options.machines.map((item) => <option key={item.id} value={`machine:${item.id}`}>{item.name}</option>)}</optgroup>}
+            {options.laborServices.length > 0 && <optgroup label="Serviços de hora homem">{options.laborServices.map((item) => <option key={item.id} value={`labor-service:${item.id}`}>{item.name}</option>)}</optgroup>}
+          </select>{stage?.plan && <small>Definido na oferta para esta etapa.</small>}</label>}
+          {form.type === 'pieces' && <label>Quantidade<select required value={form.quantity} disabled={!stage || remaining < 1} onChange={(change) => set({ quantity: change.target.value })}><option value="">{stage && remaining < 1 ? 'Etapa completa' : 'Selecione'}</option>{Array.from({ length: remaining }, (_, index) => index + 1).map((value) => <option key={value} value={value}>{value} {value === 1 ? 'peça' : 'peças'}</option>)}</select></label>}
+          {form.type === 'pause' && <label>Motivo<select required value={form.reason} onChange={(change) => set({ reason: change.target.value })}><option value="">Selecione o motivo</option>{options.pauseReasons.map((reason) => <option key={reason} value={reason}>{reason}</option>)}</select></label>}
+        </fieldset>
+      </div>
+      {preview && <p className="os-history-add-preview">No histórico: <strong>{preview}</strong></p>}
+    </>}
+    {error && <p className="os-interrupt-error" role="alert">{error}</p>}
+    <div className="os-history-add-actions"><button className="os-button" type="button" disabled={saving} onClick={onCancel}>Cancelar</button><button className="os-button os-history-add-save" type="submit" disabled={saving || !options}>{saving ? 'Salvando...' : 'Salvar operação'}</button></div>
+  </form>
+}
+
+function OrderHistoryModal({ order, onClose, onEditTime, onAddEvent, Icon }) {
   const dialog = useRef(null)
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
@@ -73,6 +156,13 @@ function OrderHistoryModal({ order, onClose, onEditTime, Icon }) {
   const [saving, setSaving] = useState(false)
   const [originalOpen, setOriginalOpen] = useState(null)
   const canEditTime = Boolean(onEditTime && sessionStorage.getItem('gmac-admin-token'))
+  const canAdd = Boolean(onAddEvent && sessionStorage.getItem('gmac-admin-token'))
+  const [adding, setAdding] = useState(false)
+  async function addEvent(body) {
+    await onAddEvent(body)
+    setAdding(false)
+    setRetry((value) => value + 1)
+  }
   async function saveTime(event) {
     event.preventDefault()
     if (saving) return
@@ -98,6 +188,8 @@ function OrderHistoryModal({ order, onClose, onEditTime, Icon }) {
       <div className="os-history-time"><time dateTime={event.at}>{moment(event.at)}</time>{canEditTime && event.sessionId && timeEditableEvents.includes(event.type) && <button className="os-history-time-action" type="button" disabled={saving} aria-label={`Editar horário de ${label}`} title="Editar horário" onClick={() => { const value = bahiaInput(event.at); setEditing({ id: event.id, value, initial: value, error: '' }) }}><Icon name="edit" /></button>}</div>
       {event.originalAt && <div className="os-history-edited"><b>Horário editado</b><button className="os-history-time-action" type="button" aria-label={`Ver horário original de ${label}`} title="Ver horário original" aria-expanded={originalOpen === event.id} onClick={() => setOriginalOpen((current) => current === event.id ? null : event.id)}><Info size={15} aria-hidden="true" /></button></div>}
       {event.originalAt && originalOpen === event.id && <p className="os-history-original" role="note"><strong>Horário original: {moment(event.originalAt)}</strong>{lastEdit && <small>Editado por {lastEdit.adminName} em {moment(lastEdit.editedAt)}</small>}</p>}
+      {event.manual && <div className="os-history-edited"><b className="os-history-manual">Lançamento manual</b><button className="os-history-time-action" type="button" aria-label={`Ver quem lançou ${label}`} title="Ver quem lançou" aria-expanded={originalOpen === `manual-${event.id}`} onClick={() => setOriginalOpen((current) => current === `manual-${event.id}` ? null : `manual-${event.id}`)}><Info size={15} aria-hidden="true" /></button></div>}
+      {event.manual && originalOpen === `manual-${event.id}` && <p className="os-history-original os-history-manual-note" role="note"><strong>Lançado a partir das anotações do funcionário</strong><small>Por {event.manual.adminName} em {moment(event.manual.recordedAt)}</small></p>}
     </>
   }
   useEffect(() => {
@@ -131,13 +223,14 @@ function OrderHistoryModal({ order, onClose, onEditTime, Icon }) {
     const stopPolling = pollWhileVisible(load, 10000)
     return () => { stopPolling(); controller.abort() }
   }, [order.code, retry])
-  return <dialog ref={dialog} className="os-history-modal" aria-labelledby="os-history-title" onCancel={(event) => { event.preventDefault(); if (editing) { if (!saving) setEditing(null) } else onClose() }} onClick={(event) => {
+  return <dialog ref={dialog} className="os-history-modal" aria-labelledby="os-history-title" onCancel={(event) => { event.preventDefault(); if (editing) { if (!saving) setEditing(null) } else if (adding) setAdding(false); else onClose() }} onClick={(event) => {
     if (event.target !== event.currentTarget) return
     const box = event.currentTarget.getBoundingClientRect()
     if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) onClose()
   }}>
-    <header className="os-history-heading"><div><h2 id="os-history-title">Histórico de operações</h2><p>{order.code} · {order.service}</p></div><button className="os-icon-button" type="button" onClick={onClose} aria-label="Fechar histórico" title="Fechar histórico">{'\u00d7'}</button></header>
+    <header className="os-history-heading"><div><h2 id="os-history-title">Histórico de operações</h2><p>{order.code} · {order.service}</p></div><div className="os-history-heading-actions">{canAdd && <button className="os-button os-history-add-button" type="button" aria-expanded={adding} onClick={() => setAdding((value) => !value)}><Plus size={16} aria-hidden="true" />Adicionar operação</button>}<button className="os-icon-button" type="button" onClick={onClose} aria-label="Fechar histórico" title="Fechar histórico">{'\u00d7'}</button></div></header>
     <div className="os-history-content" aria-busy={loading}>
+      {adding && <ManualOperationForm order={order} items={items} onSave={addEvent} onCancel={() => setAdding(false)} />}
       {error && <div className="os-history-error"><p role="alert">{error}</p><button className="os-button" type="button" onClick={() => { setLoading(true); setRetry((value) => value + 1) }}><Icon name="expand" />Tentar novamente</button></div>}
       {loading ? <p className="os-history-empty" role="status">Carregando operações...</p> : !error && !items.length ? <p className="os-history-empty">Nenhuma interação registrada.</p> : items.length > 0 && <>
         <p className="os-history-count" role="status">{items.length} {items.length === 1 ? 'operação registrada' : 'operações registradas'}</p>
@@ -316,7 +409,11 @@ function StageList({ order, operation, onSave }) {
       const code = codeOf(stage), minutes = Number(times[code]) || 0, plan = plans[code]
       return [code, { hours: minutes ? String(Math.floor(minutes / 60)) : '', minutes: minutes ? String(minutes % 60) : '', resource: plan ? `${plan.type}:${plan.id}` : '' }]
     })))
-    if (!options) Promise.all([payableRequest('/machines'), payableRequest('/labor-services')]).then(([machines, services]) => setOptions({ machines: machines.items || [], laborServices: services.items || [] })).catch((caught) => setError(caught.message))
+    if (!options) {
+      // Cache no navegador deixa os menus de máquina/serviço abrirem na hora; a rede confirma logo em seguida.
+      cachedResource('/machines', (data) => setOptions((current) => ({ machines: data.items || [], laborServices: current?.laborServices || [] }))).catch((caught) => setError(caught.message))
+      cachedResource('/labor-services', (data) => setOptions((current) => ({ machines: current?.machines || [], laborServices: data.items || [] }))).catch((caught) => setError(caught.message))
+    }
   }
   const change = (code, field, value) => setEditing((current) => ({ ...current, [code]: { ...current[code], [field]: value } }))
   async function save(event) {
@@ -365,7 +462,7 @@ function StageList({ order, operation, onSave }) {
   </>
 }
 
-export default function OrderDetails({ order, activeTime, stageNamesInput, onChangeStages, onConfigureStages, onInterrupt, onEdit, onReopen, onUpload, onEditEventTime, onRefresh, operationError, onBack, Icon }) {
+export default function OrderDetails({ order, activeTime, stageNamesInput, onChangeStages, onConfigureStages, onInterrupt, onEdit, onReopen, onUpload, onEditEventTime, onAddEvent, onRefresh, operationError, onBack, Icon }) {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [unaccepting, setUnaccepting] = useState(false)
   const [interruptOpen, setInterruptOpen] = useState(false)
@@ -420,7 +517,7 @@ export default function OrderDetails({ order, activeTime, stageNamesInput, onCha
       <PurchaseOrders order={order} onChanged={onRefresh} Icon={Icon} />
     </div></div>
     {unaccepting && <UndoAcceptModal orderCode={order.code} onConfirm={async () => { const response = await fetch(`/api/offers/${encodeURIComponent(order.offerId)}/unaccept`, { method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: '{}' }); if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || 'Não foi possível desfazer o aceite.'); await onRefresh?.(); onBack() }} onClose={() => setUnaccepting(false)} />}
-    {historyOpen && <OrderHistoryModal order={order} onClose={() => setHistoryOpen(false)} onEditTime={onEditEventTime} Icon={Icon} />}
+    {historyOpen && <OrderHistoryModal order={order} onClose={() => setHistoryOpen(false)} onEditTime={onEditEventTime} onAddEvent={onAddEvent} Icon={Icon} />}
     {interruptOpen && <InterruptSessionModal order={order} onConfirm={onInterrupt} onClose={() => setInterruptOpen(false)} Icon={Icon} />}
     {action && <OrderActionModal order={order} action={action} onClose={() => setAction(null)} onConfirm={action === 'reopen' ? onReopen : () => { setEditConfirmed(true); setEditOpen(true) }} />}
     {editOpen && <OrderEditModal order={order} confirmCompleted={editConfirmed} onSave={onEdit} onUpload={onUpload} onClose={() => setEditOpen(false)} />}

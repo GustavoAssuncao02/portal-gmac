@@ -5,7 +5,7 @@ import { todayBahia, shiftMonth } from '../server/payableRules.js'
 const AHEAD = 3
 const monthLabel = (month) => new Date(`${month}-15T12:00:00Z`).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit', timeZone: 'UTC' }).replace('.', '').replace(' de ', '/')
 const compact = (cents) => { const value = cents / 100; return value >= 1e6 ? `R$ ${(value / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mi` : value >= 1e3 ? `R$ ${(value / 1e3).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil` : `R$ ${value.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}` }
-function niceTicks(max) {
+export function niceTicks(max) {
   if (max <= 0) return [0, 100000]
   const raw = max / 4, magnitude = 10 ** Math.floor(Math.log10(raw)), step = [1, 2, 2.5, 5, 10].map((n) => n * magnitude).find((n) => n >= raw)
   return Array.from({ length: Math.ceil(max / step) + 1 }, (_, index) => index * step)

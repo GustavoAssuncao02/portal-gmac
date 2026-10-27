@@ -10,6 +10,7 @@ import { notificationSettings } from './accounts.js'
 import { assertNotReconciled, reconciledTransaction } from './bankStatements.js'
 import { orderValue } from './receivables.js'
 import { settlementBank } from './banks.js'
+import { classificationList, entryClassification } from './accountPlan.js'
 
 const directory = path.join(dataDirectory, 'payable-files')
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), { status }) }
@@ -57,10 +58,12 @@ function duplicates(store, proposed, ignored = []) {
 function fields(store, body, current) {
   const supplier = (store.suppliers || []).find((item) => String(item.id) === String(body.supplierId))
   if (!supplier) fail('Selecione um fornecedor cadastrado.')
-  // A classification already in the account stays accepted even if it was deactivated later.
-  const usable = (id) => { const item = store.classifications.find((row) => row.id === id); return item && (!item.inactive || classificationParts(current || {}).some((part) => part.classificationId === id)) ? item : null }
+  // Money out takes expense classifications (or one outside the result). A classification already in the account stays
+  // accepted even if it was deactivated later.
+  const kept = current ? classificationParts(current).map((part) => part.classificationId) : []
+  const usable = (id) => entryClassification(store, id, 'payable', kept)
   const classification = usable(body.classificationSplit?.length > 1 ? body.classificationSplit[0]?.classificationId : body.classificationId)
-  if (!classification) fail('Selecione uma classificação ativa.')
+  if (!classification) fail('Selecione uma classificação ativa de despesa.')
   if (!validDate(body.issueDate) || !validDate(body.dueDate)) fail('Informe emissão e vencimento válidos.')
   if (!['normal', 'installment', 'recurring'].includes(body.kind)) fail('Tipo de conta inválido.')
   if (body.kind === 'recurring' && !['monthly', 'yearly'].includes(body.recurrence)) fail('Selecione recorrência mensal ou anual.')
@@ -156,8 +159,8 @@ function report(rows, store, individual = false, filters = {}) {
 
 export default function createPayablesRouter(accounts, requireAdmin) {
   const router = express.Router()
-  router.use(['/payables', '/classifications', '/suppliers'], requireAdmin)
-  router.use(['/payables', '/classifications', '/suppliers'], async (request, _response, next) => { try { request.actor = await accounts.account(request.adminId); if (!request.actor) fail('Administrador não encontrado.', 401); next() } catch (error) { next(error) } })
+  router.use(['/payables', '/suppliers'], requireAdmin)
+  router.use(['/payables', '/suppliers'], async (request, _response, next) => { try { request.actor = await accounts.account(request.adminId); if (!request.actor) fail('Administrador não encontrado.', 401); next() } catch (error) { next(error) } })
   const handle = (fn) => async (req, res, next) => { try { await fn(req, res) } catch (error) { next(error) } }
   async function sweep(userId) {
     const today = todayBahia()
@@ -186,7 +189,7 @@ export default function createPayablesRouter(accounts, requireAdmin) {
       return store
     })
   }
-  router.get('/payables', handle(async (req, res) => { const store = await sweep(); res.json({ items: req.actor.role === 'staff' ? [] : store.payables.map((r) => view(r, store)), classifications: store.classifications, suppliers: store.suppliers || [], orders: (store.orders || []).map((order) => ({ code: order.code, service: order.service, company: order.company, status: order.operation?.status || 'waiting' })) }) }))
+  router.get('/payables', handle(async (req, res) => { const store = await sweep(); res.json({ items: req.actor.role === 'staff' ? [] : store.payables.map((r) => view(r, store)), classifications: classificationList(store), suppliers: store.suppliers || [], orders: (store.orders || []).map((order) => ({ code: order.code, service: order.service, company: order.company, status: order.operation?.status || 'waiting' })) }) }))
   router.get('/payables/history', handle(async (_req, res) => { const store = await sweep(); res.json({ items: [...store.payableEvents].reverse() }) }))
   router.get('/payables/order-costs', handle(async (_req, res) => { const store = await sweep(); res.json({ items: (store.orders || []).map((order) => { const { payables, ...summary } = orderCosts(store, order); return { ...summary, payableCount: payables.length } }) }) }))
   router.get('/payables/order-costs/:code', handle(async (req, res) => { const store = await sweep(); const order = (store.orders || []).find((item) => item.code === req.params.code); if (!order) fail('OS não encontrada.', 404); res.json({ item: orderCosts(store, order) }) }))
@@ -254,7 +257,9 @@ export default function createPayablesRouter(accounts, requireAdmin) {
       const ahead = common.kind === 'recurring' ? Number(body.ahead || 0) : 0
       if (!Number.isInteger(ahead) || ahead < 0 || ahead > 24) fail('Informe de 0 a 24 ocorrências futuras.')
       const seriesId = ahead ? randomUUID() : null
-      const occurrences = ahead ? Array.from({ length: ahead + 1 }, (_, index) => ({ valueCents: common.valueCents, dueDate: shiftMonth(common.dueDate, index * (common.recurrence === 'yearly' ? 12 : 1)) })) : parts
+      // Each occurrence is issued in its own month, so the DRE by competência spreads the contract over its months.
+      const step = common.recurrence === 'yearly' ? 12 : 1
+      const occurrences = ahead ? Array.from({ length: ahead + 1 }, (_, index) => ({ valueCents: common.valueCents, issueDate: shiftMonth(common.issueDate, index * step), dueDate: shiftMonth(common.dueDate, index * step) })) : parts
       const splits = common.kind === 'installment' ? splitInstallments(common.classificationSplit, occurrences.map((part) => part.valueCents)) : occurrences.map(() => common.classificationSplit)
       const proposed = occurrences.map((part, index) => ({ ...common, ...part, classificationSplit: splits[index], groupId, installmentNumber: seriesId ? 1 : index + 1, installmentCount: seriesId ? 1 : parts.length, seriesId, seriesIndex: seriesId ? index + 1 : null, seriesCount: seriesId ? occurrences.length : null, originalTotalCents: common.valueCents, previousId: index === 0 ? previous?.id || null : null, inactive: false, payment: null, attachments: [], createdAt: new Date().toISOString() }))
       if (!treasury) duplicates(store, proposed)
@@ -378,9 +383,6 @@ export default function createPayablesRouter(accounts, requireAdmin) {
     Object.assign(row, fields); event(store, req.actor, before ? 'supplier_edited' : 'supplier_created', null, { details: { before, after: row } }); return row
   }); res.json({ item }) }))
   router.delete('/suppliers/:id', handle(async (req, res) => { await mutateStore((store) => { init(store); const row = (store.suppliers || []).find((s) => s.id === req.params.id); if (!row) fail('Fornecedor não encontrado.', 404); if (store.payables.some((r) => String(r.supplierId) === row.id)) fail('Existem contas vinculadas a este fornecedor.', 409); store.suppliers = store.suppliers.filter((s) => s.id !== row.id); event(store, req.actor, 'supplier_deleted', null, { details: row }) }); res.json({ ok: true }) }))
-  router.get('/classifications', handle(async (_req, res) => { const store = await sweep(); res.json({ items: store.classifications.map((c) => ({ ...c, count: store.payables.filter((r) => classificationParts(r).some((part) => part.classificationId === c.id)).length })) }) }))
-  for (const method of ['post', 'put']) router[method](method === 'post' ? '/classifications' : '/classifications/:id', handle(async (req, res) => { const item = await mutateStore((store) => { init(store); const name = clean(req.body.name, 120); if (!name) fail('Informe o nome.'); if (store.classifications.some((c) => c.id !== req.params.id && c.name.toLocaleLowerCase() === name.toLocaleLowerCase())) fail('Classificação já cadastrada.', 409); let row = store.classifications.find((c) => c.id === req.params.id); if (method === 'put' && !row) fail('Classificação não encontrada.', 404); const before = row ? { ...row } : null; if (!row) { row = { id: randomUUID(), inactive: false }; store.classifications.push(row) } row.name = name; if (typeof req.body.inactive === 'boolean') row.inactive = req.body.inactive; event(store, req.actor, before ? 'classification_edited' : 'classification_created', null, { details: { before, after: row } }); return row }); res.json({ item }) }))
-  router.delete('/classifications/:id', handle(async (req, res) => { await mutateStore((store) => { init(store); const row = store.classifications.find((c) => c.id === req.params.id); if (!row) fail('Classificação não encontrada.', 404); if (store.payables.some((r) => classificationParts(r).some((part) => part.classificationId === row.id))) fail('Existem contas usando esta classificação.', 409); store.classifications = store.classifications.filter((c) => c.id !== row.id); event(store, req.actor, 'classification_deleted', null, { details: row }) }); res.json({ ok: true }) }))
   router.sweep = sweep
   return router
 }

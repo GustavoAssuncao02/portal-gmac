@@ -25,11 +25,15 @@ import ClientNameInput from './ClientNameInput.jsx'
 import RequesterNameInput from './RequesterNameInput.jsx'
 import { documentDigits, documentKind, maskClientDocument } from '../server/clientDocument.js'
 import DownloadLink from './DownloadLink.jsx'
-import { downloadFile } from './payablesApi.js'
+import { cachedResource, downloadFile } from './payablesApi.js'
 import { PayableModal } from './PayableModal.jsx'
 import BatchSettlementScreen from './BatchSettlementScreen.jsx'
 import ReceivablesScreen from './ReceivablesScreen.jsx'
 import TreasuryScreen from './TreasuryScreen.jsx'
+import AccountPlanScreen from './AccountPlanScreen.jsx'
+import DreScreen from './DreScreen.jsx'
+import DreAdjustmentsScreen from './DreAdjustmentsScreen.jsx'
+import CashFlowScreen from './CashFlowScreen.jsx'
 import StockPurchaseFinance, { purchasedQuantity } from './StockPurchaseFinance.jsx'
 import BankStatementsScreen from './BankStatementsScreen.jsx'
 import ReceivableScheduleModal from './ReceivableScheduleModal.jsx'
@@ -45,16 +49,16 @@ import { useMobileModal } from './useMobileModal.js'
 import { ThemeContext, useAccountTheme } from './accountTheme.js'
 import { pollWhileVisible } from './polling.js'
 import { newId } from './newId.js'
-import { Monitor, Minimize2, Plus, Pencil, Trash2, Clock3, CreditCard, HandCoins, Banknote, Landmark, ChartColumn, Tags, Truck, WalletCards, ChevronLeft, ChevronRight, ChevronDown, UsersRound, Menu, X, Info, ArrowLeft, ListChecks, Layers, CircleCheck, CircleX, ArrowUpDown, ArrowUp, ArrowDown, Building2, CirclePause, Power, Factory, Wrench, CalendarClock, Save, Contact } from 'lucide-react'
+import { Monitor, Minimize2, Plus, Pencil, Trash2, Clock3, CreditCard, HandCoins, Banknote, Landmark, ChartColumn, Tags, FileChartColumn, FilePenLine, FolderTree, ChartNoAxesCombined, Truck, WalletCards, ChevronLeft, ChevronRight, ChevronDown, UsersRound, Menu, X, Info, ArrowLeft, ListChecks, Layers, CircleCheck, CircleX, ArrowUpDown, ArrowUp, ArrowDown, Building2, CirclePause, Power, Factory, Wrench, CalendarClock, Save, Contact } from 'lucide-react'
 import { proposalCosts, proposalPricing, hoursText, marginLimits, PROPOSAL_MARGIN_GAP } from '../server/proposalMath.js'
-import { stageLabel, serviceDetails, readStageLayout, orderedStageSelection, stagePlanProblem, stagePlanPlace } from '../server/serviceStages.js'
+import { stageLabel, serviceDetails, serviceDescriptionText, readStageLayout, orderedStageSelection, stagePlanProblem, stagePlanPlace } from '../server/serviceStages.js'
 import { findInventoryMaterial, materialsStock, normalizeSearch, purchaseMaterialRequests } from './offerResources.js'
 import { deadlineCategories } from './serviceDeadline.js'
 import { currentPieceProgress, emergenciesFirst } from './serviceProgress.js'
 import { servicePanelOrders } from './servicePanels.js'
 import { pendingOrderMaterials } from '../server/pendingMaterials.js'
 import { operationElapsed } from '../server/operationSessions.js'
-import { formatQuantity, materialUnit, materialUnits, unitPriceLabel } from '../server/materialUnits.js'
+import { formatQuantity, materialUnit, materialUnits, quantityStep, unitPriceLabel, wholeUnit } from '../server/materialUnits.js'
 import './styles.css'
 import './desktop.css'
 import './mobile.css'
@@ -166,9 +170,13 @@ const navigation = [
   ['Contas a Pagar', 'payables'],
   ['Contas a Receber', 'receivables'],
   ['Tesouraria', 'treasury'],
+  ['Fluxo de caixa', 'cash-flow'],
   ['Baixa em Lote', 'batch'],
   ['Conciliação bancária', 'bank'],
   ['Business Intelligence', 'bi'],
+  ['DRE', 'dre'],
+  ['Ajustes da DRE', 'dre-adjustments'],
+  ['Grupos de contas', 'account-groups'],
   ['Classificações', 'classifications'],
   ['Fornecedores', 'suppliers'],
   ['Relatórios', 'reports'],
@@ -177,7 +185,7 @@ const navigation = [
 
 const registrationNavigation = ['Fornecedores', 'Administradores', 'Funcionários', 'Setores', 'Clientes', 'Solicitantes', 'Bancos', 'Razões de pausas'].map((label) => navigation.find(([name]) => name === label))
 const isRegistrationPage = (label) => registrationNavigation.some(([name]) => name === label)
-const financialNavigation = ['Contas a Pagar', 'Contas a Receber', 'Tesouraria', 'Baixa em Lote', 'Conciliação bancária', 'Business Intelligence', 'Classificações'].map((label) => navigation.find(([name]) => name === label))
+const financialNavigation = ['Contas a Pagar', 'Contas a Receber', 'Tesouraria', 'Fluxo de caixa', 'Baixa em Lote', 'Conciliação bancária', 'Business Intelligence', 'DRE', 'Ajustes da DRE', 'Grupos de contas', 'Classificações'].map((label) => navigation.find(([name]) => name === label))
 const isFinancialPage = (label) => financialNavigation.some(([name]) => name === label)
 const operationNavigation = ['Serviços em andamento', 'Serviços concluídos', 'Ofertas e serviços', 'Planejamento'].map((label) => navigation.find(([name]) => name === label))
 const isOperationPage = (label) => operationNavigation.some(([name]) => name === label)
@@ -323,7 +331,7 @@ function Sidebar({ collapsed, onToggle, activeNav, onNavigate, onLogout }) {
   }
   function navigationItem([label, icon]) {
     return <button className={`nav-item ${activeNav === label ? 'nav-item--active' : ''}`} key={label} type="button" title={pageLabel(label)} aria-label={pageLabel(label)} onClick={() => { setMobileOpen(false); onNavigate(label) }}>
-      {['payables', 'receivables', 'treasury', 'batch', 'bank', 'bi', 'classifications', 'suppliers', 'completed-services', 'sectors', 'pause-reasons', 'banks', 'planning', 'requesters'].includes(icon) ? (() => { const NavIcon = { planning: CalendarClock, payables: CreditCard, receivables: HandCoins, treasury: Banknote, batch: Layers, bank: Landmark, bi: ChartColumn, classifications: Tags, suppliers: Truck, 'completed-services': ListChecks, sectors: Building2, 'pause-reasons': CirclePause, banks: Landmark, requesters: Contact }[icon]; return <NavIcon className="icon nav-icon" size={20} /> })() : <Icon name={icon} className="nav-icon" />}
+      {['payables', 'receivables', 'treasury', 'cash-flow', 'batch', 'bank', 'bi', 'dre', 'dre-adjustments', 'account-groups', 'classifications', 'suppliers', 'completed-services', 'sectors', 'pause-reasons', 'banks', 'planning', 'requesters'].includes(icon) ? (() => { const NavIcon = { planning: CalendarClock, payables: CreditCard, receivables: HandCoins, treasury: Banknote, 'cash-flow': ChartNoAxesCombined, batch: Layers, bank: Landmark, bi: ChartColumn, dre: FileChartColumn, 'dre-adjustments': FilePenLine, 'account-groups': FolderTree, classifications: Tags, suppliers: Truck, 'completed-services': ListChecks, sectors: Building2, 'pause-reasons': CirclePause, banks: Landmark, requesters: Contact }[icon]; return <NavIcon className="icon nav-icon" size={20} /> })() : <Icon name={icon} className="nav-icon" />}
       <span>{pageLabel(label)}</span>
     </button>
   }
@@ -691,7 +699,7 @@ function InventoryScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout,
   const [savingInventory, setSavingInventory] = useState(false)
   const [purchase, setPurchase] = useState(null)
   const filteredItems = items.filter((item) => `${item.name} ${item.detail}`.toLowerCase().includes(search.trim().toLowerCase()))
-  // Kilos and units are added up apart: their sum would mean nothing.
+  // Kilos, metres and units are added up apart: their sum would mean nothing.
   const totals = materialUnits.map(([unit]) => [unit, items.filter((item) => materialUnit(item.unit) === unit).reduce((total, item) => total + Number(item.quantity || 0), 0)]).filter(([unit, total]) => unit === 'kg' || total > 0)
   const lowStock = items.filter((item) => Number(item.quantity) <= Number(item.minimum)).length
 
@@ -790,7 +798,7 @@ function InventoryModal({ item, inventoryItems = [], initialExistingId = null, s
   const selectedExistingMaterial = inventoryItems.find((material) => material.id === selectedExistingId)
   // A stock entry is in the unit of the material; the unit of a registered material changes only with its balance at zero.
   const unit = materialUnit(isStockEntry ? selectedExistingMaterial?.unit : form.unit), unitLocked = isEditing && Number(item.quantity) !== 0
-  const step = unit === 'un' ? '1' : '0.001'
+  const step = quantityStep(unit)
   const entryQuantity = Number(form.quantity) || 0
   const entryUnitPrice = Number(form.unitPrice) || 0
   const currentQuantity = Number(selectedExistingMaterial?.quantity || 0)
@@ -1189,8 +1197,9 @@ function RegistrationScreen({ kind, collapsed, onToggle, activeNav, onNavigate, 
           <label>E-mail<input type="email" value={form.email || ''} onChange={(event) => update('email', event.target.value)} placeholder="Opcional" /></label>
           <label>Observação<textarea rows={3} maxLength={1000} value={form.notes || ''} onChange={(event) => update('notes', event.target.value)} placeholder="Opcional" /></label>
         </> : <>
-          {isEmployee && <label>Tipo de funcionário<select value={form.type} onChange={(event) => update('type', event.target.value)}><option value="operator">Operador</option><option value="administrative">Administrativo</option></select><small className="payable-hint">{form.type === 'operator' ? 'Entra na conta do operador com o código de 4 dígitos.' : 'Entra no sistema com CPF e senha, sem a Gestão Financeira.'}</small></label>}
-          {isEmployee && <SectorPicker by="id" value={form.sectorIds || []} onChange={(ids) => update('sectorIds', ids)} hint="Opcional. O operador vê no tablet a fila planejada dos seus setores. Para criar um setor novo, use Cadastros › Setores." />}
+          {isEmployee && <label>Tipo de funcionário<select value={form.type} onChange={(event) => { const type = event.target.value; update('type', type); if (type !== 'operator') update('sectorIds', []) }}><option value="operator">Operador</option><option value="administrative">Administrativo</option></select><small className="payable-hint">{form.type === 'operator' ? 'Entra na conta do operador com o código de 4 dígitos.' : 'Entra no sistema com CPF e senha, sem a Gestão Financeira.'}</small></label>}
+          {/* Setores são só dos operadores (fila do tablet); o administrativo não usa. */}
+          {isEmployee && form.type === 'operator' && <SectorPicker by="id" value={form.sectorIds || []} onChange={(ids) => update('sectorIds', ids)} hint="Opcional. O operador vê no tablet a fila planejada dos seus setores. Para criar um setor novo, use Cadastros › Setores." />}
           {/* Employees may be registered without birth date and e-mail; administrators still need both. */}
           <label>Data de nascimento<input type="date" aria-label="Data de nascimento" value={form.birthDate || ''} onChange={(event) => update('birthDate', event.target.value)} required={!isEmployee} />{isEmployee && <small className="payable-hint">Opcional.</small>}</label>
           <label>CPF<input value={form.cpf} onChange={(event) => update('cpf', cpfMask(event.target.value))} inputMode="numeric" placeholder="000.000.000-00" required /></label>
@@ -1401,6 +1410,9 @@ function PieceLeadTime({ offer }) {
   return <div className="offer-lead-time"><Clock3 size={18} aria-hidden="true" /><div><small>Tempo para ficar pronta</small><strong>Em média {daysText(item.averageDays)}</strong><span>{item.count === 1 ? `Feita 1 vez · ${item.lastCode}` : `Média de ${item.count} vezes · última: ${daysText(item.lastDays)} (${item.lastCode})`}</span></div></div>
 }
 
+// Process settings of the offer and its service description, the same text typed when the offer was created.
+const offerDetails = (resources, description) => ({ ...serviceDetails(resources), description: serviceDescriptionText(description, resources?.serviceDescription) })
+
 function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, offer, onRefresh, onSelectOrder }) {
   const [laborServices, setLaborServices] = useState([])
   const [laborCatalogError, setLaborCatalogError] = useState('')
@@ -1410,7 +1422,7 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
   const [stages, setStages] = useState(offer?.resources?.stages ?? offer?.proposal?.stages ?? [])
   const [stageLayout, setStageLayout] = useState(() => readStageLayout({ ...offer?.resources, stages: offer?.resources?.stages ?? offer?.proposal?.stages ?? [] }))
   const [kind, setKind] = useState(offer?.resources?.kind ?? offer?.proposal?.kind ?? 'service')
-  const [details, setDetails] = useState(() => serviceDetails(offer?.resources))
+  const [details, setDetails] = useState(() => offerDetails(offer?.resources, offer?.description))
   const [stageTimes, setStageTimes] = useState(offer?.resources?.stageTimes || {})
   const [stageResources, setStageResources] = useState(offer?.resources?.stageResources || {})
   const [pieceHistory, setPieceHistory] = useState(null)
@@ -1438,7 +1450,7 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
     setStages(offer?.resources?.stages ?? offer?.proposal?.stages ?? [])
     setStageLayout(readStageLayout({ ...offer?.resources, stages: offer?.resources?.stages ?? offer?.proposal?.stages ?? [] }))
     setKind(offer?.resources?.kind ?? offer?.proposal?.kind ?? 'service')
-    setDetails(serviceDetails(offer?.resources))
+    setDetails(offerDetails(offer?.resources, offer?.description))
     setStageTimes(offer?.resources?.stageTimes || {})
     setStageResources(offer?.resources?.stageResources || {})
     resourceDraft.current = {
@@ -1447,7 +1459,7 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
       stages: offer?.resources?.stages ?? offer?.proposal?.stages ?? [],
       stageLayout: readStageLayout({ ...offer?.resources, stages: offer?.resources?.stages ?? offer?.proposal?.stages ?? [] }),
       kind: offer?.resources?.kind ?? offer?.proposal?.kind ?? 'service',
-      ...serviceDetails(offer?.resources),
+      ...offerDetails(offer?.resources, offer?.description),
       stageTimes: offer?.resources?.stageTimes || {},
       stageResources: offer?.resources?.stageResources || {},
     }
@@ -1472,8 +1484,9 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
 
   useEffect(() => {
     let active = true
-    apiRequest('/api/machines').then((data) => { if (active) setMachines(data.items) }).catch(() => {})
-    apiRequest('/api/labor-services').then((data) => { if (active) { setLaborServices(data.items); setLaborCatalogError('') } }).catch((error) => { if (active) setLaborCatalogError(error.message) })
+    // Cache no navegador para os menus de máquina/serviço da oferta abrirem na hora; a rede confirma em seguida.
+    cachedResource('/machines', (data) => { if (active) setMachines(data.items) }).catch(() => {})
+    cachedResource('/labor-services', (data) => { if (active) { setLaborServices(data.items); setLaborCatalogError('') } }).catch((error) => { if (active) setLaborCatalogError(error.message) })
     loadOverviewInventory().then((data) => {
       if (active && Array.isArray(data.items)) setInventory(data.items)
     }).catch(() => {})
@@ -1508,16 +1521,17 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
     const task = saveQueue.current.then(async () => {
       try {
         const { item } = await apiRequest(`/api/offers/${offerId}/resources`, jsonOptions('PUT', draft))
-        if (activeOfferId.current === offerId) persistedResources.current = item.resources
+        const saved = { ...item.resources, description: item.description }
+        if (activeOfferId.current === offerId) persistedResources.current = saved
         if (activeOfferId.current === offerId && resourceDraft.current === draft) {
           setAttachmentError('')
-          resourceDraft.current = item.resources
+          resourceDraft.current = saved
           setMaterials(item.resources.materials)
           setLaborEntries(item.resources.laborEntries)
           setStages(item.resources.stages)
           setStageLayout(readStageLayout(item.resources))
           setKind(item.resources.kind)
-          setDetails(serviceDetails(item.resources))
+          setDetails(offerDetails(item.resources, item.description))
           setStageTimes(item.resources.stageTimes || {})
           setStageResources(item.resources.stageResources || {})
         }
@@ -1531,7 +1545,7 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
           setStages(persistedResources.current.stages)
           setStageLayout(readStageLayout(persistedResources.current))
           setKind(persistedResources.current.kind)
-          setDetails(serviceDetails(persistedResources.current))
+          setDetails(offerDetails(persistedResources.current, persistedResources.current.description))
           setStageTimes(persistedResources.current.stageTimes || {})
           setStageResources(persistedResources.current.stageResources || {})
         }
@@ -1568,7 +1582,7 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
     const unitPrice = toNumber(materialForm.unitPrice)
     if (!materialForm.name.trim() || quantity <= 0) return
     const unit = materialUnit(materialForm.unit)
-    if (unit === 'un' && !Number.isInteger(quantity)) return setAttachmentError('Material contado por unidade aceita só quantidades inteiras.')
+    if (wholeUnit(unit) && !Number.isInteger(quantity)) return setAttachmentError('Material contado por unidade aceita só quantidades inteiras.')
     const changes = { ...materialForm, unit, name: materialForm.name.trim(), quantity, unitPrice }
     const next = editingMaterialId != null ? materials.map((material) => material.id === editingMaterialId ? { ...material, ...changes } : material) : [...materials, { ...changes, id: newId(), icon: '▰', requestedAt: new Date().toISOString() }]
     if (!await saveResources({ materials: next })) return
@@ -1726,7 +1740,7 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
           <section className="offer-information-card"><span className="offer-details-section-title">Informações do serviço</span><h2>{offer.service}</h2><p className="offer-details-description">{offer.description}</p><div className="offer-detail-facts"><div><span>▥</span><small>Cliente solicitante</small><strong>{offer.company}</strong><em>{documentKind(offer.cnpj)}: {offer.cnpj}</em>{offer.requester && <em>Solicitante: {offer.requester}</em>}</div><div><span>▣</span><small>Data da solicitação</small><strong>{displayDate(offer.requestedAt)}</strong></div><div><span>◇</span><small>Quantidade solicitada</small><strong>{offer.quantity} unidades</strong></div><div><span>◷</span><small>Prazo solicitado pelo cliente</small><strong>{displayDate(offer.deadline)}</strong></div></div><PieceLeadTime offer={offer} /><div className="offer-detail-text"><h3>Número da etiqueta</h3><p>{offer.labelNumber || 'Não informado'}</p></div><div className="offer-detail-text"><h3>Anexos da solicitação</h3>{offer.attachments?.length ? <ul>{offer.attachments.map((attachment) => <li key={attachment.id}><DownloadLink url={attachmentUrl(offer.id, attachment.id)} name={attachment.name}>{attachment.name}</DownloadLink></li>)}</ul> : <p>Nenhum anexo adicionado.</p>}</div>{offer.proposal && <div className="offer-detail-text"><h3>Proposta gerada</h3><p><DownloadLink url={`/api/offers/${offer.id}/proposal.pdf`} name={`proposta-${offer.code}.pdf`}>Baixar PDF da proposta</DownloadLink></p></div>}</section>
           <section className="offer-materials-card offer-resources-card">
             <fieldset className="offer-resource-fields" disabled={Boolean(offer.orderCode)}>
-            <div className="offer-resource-heading"><div><span className="offer-details-section-title">Materiais necessários</span><p>Adicione os materiais e informe a quantidade, em quilos (kg) ou em unidades (un).</p></div><button className="offer-add-resource-button" type="button" onClick={() => { if (editingMaterialId == null && materialFormOpen) return closeMaterialForm(); closeMaterialForm(); setMaterialFormOpen(true) }}><Icon name="plus" />Adicionar material</button></div>
+            <div className="offer-resource-heading"><div><span className="offer-details-section-title">Materiais necessários</span><p>Adicione os materiais e informe a quantidade, em quilos (kg), em metros (m) ou em unidades (un).</p></div><button className="offer-add-resource-button" type="button" onClick={() => { if (editingMaterialId == null && materialFormOpen) return closeMaterialForm(); closeMaterialForm(); setMaterialFormOpen(true) }}><Icon name="plus" />Adicionar material</button></div>
             {materialFormOpen && <form className="offer-inline-form" onSubmit={addMaterial} aria-label={editingMaterialId != null ? 'Editar material' : 'Adicionar material'}>
               <label>Material *<div className="material-autocomplete"><div className="material-autocomplete-input">
                 <input value={materialForm.name} autoComplete="off" role="combobox" aria-expanded={materialSuggestionsOpen} aria-controls="offer-material-suggestions" onFocus={() => setMaterialSuggestionsOpen(true)} onBlur={(event) => { if (!event.currentTarget.closest('.material-autocomplete')?.contains(event.relatedTarget)) setMaterialSuggestionsOpen(false) }} onChange={(event) => { selectInventoryMaterial(event.target.value); setMaterialSuggestionsOpen(true) }} onKeyDown={(event) => { if (event.key === 'Escape') setMaterialSuggestionsOpen(false); if (event.key === 'ArrowDown' && matchingInventory.length) { event.preventDefault(); document.getElementById('offer-material-suggestions')?.querySelector('button')?.focus() } }} placeholder="Digite para buscar no estoque" required /><span>⌄</span>
@@ -1735,8 +1749,8 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
               </div>}</div></label>
               <label>Especificação<input value={materialForm.detail} onChange={(event) => updateMaterial('detail', event.target.value)} placeholder="Ex.: Chapa 10 mm" /></label>
               <label>Unidade<select value={materialUnit(materialForm.unit)} disabled={materialForm.inventoryId != null} title={materialForm.inventoryId != null ? 'A unidade vem do cadastro do estoque' : undefined} onChange={(event) => updateMaterial('unit', event.target.value)}>{materialUnits.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
-              <label>{`Quantidade (${materialUnit(materialForm.unit)}) *`}<input type="number" min={materialUnit(materialForm.unit) === 'un' ? '1' : '0.001'} step={materialUnit(materialForm.unit) === 'un' ? '1' : '0.001'} value={materialForm.quantity} onChange={(event) => updateMaterial('quantity', event.target.value)} placeholder={materialUnit(materialForm.unit) === 'un' ? '0' : '0,00'} required /></label>
-              <label>{materialUnit(materialForm.unit) === 'un' ? 'Valor por unidade' : 'Valor unitário'}<input type="number" min="0" step="0.01" value={materialForm.unitPrice} onChange={(event) => updateMaterial('unitPrice', event.target.value)} placeholder="0,00" /></label>
+              <label>{`Quantidade (${materialUnit(materialForm.unit)}) *`}<input type="number" min={quantityStep(materialForm.unit)} step={quantityStep(materialForm.unit)} value={materialForm.quantity} onChange={(event) => updateMaterial('quantity', event.target.value)} placeholder={wholeUnit(materialForm.unit) ? '0' : '0,00'} required /></label>
+              <label>{materialUnit(materialForm.unit) === 'kg' ? 'Valor unitário' : unitPriceLabel(materialForm.unit)}<input type="number" min="0" step="0.01" value={materialForm.unitPrice} onChange={(event) => updateMaterial('unitPrice', event.target.value)} placeholder="0,00" /></label>
               <div className="offer-inline-actions"><button className="offer-modal-cancel" type="button" onClick={closeMaterialForm}>Cancelar</button><button className="offer-add-resource-button" type="submit" disabled={saving}>{editingMaterialId != null ? 'Salvar alterações' : 'Adicionar material'}</button></div>
             </form>}
             {materials.length > 0 ? <><div className="offer-materials-head"><span>Material</span><span>Especificação</span><span>Qtd. necessária</span><span>Estoque</span><span>Valor unitário</span><span>Valor total</span><span>Ações</span></div><div className="offer-materials-list">{checkedMaterials.map((material) => <div className={`offer-material-row offer-material-row--managed${material.id === editingMaterialId ? ' offer-material-row--editing' : ''}`} key={material.id}><div className="material-visual">{material.icon}</div><div className="material-name"><strong>{material.name}</strong><span>{material.detail || '—'}</span></div><span>{formatQuantity(material.quantity, material.unit)}</span><span className={`material-stock-status material-stock-status--${material.groupStockStatus}`}>{material.groupStockStatus === 'unknown' ? 'Não verificado' : material.groupPurchaseQuantity > 0 ? `Falta: ${formatQuantity(material.groupPurchaseQuantity, material.unit)}` : material.stockStatus === 'available' ? `Disponível: ${formatQuantity(material.stockAvailable, material.unit)}` : material.stockStatus === 'partial' ? `Parcial: ${formatQuantity(material.stockAvailable, material.unit)}` : material.stockStatus === 'unknown' ? 'Não verificado' : 'Sem estoque'}</span><span>{formatMoney(material.unitPrice)}</span><strong>{formatMoney(material.quantity * material.unitPrice)}</strong><div className="offer-resource-actions"><button className="offer-resource-edit" type="button" disabled={saving} onClick={() => editMaterial(material)} aria-label={`Editar ${material.name}`} title="Editar"><Pencil size={14} aria-hidden="true" /></button><button className="offer-resource-remove" type="button" disabled={saving} onClick={() => removeMaterial(material.id)} aria-label={`Remover ${material.name}`} title="Remover">×</button></div></div>)}</div></> : <button className="offer-empty-state" type="button" onClick={() => setMaterialFormOpen(true)}><Icon name="plus" /><strong>Nenhum material adicionado</strong><span>Clique aqui ou no botão acima para buscar materiais cadastrados no estoque.</span></button>}
@@ -1760,7 +1774,7 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
               <fieldset><legend>Tipo de proposta</legend><div className="offer-kind-options">{[['normal', 'Normal'], ['emergency', 'Emergencial']].map(([key, label]) => <label key={key}><input type="radio" name="offer-urgency" checked={details.urgency === key} onChange={() => updateDetails('urgency', key)} />{label}</label>)}</div></fieldset>
               <fieldset><legend>Tipo de serviço</legend><div className="offer-kind-options">{[['internal', 'Interno'], ['external', 'Externo']].map(([key, label]) => <label key={key}><input type="radio" name="offer-service-location" checked={details.serviceLocation === key} onChange={() => updateDetails('serviceLocation', key)} />{label}</label>)}</div></fieldset>
               {stages.includes('painting') && <label className="offer-service-field">Cor/Tipo<input value={details.paintColor} maxLength={160} onChange={(event) => updateDetails('paintColor', event.target.value, false)} onBlur={() => saveResources()} /></label>}
-              <label className="offer-service-field">Descrição do serviço<textarea aria-label="Descrição do serviço" value={details.serviceDescription} maxLength={5000} rows={4} onChange={(event) => updateDetails('serviceDescription', event.target.value, false)} onBlur={() => saveResources()} /></label>
+              <label className="offer-service-field">Descrição do serviço<textarea aria-label="Descrição do serviço" value={details.description} maxLength={5000} rows={4} required onChange={(event) => updateDetails('description', event.target.value, false)} onBlur={() => saveResources()} /></label>
               <div className="offer-kind-options offer-strict-process"><label><input type="checkbox" checked={details.strictProcess} onChange={(event) => updateDetails('strictProcess', event.target.checked)} />Processo Injessado</label></div>
             </div>
             <div className="offer-resource-totals"><div><span>Total de materiais</span><strong>{formatMoney(materialsTotal)}</strong></div><div><span>Total de mão de obra</span><strong>{formatMoney(laborTotal)}</strong></div><div className="offer-resource-total"><span>Total estimado</span><strong>{formatMoney(materialsTotal + laborTotal)}</strong></div></div>
@@ -2096,11 +2110,15 @@ function OrderScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout, tab
     await apiRequest(`/api/operations/orders/${encodeURIComponent(selectedOrderCode)}/events/${encodeURIComponent(eventId)}/time`, jsonOptions('PUT', { at }))
     onRefresh().catch(() => {})
   }
+  async function addOperationEvent(body) {
+    await apiRequest(`/api/operations/orders/${encodeURIComponent(selectedOrderCode)}/events`, jsonOptions('POST', body))
+    onRefresh().catch(() => {})
+  }
   return <div className="dashboard-shell orders-shell orders-shell--detail">
     <Sidebar collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} />
     <main className="orders-main"><WorkspaceTabs tabs={tabs} activeNav={activeNav} onNavigate={onNavigate} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} />
       <div className="orders-header"><h1>Ordem de serviço</h1></div>
-      {selectedOrder ? <OrderDetails key={selectedOrder.code} order={selectedOrder} activeTime={activeTime} stageNamesInput={stageNamesInput} onChangeStages={setStageNamesInput} onConfigureStages={configureStages} onInterrupt={interruptSession} onEdit={editOrder} onReopen={reopenOrder} onUpload={uploadOrderAttachment} onEditEventTime={editEventTime} onRefresh={onRefresh} operationError={operationError} onBack={onBack} Icon={Icon} />
+      {selectedOrder ? <OrderDetails key={selectedOrder.code} order={selectedOrder} activeTime={activeTime} stageNamesInput={stageNamesInput} onChangeStages={setStageNamesInput} onConfigureStages={configureStages} onInterrupt={interruptSession} onEdit={editOrder} onReopen={reopenOrder} onUpload={uploadOrderAttachment} onEditEventTime={editEventTime} onAddEvent={addOperationEvent} onRefresh={onRefresh} operationError={operationError} onBack={onBack} Icon={Icon} />
         : <div className="os-missing"><p role="status">{workflowLoading ? 'Carregando a ordem de serviço...' : 'Ordem de serviço não encontrada.'}</p>{!workflowLoading && <button className="os-button" type="button" onClick={onBack}><Icon name="collapse" />Voltar</button>}</div>}
     </main>
   </div>
@@ -2184,9 +2202,13 @@ function AdminServicesView({ collapsed, onToggle, activeNav, onNavigate, onLogou
 
 function Dashboard({ user, onUpdateUser, collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, offers, orders, selectedOfferId, selectedOrderCode, onRefresh, onSelectOffer, onSelectOrder, onCloseOrder, onOrderReopened, reopenedCode, onOpenPayables, payableFilters, workflowError, workflowLoading, materialRequestTarget, onRequestLocated }) {
   const toolProps = { Sidebar, WorkspaceTabs, navigationProps: { collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs } }
-  if (['Contas a Pagar', 'Business Intelligence', 'Classificações', 'Fornecedores'].includes(activeNav)) return <PayablesScreen {...toolProps} accountFilters={payableFilters} mode={{ 'Contas a Pagar': 'accounts', 'Business Intelligence': 'bi', 'Classificações': 'classifications', 'Fornecedores': 'suppliers' }[activeNav]} />
+  if (['Contas a Pagar', 'Business Intelligence', 'Fornecedores'].includes(activeNav)) return <PayablesScreen {...toolProps} accountFilters={payableFilters} mode={{ 'Contas a Pagar': 'accounts', 'Business Intelligence': 'bi', 'Fornecedores': 'suppliers' }[activeNav]} />
+  if (['Grupos de contas', 'Classificações'].includes(activeNav)) return <AccountPlanScreen key={activeNav} {...toolProps} mode={activeNav === 'Grupos de contas' ? 'groups' : 'classifications'} />
+  if (activeNav === 'DRE') return <DreScreen {...toolProps} />
+  if (activeNav === 'Ajustes da DRE') return <DreAdjustmentsScreen {...toolProps} />
   if (activeNav === 'Contas a Receber') return <ReceivablesScreen {...toolProps} />
   if (activeNav === 'Tesouraria') return <TreasuryScreen {...toolProps} />
+  if (activeNav === 'Fluxo de caixa') return <CashFlowScreen {...toolProps} />
   if (activeNav === 'Baixa em Lote') return <BatchSettlementScreen {...toolProps} />
   if (activeNav === 'Conciliação bancária') return <BankStatementsScreen {...toolProps} />
   if (activeNav === 'Relatórios') return <ReportsScreen {...toolProps} />
@@ -2221,6 +2243,7 @@ function App() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
+  const [messageError, setMessageError] = useState(false)
   const [isDashboard, setIsDashboard] = useState(false)
   const [adminUser, setAdminUser] = useState(null)
   const [restoringSession, setRestoringSession] = useState(() => !operatorToken && Boolean(window.sessionStorage.getItem('gmac-admin-token')))
@@ -2438,6 +2461,7 @@ function App() {
   async function handleSubmit(event) {
     event.preventDefault()
     setMessage('')
+    setMessageError(false)
     setLoading(true)
 
     try {
@@ -2454,12 +2478,19 @@ function App() {
         body: JSON.stringify({ cpf, password }),
       })
       const data = await response.json()
-      if (!response.ok) throw new Error(data.message || 'Não foi possível entrar.')
+      if (!response.ok) {
+        // After the 3rd wrong password, the server sends how many tries are left (2 or 1): warn in red.
+        if (typeof data.attemptsRemaining === 'number' && data.attemptsRemaining > 0 && data.attemptsRemaining <= 2) {
+          throw new Error(`${data.message || 'CPF ou senha inválidos.'} ${data.attemptsRemaining} ${data.attemptsRemaining === 1 ? 'tentativa restante' : 'tentativas restantes'} antes do bloqueio temporário.`)
+        }
+        throw new Error(data.message || 'Não foi possível entrar.')
+      }
       enterAdmin(data.user, data.token)
     } catch (error) {
       if (loginMode === 'admin' && error.message === 'O banco de dados ainda não está configurado.') {
         enterAdmin(null)
       } else {
+        setMessageError(true)
         setMessage(error.message)
       }
     } finally {
@@ -2532,8 +2563,8 @@ function App() {
             </button>
           </form>
 
-          {loginMode === 'admin' && <button className="forgot-link" type="button" onClick={() => setMessage('Entre em contato com o administrador para redefinir sua senha.')}>Esqueci minha senha</button>}
-          {message && <p className="form-message" role="status">{message}</p>}
+          {loginMode === 'admin' && <button className="forgot-link" type="button" onClick={() => { setMessageError(false); setMessage('Entre em contato com o administrador para redefinir sua senha.') }}>Esqueci minha senha</button>}
+          {message && <p className={`form-message${messageError ? ' form-message--error' : ''}`} role={messageError ? 'alert' : 'status'}>{message}</p>}
         </div>
       </section>
     </main>

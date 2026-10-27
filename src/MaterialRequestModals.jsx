@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { CircleCheck, CircleX, Plus, X } from 'lucide-react'
-import { formatQuantity, materialUnit, materialUnits } from '../server/materialUnits.js'
+import { formatQuantity, materialUnit, materialUnits, quantityStep, wholeUnit } from '../server/materialUnits.js'
 
 function useRequestDialog() {
   const dialog = useRef(null)
@@ -48,7 +48,7 @@ export function MaterialRequestModal({ inventory, onSave, onClose }) {
       {mode === 'stock' ? <label className="material-request-field">Material<select aria-label="Material" required disabled={busy} value={inventoryId} onChange={(event) => { setInventoryId(event.target.value); setDetail(inventory.find((item) => String(item.id) === event.target.value)?.detail || '') }}><option value="">Selecione</option>{inventory.map((item) => <option key={item.id} value={item.id}>{item.name} · {formatQuantity(item.quantity, item.unit)} em estoque</option>)}</select></label> : <label className="material-request-field">Nome do material<input required maxLength={160} value={name} disabled={busy} onChange={(event) => setName(event.target.value)} /></label>}
       <label className="material-request-field">Especificação<input maxLength={500} value={detail} disabled={busy} onChange={(event) => setDetail(event.target.value)} /></label>
       {mode === 'new' && <fieldset className="material-request-modes" disabled={busy}><legend>Unidade</legend>{materialUnits.map(([key, label]) => <label key={key}><input type="radio" name="material-request-unit" checked={unit === key} onChange={() => setUnit(key)} />{label}</label>)}</fieldset>}
-      <label className="material-request-field">{`Quantidade solicitada (${requestUnit})`}<input required type="number" min={requestUnit === 'un' ? '1' : '0.001'} max="1000000000" step={requestUnit === 'un' ? '1' : '0.001'} inputMode={requestUnit === 'un' ? 'numeric' : 'decimal'} value={quantity} disabled={busy} onChange={(event) => setQuantity(event.target.value)} /></label>
+      <label className="material-request-field">{`Quantidade solicitada (${requestUnit})`}<input required type="number" min={quantityStep(requestUnit)} max="1000000000" step={quantityStep(requestUnit)} inputMode={wholeUnit(requestUnit) ? 'numeric' : 'decimal'} value={quantity} disabled={busy} onChange={(event) => setQuantity(event.target.value)} /></label>
       {error && <p className="os-edit-error" role="alert">{error}</p>}
       <footer className="os-edit-actions"><button className="os-button" type="button" disabled={busy} onClick={close}>Cancelar</button><button className="os-button os-button--primary" disabled={busy} type="submit"><Plus size={16} />{busy ? 'Solicitando...' : 'Solicitar material'}</button></footer>
     </form>
