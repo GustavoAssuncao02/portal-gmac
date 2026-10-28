@@ -156,3 +156,19 @@ test('DRE by cash and by competência, with interest, ISS, adjustments and expor
     assert.equal((await f.adminRequest('/dre?start=2026-12&end=2026-10')).status, 400)
   } finally { await f.close() }
 })
+
+test('a bank in the DRE keeps only the accounts settled in it and leaves the adjustments out', async () => {
+  const { dreReport } = await import('../server/dre.js')
+  const store = {
+    banks: [{ id: 'b1', name: 'Sicoob', agency: '1', account: '2' }, { id: 'b2', name: 'Caixa' }],
+    classifications: [], suppliers: [],
+    payables: [{ id: 'P1', issueDate: '2026-10-01', valueCents: 1000, payment: { date: '2026-10-02', bankId: 'b1', finalCents: 1000 } }, { id: 'P2', issueDate: '2026-10-01', valueCents: 3000, payment: { date: '2026-10-03', bankId: 'b2', finalCents: 3000 } }, { id: 'P3', issueDate: '2026-10-01', valueCents: 5000 }],
+    receivables: [{ id: 'R1', issueDate: '2026-10-01', valueCents: 7000, receipt: { date: '2026-10-04', bankId: 'b1', finalCents: 7000 } }],
+    dreAdjustments: [{ id: 'A1', month: '2026-10', valueCents: 900 }],
+  }
+  const ids = (report) => report.entries.map((entry) => entry.refId).sort()
+  assert.deepEqual(ids(dreReport(store, { view: 'cash', start: '2026-10', end: '2026-10' })), ['A1', 'P1', 'P2', 'R1'])
+  const filtered = dreReport(store, { view: 'accrual', start: '2026-10', end: '2026-10', bankId: 'b1' })
+  assert.deepEqual(ids(filtered), ['P1', 'R1'])
+  assert.equal(filtered.bankName, 'Sicoob · Ag. 1 · C/C 2')
+})

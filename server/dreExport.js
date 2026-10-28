@@ -23,7 +23,9 @@ const cellText = (report, row, column) => {
   return value ? amount(value) : '–'
 }
 const rowLabel = (row) => row.type === 'line' || row.type === 'group' ? `${row.code ? `${row.code}  ` : ''}${row.label}` : row.label
-const notes = (report) => [viewHints[report.view], ...(report.unclassified.count ? [`${report.unclassified.count} ${report.unclassified.count === 1 ? 'lançamento sem classificação não entrou' : 'lançamentos sem classificação não entraram'} na DRE (${money(report.unclassified.inCents)} de entradas e ${money(report.unclassified.outCents)} de saídas). Classifique essas contas para que façam parte do resultado.`] : [])]
+// With a bank chosen, the hint says which one: only the accounts settled in it, without the DRE adjustments.
+const hint = (report) => `${viewHints[report.view]}${report.bankName ? ` Banco: ${report.bankName} (só as contas baixadas neste banco; os ajustes da DRE ficam de fora).` : ''}`
+const notes = (report) => [hint(report), ...(report.unclassified.count ? [`${report.unclassified.count} ${report.unclassified.count === 1 ? 'lançamento sem classificação não entrou' : 'lançamentos sem classificação não entraram'} na DRE (${money(report.unclassified.inCents)} de entradas e ${money(report.unclassified.outCents)} de saídas). Classifique essas contas para que façam parte do resultado.`] : [])]
 
 export function drePdf(report) {
   return new Promise((resolve, reject) => {
@@ -62,7 +64,7 @@ export function drePdf(report) {
     doc.on('pageAdded', continuationHeader)
     firstHeader()
     for (const note of notes(report)) {
-      const warning = note !== viewHints[report.view]
+      const warning = note !== hint(report)
       const height = style('regular', 9, palette.ink).heightOfString(note, { width: width - 24 }) + 12
       if (warning) { doc.roundedRect(left, y, width, height, 5).fill(palette.warning); style('regular', 9, palette.warningText).text(note, left + 12, y + 6, { width: width - 24 }) }
       else style('regular', 9, palette.muted).text(note, left, y, { width })

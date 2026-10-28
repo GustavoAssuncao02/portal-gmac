@@ -9,6 +9,7 @@ import { classificationList, entryClassification } from './accountPlan.js'
 import { natureOf } from './accountPlanRules.js'
 import { repeatedValues } from './dreRules.js'
 import { drePdf, dreWorkbook } from './dreExport.js'
+import { bankLabel } from './banks.js'
 
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), { status }) }
 const clean = (value, limit = 1000) => String(value ?? '').trim().slice(0, limit)
@@ -26,7 +27,8 @@ export function monthsBetween(start, end) {
 // keeps the direction it moved). `view` 'cash' places the accounts on the day the money moved, so only what was paid or
 // received counts; 'accrual' (competência) places them on the issue date, paid or not. Interest and discounts happen on
 // the settlement, in both views; the ISS withheld goes with its revenue. DRE adjustments count in both views.
-export function dreEntries(store, view, from, to) {
+// `bankId` keeps only the accounts settled in that bank; the adjustments do not go through a bank and stay out.
+export function dreEntries(store, view, from, to, bankId = '') {
   const classifications = new Map((store.classifications || []).map((item) => [item.id, item]))
   const suppliers = new Map((store.suppliers || []).map((row) => [String(row.id), row.name]))
   const settings = store.dreSettings || {}, list = []
@@ -39,6 +41,7 @@ export function dreEntries(store, view, from, to) {
   for (const row of store.payables || []) {
     const entry = (kind) => ({ source: 'payable', kind, refId: row.id, name: suppliers.get(String(row.supplierId)) || row.supplierName || '', description: row.description || '', documentNumber: row.documentNumber || '' })
     const payment = row.payment, date = view === 'cash' ? payment?.date : row.issueDate
+    if (bankId && payment?.bankId !== bankId) continue
     for (const part of classificationParts(row)) add(date, part.classificationId, part.valueCents, -1, entry('principal'))
     if (payment) { add(payment.date, settings.interestPaid, payment.interestCents, -1, entry('interest')); add(payment.date, settings.discountReceived, payment.discountCents, 1, entry('discount')) }
   }
@@ -46,11 +49,12 @@ export function dreEntries(store, view, from, to) {
     if (row.inactive) continue
     const entry = (kind) => ({ source: 'receivable', kind, refId: row.id, name: row.customerName || '', description: row.description || '', documentNumber: row.documentNumber || '' })
     const receipt = row.receipt, date = view === 'cash' ? receipt?.date : row.issueDate
+    if (bankId && receipt?.bankId !== bankId) continue
     add(date, row.classificationId, row.valueCents, 1, entry('principal'))
     add(date, settings.iss, receipt ? receipt.issCents : view === 'cash' ? 0 : row.issCents, -1, entry('iss'))
     if (receipt) { add(receipt.date, settings.interestReceived, receipt.interestCents, 1, entry('interest')); add(receipt.date, settings.discountGiven, receipt.discountCents, -1, entry('discount')) }
   }
-  for (const row of store.dreAdjustments || []) add(`${row.month}-01`, row.classificationId, row.valueCents, -1, { source: 'adjustment', kind: 'adjustment', refId: row.id, name: 'Ajuste da DRE', description: row.description || '', documentNumber: '' })
+  if (!bankId) for (const row of store.dreAdjustments || []) add(`${row.month}-01`, row.classificationId, row.valueCents, -1, { source: 'adjustment', kind: 'adjustment', refId: row.id, name: 'Ajuste da DRE', description: row.description || '', documentNumber: '' })
   return list.sort((a, b) => a.date.localeCompare(b.date) || a.refId.localeCompare(b.refId))
 }
 
@@ -72,9 +76,9 @@ const sections = [
 
 // The DRE of the months from `start` to `end` (YYYY-MM). The values also cover the month before `start`, for the
 // comparison with the previous month. Inactive classifications only appear when they have values.
-export function dreReport(store, { view, start, end }) {
+export function dreReport(store, { view, start, end, bankId = '' }) {
   const months = monthsBetween(start, end), previousMonth = addMonths(start, -1), all = [previousMonth, ...months]
-  const entries = dreEntries(store, view, previousMonth, end), list = classificationList(store)
+  const entries = dreEntries(store, view, previousMonth, end, bankId), list = classificationList(store)
   const empty = () => Object.fromEntries(all.map((month) => [month, 0]))
   const sums = new Map()
   for (const entry of entries) {
@@ -110,14 +114,15 @@ export function dreReport(store, { view, start, end }) {
   for (const row of rows) { row.total = inPeriod(row.values); row.percent = revenue && row.type !== 'info' && !row.outside ? row.total / revenue * 100 : null }
   // The entries of the month before come along: the single month view compares with it and opens its entries too.
   const unclassified = entries.filter((entry) => !entry.classificationId && months.includes(entry.month))
-  return { view, start, end, months, previousMonth, rows, entries, unclassified: { count: unclassified.length, inCents: unclassified.filter((entry) => entry.valueCents > 0).reduce((total, entry) => total + entry.valueCents, 0), outCents: -unclassified.filter((entry) => entry.valueCents < 0).reduce((total, entry) => total + entry.valueCents, 0) }, generatedAt: new Date().toISOString() }
+  const bank = bankId ? (store.banks || []).find((row) => row.id === bankId) : null
+  return { view, start, end, bankId: bank ? bank.id : '', bankName: bank ? bankLabel(bank) : '', months, previousMonth, rows, entries, unclassified: { count: unclassified.length, inCents: unclassified.filter((entry) => entry.valueCents > 0).reduce((total, entry) => total + entry.valueCents, 0), outCents: -unclassified.filter((entry) => entry.valueCents < 0).reduce((total, entry) => total + entry.valueCents, 0) }, generatedAt: new Date().toISOString() }
 }
 
 function period(source) {
   const view = source.view === 'accrual' ? 'accrual' : 'cash', start = clean(source.start, 7) || todayBahia().slice(0, 7), end = clean(source.end, 7) || start
   if (!monthPattern.test(start) || !monthPattern.test(end) || start > end) fail('Informe um período válido: o mês inicial não pode vir depois do mês final.')
   if (monthsBetween(start, end).length > 36) fail('Escolha um período de até 36 meses.')
-  return { view, start, end }
+  return { view, start, end, bankId: clean(source.bankId, 64) }
 }
 
 // Ajustes da DRE: amounts that do not go through the bank (depreciation, provisions for vacation and the 13th salary)

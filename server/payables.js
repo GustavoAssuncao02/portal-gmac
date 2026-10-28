@@ -9,7 +9,7 @@ import { cents, validDate, todayBahia, payableStatus, daysUntil, makeInstallment
 import { notificationSettings } from './accounts.js'
 import { assertNotReconciled, reconciledTransaction } from './bankStatements.js'
 import { orderValue } from './receivables.js'
-import { settlementBank } from './banks.js'
+import { settlementBank, bankFilterNote } from './banks.js'
 import { classificationList, entryClassification } from './accountPlan.js'
 
 const directory = path.join(dataDirectory, 'payable-files')
@@ -153,7 +153,7 @@ function report(rows, store, individual = false, filters = {}) {
     sections.push({ name: 'Histórico', columns: ['Conta', 'Data/hora (Bahia)', 'Usuário', 'Ação', 'Detalhes'], rows: store.payableEvents.filter((e) => ids.includes(e.accountId)).map((e) => [e.accountId, new Date(e.at).toLocaleString('pt-BR', { timeZone: 'America/Bahia' }), e.userName, actionLabel[e.type] || e.type, [e.reason, readableDetails(e.changes || e.details || '')].filter(Boolean).join('\n')]) })
     sections.push({ name: 'Anexos e comprovantes', columns: ['Conta', 'Arquivo', 'Tipo', 'Tamanho (bytes)'], rows: rows.flatMap((r) => [...(r.attachments || []), ...(r.payment?.receipts || [])].map((f) => [r.id, f.name, f.contentType, f.size])) })
   }
-  const notes = individual ? [] : [`Situação: ${{ all: 'Todas', inactive: 'Desativadas', ...statusLabel }[filters.status] || 'Pendentes e vencidas'}`, ...(filters.search ? [`Busca: ${filters.search}`] : []), ...(filters.supplierId ? [`Fornecedor: ${store.suppliers?.find((row) => row.id === filters.supplierId)?.name || filters.supplierId}`] : []), ...(filters.classificationId ? [`Classificação: ${store.classifications.find((row) => row.id === filters.classificationId)?.name || filters.classificationId}`] : [])]
+  const notes = individual ? [] : [`Situação: ${{ all: 'Todas', inactive: 'Desativadas', ...statusLabel }[filters.status] || (filters.bankId ? 'Pagas' : 'Pendentes e vencidas')}`, ...bankFilterNote(store, filters.bankId), ...(filters.search ? [`Busca: ${filters.search}`] : []), ...(filters.supplierId ? [`Fornecedor: ${store.suppliers?.find((row) => row.id === filters.supplierId)?.name || filters.supplierId}`] : []), ...(filters.classificationId ? [`Classificação: ${store.classifications.find((row) => row.id === filters.classificationId)?.name || filters.classificationId}`] : [])]
   return { title: individual ? `Conta ${rows[0]?.id || ''}` : 'Contas a pagar', eyebrow: 'Financeiro', generatedAt: new Date().toISOString(), start: filters.start, end: filters.end, summary: [['Contas', rows.length], ['Valor original', money(rows.reduce((sum, r) => sum + r.valueCents, 0))]], notes, sections }
 }
 

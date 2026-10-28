@@ -14,5 +14,12 @@ export function settlementBank(store, bankId) {
   return { bankId: bank.id, bankName: bankLabel(bank) }
 }
 
+// The bank filter of a list, written in the notes of its PDF and Excel export.
+export function bankFilterNote(store, bankId) {
+  if (!bankId) return []
+  const bank = (store.banks || []).find((row) => row.id === String(bankId))
+  return [`Banco da baixa: ${bank ? bankLabel(bank) : bankId}`]
+}
+
 // Settlements made with a bank: a bank in use cannot be deleted.
 export const bankInUse = (store, bankId) => [...(store.payables || []).map((row) => row.payment), ...(store.receivables || []).map((row) => row.receipt)].filter((settlement) => settlement?.bankId === bankId).length

@@ -11,7 +11,7 @@ import { assertNotReconciled, reconciledTransaction } from './bankStatements.js'
 import { normalizeText } from './ofx.js'
 import { osValueOf } from './proposalMath.js'
 import { operationStates } from './reportData.js'
-import { settlementBank } from './banks.js'
+import { settlementBank, bankFilterNote } from './banks.js'
 import { classificationList, entryClassification } from './accountPlan.js'
 
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), { status }) }
@@ -199,9 +199,9 @@ export function activeReceivableNotices(store, userId) {
 export function receivableNotificationItems(store, userId) {
   return activeReceivableNotices(store, userId).map(({ readBy, ...notice }) => ({ ...notice, readAt: readBy?.find((entry) => String(entry.userId) === String(userId))?.at || null, account: view(store.receivables.find((row) => row.id === notice.accountId), store) })).reverse()
 }
-function report(rows, filters = {}, individual = false) {
+function report(rows, filters = {}, individual = false, store = {}) {
   const columns = ['ID', 'Cliente', 'CPF/CNPJ', 'Descrição', 'Classificação', 'Origem', 'Documento', 'Parcela', 'Emissão', 'Valor (R$)', 'Vencimento', 'Status', 'Recebimento', 'Forma', 'Banco', 'Juros (R$)', 'Desconto (R$)', 'ISS (R$)', 'Recebido (R$)', 'Observação']
-  return { title: individual ? `Conta ${rows[0]?.id || ''}` : 'Contas a receber', eyebrow: 'Financeiro', generatedAt: new Date().toISOString(), start: filters.start, end: filters.end, summary: [['Contas', rows.length], ['Valor original', money(rows.reduce((sum, row) => sum + row.valueCents, 0))]], notes: [`Situação: ${{ all: 'Todas', ...statusLabel }[filters.status] || 'Pendentes e vencidas'}`, ...(filters.search ? [`Busca: ${filters.search}`] : [])], sections: [{ name: 'Contas a receber', columns, rows: rows.map((row) => { const r = row.receipt; return [row.id, row.customerName, row.customerDocument, row.description, row.classificationName || '', row.orderCode || 'Manual', row.documentNumber, row.groupId ? `${row.installmentNumber} de ${row.installmentCount}` : '', row.issueDate, row.valueCents / 100, row.dueDate, statusLabel[receivableStatus(row)], r?.date, receiptMethods[r?.method] || '', r?.bankName || '', (r?.interestCents || 0) / 100, (r?.discountCents || 0) / 100, (r?.issCents || 0) / 100, r ? r.finalCents / 100 : '', r?.note] }) }] }
+  return { title: individual ? `Conta ${rows[0]?.id || ''}` : 'Contas a receber', eyebrow: 'Financeiro', generatedAt: new Date().toISOString(), start: filters.start, end: filters.end, summary: [['Contas', rows.length], ['Valor original', money(rows.reduce((sum, row) => sum + row.valueCents, 0))]], notes: [`Situação: ${{ all: 'Todas', ...statusLabel }[filters.status] || (filters.bankId ? 'Recebidas' : 'Pendentes e vencidas')}`, ...bankFilterNote(store, filters.bankId), ...(filters.search ? [`Busca: ${filters.search}`] : [])], sections: [{ name: 'Contas a receber', columns, rows: rows.map((row) => { const r = row.receipt; return [row.id, row.customerName, row.customerDocument, row.description, row.classificationName || '', row.orderCode || 'Manual', row.documentNumber, row.groupId ? `${row.installmentNumber} de ${row.installmentCount}` : '', row.issueDate, row.valueCents / 100, row.dueDate, statusLabel[receivableStatus(row)], r?.date, receiptMethods[r?.method] || '', r?.bankName || '', (r?.interestCents || 0) / 100, (r?.discountCents || 0) / 100, (r?.issCents || 0) / 100, r ? r.finalCents / 100 : '', r?.note] }) }] }
 }
 
 export default function createReceivablesRouter(accounts, requireAdmin, pool = null) {
@@ -448,7 +448,7 @@ export default function createReceivablesRouter(accounts, requireAdmin, pool = n
     if (!['pdf', 'xlsx'].includes(req.body.format)) fail('Formato inválido.')
     if (req.body.ids !== undefined && !Array.isArray(req.body.ids)) fail('Seleção inválida.')
     const rows = req.body.id ? [find(store, req.body.id)] : filterReceivables(store.receivables, req.body.filters).filter((row) => !req.body.ids || req.body.ids.includes(row.id))
-    const data = report(rows.map((row) => ({ ...row, classificationName: classificationNameOf(store, row) })), req.body.filters, Boolean(req.body.id))
+    const data = report(rows.map((row) => ({ ...row, classificationName: classificationNameOf(store, row) })), req.body.filters, Boolean(req.body.id), store)
     if (req.body.id) data.sections.push({ name: 'Histórico', columns: ['Data/hora (Bahia)', 'Usuário', 'Ação', 'Motivo'], rows: store.receivableEvents.filter((e) => e.accountId === req.body.id).map((e) => [new Date(e.at).toLocaleString('pt-BR', { timeZone: 'America/Bahia' }), e.userName, actionLabel[e.type] || e.type, e.reason || '']) })
     const output = req.body.format === 'pdf' ? await exportPdf(data) : await exportWorkbook(data)
     res.setHeader('Content-Type', req.body.format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')

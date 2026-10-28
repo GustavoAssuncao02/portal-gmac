@@ -506,7 +506,7 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .classification-term-hint .payable-link { font-size: calc(11.5px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .dre-control-label { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .dre-month-picker label { font-size: calc(13px * var(--account-font-scale)); }
-:root:is([data-font-size="small"], [data-font-size="large"]) .dre-month-picker input { font-size: inherit; }
+:root:is([data-font-size="small"], [data-font-size="large"]) .dre-month-picker input, :root:is([data-font-size="small"], [data-font-size="large"]) .dre-bank { font-size: inherit; }
 :root:is([data-font-size="small"], [data-font-size="large"]) .dre-zero-toggle { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .dre-report-heading h2 { font-size: calc(16px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .dre-report-heading span { font-size: calc(12.5px * var(--account-font-scale)); }

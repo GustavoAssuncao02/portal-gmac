@@ -1,6 +1,15 @@
 // Each commit to main is a new version: add an entry at the top, with what changed in plain words for whoever uses the portal.
 export const releaseNotes = [
   {
+    version: '1.0.05',
+    date: '2026-10-28',
+    notes: [
+      'DRE: novo filtro por banco',
+      'Business Intelligence: novo filtro por banco da baixa',
+      'Contas a Pagar e Contas a Receber: o PDF e o Excel mostram o banco filtrado',
+    ],
+  },
+  {
     version: '1.0.04',
     date: '2026-10-27',
     notes: [

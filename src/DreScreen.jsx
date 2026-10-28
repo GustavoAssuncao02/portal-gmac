@@ -5,6 +5,7 @@ import { PayableModal } from './PayableModal.jsx'
 import { money, dateLabel, payableRequest, downloadBlob } from './payablesApi.js'
 import { todayBahia, shiftMonth } from '../server/payableRules.js'
 import { dreColumns, dreCell, visibleDreRows, variation, changeTone, monthBefore, monthLabel, periodLabel, viewLabels, viewHints, entrySourceLabels, entryKindLabels, percentText } from '../server/dreRules.js'
+import { useBanks, bankOptionLabel } from './BankSelect.jsx'
 import './payables.css'
 import './dre.css'
 
@@ -33,22 +34,22 @@ function EntriesModal({ report, target, onClose, onOpen }) {
 
 // DRE: the result of the month (by default the current one) or of a chosen period, by cash or by competência.
 export default function DreScreen(props) {
-  const current = todayBahia().slice(0, 7)
+  const current = todayBahia().slice(0, 7), banks = useBanks()
   const [view, setView] = useState('cash'), [range, setRange] = useState('month'), [month, setMonth] = useState(current), [period, setPeriod] = useState({ start: `${current.slice(0, 4)}-01`, end: current })
-  const [report, setReport] = useState(null), [error, setError] = useState(''), [loading, setLoading] = useState(true), [showZero, setShowZero] = useState(false), [target, setTarget] = useState(null), [exporting, setExporting] = useState(false)
+  const [report, setReport] = useState(null), [error, setError] = useState(''), [loading, setLoading] = useState(true), [showZero, setShowZero] = useState(false), [target, setTarget] = useState(null), [exporting, setExporting] = useState(false), [bankId, setBankId] = useState('')
   const start = range === 'month' ? month : period.start, end = range === 'month' ? month : period.end
   const valid = /^\d{4}-\d{2}$/.test(start) && /^\d{4}-\d{2}$/.test(end) && start <= end
   useEffect(() => {
     if (!valid) return
     let active = true
     setLoading(true)
-    payableRequest(`/dre?view=${view}&start=${start}&end=${end}`).then((result) => { if (active) { setReport(result); setError('') } }).catch((caught) => { if (active) setError(caught.message) }).finally(() => { if (active) setLoading(false) })
+    payableRequest(`/dre?view=${view}&start=${start}&end=${end}${bankId ? `&bankId=${encodeURIComponent(bankId)}` : ''}`).then((result) => { if (active) { setReport(result); setError('') } }).catch((caught) => { if (active) setError(caught.message) }).finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [view, start, end, valid])
+  }, [view, start, end, bankId, valid])
   async function download(format) {
     setExporting(true); setError('')
     try {
-      const response = await fetch('/api/dre/export', { method: 'POST', headers: { Authorization: `Bearer ${sessionStorage.getItem('gmac-admin-token') || ''}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ format, view, start, end }) })
+      const response = await fetch('/api/dre/export', { method: 'POST', headers: { Authorization: `Bearer ${sessionStorage.getItem('gmac-admin-token') || ''}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ format, view, start, end, bankId }) })
       if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || 'Falha ao exportar.')
       downloadBlob(await response.blob(), `gmac-dre-${start}${end === start ? '' : `-a-${end}`}.${format}`)
     } catch (caught) { setError(caught.message) } finally { setExporting(false) }
@@ -69,13 +70,14 @@ export default function DreScreen(props) {
         {range === 'month' ? <div className="dre-month-picker"><button type="button" className="payable-icon" title="Mês anterior" aria-label="Mês anterior" onClick={() => setMonth(addMonths(month, -1))}><ChevronLeft size={18} /></button><input type="month" aria-label="Mês da DRE" required value={month} onChange={(event) => event.target.value && setMonth(event.target.value)} /><button type="button" className="payable-icon" title="Próximo mês" aria-label="Próximo mês" onClick={() => setMonth(addMonths(month, 1))}><ChevronRight size={18} /></button>{month !== current && <button type="button" className="payable-link" onClick={() => setMonth(current)}>Mês atual</button>}</div>
           : <div className="dre-month-picker"><label>De<input type="month" aria-label="Mês inicial" required max={period.end} value={period.start} onChange={(event) => setPeriod({ ...period, start: event.target.value })} /></label><label>Até<input type="month" aria-label="Mês final" required min={period.start} value={period.end} onChange={(event) => setPeriod({ ...period, end: event.target.value })} /></label><button type="button" className="payable-link" onClick={() => setPeriod({ start: `${current.slice(0, 4)}-01`, end: current })}>Este ano</button><button type="button" className="payable-link" onClick={() => setPeriod({ start: addMonths(current, -11), end: current })}>Últimos 12 meses</button></div>}
       </div>
+      <div className="dre-control"><label className="dre-control-label" htmlFor="dre-bank">Banco</label><select id="dre-bank" className="dre-bank" aria-label="Banco" value={bankId} onChange={(event) => setBankId(event.target.value)}><option value="">Todos os bancos</option>{(banks || []).map((bank) => <option key={bank.id} value={bank.id}>{bankOptionLabel(bank)}</option>)}</select>{bankId && <small className="payable-hint">Só as contas baixadas neste banco. Os ajustes da DRE não passam pelo banco e ficam de fora.</small>}</div>
       <label className="payable-mobile-select dre-zero-toggle"><input type="checkbox" checked={showZero} onChange={(event) => setShowZero(event.target.checked)} />Mostrar linhas zeradas</label>
     </div>
     {!valid && <p className="admin-tool-error" role="alert">Informe um período válido: o mês inicial não pode vir depois do mês final.</p>}
     {error && <p className="admin-tool-error" role="alert">{error}</p>}
     {report?.unclassified.count > 0 && <p className="bank-warning bank-warning--warning dre-warning"><TriangleAlert size={17} aria-hidden="true" />{report.unclassified.count} {report.unclassified.count === 1 ? 'lançamento sem classificação ficou' : 'lançamentos sem classificação ficaram'} fora da DRE ({money(report.unclassified.inCents)} de entradas e {money(report.unclassified.outCents)} de saídas).<button type="button" className="payable-link" onClick={() => setTarget({ classificationId: null, label: 'Sem classificação' })}>Ver lançamentos</button></p>}
     {!report ? loading && valid && <p>Carregando...</p> : <section className="dre-report" aria-busy={loading}>
-      <header className="dre-report-heading"><h2>Demonstração do Resultado · {periodLabel(report)}</h2><span>Visão {viewLabels[report.view].toLocaleLowerCase('pt-BR')} · valores em R${single ? ` · comparado com ${monthLabel(report.previousMonth)}` : ''}</span></header>
+      <header className="dre-report-heading"><h2>Demonstração do Resultado · {periodLabel(report)}</h2><span>Visão {viewLabels[report.view].toLocaleLowerCase('pt-BR')}{report.bankName ? ` · ${report.bankName}` : ''} · valores em R${single ? ` · comparado com ${monthLabel(report.previousMonth)}` : ''}</span></header>
       <div className="payable-table-scroll dre-table-scroll"><table className="dre-table"><thead><tr><th scope="col" className="dre-label">Linha da DRE</th>{columns.map((column) => <th scope="col" key={column.key} className="dre-value">{column.label}</th>)}</tr></thead><tbody>
         {rows.map((row) => {
           const openable = row.type === 'line'

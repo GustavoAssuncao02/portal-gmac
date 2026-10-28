@@ -2856,7 +2856,7 @@
 :root[data-theme="dark"] .dre-month-picker label {
     color: #b4c2cf
 }
-:root[data-theme="dark"] .dre-month-picker input {
+:root[data-theme="dark"] .dre-month-picker input, :root[data-theme="dark"] .dre-bank {
     border: 1px solid #36516f;
     background: #162b43;
     color: #e1ebf6

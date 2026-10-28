@@ -2463,7 +2463,7 @@
 :root[data-theme="dark"][data-tone="black"] .dre-month-picker label {
     color: #bec2c5
 }
-:root[data-theme="dark"][data-tone="black"] .dre-month-picker input {
+:root[data-theme="dark"][data-tone="black"] .dre-month-picker input, :root[data-theme="dark"][data-tone="black"] .dre-bank {
     border: 1px solid #303133;
     background: #1a1b1c;
     color: #ebebec

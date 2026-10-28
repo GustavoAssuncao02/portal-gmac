@@ -23,7 +23,8 @@
 .dre-control-label { font-size: 12px; font-weight: 600; color: #4d6378; }
 .dre-month-picker { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
 .dre-month-picker label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #4d6378; }
-.dre-month-picker input { min-height: 38px; padding: 6px 10px; border: 1px solid #c9d7e5; border-radius: 5px; background: #fff; color: #1f2937; font: inherit; }
+.dre-month-picker input, .dre-bank { min-height: 38px; padding: 6px 10px; border: 1px solid #c9d7e5; border-radius: 5px; background: #fff; color: #1f2937; font: inherit; }
+.dre-bank { min-width: 220px; max-width: 100%; }
 .dre-zero-toggle { align-self: flex-end; display: flex; flex-direction: row !important; align-items: center; gap: 8px; font-size: 13px; color: #4d6378; min-height: 38px; }
 .dre-warning { margin-bottom: 16px; align-items: center; flex-wrap: wrap; }
 .dre-warning .payable-link { padding: 0; }
