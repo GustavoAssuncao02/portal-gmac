@@ -21,6 +21,7 @@ import { addManualEvent, manualEventTypes } from './operationManualEvents.js'
 import { removeOrderReceivables } from './receivables.js'
 import { pauseReasonNames, sectorRows, SWITCH_PAUSE_REASON } from './registries.js'
 import { formatQuantity } from './materialUnits.js'
+import { recordPasswordChange } from './passwordReset.js'
 
 // The reasons to pause come from the registry (Cadastros > Razões de pausas). SWITCH_PAUSE_REASON is not chosen by the
 // operator: it is recorded when starting another OS pauses the current one.
@@ -346,12 +347,15 @@ export default function createOperationsRouter(pool) {
     if (store.employees.some((item) => item !== current && (item.cpf === fields.cpf || fields.email && item.email === fields.email || fields.identification && item.identification === fields.identification))) throw new OperationError(409, 'CPF, e-mail ou identificação já cadastrados.')
     if (fields.accessCode && store.employees.some((item) => item !== current && item.accessCode === fields.accessCode)) throw new OperationError(409, 'Este código já está em uso por outro operador.')
   }
+  // The administrative employee signs in with CPF and password: the e-mail is where "Esqueci minha senha" sends the code.
+  const requireStaffEmail = (fields) => { if (fields.type === 'administrative' && !fields.email) throw new OperationError(400, 'Informe o e-mail do funcionário administrativo: é para ele que vai o código de "Esqueci minha senha".') }
   const duplicateEntry = (error) => error.code === 'ER_DUP_ENTRY' ? new OperationError(409, /access_code/.test(error.message) ? 'Este código já está em uso por outro operador.' : 'CPF, e-mail ou identificação já cadastrados.') : error
 
   router.post('/employees', requireAdmin, async (request, response) => {
     try {
       const access = await accessFields(request.body, null, await employeeRows())
       const fields = { ...await employeeFields(request.body), ...access, active: true }
+      requireStaffEmail(fields)
       let employee
       if (pool) {
         const [result] = await pool.execute('INSERT INTO employees (name, birth_date, cpf, email, i_identificacao, employee_type, access_code, password_hash, sector_id, sector_ids) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [fields.name, fields.birthDate, fields.cpf, fields.email, fields.identification, fields.type, fields.accessCode, fields.passwordHash, fields.sectorId, JSON.stringify(fields.sectorIds)])
@@ -376,6 +380,7 @@ export default function createOperationsRouter(pool) {
       if (!previous) throw new OperationError(404, 'Funcionário não encontrado.')
       const access = await accessFields(request.body, previous, employees)
       const fields = { ...await employeeFields(request.body, previous), ...access }
+      requireStaffEmail(fields)
       let employee
       if (pool) {
         const [result] = await pool.execute('UPDATE employees SET name = ?, birth_date = ?, cpf = ?, email = ?, i_identificacao = ?, employee_type = ?, access_code = ?, password_hash = ?, sector_id = ?, sector_ids = ? WHERE id = ?', [fields.name, fields.birthDate, fields.cpf, fields.email, fields.identification, fields.type, fields.accessCode, fields.passwordHash, fields.sectorId, JSON.stringify(fields.sectorIds), request.params.id])
@@ -393,6 +398,7 @@ export default function createOperationsRouter(pool) {
       }
       // A new password or a change of type ends the administrative sessions already open.
       if (fields.type !== previous.type || fields.passwordHash !== previous.passwordHash) await revokeAccountSessions(staffAccountId(previous.id))
+      if (previous.type === 'administrative' && fields.type === 'administrative' && fields.passwordHash !== previous.passwordHash) await recordPasswordChange('admin', { ...employee, id: staffAccountId(previous.id) }, { id: request.adminId, name: request.adminName })
       response.json({ item: publicEmployee(employee, { withCode: true }) })
     } catch (error) { sendError(response, duplicateEntry(error)) }
   })

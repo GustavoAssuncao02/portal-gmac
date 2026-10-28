@@ -9,6 +9,8 @@ import createOperationsRouter from './operations.js'
 import { createAccountService, createAccountsRouter, loadAdminSessions, requireAdmin, restrictStaffFinance } from './accounts.js'
 import { ensureEmployeeAccess } from './employeeAccess.js'
 import createLoginRouter, { testLoginEnabled } from './authLogin.js'
+import createPasswordResetRouter from './passwordReset.js'
+import { createLoginThrottle } from './loginThrottle.js'
 import createOperatorAccountRouter, { loadOperatorAccount } from './operatorAccount.js'
 import createMachinesRouter from './machines.js'
 import createLaborServicesRouter, { ensureLaborServices } from './laborServices.js'
@@ -89,7 +91,10 @@ const accounts = createAccountService(pool)
 app.use('/api', createOffersRouter(pool, requireAdmin, accounts))
 app.use('/api', createOperationsRouter(pool))
 app.use('/api', createAccountsRouter(accounts))
-app.use('/api', createLoginRouter(accounts))
+// One count of wrong passwords, cleared when the password is reset by e-mail.
+const loginThrottle = createLoginThrottle()
+app.use('/api', createLoginRouter(accounts, process.env, loginThrottle))
+app.use('/api', createPasswordResetRouter(accounts, requireAdmin, { throttle: loginThrottle }))
 app.use('/api', createOperatorAccountRouter(requireAdmin))
 app.use('/api', createMachinesRouter(requireAdmin, pool))
 app.use('/api', createLaborServicesRouter(requireAdmin, pool))

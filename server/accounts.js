@@ -6,6 +6,7 @@ import { storePool } from './store.js'
 import { notificationDefaults, notificationOptions, notificationSoundDefault, validNotificationSound } from './notificationRules.js'
 import { employeeRecords, staffAccountId } from './employeeAccess.js'
 import { clientRequesters } from './requesters.js'
+import { recordPasswordChange } from './passwordReset.js'
 
 const sessions = new Map()
 const safe = ({ id, name, birthDate, cpf, email, createdAt, role }) => ({ id, name, birthDate, cpf, email, createdAt, role: role || 'admin' })
@@ -125,7 +126,8 @@ export function createAccountService(pool, env = process.env) {
     const user = (await accounts()).find((item) => String(item.id) === String(id))
     return user ? safe(user) : null
   }
-  // Test login only: the CPF chooses the account (administrator or administrative employee), without password.
+  // The account of a CPF (administrator or active administrative employee): the test login enters it without password,
+  // and "Esqueci minha senha" sends the code to its e-mail.
   async function accountByCpf(cpf) {
     const user = (await accounts()).find((item) => digits(item.cpf) === digits(cpf))
     return user ? safe(user) : null
@@ -161,6 +163,23 @@ export function createAccountService(pool, env = process.env) {
     })
     if (fields.password) await revokeAccountSessions(id)
     return safe({ ...current, ...changes })
+  }
+  // "Esqueci minha senha": the code sent to the e-mail stands for the current password. Ends every open session.
+  async function setPassword(id, password) {
+    const current = (await accounts()).find((item) => String(item.id) === String(id))
+    if (!current) fail(404, 'Conta não encontrada.')
+    if (typeof password !== 'string' || password.length < 6 || password.length > 72) fail(400, 'A nova senha deve ter entre 6 e 72 caracteres.')
+    const passwordHash = await bcrypt.hash(password, 12)
+    if (current.role === 'staff') {
+      if (pool) await pool.execute('UPDATE employees SET password_hash = ? WHERE id = ?', [passwordHash, current.employeeId])
+      else await mutateStore((store) => { Object.assign(store.employees.find((item) => String(item.id) === String(current.employeeId)), { passwordHash }) })
+    } else if (pool) await pool.execute("UPDATE users SET password_hash = ? WHERE id = ? AND role = 'admin'", [passwordHash, id])
+    else await mutateStore((store) => {
+      if (Number(id) === 0) store.demoAdmin = { ...store.demoAdmin, passwordHash }
+      else Object.assign(store.admins.find((item) => String(item.id) === String(id)), { passwordHash })
+    })
+    await revokeAccountSessions(id)
+    return safe(current)
   }
   // The free note of a client was added later: databases created before get the column once (existing clients stay blank).
   // If the database user cannot change tables (common on shared hosting), the clients keep working without the note and
@@ -295,7 +314,7 @@ export function createAccountService(pool, env = process.env) {
       return appearanceSettings(store, id)
     })
   }
-  return { admins, clients, account, accountByCpf, authenticate, updateAccount, getNotificationSettings, updateNotificationSettings, getAppearanceSettings, updateAppearanceSettings, save, remove }
+  return { admins, clients, account, accountByCpf, authenticate, updateAccount, setPassword, getNotificationSettings, updateNotificationSettings, getAppearanceSettings, updateAppearanceSettings, save, remove }
 }
 
 export function createAccountsRouter(service) {
@@ -324,12 +343,20 @@ export function createAccountsRouter(service) {
     try { response.json({ settings: await service.updateAppearanceSettings(request.adminId, request.body) }) } catch (error) { next(error) }
   })
   router.patch('/account', async (request, response, next) => {
-    try { const user = await service.updateAccount(request.adminId, request.body); response.json({ user, token: await issueAdminToken(user) }) } catch (error) { next(error) }
+    try {
+      const user = await service.updateAccount(request.adminId, request.body)
+      if (request.body?.password) await recordPasswordChange('self', user)
+      response.json({ user, token: await issueAdminToken(user) })
+    } catch (error) { next(error) }
   })
   for (const kind of ['admins', 'clients']) {
     router.get(`/${kind}`, async (_request, response, next) => { try { response.json({ items: await service[kind]() }) } catch (error) { next(error) } })
     for (const method of ['post', 'put']) router[method](method === 'post' ? `/${kind}` : `/${kind}/:id`, async (request, response, next) => {
-      try { response.json({ item: await service.save(kind, request.params.id, request.body) }) } catch (error) { next(error) }
+      try {
+        const item = await service.save(kind, request.params.id, request.body)
+        if (kind === 'admins' && method === 'put' && request.body?.password) await recordPasswordChange('admin', item, { id: request.adminId, name: request.adminName })
+        response.json({ item })
+      } catch (error) { next(error) }
     })
     router.delete(`/${kind}/:id`, async (request, response, next) => {
       try {

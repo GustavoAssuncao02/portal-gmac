@@ -4,7 +4,7 @@ import { chromium } from 'playwright'
 const base = process.env.TEST_BASE_URL || 'http://localhost:5174'
 const browser = await chromium.launch({ headless: true })
 try {
-  for (const role of ['Administrador', 'Operador']) {
+  for (const role of ['Administrativo', 'Operador']) {
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
     const page = await context.newPage()
     const errors = []
@@ -29,11 +29,11 @@ try {
     await page.getByText('Ambiente de teste: acesso sem senha.', { exact: true }).waitFor()
     assert.ok(configAttempts >= 3, 'Failed configuration requests must be retried')
     await page.getByRole('button', { name: role, exact: true }).click()
-    const username = role === 'Administrador' ? 'CPF' : 'Usuário compartilhado'
+    const username = role === 'Administrativo' ? 'CPF' : 'Usuário compartilhado'
     assert.equal(await page.getByLabel(username, { exact: true }).inputValue(), '')
     assert.equal(await page.getByLabel('Senha', { exact: true }).inputValue(), '')
     await page.getByRole('button', { name: 'Entrar', exact: true }).click()
-    const screen = role === 'Administrador' ? page.locator('.admin-home-main') : page.getByRole('heading', { name: 'Projetos em andamento', exact: true })
+    const screen = role === 'Administrativo' ? page.locator('.admin-home-main') : page.getByRole('heading', { name: 'Projetos em andamento', exact: true })
     await screen.waitFor({ timeout: 30000 })
     await page.reload()
     await screen.waitFor({ timeout: 30000 })

@@ -7,6 +7,10 @@ export const releaseNotes = [
       'DRE: novo filtro por banco',
       'Business Intelligence: novo filtro por banco da baixa',
       'Contas a Pagar e Contas a Receber: o PDF e o Excel mostram o banco filtrado',
+      'Login: Esqueci minha senha com código enviado para o e-mail do cadastro',
+      'Login: a aba Administrador passou a se chamar Administrativo',
+      'Administradores: novo Histórico de senhas',
+      'Funcionários: e-mail obrigatório para o funcionário administrativo',
     ],
   },
   {

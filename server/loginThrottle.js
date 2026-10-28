@@ -27,6 +27,8 @@ export function createLoginThrottle({ limit = LIMIT, windowMs = WINDOW_MS, now =
     fail: (key) => { const times = recent(key); times.push(now()); failures.set(key, times); return state(times) },
     // Acerto: zera a contagem daquele par.
     succeed: (key) => failures.delete(key),
+    // Senha redefinida pelo e-mail: libera aquele CPF em qualquer IP.
+    clearCpf: (cpf) => { for (const key of failures.keys()) if (key.endsWith(`|${cpf}`)) failures.delete(key) },
     get size() { return failures.size },
   }
 }

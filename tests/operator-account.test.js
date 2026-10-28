@@ -46,7 +46,7 @@ test('operator account: set by administrators with a reason, kept in the history
   assert.equal((await fixture.request('/operations/operator/orders', 'GET', undefined, { Authorization: `Bearer ${issueOperatorToken()}` })).status, 200, 'a new user alone does not end the sessions')
   assert.equal((await request('/operator-account', 'PUT', { username: '99988877766', reason: 'Nada mudou de verdade aqui' })).status, 400)
 
-  const staff = (await request('/employees', 'POST', { name: 'Clara Adm', cpf: '00000000009', type: 'administrative', password: 'clara123' })).data.item
+  const staff = (await request('/employees', 'POST', { name: 'Clara Adm', cpf: '00000000009', email: 'clara@example.invalid', type: 'administrative', password: 'clara123' })).data.item
   const staffAuth = { Authorization: `Bearer ${(await fixture.request('/auth/login', 'POST', { cpf: staff.cpf, password: 'clara123' })).data.token}` }
   assert.equal((await fixture.request('/operator-account', 'GET', undefined, staffAuth)).status, 403, 'administrative employees do not manage the operator access')
 })

@@ -2,6 +2,8 @@ import { StrictMode, createContext, useContext, useEffect, useLayoutEffect, useM
 import { createRoot } from 'react-dom/client'
 import OperatorDashboard, { operatorEmployeeKey } from './OperatorDashboard.jsx'
 import EmployeeActivityModal from './EmployeeActivityModal.jsx'
+import PasswordRecovery from './PasswordRecovery.jsx'
+import PasswordHistoryModal from './PasswordHistoryModal.jsx'
 import OrderDetails from './OrderDetails.jsx'
 import RejectOfferModal from './RejectOfferModal.jsx'
 import DeclineProposalModal, { UndoDeclineModal, AcceptOfferModal, UndoAcceptModal } from './DeclineProposalModal.jsx'
@@ -49,7 +51,7 @@ import { useMobileModal } from './useMobileModal.js'
 import { ThemeContext, useAccountTheme } from './accountTheme.js'
 import { pollWhileVisible } from './polling.js'
 import { newId } from './newId.js'
-import { Monitor, Minimize2, Plus, Pencil, Trash2, Clock3, CreditCard, HandCoins, Banknote, Landmark, ChartColumn, Tags, FileChartColumn, FilePenLine, FolderTree, ChartNoAxesCombined, Truck, WalletCards, ChevronLeft, ChevronRight, ChevronDown, UsersRound, Menu, X, Info, ArrowLeft, ListChecks, Layers, CircleCheck, CircleX, ArrowUpDown, ArrowUp, ArrowDown, Building2, CirclePause, Power, Factory, Wrench, CalendarClock, Save, Contact } from 'lucide-react'
+import { History, Monitor, Minimize2, Plus, Pencil, Trash2, Clock3, CreditCard, HandCoins, Banknote, Landmark, ChartColumn, Tags, FileChartColumn, FilePenLine, FolderTree, ChartNoAxesCombined, Truck, WalletCards, ChevronLeft, ChevronRight, ChevronDown, UsersRound, Menu, X, Info, ArrowLeft, ListChecks, Layers, CircleCheck, CircleX, ArrowUpDown, ArrowUp, ArrowDown, Building2, CirclePause, Power, Factory, Wrench, CalendarClock, Save, Contact } from 'lucide-react'
 import { proposalCosts, proposalPricing, hoursText, marginLimits, PROPOSAL_MARGIN_GAP } from '../server/proposalMath.js'
 import { stageLabel, serviceDetails, serviceDescriptionText, readStageLayout, orderedStageSelection, stagePlanProblem, stagePlanPlace } from '../server/serviceStages.js'
 import { findInventoryMaterial, materialsStock, normalizeSearch, purchaseMaterialRequests } from './offerResources.js'
@@ -1031,6 +1033,8 @@ function RegistrationScreen({ kind, collapsed, onToggle, activeNav, onNavigate, 
   const [message, setMessage] = useState('')
   const [editingId, setEditingId] = useState(null)
   const [activityEmployee, setActivityEmployee] = useState(null)
+  const [passwordHistory, setPasswordHistory] = useState(false)
+  const viewer = useContext(AdminIdentityContext)
   const [formOpen, setFormOpen] = useState(false)
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -1168,7 +1172,7 @@ function RegistrationScreen({ kind, collapsed, onToggle, activeNav, onNavigate, 
   const navigationProps = { collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs }
   // Same pattern as Fornecedores: only the list on screen; adding and editing happen in a modal.
   return <AdminWorkspace Sidebar={Sidebar} WorkspaceTabs={WorkspaceTabs} navigationProps={navigationProps} title={title}>
-    <div className="payable-heading-actions"><button className="admin-tool-button admin-tool-button--primary" type="button" onClick={newRecord}><Plus size={17} />Novo {singular}</button></div>
+    <div className="payable-heading-actions">{kind === 'admin' && viewer?.role !== 'staff' && <button className="admin-tool-button" type="button" onClick={() => setPasswordHistory(true)}><History size={17} />Histórico de senhas</button>}<button className="admin-tool-button admin-tool-button--primary" type="button" onClick={newRecord}><Plus size={17} />Novo {singular}</button></div>
     {message && <p className={`registration-message ${message.includes('sucesso') ? 'registration-message--success' : 'registration-message--error'}`} role="status">{message}</p>}
     <RegistryToolbar list={list} total={records.length} singular={singular} plural={title.toLowerCase()} placeholder={isClient ? 'Nome, nome fantasia, CPF/CNPJ ou e-mail' : isEmployee ? 'Nome, código, CPF ou e-mail' : 'Nome, CPF ou e-mail'} />
     <div className="payable-table-scroll"><table className={`payable-table payable-registry-table registration-table registry-table registry-table--${kind}`}><thead><tr>{shownColumns.map((column) => <SortHeader key={column.key} column={column} list={list} className={`registry-col-${column.key}`} />)}<th className="registry-col-actions">Ações</th></tr></thead><tbody>
@@ -1200,10 +1204,10 @@ function RegistrationScreen({ kind, collapsed, onToggle, activeNav, onNavigate, 
           {isEmployee && <label>Tipo de funcionário<select value={form.type} onChange={(event) => { const type = event.target.value; update('type', type); if (type !== 'operator') update('sectorIds', []) }}><option value="operator">Operador</option><option value="administrative">Administrativo</option></select><small className="payable-hint">{form.type === 'operator' ? 'Entra na conta do operador com o código de 4 dígitos.' : 'Entra no sistema com CPF e senha, sem a Gestão Financeira.'}</small></label>}
           {/* Setores são só dos operadores (fila do tablet); o administrativo não usa. */}
           {isEmployee && form.type === 'operator' && <SectorPicker by="id" value={form.sectorIds || []} onChange={(ids) => update('sectorIds', ids)} hint="Opcional. O operador vê no tablet a fila planejada dos seus setores. Para criar um setor novo, use Cadastros › Setores." />}
-          {/* Employees may be registered without birth date and e-mail; administrators still need both. */}
+          {/* Operators may be registered without birth date and e-mail; administrative employees need the e-mail (the reset code goes to it) and administrators need both. */}
           <label>Data de nascimento<input type="date" aria-label="Data de nascimento" value={form.birthDate || ''} onChange={(event) => update('birthDate', event.target.value)} required={!isEmployee} />{isEmployee && <small className="payable-hint">Opcional.</small>}</label>
           <label>CPF<input value={form.cpf} onChange={(event) => update('cpf', cpfMask(event.target.value))} inputMode="numeric" placeholder="000.000.000-00" required /></label>
-          <label>E-mail<input type="email" value={form.email || ''} onChange={(event) => update('email', event.target.value)} required={!isEmployee} placeholder={isEmployee ? 'Opcional' : undefined} /></label>
+          <label>E-mail<input type="email" value={form.email || ''} onChange={(event) => update('email', event.target.value)} required={!isEmployee || form.type === 'administrative'} placeholder={isEmployee && form.type !== 'administrative' ? 'Opcional' : undefined} />{isEmployee && form.type === 'administrative' && <small className="payable-hint">Obrigatório: é para este e-mail que vai o código de "Esqueci minha senha".</small>}</label>
           {isEmployee && form.type === 'operator' && <label>Código de acesso<span className="registration-access-code"><input value={form.accessCode} onChange={(event) => update('accessCode', event.target.value.replace(/\D/g, '').slice(0, 4))} inputMode="numeric" maxLength={4} pattern="[0-9]{4}" placeholder="Ex.: 4827" autoComplete="off" required /><button type="button" onClick={generateAccessCode}>Gerar código</button></span><small className="payable-hint">4 dígitos, diferente para cada operador.</small></label>}
           {(!isEmployee || form.type === 'administrative') && <label>Senha<span className="registration-password"><input type={showPassword ? 'text' : 'password'} value={form.password} onChange={(event) => update('password', event.target.value)} placeholder={passwordRequired ? 'Crie uma senha de acesso' : 'Deixe em branco para manter a senha atual'} minLength={6} required={passwordRequired} autoComplete="new-password" /><button type="button" onClick={() => setShowPassword((current) => !current)} aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}><EyeIcon crossed={!showPassword} /></button></span><small className="payable-hint">{passwordRequired ? 'Mínimo de 6 caracteres.' : 'Preencha somente se quiser trocar a senha.'}</small></label>}
         </>}
@@ -1211,6 +1215,7 @@ function RegistrationScreen({ kind, collapsed, onToggle, activeNav, onNavigate, 
       </fieldset></form>
     </PayableModal>}
     {activityEmployee && <EmployeeActivityModal employee={activityEmployee} onClose={() => setActivityEmployee(null)} />}
+    {passwordHistory && <PasswordHistoryModal onClose={() => setPasswordHistory(false)} />}
   </AdminWorkspace>
 }
 
@@ -2237,6 +2242,7 @@ function App() {
   const [cpf, setCpf] = useState('')
   const [operatorUsername, setOperatorUsername] = useState('')
   const [loginMode, setLoginMode] = useState('admin')
+  const [recovering, setRecovering] = useState(false)
   const [testLoginEnabled, setTestLoginEnabled] = useState(null)
   const [operatorToken, setOperatorToken] = useState(() => window.sessionStorage.getItem('gmac-operator-token'))
   const [password, setPassword] = useState('')
@@ -2513,10 +2519,11 @@ function App() {
             <p>{testLoginEnabled == null ? 'Verificando configuração de acesso...' : testLoginEnabled ? 'Ambiente de teste: acesso sem senha.' : loginMode === 'admin' ? 'Informe seu CPF e senha para acessar.' : 'Use a conta compartilhada dos operadores.'}</p>
           </div>
 
-          <div className="login-role-switch"><button className={loginMode === 'admin' ? 'active' : ''} type="button" onClick={() => { setLoginMode('admin'); setMessage(''); setPassword('') }}>Administrador</button><button className={loginMode === 'operator' ? 'active' : ''} type="button" onClick={() => { setLoginMode('operator'); setMessage(''); setPassword('') }}>Operador</button></div>
+          <div className="login-role-switch"><button className={loginMode === 'admin' ? 'active' : ''} type="button" onClick={() => { setLoginMode('admin'); setMessage(''); setPassword('') }}>Administrativo</button><button className={loginMode === 'operator' ? 'active' : ''} type="button" onClick={() => { setLoginMode('operator'); setRecovering(false); setMessage(''); setPassword('') }}>Operador</button></div>
 
           <div className="heading-rule" />
 
+          {recovering ? <PasswordRecovery initialCpf={cpf} onCancel={() => { setRecovering(false); setMessage('') }} onDone={(text) => { setRecovering(false); setPassword(''); setMessageError(false); setMessage(text) }} /> : <>
           <form onSubmit={handleSubmit} noValidate={testLoginEnabled !== false}>
             <label className="field-label" htmlFor={loginMode === 'admin' ? 'cpf' : 'operator-username'}>{loginMode === 'admin' ? 'CPF' : 'Usuário compartilhado'}</label>
             <div className="input-wrap">
@@ -2563,8 +2570,9 @@ function App() {
             </button>
           </form>
 
-          {loginMode === 'admin' && <button className="forgot-link" type="button" onClick={() => { setMessageError(false); setMessage('Entre em contato com o administrador para redefinir sua senha.') }}>Esqueci minha senha</button>}
+          {loginMode === 'admin' && <button className="forgot-link" type="button" onClick={() => { setMessage(''); setRecovering(true) }}>Esqueci minha senha</button>}
           {message && <p className={`form-message${messageError ? ' form-message--error' : ''}`} role={messageError ? 'alert' : 'status'}>{message}</p>}
+          </>}
         </div>
       </section>
     </main>

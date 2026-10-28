@@ -2957,6 +2957,18 @@
 :root[data-theme="dark"][data-tone="black"] .form-message {
     color: #bec2c5
 }
+:root[data-theme="dark"][data-tone="black"] .password-recovery h2 {
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .password-recovery__intro {
+    color: #bec2c5
+}
+:root[data-theme="dark"][data-tone="black"] .password-recovery .forgot-link:disabled {
+    color: #cdcfd2
+}
+:root[data-theme="dark"][data-tone="black"] .password-recovery__help {
+    color: #bec2c5
+}
 :root[data-theme="dark"][data-tone="black"] .dashboard-shell {
     color: #ebebec;
     background: #1a1b1c

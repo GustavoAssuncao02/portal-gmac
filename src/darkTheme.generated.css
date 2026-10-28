@@ -3478,6 +3478,18 @@
 :root[data-theme="dark"] .form-message--error {
     color: #e68e97
 }
+:root[data-theme="dark"] .password-recovery h2 {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .password-recovery__intro {
+    color: #b4c2cf
+}
+:root[data-theme="dark"] .password-recovery .forgot-link:disabled {
+    color: #c1cfde
+}
+:root[data-theme="dark"] .password-recovery__help {
+    color: #b7c2cc
+}
 :root[data-theme="dark"] .dashboard-shell {
     color: #e1ebf6;
     background: #162b43

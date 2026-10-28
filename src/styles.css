@@ -340,6 +340,39 @@ button {
   font-weight: 600;
 }
 
+.password-recovery h2 {
+  margin: 0 0 6px;
+  color: #12345a;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.password-recovery__intro {
+  margin: 0 0 18px;
+  color: #4d6378;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.password-recovery .input-wrap input.password-recovery__code {
+  font-size: 22px;
+  letter-spacing: 6px;
+}
+
+.password-recovery .forgot-link:disabled {
+  color: #8a97a6;
+  cursor: default;
+  text-decoration: none;
+}
+
+.password-recovery__help {
+  margin: 18px 0 0;
+  color: #71869a;
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: center;
+}
+
 /* Dashboard */
 .dashboard-shell {
   display: flex;

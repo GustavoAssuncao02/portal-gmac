@@ -600,6 +600,10 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .submit-button { font-size: calc(18px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .forgot-link { font-size: calc(16px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .form-message { font-size: calc(15px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .password-recovery h2 { font-size: calc(20px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .password-recovery__intro { font-size: calc(15px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .password-recovery .input-wrap input.password-recovery__code { font-size: calc(22px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .password-recovery__help { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .workspace-tabs-clock strong { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .workspace-tabs-clock span { font-size: calc(10px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .workspace-tab > button:first-child { font-size: calc(11px * var(--account-font-scale)); }

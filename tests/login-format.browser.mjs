@@ -13,7 +13,7 @@ await mkdir('test-results', { recursive: true })
 
 try {
   for (const [role, route, key, username, password] of [
-    ['Administrador', '/api/auth/login', 'cpf', process.env.DEMO_ADMIN_CPF, process.env.DEMO_ADMIN_PASSWORD],
+    ['Administrativo', '/api/auth/login', 'cpf', process.env.DEMO_ADMIN_CPF, process.env.DEMO_ADMIN_PASSWORD],
     ['Operador', '/api/auth/operator-login', 'username', process.env.OPERATOR_USERNAME, process.env.OPERATOR_PASSWORD],
   ]) {
     const digits = String(username || '').replace(/\D/g, '')
@@ -33,7 +33,7 @@ try {
       })
       await page.goto(frontend)
       await page.getByRole('button', { name: role, exact: true }).click()
-      const field = page.locator(role === 'Administrador' ? '#cpf' : '#operator-username')
+      const field = page.locator(role === 'Administrativo' ? '#cpf' : '#operator-username')
       assert.equal(await field.getAttribute('inputmode'), 'numeric')
       assert.equal(await field.getAttribute('placeholder'), '00000000000')
       await field.fill('123.456.789-01')
@@ -54,7 +54,7 @@ try {
       const loginResponse = page.waitForResponse((response) => new URL(response.url()).pathname === route)
       await page.getByRole('button', { name: 'Entrar', exact: true }).click()
       assert.equal((await loginResponse).status(), 200)
-      await page.locator(role === 'Administrador' ? '.dashboard-shell' : '.operator-app').waitFor()
+      await page.locator(role === 'Administrativo' ? '.dashboard-shell' : '.operator-app').waitFor()
       assert.equal(submissions.length, 1)
       assert.equal(submissions[0][key], digits)
     } finally {
