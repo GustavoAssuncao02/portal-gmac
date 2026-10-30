@@ -140,7 +140,7 @@ test('an accepted offer tells the other administrators about the new OS, not the
   const otherAuth = await signIn('00000000002', 'teste123')
   const added = async (headers) => (await fixture.request('/notifications', 'GET', undefined, headers)).data.items.filter((item) => item.type === 'service-added')
   const offer = (await request('/offers', 'POST', offerDraft)).data.item
-  assert.equal((await request(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], stages: ['cutting'], kind: 'service' })).status, 200)
+  assert.equal((await request(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], stages: ['cut-bend'], kind: 'service' })).status, 200)
   const generated = await request(`/offers/${offer.id}/proposal`, 'POST', { proposal: { key: 'A', title: 'Teste', deadline: '2026-12-20', serviceValue: 600, materials: 0, labor: 600, margin: 0, discount: 0, profit: 0 }, layout: 'classic' })
   assert.equal(generated.status, 200, generated.data.message)
   const accepted = await request(`/offers/${offer.id}/accept`, 'POST')

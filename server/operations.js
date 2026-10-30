@@ -5,13 +5,13 @@ import { requireOperator } from './operatorAuth.js'
 import { requireAdminOrOperator } from './access.js'
 import { activityDateRange, employeeActivityQuery } from './employeeActivity.js'
 import { operationStates, ordersWithOperations } from './reportData.js'
-import { productionStages, stageLabel, serviceDetails } from './serviceStages.js'
+import { stageCodeOf, stageLabel, serviceDetails } from './serviceStages.js'
 import { machineRows, sectorLabel } from './machines.js'
 import { laborServiceRows } from './laborServices.js'
 import { requireAdmin, adminIdentity, revokeAccountSessions } from './accounts.js'
 import { orderHistory } from './orderHistory.js'
 import { pieceCatalog, pieceKey, pieceSuggestion, pieceLeadTime } from './pieces.js'
-import { accessFields, employeeRecords, employeesWithActivity, publicEmployee, staffAccountId } from './employeeAccess.js'
+import { accessFields, employeeRecords, employeesWithActivity, isOperator, isStaff, publicEmployee, staffAccountId } from './employeeAccess.js'
 import { editOrder } from './orderEditing.js'
 import { pendingOrderMaterials } from './pendingMaterials.js'
 import { addNotification, completedServiceNotice } from './notificationEvents.js'
@@ -98,11 +98,14 @@ function closeStageSegment(state, session, at) {
   session.stageSince = at
   return duration
 }
-// The stage chosen by the operator; without a choice, the first stage that is not finished.
+// The stage chosen by the operator; without a choice, the first stage that is not finished. In a mandatory sequence
+// (Processo Injessado) a stage opens only when the one before it has all the pieces of the OS.
 function workStage(state, order, stageKey) {
   if (stageKey != null && stageKey !== '') {
-    const stage = state.stages.find((item) => item.key === stageKey)
-    if (!stage) throw new OperationError(400, 'Selecione uma etapa desta OS.')
+    const index = state.stages.findIndex((item) => item.key === stageKey)
+    if (index < 0) throw new OperationError(400, 'Selecione uma etapa desta OS.')
+    const stage = state.stages[index], before = state.stages[index - 1]
+    if (before && serviceDetails(order.resources).strictProcess && Number(state.stageCounts[before.key] || 0) < Number(order.quantity)) throw new OperationError(409, `Conclua a etapa ${before.name} antes de começar ${stage.name}: o processo desta OS segue a sequência das etapas.`)
     return stage
   }
   return state.stages.find((item) => Number(state.stageCounts[item.key] || 0) < Number(order.quantity)) || state.stages[0]
@@ -140,7 +143,7 @@ function changeSessionResource(state, request, machine, service) {
 // The machine or labor service planned in the offer for a stage, while it is still registered: the stage then decides
 // the resource and the operator cannot use another one. Without a plan the operator chooses.
 function stagePlan(order, stage, catalog) {
-  const code = productionStages.find(([, label]) => label === stage?.name)?.[0]
+  const code = stageCodeOf(stage)
   const plan = code && order?.resources?.stageResources?.[code]
   const item = plan && catalog[plan.type]?.find((entry) => String(entry.id) === String(plan.id))
   return item ? { type: plan.type, name: item.name, machine: plan.type === 'machine' ? item : null, laborService: plan.type === 'labor-service' ? item : null } : null
@@ -348,7 +351,7 @@ export default function createOperationsRouter(pool) {
     if (fields.accessCode && store.employees.some((item) => item !== current && item.accessCode === fields.accessCode)) throw new OperationError(409, 'Este código já está em uso por outro operador.')
   }
   // The administrative employee signs in with CPF and password: the e-mail is where "Esqueci minha senha" sends the code.
-  const requireStaffEmail = (fields) => { if (fields.type === 'administrative' && !fields.email) throw new OperationError(400, 'Informe o e-mail do funcionário administrativo: é para ele que vai o código de "Esqueci minha senha".') }
+  const requireStaffEmail = (fields) => { if (isStaff(fields) && !fields.email) throw new OperationError(400, 'Informe o e-mail do funcionário administrativo: é para ele que vai o código de "Esqueci minha senha".') }
   const duplicateEntry = (error) => error.code === 'ER_DUP_ENTRY' ? new OperationError(409, /access_code/.test(error.message) ? 'Este código já está em uso por outro operador.' : 'CPF, e-mail ou identificação já cadastrados.') : error
 
   router.post('/employees', requireAdmin, async (request, response) => {
@@ -397,8 +400,8 @@ export default function createOperationsRouter(pool) {
         })
       }
       // A new password or a change of type ends the administrative sessions already open.
-      if (fields.type !== previous.type || fields.passwordHash !== previous.passwordHash) await revokeAccountSessions(staffAccountId(previous.id))
-      if (previous.type === 'administrative' && fields.type === 'administrative' && fields.passwordHash !== previous.passwordHash) await recordPasswordChange('admin', { ...employee, id: staffAccountId(previous.id) }, { id: request.adminId, name: request.adminName })
+      if (isStaff(fields) !== isStaff(previous) || fields.passwordHash !== previous.passwordHash) await revokeAccountSessions(staffAccountId(previous.id))
+      if (isStaff(previous) && isStaff(fields) && fields.passwordHash !== previous.passwordHash) await recordPasswordChange('admin', { ...employee, id: staffAccountId(previous.id) }, { id: request.adminId, name: request.adminName })
       response.json({ item: publicEmployee(employee, { withCode: true }) })
     } catch (error) { sendError(response, duplicateEntry(error)) }
   })
@@ -485,7 +488,7 @@ export default function createOperationsRouter(pool) {
         const id = String(event.employeeId)
         if (!lastStop.has(id) || at > Date.parse(lastStop.get(id).at)) lastStop.set(id, event)
       }
-      const items = (await employeeRows()).filter((employee) => employee.type === 'operator' && employee.active && !busy.has(String(employee.id))).map((employee) => {
+      const items = (await employeeRows()).filter((employee) => isOperator(employee) && employee.active && !busy.has(String(employee.id))).map((employee) => {
         const stop = lastStop.get(String(employee.id))
         return { id: employee.id, name: employee.name, idleSince: stop?.at || null, reason: stop ? stop.reason || (stop.type === 'completed' || stop.type === 'session_ended' ? 'OS concluída' : stop.type === 'admin_interrupted' ? 'Encerrado pelo admin' : null) : null, orderCode: stop?.orderCode || null }
       })
@@ -507,7 +510,7 @@ export default function createOperationsRouter(pool) {
     try {
       const code = String(request.body?.code ?? '')
       if (!/^\d{4}$/.test(code)) throw new OperationError(400, 'Digite o seu código de 4 dígitos.')
-      const employee = (await employeeRows()).find((item) => item.type === 'operator' && item.accessCode === code)
+      const employee = (await employeeRows()).find((item) => isOperator(item) && item.accessCode === code)
       if (!employee) throw new OperationError(404, 'Código não encontrado. Confira os 4 dígitos.')
       if (!employee.active) throw new OperationError(403, 'Este cadastro está desativado. Procure o administrador.')
       // The operator is who they say (their own code): this device receives a key to each work session they have open,
@@ -557,7 +560,7 @@ export default function createOperationsRouter(pool) {
       const option = (item) => ({ id: item.id, name: item.name })
       const byName = (left, right) => left.name.localeCompare(right.name, 'pt-BR')
       response.set('Cache-Control', 'no-store').json({
-        employees: employees.filter((item) => item.type === 'operator' && item.active).map(option).sort(byName),
+        employees: employees.filter((item) => isOperator(item) && item.active).map(option).sort(byName),
         pauseReasons,
         machines: catalog.machine.map(option).sort(byName),
         laborServices: catalog['labor-service'].map(option).sort(byName),
@@ -575,7 +578,7 @@ export default function createOperationsRouter(pool) {
     try {
       const body = request.body || {}
       if (!manualEventTypes.includes(body.type)) throw new OperationError(400, 'Selecione a operação.')
-      const employee = (await employeeRows()).find((item) => item.type === 'operator' && String(item.id) === String(body.employeeId))
+      const employee = (await employeeRows()).find((item) => isOperator(item) && String(item.id) === String(body.employeeId))
       if (!employee) throw new OperationError(400, 'Selecione o funcionário responsável.')
       const input = { type: body.type, at: body.at, employee: { id: employee.id, name: employee.name }, stageKey: body.stageKey, quantity: body.quantity }
       if (body.type === 'pause') {
@@ -715,7 +718,7 @@ export default function createOperationsRouter(pool) {
 
   router.post('/operations/orders/:code/start', requireOperator, async (request, response) => {
     try {
-      const employee = (await employeeRows()).find((item) => item.type === 'operator' && String(item.id) === String(request.body?.employeeId))
+      const employee = (await employeeRows()).find((item) => isOperator(item) && String(item.id) === String(request.body?.employeeId))
       if (!employee) throw new OperationError(400, 'Selecione um funcionário cadastrado.')
       if (!employee.active) throw new OperationError(403, 'Este cadastro está desativado. Procure o administrador.')
       const machine = await selectedResource('machine', request.body?.machineId)

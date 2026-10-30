@@ -83,7 +83,7 @@ test('free stages count only pieces processed in every stage and preserve sessio
   assert.equal((await fixture.request(`${route}/complete`, 'POST', credentials, auth)).status, 200)
 })
 
-test('default and legacy orders still require pieces to pass the preceding stage', async (t) => {
+test('default and legacy orders open each stage only when the one before it has every piece', async (t) => {
   const fixture = await createWorkflowFixture()
   t.after(() => fixture.close())
   const employee = (await fixture.adminRequest('/employees', 'POST', { name: 'Ana', birthDate: '1990-01-01', cpf: '00000000001', email: 'ana@example.invalid', identification: '001' }, fixture.admin)).data.item
@@ -92,15 +92,24 @@ test('default and legacy orders still require pieces to pass the preceding stage
     const { order } = await createOrder(fixture)
     if (legacy) await fixture.mutateStore((store) => { delete store.orders.find((item) => item.code === order.code).resources.strictProcess })
     const route = `/operations/orders/${order.code}`
+    assert.equal((await fixture.request(`${route}/start`, 'POST', { employeeId: employee.id, stageKey: 'stage-2' }, auth)).status, 409, 'the second stage waits for the first')
     const started = (await fixture.request(`${route}/start`, 'POST', { employeeId: employee.id }, auth)).data
-    const credentials = { sessionId: started.operation.activeSession.id, sessionToken: started.sessionToken }
-    const register = async (key, quantity) => { await fixture.request(`${route}/work-stage`, 'POST', { ...credentials, stageKey: key }, auth); return fixture.request(`${route}/stages/${key}`, 'POST', { ...credentials, quantity }, auth) }
-    assert.equal((await register('stage-3', 1)).status, 409)
-    assert.equal((await register('stage-2', 1)).status, 409)
+    let credentials = { sessionId: started.operation.activeSession.id, sessionToken: started.sessionToken }
+    const moveTo = (key) => fixture.request(`${route}/work-stage`, 'POST', { ...credentials, stageKey: key }, auth)
+    const register = (key, quantity) => fixture.request(`${route}/stages/${key}`, 'POST', { ...credentials, quantity }, auth)
+    assert.equal((await moveTo('stage-3')).status, 409)
+    assert.equal((await register('stage-2', 1)).status, 409, 'nobody can work on it')
     assert.equal((await register('stage-1', 5)).status, 200)
-    assert.equal((await register('stage-2', 6)).status, 409)
+    const waiting = await moveTo('stage-2')
+    assert.equal(waiting.status, 409, 'part of the pieces is not enough')
+    assert.match(waiting.data.message, /Conclua a etapa .* antes de começar/)
+    assert.equal((await register('stage-1', 15)).status, 200)
+    // The finished stage ends the work on it: the operator starts again on the next one, never past it.
+    assert.equal((await fixture.request(`${route}/start`, 'POST', { employeeId: employee.id, stageKey: 'stage-3' }, auth)).status, 409)
+    const next = await fixture.request(`${route}/start`, 'POST', { employeeId: employee.id, stageKey: 'stage-2' }, auth)
+    assert.equal(next.status, 200, next.data?.message)
+    credentials = { sessionId: next.data.session.id, sessionToken: next.data.sessionToken }
     assert.equal((await register('stage-2', 5)).status, 200)
-    assert.equal((await register('stage-3', 5)).status, 200)
     assert.equal((await fixture.request(`${route}/pause`, 'POST', { ...credentials, reason: 'Descanso' }, auth)).status, 200)
   }
 })

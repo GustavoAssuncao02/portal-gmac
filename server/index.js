@@ -16,6 +16,10 @@ import createMachinesRouter from './machines.js'
 import createLaborServicesRouter, { ensureLaborServices } from './laborServices.js'
 import createRegistriesRouter, { ensurePauseReasons, ensureSectors } from './registries.js'
 import createRequestersRouter from './requesters.js'
+import createProposalEmailsRouter from './proposalEmails.js'
+import createStageCatalogRouter, { ensureStageCatalog } from './stageCatalog.js'
+import { announceRelease } from './notificationEvents.js'
+import { releaseNotes } from '../src/releaseNotes.js'
 import { createSiteQuotes } from './siteQuotes/index.js'
 import createPlanningRouter from './planning.js'
 import createReportsRouter from './reports.js'
@@ -81,6 +85,10 @@ await ensureInventoryAppearance(pool)
 await ensureEmployeeAccess(pool)
 await ensureLaborServices()
 await ensureSectors()
+// The stages come from "Etapas": the first start saves the stages the system always had.
+await ensureStageCatalog()
+// A new version of the portal: the bell tells everybody once (src/releaseNotes.js is the list of the versions).
+if (!(await readStore()).operationalNotifications?.some((item) => item.id === `release:${releaseNotes[0].version}`)) await mutateStore((store) => { announceRelease(store, releaseNotes[0]) })
 await ensurePauseReasons()
 await ensureAccountPlan()
 await loadOperatorAccount()
@@ -100,6 +108,8 @@ app.use('/api', createMachinesRouter(requireAdmin, pool))
 app.use('/api', createLaborServicesRouter(requireAdmin, pool))
 app.use('/api', createRegistriesRouter(requireAdmin, pool))
 app.use('/api', createRequestersRouter(accounts, requireAdmin))
+app.use('/api', createProposalEmailsRouter(accounts, requireAdmin))
+app.use('/api', createStageCatalogRouter(requireAdmin, pool))
 app.use('/api', createPlanningRouter(requireAdmin, pool))
 app.use('/api', createReportsRouter(pool, accounts, requireAdmin))
 app.use('/api', createInventoryImportRouter(pool, requireAdmin))

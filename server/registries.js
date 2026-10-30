@@ -4,6 +4,7 @@ import { readStore, mutateStore } from './offers.js'
 import { requireAdminOrOperator } from './access.js'
 import { employeeRecords } from './employeeAccess.js'
 import { bankInUse } from './banks.js'
+import { refreshStageCatalog } from './stageCatalog.js'
 
 // Simple registrations kept by the users themselves: the sectors of the employees and the reasons an operator can choose
 // when pausing a work session. Each item is only a name.
@@ -75,7 +76,7 @@ export async function pauseReasonStats(pool) {
 }
 
 // `fields`: text fields besides the name ([key, limit]); `sameKey` tells which fields make two registrations the same.
-function registryRoutes(router, { path, key, label, requireAdmin, readAccess = requireAdmin, inUse, decorate = async (items) => items, fields = [], sameKey = (row) => row.name, onSave = () => {} }) {
+function registryRoutes(router, { path, key, label, requireAdmin, readAccess = requireAdmin, inUse, decorate = async (items) => items, fields = [], sameKey = (row) => row.name, onSave = () => {}, afterChange = async () => {} }) {
   const handle = (task) => async (request, response, next) => {
     try { await task(request, response) } catch (error) { error.status ? response.status(error.status).json({ message: error.message }) : next(error) }
   }
@@ -100,6 +101,7 @@ function registryRoutes(router, { path, key, label, requireAdmin, readAccess = r
       onSave(store, row, previous)
       return row
     })
+    await afterChange()
     response.status(method === 'post' ? 201 : 200).json({ item })
   }))
   router.delete(`${path}/:id`, requireAdmin, handle(async (request, response) => {
@@ -108,28 +110,31 @@ function registryRoutes(router, { path, key, label, requireAdmin, readAccess = r
     const used = await inUse(current)
     if (used) fail(409, used)
     await mutateStore((store) => { store[key] = (store[key] || []).filter((row) => row.id !== current.id) })
+    await afterChange()
     response.status(204).end()
   }))
 }
 
 export default function createRegistriesRouter(requireAdmin, pool) {
   const router = express.Router()
-  // Who uses a sector: employees by id, machines and labor services by name.
+  // Who uses a sector: employees and stages (Etapas) by id, machines and labor services by name.
   const usage = async (sector) => {
     const store = await readStore()
     const named = (rows) => (rows || []).filter((row) => namesOf(row).some((name) => sameName(clean(name), sector.name))).length
-    return { employees: (await employeeRecords(pool)).filter((employee) => employee.sectorIds.includes(sector.id)).length, machines: named(store.machines), laborServices: named(store.laborServices) }
+    return { employees: (await employeeRecords(pool)).filter((employee) => employee.sectorIds.includes(sector.id)).length, machines: named(store.machines), laborServices: named(store.laborServices), stages: (store.stageCatalog?.stages || []).filter((row) => row.sectorId === sector.id).length }
   }
   const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`
   registryRoutes(router, {
     path: '/sectors', key: 'sectors', label: 'Setor', requireAdmin,
     decorate: async (items) => Promise.all(items.map(async (item) => ({ ...item, ...await usage(item) }))),
     inUse: async (sector) => {
-      const { employees, machines, laborServices } = await usage(sector)
-      const parts = [employees && plural(employees, 'funcionário', 'funcionários'), machines && plural(machines, 'máquina', 'máquinas'), laborServices && plural(laborServices, 'serviço', 'serviços')].filter(Boolean)
+      const { employees, machines, laborServices, stages } = await usage(sector)
+      const parts = [employees && plural(employees, 'funcionário', 'funcionários'), machines && plural(machines, 'máquina', 'máquinas'), laborServices && plural(laborServices, 'serviço', 'serviços'), stages && plural(stages, 'etapa', 'etapas')].filter(Boolean)
       return parts.length ? `Este setor está vinculado a ${sectorText(parts)}. Troque o setor deles antes de excluir.` : null
     },
-    // Renaming a sector renames it in the machines and services that use it (the employees keep its id).
+    // Renaming a sector renames it in the machines and services that use it (the employees and the stages keep its id;
+    // the groups of the stages are then read again).
+    afterChange: refreshStageCatalog,
     onSave: (store, row, previous) => {
       if (!previous || previous === row.name) return
       for (const item of [...(store.machines || []), ...(store.laborServices || [])]) {

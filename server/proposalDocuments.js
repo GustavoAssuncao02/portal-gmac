@@ -175,6 +175,14 @@ export function nextQuoteNumber(store, settings) {
   return String(Math.max(settings.lastQuoteNumber, ...used) + 1)
 }
 
+// Every generated PDF has a quote number of its own: a number already issued (the previous PDF of this same offer, or one
+// taken by someone else while the form was open) moves to the next one. A higher number typed by hand is kept.
+function claimQuoteNumber(store, document) {
+  if (!Number.isInteger(Number(document.quoteNumber))) return
+  const next = nextQuoteNumber(store, proposalSettings(store))
+  if (Number(document.quoteNumber) < Number(next)) document.quoteNumber = next
+}
+
 export async function buildDraft({ model, store, offer, value, deadline }) {
   if (!documentModels.includes(model)) fail('Modelo de proposta inválido.')
   const settings = proposalSettings(store)
@@ -188,7 +196,7 @@ export async function buildDraft({ model, store, offer, value, deadline }) {
     const total = Number(value) > 0 ? round2(value) : 0
     const quantityValue = Number(source?.quantity) > 0 ? Number(source.quantity) : 1
     return {
-      ...base, quoteNumber: nextQuoteNumber(store, settings), customer: source?.company || '', customerDocument: formatDocument(source?.cnpj), requester: String(source?.requester || '').slice(0, 80), attention: '', subject: `serviço de ${source?.service || ''}`.trim(),
+      ...base, quoteNumber: nextQuoteNumber(store, settings), customer: source?.company || '', customerDocument: formatDocument(source?.cnpj), requester: String(source?.requester || '').slice(0, 80), attention: String(source?.buyer || '').slice(0, 80), subject: `serviço de ${source?.service || ''}`.trim(),
       scope: String(source?.description || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
       items: [{ description: source?.service || 'Serviço', quantity: quantityValue, unit: 'Un', unitPrice: round2(total / quantityValue) }],
       deliveryTerm: /^\d{4}-\d{2}-\d{2}$/.test(String(deadline || '').trim()) ? String(deadline).trim().split('-').reverse().join('/') : String(deadline || '').trim(), payment: '', validityDays: settings.validityDays, important: settings.important,
@@ -281,7 +289,7 @@ export async function normalizeDocument(model, input, store) {
   if (items.length > 30) fail('A composição aceita no máximo 30 itens.')
   const document = {
     ...common, city: issuer.city, quoteNumber: text(input.quoteNumber, 20, 'o número da cotação', { required: true }), customer: text(input.customer, 160, 'o cliente', { required: true }), customerDocument: text(input.customerDocument, 20, 'o CNPJ do cliente'),
-    requester: text(input.requester, 80, 'o solicitante'), attention: text(input.attention, 80, 'aos cuidados de'), subject: text(input.subject, 300, 'o objeto da proposta', { required: true }),
+    requester: text(input.requester, 80, 'o solicitante'), attention: text(input.attention, 80, 'o comprador'), subject: text(input.subject, 300, 'o objeto da proposta', { required: true }),
     scope, items, deliveryTerm: text(input.deliveryTerm, 200, 'o prazo de entrega'), payment: text(input.payment, 300, 'a condição de pagamento'),
     validityDays: Math.min(365, Math.max(1, Number(input.validityDays) || settings.validityDays)), important: settings.important, fiscal: { cnae, nbs, ncm },
     technician: input.technician && typeof input.technician === 'object' ? { name: text(input.technician.name, 120, 'o técnico responsável'), registry: text(input.technician.registry, 60, 'o registro do técnico'), phone: text(input.technician.phone, 40, 'o contato do técnico') } : issuerTechnician(issuer),
@@ -359,7 +367,8 @@ export default function createProposalDocumentsRouter(requireAdmin) {
     const offer = store.offers.find((item) => item.id === request.params.id) || fail('Oferta não encontrada.', 404)
     const model = String(request.query.model || '')
     const fresh = await buildDraft({ model, store, offer, value: request.query.value, deadline: request.query.deadline })
-    const draft = offer.proposal?.document?.model === model && !request.query.fresh ? { ...fromSaved(offer.proposal.document, proposalSettings(store)), usage: fresh.usage } : fresh
+    // Reopening the saved document keeps what was typed, but a new PDF takes the next quote number.
+    const draft = offer.proposal?.document?.model === model && !request.query.fresh ? { ...fromSaved(offer.proposal.document, proposalSettings(store)), ...(fresh.quoteNumber ? { quoteNumber: fresh.quoteNumber } : {}), usage: fresh.usage } : fresh
     response.set('Cache-Control', 'no-store').json({ draft, settings: proposalSettings(store) })
   }))
 
@@ -377,6 +386,7 @@ export default function createProposalDocumentsRouter(requireAdmin) {
     const updated = await mutateStore((store) => {
       const item = store.offers.find((entry) => entry.id === request.params.id)
       if (!item || item.orderCode || item.status === 'rejected') fail('Oferta não encontrada, já aceita ou recusada.', 404)
+      claimQuoteNumber(store, document)
       item.proposal = documentProposal({ item, option, document, model, stages, generatedBy: request.adminName || null })
       item.status = 'proposed'
       remember(store, model, document, assignments)

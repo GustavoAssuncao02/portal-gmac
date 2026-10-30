@@ -24,7 +24,7 @@ test('start and resume require acknowledgement of current pending quantities and
   const fixture = await createWorkflowFixture()
   t.after(() => fixture.close())
   const offer = (await fixture.adminRequest('/offers', 'POST', offerDraft)).data.item
-  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], stages: ['cutting'], kind: 'service' })
+  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], stages: ['cut-bend'], kind: 'service' })
   await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', serviceValue: 100, deadline: offer.deadline } })
   const order = (await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')).data.item
   await fixture.mutateStore((store) => { store.orders[0].resources.materials = [{ id: 'inox', inventoryId: 7, name: 'Inox 304', quantity: 10, purchaseQuantity: 10 }] })

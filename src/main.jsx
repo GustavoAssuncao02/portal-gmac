@@ -18,13 +18,15 @@ import AccountSettings from './AccountSettings.jsx'
 import PayablesScreen from './PayablesScreen.jsx'
 import AdminWorkspace from './AdminWorkspace.jsx'
 import SimpleRegistryScreen from './SimpleRegistryScreen.jsx'
-import RequestersScreen from './RequestersScreen.jsx'
+import RequestersScreen, { contactKinds } from './RequestersScreen.jsx'
 import { RegistryToolbar, SortHeader, documentLabel, useRegistryList } from './RegistryList.jsx'
 import { bySector, parseSectors, sectorsOf } from './machineSectors.js'
 import ServicePanelRow, { collaboratorNames, panelDeadline, panelDuration } from './ServicePanelRow.jsx'
 import PieceNameInput from './PieceNameInput.jsx'
 import ClientNameInput from './ClientNameInput.jsx'
 import RequesterNameInput from './RequesterNameInput.jsx'
+import ProposalEmailModal, { ProposalEmailHistory } from './ProposalEmailModal.jsx'
+import StagesScreen from './StagesScreen.jsx'
 import { documentDigits, documentKind, maskClientDocument } from '../server/clientDocument.js'
 import DownloadLink from './DownloadLink.jsx'
 import { cachedResource, downloadFile } from './payablesApi.js'
@@ -51,9 +53,9 @@ import { useMobileModal } from './useMobileModal.js'
 import { ThemeContext, useAccountTheme } from './accountTheme.js'
 import { pollWhileVisible } from './polling.js'
 import { newId } from './newId.js'
-import { History, Monitor, Minimize2, Plus, Pencil, Trash2, Clock3, CreditCard, HandCoins, Banknote, Landmark, ChartColumn, Tags, FileChartColumn, FilePenLine, FolderTree, ChartNoAxesCombined, Truck, WalletCards, ChevronLeft, ChevronRight, ChevronDown, UsersRound, Menu, X, Info, ArrowLeft, ListChecks, Layers, CircleCheck, CircleX, ArrowUpDown, ArrowUp, ArrowDown, Building2, CirclePause, Power, Factory, Wrench, CalendarClock, Save, Contact } from 'lucide-react'
+import { History, Monitor, Minimize2, Plus, Pencil, Trash2, Clock3, CreditCard, HandCoins, Banknote, Landmark, ChartColumn, Tags, FileChartColumn, FilePenLine, FolderTree, ChartNoAxesCombined, Truck, WalletCards, ChevronLeft, ChevronRight, ChevronDown, UsersRound, Menu, X, Info, ArrowLeft, ListChecks, Layers, CircleCheck, CircleX, ArrowUpDown, ArrowUp, ArrowDown, Building2, CirclePause, Power, Factory, Wrench, CalendarClock, Save, Contact, ShoppingCart, Mail, ListOrdered } from 'lucide-react'
 import { proposalCosts, proposalPricing, hoursText, marginLimits, PROPOSAL_MARGIN_GAP } from '../server/proposalMath.js'
-import { stageLabel, serviceDetails, serviceDescriptionText, readStageLayout, orderedStageSelection, stagePlanProblem, stagePlanPlace } from '../server/serviceStages.js'
+import { stageLabel, serviceDetails, serviceDescriptionText, readStageLayout, orderedStageSelection, stagePlanProblem, stagePlanPlace, setStageCatalog, onStageCatalogChange, defaultStageResource } from '../server/serviceStages.js'
 import { findInventoryMaterial, materialsStock, normalizeSearch, purchaseMaterialRequests } from './offerResources.js'
 import { deadlineCategories } from './serviceDeadline.js'
 import { currentPieceProgress, emergenciesFirst } from './serviceProgress.js'
@@ -155,6 +157,7 @@ const navigation = [
   ['Dashboard', 'dashboard'],
   ['Máquinas', 'machines'],
   ['Serviços', 'services'],
+  ['Etapas', 'stages'],
   ['Estoque', 'stock'],
   ['Pedidos', 'orders'],
   ['Calculadora de pesos e medidas', 'calculator'],
@@ -169,6 +172,7 @@ const navigation = [
   ['Planejamento', 'planning'],
   ['Clientes', 'clients'],
   ['Solicitantes', 'requesters'],
+  ['Compradores', 'buyers'],
   ['Contas a Pagar', 'payables'],
   ['Contas a Receber', 'receivables'],
   ['Tesouraria', 'treasury'],
@@ -185,7 +189,7 @@ const navigation = [
   ['Configurações', 'settings'],
 ]
 
-const registrationNavigation = ['Fornecedores', 'Administradores', 'Funcionários', 'Setores', 'Clientes', 'Solicitantes', 'Bancos', 'Razões de pausas'].map((label) => navigation.find(([name]) => name === label))
+const registrationNavigation = ['Fornecedores', 'Administradores', 'Funcionários', 'Setores', 'Clientes', 'Solicitantes', 'Compradores', 'Bancos', 'Razões de pausas'].map((label) => navigation.find(([name]) => name === label))
 const isRegistrationPage = (label) => registrationNavigation.some(([name]) => name === label)
 const financialNavigation = ['Contas a Pagar', 'Contas a Receber', 'Tesouraria', 'Fluxo de caixa', 'Baixa em Lote', 'Conciliação bancária', 'Business Intelligence', 'DRE', 'Ajustes da DRE', 'Grupos de contas', 'Classificações'].map((label) => navigation.find(([name]) => name === label))
 const isFinancialPage = (label) => financialNavigation.some(([name]) => name === label)
@@ -333,7 +337,7 @@ function Sidebar({ collapsed, onToggle, activeNav, onNavigate, onLogout }) {
   }
   function navigationItem([label, icon]) {
     return <button className={`nav-item ${activeNav === label ? 'nav-item--active' : ''}`} key={label} type="button" title={pageLabel(label)} aria-label={pageLabel(label)} onClick={() => { setMobileOpen(false); onNavigate(label) }}>
-      {['payables', 'receivables', 'treasury', 'cash-flow', 'batch', 'bank', 'bi', 'dre', 'dre-adjustments', 'account-groups', 'classifications', 'suppliers', 'completed-services', 'sectors', 'pause-reasons', 'banks', 'planning', 'requesters'].includes(icon) ? (() => { const NavIcon = { planning: CalendarClock, payables: CreditCard, receivables: HandCoins, treasury: Banknote, 'cash-flow': ChartNoAxesCombined, batch: Layers, bank: Landmark, bi: ChartColumn, dre: FileChartColumn, 'dre-adjustments': FilePenLine, 'account-groups': FolderTree, classifications: Tags, suppliers: Truck, 'completed-services': ListChecks, sectors: Building2, 'pause-reasons': CirclePause, banks: Landmark, requesters: Contact }[icon]; return <NavIcon className="icon nav-icon" size={20} /> })() : <Icon name={icon} className="nav-icon" />}
+      {['payables', 'receivables', 'treasury', 'cash-flow', 'batch', 'bank', 'bi', 'dre', 'dre-adjustments', 'account-groups', 'classifications', 'suppliers', 'completed-services', 'sectors', 'pause-reasons', 'banks', 'planning', 'requesters', 'buyers', 'stages'].includes(icon) ? (() => { const NavIcon = { planning: CalendarClock, payables: CreditCard, receivables: HandCoins, treasury: Banknote, 'cash-flow': ChartNoAxesCombined, batch: Layers, bank: Landmark, bi: ChartColumn, dre: FileChartColumn, 'dre-adjustments': FilePenLine, 'account-groups': FolderTree, classifications: Tags, suppliers: Truck, 'completed-services': ListChecks, sectors: Building2, 'pause-reasons': CirclePause, banks: Landmark, requesters: Contact, buyers: ShoppingCart, stages: ListOrdered }[icon]; return <NavIcon className="icon nav-icon" size={20} /> })() : <Icon name={icon} className="nav-icon" />}
       <span>{pageLabel(label)}</span>
     </button>
   }
@@ -471,7 +475,7 @@ function WorkspaceTabs({ tabs, activeNav, onNavigate, onCloseTab, onReorderTabs 
     </div>
     {scrollState.overflow && <button ref={rightArrowRef} className="workspace-tabs-control" type="button" aria-label="Rolar abas para a direita" title="Rolar abas para a direita" disabled={!scrollState.right} onClick={() => scrollTabs(1)}><ChevronRight size={17} aria-hidden="true" /></button>}
     {tabs.length > 3 && <button className="workspace-tabs-control workspace-tabs-close-all" type="button" aria-label="Fechar todas as abas" title="Fechar todas as abas" onClick={closeAllTabs}><X size={17} aria-hidden="true" /></button>}
-    <NotificationsButton onOpenAccount={(id) => { sessionStorage.setItem('gmac-payable-open', id); onNavigate('Contas a Pagar'); window.dispatchEvent(new CustomEvent('gmac-payable-open', { detail: id })) }} onOpenReceivable={(id) => { sessionStorage.setItem('gmac-receivable-open', id); onNavigate('Contas a Receber'); window.dispatchEvent(new CustomEvent('gmac-receivable-open', { detail: id })) }} onOpenNotice={(notice) => notice.type === 'proposal-saved' ? window.dispatchEvent(new CustomEvent('gmac-proposal-open', { detail: notice.offerId })) : onNavigate({ 'material-request': 'Pedidos', 'low-stock': 'Estoque', 'service-completed': 'Serviços em andamento', 'service-added': 'Serviços em andamento' }[notice.type] || 'Dashboard')} />
+    <NotificationsButton onOpenAccount={(id) => { sessionStorage.setItem('gmac-payable-open', id); onNavigate('Contas a Pagar'); window.dispatchEvent(new CustomEvent('gmac-payable-open', { detail: id })) }} onOpenReceivable={(id) => { sessionStorage.setItem('gmac-receivable-open', id); onNavigate('Contas a Receber'); window.dispatchEvent(new CustomEvent('gmac-receivable-open', { detail: id })) }} onOpenNotice={(notice) => notice.type === 'proposal-saved' ? window.dispatchEvent(new CustomEvent('gmac-proposal-open', { detail: notice.offerId })) : notice.type === 'release' ? (sessionStorage.setItem('gmac-release-notes-open', '1'), onNavigate('Configurações'), window.dispatchEvent(new CustomEvent('gmac-release-notes-open'))) : onNavigate({ 'material-request': 'Pedidos', 'low-stock': 'Estoque', 'service-completed': 'Serviços em andamento', 'service-added': 'Serviços em andamento' }[notice.type] || 'Dashboard')} />
     <div className="workspace-tabs-clock" aria-label="Data e hora atual"><strong>{currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</strong><span>{currentTime.toLocaleDateString('pt-BR')}</span></div>
   </div>
 }
@@ -1022,6 +1026,12 @@ async function applyPieceSuggestion(offer) {
   return item
 }
 
+// An employee is an operator (4-digit code), administrative (CPF and password) or both (`both`).
+const operatesMachines = (type) => type === 'operator' || type === 'both'
+const worksInOffice = (type) => type === 'administrative' || type === 'both'
+const employeeType = (operator, staff) => operator && staff ? 'both' : staff ? 'administrative' : 'operator'
+const employeeTypeLabel = (type) => [operatesMachines(type) && 'Operador', worksInOffice(type) && 'Administrativo'].filter(Boolean).join(' e ')
+
 function RegistrationScreen({ kind, collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs }) {
   const isEmployee = kind === 'employee'
   const isClient = kind === 'client'
@@ -1064,7 +1074,7 @@ function RegistrationScreen({ kind, collapsed, onToggle, activeNav, onNavigate, 
 
   async function submitForm() {
     const setMessage = (text) => text.includes('sucesso') ? setNotice(text) : setFormError(text)
-    if (isEmployee && form.type === 'operator' && !/^\d{4}$/.test(form.accessCode)) {
+    if (isEmployee && operatesMachines(form.type) && !/^\d{4}$/.test(form.accessCode)) {
       setMessage('Informe o código de acesso do operador com 4 dígitos.')
       return
     }
@@ -1150,7 +1160,15 @@ function RegistrationScreen({ kind, collapsed, onToggle, activeNav, onNavigate, 
     } catch (error) { setMessage(error.message) }
   }
 
-  const passwordRequired = editingId === null || isEmployee && records.find((item) => item.id === editingId)?.type !== 'administrative'
+  const passwordRequired = editingId === null || isEmployee && !worksInOffice(records.find((item) => item.id === editingId)?.type)
+  // Checking one role keeps the other as it is; at least one stays checked. Only operators have sectors.
+  function changeEmployeeRole(role, checked) {
+    const operator = role === 'operator' ? checked : operatesMachines(form.type)
+    const staff = role === 'staff' ? checked : worksInOffice(form.type)
+    if (!operator && !staff) return
+    update('type', employeeType(operator, staff))
+    if (!operator) update('sectorIds', [])
+  }
   function generateAccessCode() {
     const taken = new Set(records.filter((item) => item.id !== editingId).map((item) => item.accessCode))
     let code
@@ -1165,7 +1183,7 @@ function RegistrationScreen({ kind, collapsed, onToggle, activeNav, onNavigate, 
   const listColumns = isClient
     ? [{ key: 'name', label: 'Nome / razão social', value: (row) => row.name, search: true }, { key: 'notes', value: (row) => row.notes, search: true, hidden: true }, { key: 'document', label: 'CPF / CNPJ', value: (row) => row.document, search: true }, { key: 'email', label: 'E-mail', value: (row) => row.email || '', search: true }]
     : [...(isEmployee ? [] : [{ key: 'id', label: 'ID', value: (row) => Number(row.id), numeric: true }]), { key: 'name', label: 'Nome', value: (row) => row.name, search: true },
-      ...(isEmployee ? [{ key: 'type', label: 'Tipo', value: (row) => row.type === 'administrative' ? 'Administrativo' : 'Operador' }, { key: 'sector', label: 'Setor', value: (row) => row.sectorName || '', search: true }, { key: 'accessCode', label: 'Código', value: (row) => row.accessCode || '', search: true }] : []),
+      ...(isEmployee ? [{ key: 'type', label: 'Tipo', value: (row) => employeeTypeLabel(row.type) }, { key: 'sector', label: 'Setor', value: (row) => row.sectorName || '', search: true }, { key: 'accessCode', label: 'Código', value: (row) => row.accessCode || '', search: true }] : []),
       { key: 'cpf', label: 'CPF', value: (row) => row.cpf, search: true }, { key: 'email', label: 'E-mail', value: (row) => row.email || '', search: true }, { key: 'birthDate', label: 'Nascimento', value: (row) => row.birthDate || '' }]
   const list = useRegistryList(records, listColumns, 'name')
   const shownColumns = listColumns.filter((column) => !column.hidden)
@@ -1179,7 +1197,7 @@ function RegistrationScreen({ kind, collapsed, onToggle, activeNav, onNavigate, 
       {list.rows.map((record) => <tr key={record.id}>
         {!isEmployee && !isClient && <td data-label="ID" className="payable-id">{`ADM-${String(record.id).padStart(3, '0')}`}</td>}
         <td className="registry-name"><strong>{record.name}</strong>{isClient && record.notes && <small title={record.notes}>{record.notes}</small>}{isEmployee && record.active === false && <small className="registry-inactive">Desativado</small>}</td>
-        {isEmployee && <><td data-label="Tipo"><span className={`registry-badge registry-badge--${record.type === 'administrative' ? 'admin' : 'operator'}`}>{record.type === 'administrative' ? 'Administrativo' : 'Operador'}</span></td><td data-label="Setor">{record.sectorName || <span className="registry-empty">—</span>}</td><td data-label="Código" className="registry-code">{record.type === 'administrative' ? <span className="registry-empty">—</span> : record.accessCode || <span className="registry-empty">—</span>}</td></>}
+        {isEmployee && <><td data-label="Tipo"><span className="registry-badges">{operatesMachines(record.type) && <span className="registry-badge registry-badge--operator">Operador</span>}{worksInOffice(record.type) && <span className="registry-badge registry-badge--admin">Administrativo</span>}</span></td><td data-label="Setor">{record.sectorName || <span className="registry-empty">—</span>}</td><td data-label="Código" className="registry-code">{!operatesMachines(record.type) ? <span className="registry-empty">—</span> : record.accessCode || <span className="registry-empty">—</span>}</td></>}
         <td data-label={isClient ? 'CPF / CNPJ' : 'CPF'} className="registry-document"><span>{isClient && <span className="registry-doc-type">{record.documentType === 'cpf' ? 'CPF' : 'CNPJ'}</span>}{documentLabel(isClient ? record.document : record.cpf)}</span></td>
         <td data-label="E-mail">{record.email || <span className="registry-empty">—</span>}</td>
         {!isClient && <td data-label="Nascimento">{record.birthDate ? record.birthDate.split('-').reverse().join('/') : <span className="registry-empty">—</span>}</td>}
@@ -1201,15 +1219,17 @@ function RegistrationScreen({ kind, collapsed, onToggle, activeNav, onNavigate, 
           <label>E-mail<input type="email" value={form.email || ''} onChange={(event) => update('email', event.target.value)} placeholder="Opcional" /></label>
           <label>Observação<textarea rows={3} maxLength={1000} value={form.notes || ''} onChange={(event) => update('notes', event.target.value)} placeholder="Opcional" /></label>
         </> : <>
-          {isEmployee && <label>Tipo de funcionário<select value={form.type} onChange={(event) => { const type = event.target.value; update('type', type); if (type !== 'operator') update('sectorIds', []) }}><option value="operator">Operador</option><option value="administrative">Administrativo</option></select><small className="payable-hint">{form.type === 'operator' ? 'Entra na conta do operador com o código de 4 dígitos.' : 'Entra no sistema com CPF e senha, sem a Gestão Financeira.'}</small></label>}
+          {isEmployee && <fieldset className="registration-roles"><legend>Tipo de funcionário</legend>
+            <div className="registration-roles-options"><label><input type="checkbox" checked={operatesMachines(form.type)} onChange={(event) => changeEmployeeRole('operator', event.target.checked)} />Operador</label><label><input type="checkbox" checked={worksInOffice(form.type)} onChange={(event) => changeEmployeeRole('staff', event.target.checked)} />Administrativo</label></div>
+            <small className="payable-hint">{[operatesMachines(form.type) && 'Operador: entra na conta do operador com o código de 4 dígitos.', worksInOffice(form.type) && 'Administrativo: entra no sistema com CPF e senha, sem a Gestão Financeira.'].filter(Boolean).join(' ')}</small></fieldset>}
           {/* Setores são só dos operadores (fila do tablet); o administrativo não usa. */}
-          {isEmployee && form.type === 'operator' && <SectorPicker by="id" value={form.sectorIds || []} onChange={(ids) => update('sectorIds', ids)} hint="Opcional. O operador vê no tablet a fila planejada dos seus setores. Para criar um setor novo, use Cadastros › Setores." />}
+          {isEmployee && operatesMachines(form.type) && <SectorPicker by="id" value={form.sectorIds || []} onChange={(ids) => update('sectorIds', ids)} hint="Opcional. O operador vê no tablet a fila planejada dos seus setores. Para criar um setor novo, use Cadastros › Setores." />}
           {/* Operators may be registered without birth date and e-mail; administrative employees need the e-mail (the reset code goes to it) and administrators need both. */}
           <label>Data de nascimento<input type="date" aria-label="Data de nascimento" value={form.birthDate || ''} onChange={(event) => update('birthDate', event.target.value)} required={!isEmployee} />{isEmployee && <small className="payable-hint">Opcional.</small>}</label>
           <label>CPF<input value={form.cpf} onChange={(event) => update('cpf', cpfMask(event.target.value))} inputMode="numeric" placeholder="000.000.000-00" required /></label>
-          <label>E-mail<input type="email" value={form.email || ''} onChange={(event) => update('email', event.target.value)} required={!isEmployee || form.type === 'administrative'} placeholder={isEmployee && form.type !== 'administrative' ? 'Opcional' : undefined} />{isEmployee && form.type === 'administrative' && <small className="payable-hint">Obrigatório: é para este e-mail que vai o código de "Esqueci minha senha".</small>}</label>
-          {isEmployee && form.type === 'operator' && <label>Código de acesso<span className="registration-access-code"><input value={form.accessCode} onChange={(event) => update('accessCode', event.target.value.replace(/\D/g, '').slice(0, 4))} inputMode="numeric" maxLength={4} pattern="[0-9]{4}" placeholder="Ex.: 4827" autoComplete="off" required /><button type="button" onClick={generateAccessCode}>Gerar código</button></span><small className="payable-hint">4 dígitos, diferente para cada operador.</small></label>}
-          {(!isEmployee || form.type === 'administrative') && <label>Senha<span className="registration-password"><input type={showPassword ? 'text' : 'password'} value={form.password} onChange={(event) => update('password', event.target.value)} placeholder={passwordRequired ? 'Crie uma senha de acesso' : 'Deixe em branco para manter a senha atual'} minLength={6} required={passwordRequired} autoComplete="new-password" /><button type="button" onClick={() => setShowPassword((current) => !current)} aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}><EyeIcon crossed={!showPassword} /></button></span><small className="payable-hint">{passwordRequired ? 'Mínimo de 6 caracteres.' : 'Preencha somente se quiser trocar a senha.'}</small></label>}
+          <label>E-mail<input type="email" value={form.email || ''} onChange={(event) => update('email', event.target.value)} required={!isEmployee || worksInOffice(form.type)} placeholder={isEmployee && !worksInOffice(form.type) ? 'Opcional' : undefined} />{isEmployee && worksInOffice(form.type) && <small className="payable-hint">Obrigatório: é para este e-mail que vai o código de "Esqueci minha senha".</small>}</label>
+          {isEmployee && operatesMachines(form.type) && <label>Código de acesso<span className="registration-access-code"><input value={form.accessCode} onChange={(event) => update('accessCode', event.target.value.replace(/\D/g, '').slice(0, 4))} inputMode="numeric" maxLength={4} pattern="[0-9]{4}" placeholder="Ex.: 4827" autoComplete="off" required /><button type="button" onClick={generateAccessCode}>Gerar código</button></span><small className="payable-hint">4 dígitos, diferente para cada operador.</small></label>}
+          {(!isEmployee || worksInOffice(form.type)) && <label>Senha<span className="registration-password"><input type={showPassword ? 'text' : 'password'} value={form.password} onChange={(event) => update('password', event.target.value)} placeholder={passwordRequired ? 'Crie uma senha de acesso' : 'Deixe em branco para manter a senha atual'} minLength={6} required={passwordRequired} autoComplete="new-password" /><button type="button" onClick={() => setShowPassword((current) => !current)} aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}><EyeIcon crossed={!showPassword} /></button></span><small className="payable-hint">{passwordRequired ? 'Mínimo de 6 caracteres.' : 'Preencha somente se quiser trocar a senha.'}</small></label>}
         </>}
         {formError && <p className="admin-tool-error" role="alert">{formError}</p>}
       </fieldset></form>
@@ -1219,7 +1239,7 @@ function RegistrationScreen({ kind, collapsed, onToggle, activeNav, onNavigate, 
   </AdminWorkspace>
 }
 
-// Time since the proposal was sent (its PDF was generated); after 7 days without an answer it turns orange.
+// Time since the proposal was sent (its last e-mail, or the generation of its PDF); after 7 days without an answer it turns orange.
 const PROPOSAL_FOLLOW_UP_DAYS = 7
 function sentSinceText(at, now = Date.now()) {
   const minutes = Math.max(0, Math.floor((now - Date.parse(at)) / 60000))
@@ -1260,19 +1280,20 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
   useMobileModal(manualOpen, '.offer-manual-modal', () => setManualOpen(false))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const emptyForm = { cnpj: '', company: '', requester: '', deadline: '', service: '', quantity: '', description: '', labelNumber: '', attachment: null }
+  const emptyForm = { cnpj: '', company: '', requester: '', buyer: '', deadline: '', service: '', quantity: '', description: '', labelNumber: '', attachment: null }
   const [manualForm, setManualForm] = useState(emptyForm)
   const [pieces, setPieces] = useState([])
   const [clients, setClients] = useState([])
   const [requesters, setRequesters] = useState([])
-  // "Solicitante cadastrado automaticamente": a discreet notice for 4 seconds after the offer is added.
-  const [requesterNotice, setRequesterNotice] = useState(false)
+  const [buyers, setBuyers] = useState([])
+  // "Solicitante cadastrado automaticamente" (or the buyer, or both): a discreet notice for 4 seconds after the offer is added.
+  const [requesterNotice, setRequesterNotice] = useState('')
   useEffect(() => {
     if (!requesterNotice) return
-    const timer = setTimeout(() => setRequesterNotice(false), 4000)
+    const timer = setTimeout(() => setRequesterNotice(''), 4000)
     return () => clearTimeout(timer)
   }, [requesterNotice])
-  // The client whose requesters are offered: the registered client with the typed CPF/CNPJ.
+  // The client whose requesters and buyers are offered: the registered client with the typed CPF/CNPJ.
   const manualClient = documentDigits(manualForm.cnpj) ? clients.find((item) => documentDigits(item.document) === documentDigits(manualForm.cnpj)) : null
   // Shown on the list itself: the creation modal is already closed when something after the creation fails.
   const [pageNotice, setPageNotice] = useState('')
@@ -1281,6 +1302,7 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
     apiRequest('/api/pieces').then((data) => setPieces(data.items || [])).catch(() => setPieces([]))
     apiRequest('/api/clients').then((data) => setClients(data.items || [])).catch(() => setClients([]))
     apiRequest('/api/requesters').then((data) => setRequesters(data.items || [])).catch(() => setRequesters([]))
+    apiRequest('/api/buyers').then((data) => setBuyers(data.items || [])).catch(() => setBuyers([]))
   }, [manualOpen])
   const filteredOffers = offers.filter((offer) => {
     const query = search.trim().toLocaleLowerCase()
@@ -1307,9 +1329,9 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
     let created = false
     try {
       const { attachment, ...fields } = manualForm
-      const { item, requesterCreated } = await apiRequest('/api/offers', jsonOptions('POST', fields))
+      const { item, requesterCreated, buyerCreated } = await apiRequest('/api/offers', jsonOptions('POST', fields))
       created = true
-      if (requesterCreated) setRequesterNotice(true)
+      if (requesterCreated || buyerCreated) setRequesterNotice(requesterCreated && buyerCreated ? 'Solicitante e comprador cadastrados automaticamente' : `${requesterCreated ? 'Solicitante' : 'Comprador'} cadastrado automaticamente`)
       if (attachment) await uploadOfferAttachment(item.id, attachment)
       try { await applyPieceSuggestion(item) } catch (caught) { setPageNotice(`A oferta ${item.code} foi criada, mas não foi possível preencher com o histórico da peça (${caught.message}). Abra a oferta e use "Preencher com o histórico".`) }
       await onRefresh()
@@ -1364,7 +1386,7 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
             {filteredOffers.map((offer) => <div className="offers-table-row" key={offer.id}>
               <div className="offer-piece"><strong>{offer.service}</strong><span>{offer.code}</span></div>
               <span data-label="Cliente">{offer.company}</span><span data-label="Etiqueta">{offer.labelNumber || "—"}</span><span data-label="Quantidade">{offer.quantity} un</span><span data-label="Solicitação">{displayDate(offer.requestedAt)}</span><span data-label="Prazo">{displayDate(offer.deadline)}</span>
-              <div className="offer-status-cell"><div className={`offer-table-status offer-table-status--${savedProposal(offer) ? 'saved' : offer.status}`}><strong>{savedProposal(offer) ? 'Proposta salva' : offer.status === 'review' ? 'Em análise' : offer.status === 'proposed' ? 'Proposta gerada' : offer.status === 'rejected' ? offer.proposalDecline ? `Proposta ${offer.proposalDecline.key} recusada` : 'Recusada' : 'Aceita'}</strong>{savedProposal(offer) && <span>Opção {offer.proposalDraft.selectedKey}</span>}{offer.orderCode && <span>{offer.orderCode}</span>}{offer.proposalDecline?.reason && <span>{offer.proposalDecline.reason}</span>}</div>{offer.status === 'proposed' && offer.proposal?.generatedAt && <ProposalSentSince at={offer.proposal.generatedAt} />}</div>
+              <div className="offer-status-cell"><div className={`offer-table-status offer-table-status--${savedProposal(offer) ? 'saved' : offer.status}`}><strong>{savedProposal(offer) ? 'Proposta salva' : offer.status === 'review' ? 'Em análise' : offer.status === 'proposed' ? 'Proposta gerada' : offer.status === 'rejected' ? offer.proposalDecline ? `Proposta ${offer.proposalDecline.key} recusada` : 'Recusada' : 'Aceita'}</strong>{savedProposal(offer) && <span>Opção {offer.proposalDraft.selectedKey}</span>}{offer.orderCode && <span>{offer.orderCode}</span>}{offer.proposalDecline?.reason && <span>{offer.proposalDecline.reason}</span>}</div>{offer.status === 'proposed' && offer.proposal?.generatedAt && <ProposalSentSince at={offer.proposalEmails?.[0]?.sentAt || offer.proposal.generatedAt} />}</div>
               <span data-label="Origem">{offer.origin}</span>
               <div className="offer-table-actions">
                 {offer.status === 'rejected' ? offer.proposalDecline ? <button className="offer-review-button" type="button" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setUndoingOffer(offer) }}>Desfazer recusa</button> : <span>Recusada</span> : offer.status === 'accepted'
@@ -1387,8 +1409,9 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
             <label>CNPJ/CPF *<input value={manualForm.cnpj} onChange={(event) => changeManualDocument(event.target.value)} inputMode="numeric" placeholder="CNPJ ou CPF do cliente" required /></label>
             <label>Empresa *<ClientNameInput label="Empresa *" value={manualForm.company} documentValue={manualForm.cnpj} clients={clients} onChange={(value) => updateManualForm('company', value)} onSelect={(client) => setManualForm((current) => ({ ...current, company: client.name, cnpj: maskClientDocument(client.document) }))} required /></label>
             <label>Solicitante<RequesterNameInput label="Solicitante" value={manualForm.requester} client={manualClient} requesters={requesters} onChange={(value) => updateManualForm('requester', value)} /></label>
+            <label>Comprador<RequesterNameInput label="Comprador" kind={contactKinds.buyers} who="quem compra o serviço" value={manualForm.buyer} client={manualClient} requesters={buyers} onChange={(value) => updateManualForm('buyer', value)} /></label>
+            <label>Peça/Serviço *<PieceNameInput label="Peça/Serviço *" value={manualForm.service} onChange={(value) => updateManualForm('service', value)} pieces={pieces} required /></label>
             <label>Prazo solicitado *<input type="date" value={manualForm.deadline} onChange={(event) => updateManualForm('deadline', event.target.value)} required /></label>
-            <label className="offer-form-field--full">Peça/Serviço *<PieceNameInput label="Peça/Serviço *" value={manualForm.service} onChange={(value) => updateManualForm('service', value)} pieces={pieces} required /></label>
             <label>Quantidade *<input type="number" min="1" step="1" value={manualForm.quantity} onChange={(event) => updateManualForm('quantity', event.target.value)} required /></label>
             <label>Número da etiqueta<input value={manualForm.labelNumber} onChange={(event) => updateManualForm('labelNumber', event.target.value)} placeholder="Opcional" /></label>
             <label className="offer-form-field--full">Descrição do serviço *<textarea value={manualForm.description} onChange={(event) => updateManualForm('description', event.target.value)} rows="4" required /></label>
@@ -1396,7 +1419,7 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
           </div>{error && <p className="workflow-error" role="alert">{error}</p>}<div className="offer-modal-actions"><button className="offer-modal-cancel" type="button" onClick={() => setManualOpen(false)}>Cancelar</button><button className="manual-offer-button" type="submit" disabled={saving}>{saving ? 'Salvando...' : 'Adicionar solicitação'}</button></div></form>
         </section>
       </div>}
-      {requesterNotice && <p className="app-toast" role="status"><CircleCheck size={16} aria-hidden="true" />Solicitante cadastrado automaticamente</p>}
+      {requesterNotice && <p className="app-toast" role="status"><CircleCheck size={16} aria-hidden="true" />{requesterNotice}</p>}
     </div>
   )
 }
@@ -1420,7 +1443,6 @@ const offerDetails = (resources, description) => ({ ...serviceDetails(resources)
 
 function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, offer, onRefresh, onSelectOrder }) {
   const [laborServices, setLaborServices] = useState([])
-  const [laborCatalogError, setLaborCatalogError] = useState('')
   const [inventory, setInventory] = useState([])
   const [machines, setMachines] = useState([])
   const [materials, setMaterials] = useState(offer?.resources?.materials || [])
@@ -1433,12 +1455,9 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
   const [pieceHistory, setPieceHistory] = useState(null)
   const [materialFormOpen, setMaterialFormOpen] = useState(false)
   const [materialForm, setMaterialForm] = useState({ name: '', detail: '', unit: 'kg', quantity: '', unitPrice: '' })
-  // The row being edited in the material or labor form (null: the form adds a new row).
+  // The row being edited in the material form (null: the form adds a new row).
   const [editingMaterialId, setEditingMaterialId] = useState(null)
-  const [editingLaborId, setEditingLaborId] = useState(null)
   const [laborEntries, setLaborEntries] = useState(offer?.resources?.laborEntries || [])
-  const [laborFormOpen, setLaborFormOpen] = useState(false)
-  const [laborForm, setLaborForm] = useState({ type: 'machine', resource: '', hours: '', hourlyRate: '' })
   const [materialSuggestionsOpen, setMaterialSuggestionsOpen] = useState(false)
   const [attachmentError, setAttachmentError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -1471,9 +1490,7 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
     persistedResources.current = resourceDraft.current
     // A row being edited belongs to the offer that was open.
     setEditingMaterialId(null)
-    setEditingLaborId(null)
     setMaterialFormOpen(false)
-    setLaborFormOpen(false)
   }, [offer?.id])
 
   // An offer that arrives empty (for example, from the website) of a piece made before can be filled with its history.
@@ -1491,7 +1508,7 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
     let active = true
     // Cache no navegador para os menus de máquina/serviço da oferta abrirem na hora; a rede confirma em seguida.
     cachedResource('/machines', (data) => { if (active) setMachines(data.items) }).catch(() => {})
-    cachedResource('/labor-services', (data) => { if (active) { setLaborServices(data.items); setLaborCatalogError('') } }).catch((error) => { if (active) setLaborCatalogError(error.message) })
+    cachedResource('/labor-services', (data) => { if (active) setLaborServices(data.items) }).catch(() => {})
     loadOverviewInventory().then((data) => {
       if (active && Array.isArray(data.items)) setInventory(data.items)
     }).catch(() => {})
@@ -1613,26 +1630,18 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
     saveResources({ materials: materials.filter((material) => material.id !== id) })
   }
 
-  function selectLaborType(type) {
-    setLaborForm({ type, resource: '', hours: '', hourlyRate: '' })
-  }
-
-  function selectMachine(id) {
-    const machine = machines.find((item) => String(item.id) === id)
-    setLaborForm((current) => ({ ...current, machineId: machine?.id ?? '', resource: machine?.name || '', hourlyRate: machine?.hourlyRate ?? '' }))
-  }
-
-  function selectLaborService(id) {
-    const service = laborServices.find((item) => String(item.id) === id)
-    setLaborForm((current) => ({ ...current, laborServiceId: service?.id ?? '', resource: service?.name || '', hourlyRate: service?.hourlyRate ?? '' }))
-  }
-
+  // A checked stage comes with its default machine or service (Etapas); the planner can still change it.
   function toggleStage(stage) {
     const currentStages = resourceDraft.current.stages
-    const selected = currentStages.includes(stage) ? currentStages.filter((key) => key !== stage) : [...currentStages, stage]
+    const adding = !currentStages.includes(stage)
+    const selected = adding ? [...currentStages, stage] : currentStages.filter((key) => key !== stage)
     const nextStages = orderedStageSelection(resourceDraft.current.stageLayout, selected)
     setStages(nextStages)
-    saveResources({ stages: nextStages })
+    const preset = adding && !resourceDraft.current.stageResources?.[stage] && defaultStageResource(stage, { machines, laborServices })
+    if (!preset) return saveResources({ stages: nextStages })
+    const nextResources = { ...resourceDraft.current.stageResources, [stage]: preset }
+    setStageResources(nextResources)
+    saveResources({ stages: nextStages, stageResources: nextResources })
   }
 
   // Planned time of a stage for the whole OS, in minutes; empty removes the target.
@@ -1671,37 +1680,8 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
     else resourceDraft.current = { ...resourceDraft.current, [field]: value }
   }
 
-  async function addLabor(event) {
-    event.preventDefault()
-    const hours = toNumber(laborForm.hours)
-    const hourlyRate = toNumber(laborForm.hourlyRate)
-    if (!laborForm.resource.trim() || hours <= 0 || hourlyRate < 0 || laborForm.hourlyRate === '') return
-    const changes = { ...laborForm, resource: laborForm.resource.trim(), hours, hourlyRate }
-    // A changed type drops the machine or service of the old one.
-    const next = editingLaborId != null ? laborEntries.map((entry) => entry.id === editingLaborId ? { ...entry, machineId: undefined, laborServiceId: undefined, ...changes } : entry) : [...laborEntries, { ...changes, id: newId() }]
-    if (!await saveResources({ laborEntries: next })) return
-    closeLaborForm()
-  }
-
-  function closeLaborForm() {
-    setLaborForm((current) => ({ type: current.type, resource: '', hours: '', hourlyRate: '' }))
-    setEditingLaborId(null)
-    setLaborFormOpen(false)
-  }
-
-  // Older rows kept only the name of the machine or service: the form finds it in the registry by that name.
-  function editLabor(entry) {
-    const choice = entry.type === 'machine'
-      ? { machineId: entry.machineId ?? machines.find((machine) => machine.name === entry.resource)?.id ?? '' }
-      : { laborServiceId: entry.laborServiceId ?? laborServices.find((service) => service.name === entry.resource)?.id ?? '' }
-    setLaborForm({ type: entry.type, resource: entry.resource, hours: String(entry.hours), hourlyRate: String(entry.hourlyRate), ...choice })
-    setEditingLaborId(entry.id)
-    setLaborFormOpen(true)
-    window.requestAnimationFrame(() => document.querySelector('.offer-labor-form')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }))
-  }
-
+  // Labor comes from the stages (time and machine or service of each one); only an older hand-typed row can be removed.
   function removeLabor(id) {
-    if (id === editingLaborId) closeLaborForm()
     saveResources({ laborEntries: laborEntries.filter((entry) => entry.id !== id) })
   }
 
@@ -1742,7 +1722,7 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
         <WorkspaceTabs tabs={tabs} activeNav={activeNav} onNavigate={onNavigate} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} />
         <div className="offer-details-header"><button className="offer-back-button" type="button" onClick={() => onNavigate('Ofertas e serviços')} aria-label="Voltar para ofertas"><ArrowLeft size={24} aria-hidden="true" /></button><h1>Detalhes da oferta {offer.code}</h1></div>
         <div className="offer-details-grid">
-          <section className="offer-information-card"><span className="offer-details-section-title">Informações do serviço</span><h2>{offer.service}</h2><p className="offer-details-description">{offer.description}</p><div className="offer-detail-facts"><div><span>▥</span><small>Cliente solicitante</small><strong>{offer.company}</strong><em>{documentKind(offer.cnpj)}: {offer.cnpj}</em>{offer.requester && <em>Solicitante: {offer.requester}</em>}</div><div><span>▣</span><small>Data da solicitação</small><strong>{displayDate(offer.requestedAt)}</strong></div><div><span>◇</span><small>Quantidade solicitada</small><strong>{offer.quantity} unidades</strong></div><div><span>◷</span><small>Prazo solicitado pelo cliente</small><strong>{displayDate(offer.deadline)}</strong></div></div><PieceLeadTime offer={offer} /><div className="offer-detail-text"><h3>Número da etiqueta</h3><p>{offer.labelNumber || 'Não informado'}</p></div><div className="offer-detail-text"><h3>Anexos da solicitação</h3>{offer.attachments?.length ? <ul>{offer.attachments.map((attachment) => <li key={attachment.id}><DownloadLink url={attachmentUrl(offer.id, attachment.id)} name={attachment.name}>{attachment.name}</DownloadLink></li>)}</ul> : <p>Nenhum anexo adicionado.</p>}</div>{offer.proposal && <div className="offer-detail-text"><h3>Proposta gerada</h3><p><DownloadLink url={`/api/offers/${offer.id}/proposal.pdf`} name={`proposta-${offer.code}.pdf`}>Baixar PDF da proposta</DownloadLink></p></div>}</section>
+          <section className="offer-information-card"><span className="offer-details-section-title">Informações do serviço</span><h2>{offer.service}</h2><p className="offer-details-description">{offer.description}</p><div className="offer-detail-facts"><div><span>▥</span><small>Cliente solicitante</small><strong>{offer.company}</strong><em>{documentKind(offer.cnpj)}: {offer.cnpj}</em>{offer.requester && <em>Solicitante: {offer.requester}</em>}{offer.buyer && <em>Comprador: {offer.buyer}</em>}</div><div><span>▣</span><small>Data da solicitação</small><strong>{displayDate(offer.requestedAt)}</strong></div><div><span>◇</span><small>Quantidade solicitada</small><strong>{offer.quantity} unidades</strong></div><div><span>◷</span><small>Prazo solicitado pelo cliente</small><strong>{displayDate(offer.deadline)}</strong></div></div><PieceLeadTime offer={offer} /><div className="offer-detail-text"><h3>Número da etiqueta</h3><p>{offer.labelNumber || 'Não informado'}</p></div><div className="offer-detail-text"><h3>Anexos da solicitação</h3>{offer.attachments?.length ? <ul>{offer.attachments.map((attachment) => <li key={attachment.id}><DownloadLink url={attachmentUrl(offer.id, attachment.id)} name={attachment.name}>{attachment.name}</DownloadLink></li>)}</ul> : <p>Nenhum anexo adicionado.</p>}</div>{offer.proposal && <div className="offer-detail-text"><h3>Proposta gerada</h3><p><DownloadLink url={`/api/offers/${offer.id}/proposal.pdf`} name={`proposta-${offer.code}.pdf`}>Baixar PDF da proposta</DownloadLink></p></div>}{(offer.proposal || offer.proposalEmails?.length > 0) && <ProposalEmailHistory offer={offer} />}</section>
           <section className="offer-materials-card offer-resources-card">
             <fieldset className="offer-resource-fields" disabled={Boolean(offer.orderCode)}>
             <div className="offer-resource-heading"><div><span className="offer-details-section-title">Materiais necessários</span><p>Adicione os materiais e informe a quantidade, em quilos (kg), em metros (m) ou em unidades (un).</p></div><button className="offer-add-resource-button" type="button" onClick={() => { if (editingMaterialId == null && materialFormOpen) return closeMaterialForm(); closeMaterialForm(); setMaterialFormOpen(true) }}><Icon name="plus" />Adicionar material</button></div>
@@ -1759,16 +1739,8 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
               <div className="offer-inline-actions"><button className="offer-modal-cancel" type="button" onClick={closeMaterialForm}>Cancelar</button><button className="offer-add-resource-button" type="submit" disabled={saving}>{editingMaterialId != null ? 'Salvar alterações' : 'Adicionar material'}</button></div>
             </form>}
             {materials.length > 0 ? <><div className="offer-materials-head"><span>Material</span><span>Especificação</span><span>Qtd. necessária</span><span>Estoque</span><span>Valor unitário</span><span>Valor total</span><span>Ações</span></div><div className="offer-materials-list">{checkedMaterials.map((material) => <div className={`offer-material-row offer-material-row--managed${material.id === editingMaterialId ? ' offer-material-row--editing' : ''}`} key={material.id}><div className="material-visual">{material.icon}</div><div className="material-name"><strong>{material.name}</strong><span>{material.detail || '—'}</span></div><span>{formatQuantity(material.quantity, material.unit)}</span><span className={`material-stock-status material-stock-status--${material.groupStockStatus}`}>{material.groupStockStatus === 'unknown' ? 'Não verificado' : material.groupPurchaseQuantity > 0 ? `Falta: ${formatQuantity(material.groupPurchaseQuantity, material.unit)}` : material.stockStatus === 'available' ? `Disponível: ${formatQuantity(material.stockAvailable, material.unit)}` : material.stockStatus === 'partial' ? `Parcial: ${formatQuantity(material.stockAvailable, material.unit)}` : material.stockStatus === 'unknown' ? 'Não verificado' : 'Sem estoque'}</span><span>{formatMoney(material.unitPrice)}</span><strong>{formatMoney(material.quantity * material.unitPrice)}</strong><div className="offer-resource-actions"><button className="offer-resource-edit" type="button" disabled={saving} onClick={() => editMaterial(material)} aria-label={`Editar ${material.name}`} title="Editar"><Pencil size={14} aria-hidden="true" /></button><button className="offer-resource-remove" type="button" disabled={saving} onClick={() => removeMaterial(material.id)} aria-label={`Remover ${material.name}`} title="Remover">×</button></div></div>)}</div></> : <button className="offer-empty-state" type="button" onClick={() => setMaterialFormOpen(true)}><Icon name="plus" /><strong>Nenhum material adicionado</strong><span>Clique aqui ou no botão acima para buscar materiais cadastrados no estoque.</span></button>}
-            <div className="offer-resource-subsection"><div className="offer-resource-heading"><div><span className="offer-details-section-title">Mão de obra</span><p>Adicione horas de máquina ou de profissionais.</p></div><button className="offer-add-resource-button" type="button" onClick={() => { if (editingLaborId == null && laborFormOpen) return closeLaborForm(); closeLaborForm(); setLaborFormOpen(true) }}><Icon name="plus" />Adicionar mão de obra</button></div>
-              {laborFormOpen && <form className="offer-inline-form offer-labor-form" onSubmit={addLabor} aria-label={editingLaborId != null ? 'Editar mão de obra' : 'Adicionar mão de obra'}>
-                <label>Tipo<select aria-label="Tipo" value={laborForm.type} onChange={(event) => selectLaborType(event.target.value)}><option value="machine">Hora máquina</option><option value="person">Hora homem</option></select></label>
-                <label>{laborForm.type === 'machine' ? 'Máquina' : 'Serviço do profissional'}{laborForm.type === 'machine' ? <select aria-label="Máquina" value={laborForm.machineId || ''} onChange={(event) => selectMachine(event.target.value)} required><option value="">Selecionar máquina</option>{bySector(machines).map(([sector, group], _index, groups) => { const options = group.map((machine) => <option key={machine.id} value={machine.id}>{machine.name}{machine.hourlyRate != null ? ` · ${formatMoney(machine.hourlyRate)}/h` : ''}</option>); return groups.length > 1 ? <optgroup key={sector} label={sector}>{options}</optgroup> : options })}</select> : <select aria-label="Serviço do profissional" value={laborForm.laborServiceId || ''} onChange={(event) => selectLaborService(event.target.value)} required><option value="">Selecionar serviço</option>{laborServices.map((service) => <option key={service.id} value={service.id}>{service.name} · {formatMoney(service.hourlyRate)}/h</option>)}</select>}</label>
-                {laborForm.type === 'person' && laborCatalogError && <p className="admin-tool-error" role="alert">{laborCatalogError}</p>}
-                <label>Tempo (horas)<input type="number" min="0.01" step="0.01" value={laborForm.hours} onChange={(event) => setLaborForm((current) => ({ ...current, hours: event.target.value }))} placeholder="0,00" required /></label>
-                <label>Valor da hora<input type="number" min="0" step="0.01" value={laborForm.hourlyRate} onChange={(event) => setLaborForm((current) => ({ ...current, hourlyRate: event.target.value }))} placeholder="0,00" required /></label>
-                <div className="offer-inline-actions"><button className="offer-modal-cancel" type="button" onClick={closeLaborForm}>Cancelar</button><button className="offer-add-resource-button" type="submit" disabled={saving}>{editingLaborId != null ? 'Salvar alterações' : 'Adicionar mão de obra'}</button></div>
-              </form>}
-              {laborEntries.length > 0 ? <><div className="offer-materials-head"><span>Tipo</span><span>Máquina / serviço</span><span>Tempo (h)</span><span>Setor</span><span>Valor/hora</span><span>Valor total</span><span>Ações</span></div><div className="offer-materials-list offer-labor-list">{laborEntries.map((entry) => <div className={`offer-material-row offer-material-row--managed offer-material-row--labor${entry.id === editingLaborId ? ' offer-material-row--editing' : ''}`} key={entry.id}><div className="material-visual"><Icon name={entry.type === 'machine' ? 'machines' : 'employees'} /></div><div className="material-name"><strong>{entry.resource}</strong><span>{entry.type === 'machine' ? 'Hora máquina' : 'Hora homem'}</span></div><span>{entry.hours.toLocaleString('pt-BR')} h</span><span>{laborSector(entry)}</span><span>{formatMoney(entry.hourlyRate)}</span><strong>{formatMoney(entry.hours * entry.hourlyRate)}</strong><div className="offer-resource-actions"><button className="offer-resource-edit" type="button" disabled={saving} onClick={() => editLabor(entry)} aria-label={`Editar ${entry.resource}`} title="Editar"><Pencil size={14} aria-hidden="true" /></button><button className="offer-resource-remove" type="button" disabled={saving} onClick={() => removeLabor(entry.id)} aria-label={`Remover ${entry.resource}`} title="Remover">×</button></div></div>)}</div></> : <button className="offer-empty-state" type="button" onClick={() => setLaborFormOpen(true)}><Icon name="plus" /><strong>Nenhuma mão de obra adicionada</strong><span>Clique aqui ou no botão acima para informar a máquina ou o serviço e o tempo utilizado.</span></button>}
+            <div className="offer-resource-subsection"><div className="offer-resource-heading"><div><span className="offer-details-section-title">Mão de obra</span><p>Vem das etapas do serviço: o tempo e a máquina ou o serviço de cada etapa, ao valor da hora do cadastro.</p></div></div>
+              {laborEntries.length > 0 ? <><div className="offer-materials-head"><span>Tipo</span><span>Máquina / serviço</span><span>Tempo (h)</span><span>Setor</span><span>Valor/hora</span><span>Valor total</span><span>Ações</span></div><div className="offer-materials-list offer-labor-list">{laborEntries.map((entry) => <div className="offer-material-row offer-material-row--managed offer-material-row--labor" key={entry.id}><div className="material-visual"><Icon name={entry.type === 'machine' ? 'machines' : 'employees'} /></div><div className="material-name"><strong>{entry.resource}</strong><span>{entry.type === 'machine' ? 'Hora máquina' : 'Hora homem'} · {entry.stageCode ? stageLabel(entry.stageCode) : 'Lançada à mão antes das etapas'}</span></div><span>{Number(entry.hours).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} h</span><span>{laborSector(entry)}</span><span>{formatMoney(entry.hourlyRate)}</span><strong>{formatMoney(entry.hours * entry.hourlyRate)}</strong><div className="offer-resource-actions">{!entry.stageCode && <button className="offer-resource-remove" type="button" disabled={saving} onClick={() => removeLabor(entry.id)} aria-label={`Remover ${entry.resource}`} title="Remover: a mão de obra agora vem das etapas">×</button>}</div></div>)}</div></> : <div className="offer-empty-state offer-empty-state--static"><strong>Nenhuma mão de obra ainda</strong><span>Informe o tempo e a máquina ou o serviço de cada etapa, em Etapas do serviço, e as horas aparecem aqui.</span></div>}
             </div>
             <div className="offer-resource-subsection offer-process-settings">
               {pieceHistory && emptyResources && <div className="piece-history-banner" role="status"><div><strong>Esta peça já foi feita antes.</strong><span>Dá para preencher os materiais, as etapas e os tempos com base no histórico{pieceHistory.samples ? ` (média de ${pieceHistory.samples} ${pieceHistory.samples === 1 ? 'registro' : 'registros'})` : ` (última vez: ${pieceHistory.source || 'oferta anterior'})`}.</span></div><button type="button" className="offer-add-resource-button" disabled={saving} onClick={async () => { if (await saveResources(pieceHistory.resources)) setPieceHistory(null) }}>Preencher com o histórico</button></div>}
@@ -1800,9 +1772,22 @@ function ProposalBuilder({ collapsed, onToggle, activeNav, onNavigate, onLogout,
   const [layoutOpen, setLayoutOpen] = useState(false)
   const [editingCell, setEditingCell] = useState(null)
   const [generated, setGenerated] = useState(Boolean(offer?.proposal))
+  // "Enviar E-mail" is there from the start, but only works once the proposal PDF is generated.
+  const [emailOpen, setEmailOpen] = useState(false)
+  const [emailNotice, setEmailNotice] = useState('')
+  useEffect(() => {
+    if (!emailNotice) return
+    const timer = setTimeout(() => setEmailNotice(''), 6000)
+    return () => clearTimeout(timer)
+  }, [emailNotice])
+  async function proposalEmailSent({ email, registered = [], warnings = [] }) {
+    setEmailOpen(false)
+    setEmailNotice([`E-mail enviado para ${[...email.to, ...email.cc].join(', ')}`, ...registered.map((item) => `${item.email} cadastrado para o ${item.kind === 'client' ? 'cliente' : 'comprador'} ${item.name}`), ...warnings].join(' · '))
+    try { await onRefresh() } catch { /* O erro de carregamento aparece na tela. */ }
+  }
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  // The message sits under the proposals: it is brought into view so it is not missed.
+  // The message sits above the proposals, under the summary: it is brought into view, as the actions are further down.
   const errorRef = useRef(null)
   useEffect(() => { if (error) errorRef.current?.scrollIntoView({ block: 'center', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }) }, [error])
   const resourceData = offer?.resources || { materials: [], laborEntries: [] }
@@ -1933,11 +1918,11 @@ function ProposalBuilder({ collapsed, onToggle, activeNav, onNavigate, onLogout,
         <WorkspaceTabs tabs={tabs} activeNav={activeNav} onNavigate={onNavigate} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} />
         <div className="proposal-header"><div><button className="proposal-back-button" type="button" onClick={() => onNavigate('Detalhes da oferta')} aria-label="Voltar para detalhes"><ArrowLeft size={24} aria-hidden="true" /></button><div><h1>Fazer proposta</h1><p>Escolha uma das quatro opções e ajuste os valores para esta solicitação.</p></div></div></div>
         <section className="proposal-service-summary"><div className="proposal-service-image">▰</div><div className="proposal-service-client"><h2>{offer.service}</h2><span>Cliente solicitante</span><strong>{offer.company}</strong><small>{documentKind(offer.cnpj)}: {offer.cnpj}</small>{offer.requester && <small>Solicitante: {offer.requester}</small>}<small>Etiqueta: {offer.labelNumber || 'não informada'}</small></div><div className="proposal-service-fact"><span>▣</span><div><small>Prazo solicitado</small><strong>{displayDate(offer.deadline)}</strong></div><span>◇</span><div><small>Quantidade</small><strong>{offer.quantity} unidades</strong></div></div><div className="proposal-service-summary-copy"><strong>Resumo do serviço</strong><p>{offer.description}</p></div><div className="proposal-material-summary"><span>Materiais informados</span><strong>{formatMoney(materialCost)}</strong><button type="button" onClick={() => onNavigate('Detalhes da oferta')}>Ver detalhamento <span>›</span></button></div></section>
+        {error && <p ref={errorRef} className="workflow-error" role="alert">{error}</p>}
         <h2 className="proposal-section-heading">Escolha uma das propostas abaixo ou personalize os valores</h2>
         <div className="proposal-card-grid">{visibleProposals.map((proposal) => <article className={`proposal-card proposal-card--${proposal.tone} ${selectedKey === proposal.key ? 'proposal-card--selected' : ''}`} key={proposal.key} onClick={() => { setSelectedKey(proposal.key); if (proposal.key !== selectedKey) { setGenerated(false); setUnsaved(true) } }}><div className="proposal-card-heading"><div><span className="proposal-card-label">PROPOSTA {proposal.key}</span><div className="proposal-card-intro"><span className="proposal-card-icon">{proposal.icon}</span><div><strong>{proposal.title}</strong><p>{proposal.description}</p></div></div></div><span className="proposal-card-tag">{proposal.tag}</span></div><div className="proposal-card-content"><div className="proposal-card-column"><div><span>◇</span><label>Materiais</label><strong>{formatMoney(proposal.materials)}</strong></div><div><span>♧</span><label>Mão de obra</label><strong>{formatMoney(proposal.labor)}</strong></div><div><span>＄</span><label>Valor do serviço</label><strong>{formatMoney(proposal.serviceValue)}</strong></div><div><span>▥</span><label>% de lucro bruto</label>{renderEditable(proposal, 'margin', `${Number(proposal.margin).toFixed(1).replace('.', ',')}%`, 'number')}</div>{marginStats && (() => { const stat = marginStats.find((item) => item.key === proposal.key); return stat && <small className="proposal-margin-hint">{stat.accepted ? `Média de ${stat.accepted} ${stat.accepted === 1 ? 'proposta aceita' : 'propostas aceitas'}` : 'Ainda sem propostas aceitas'}{stat.rate != null ? ` · ${stat.rate}% de aceite (${stat.won} de ${stat.won + stat.declined})` : ''}</small> })()}<div><span>◇</span><label>Desconto</label>{renderEditable(proposal, 'discount', `${Number(proposal.discount).toFixed(1).replace('.', ',')}%`, 'number')}</div></div><div className="proposal-card-column"><div><span>◷</span><label>Prazo de entrega</label>{renderEditable(proposal, 'deadline', proposal.deadline)}</div><div><span>⚙</span><label>Tempo de máquina</label><strong>{proposal.machine}</strong></div><div><span>◷</span><label>Tempo de serviço</label><strong>{proposal.serviceTime}</strong></div><div><span>◔</span><label>Horas totais</label><strong>{proposal.totalTime}</strong></div></div></div><div className="proposal-price"><strong>Valor da OS<small>valor cobrado do cliente</small></strong><b>{formatMoney(proposal.osValue)}</b></div><div className="proposal-profit"><strong>Lucro bruto esperado</strong><b>{formatMoney(proposal.profit)}</b></div></article>)}</div>
-        <div className="proposal-bottom"><div className="proposal-notice"><span>ⓘ</span><div><strong>Confira os valores</strong><p>Materiais, mão de obra e horas vêm dos detalhes da oferta. Ajuste o prazo, o % de lucro bruto e o desconto: o Valor da OS é o que será cobrado do cliente no PDF.</p></div></div><div className="proposal-actions"><button className="proposal-cancel-button" type="button" onClick={() => onNavigate('Detalhes da oferta')}>× <strong>Cancelar</strong></button><button className="proposal-cancel-button" type="button" disabled={draftSaving || Boolean(offer.orderCode) || offer.status === 'rejected'} onClick={saveDraft}><Save size={17} aria-hidden="true" /><strong>{draftSaving ? 'Salvando...' : 'Salvar'}</strong></button><button className="proposal-send-button" type="button" onClick={openModels}><Icon name="send" /><strong>Gerar proposta em PDF</strong></button></div></div>
+        <div className="proposal-bottom"><div className="proposal-notice"><span>ⓘ</span><div><strong>Confira os valores</strong><p>Materiais, mão de obra e horas vêm dos detalhes da oferta. Ajuste o prazo, o % de lucro bruto e o desconto: o Valor da OS é o que será cobrado do cliente no PDF.</p></div></div><div className="proposal-actions"><button className="proposal-cancel-button" type="button" onClick={() => onNavigate('Detalhes da oferta')}>× <strong>Cancelar</strong></button><button className="proposal-cancel-button" type="button" disabled={draftSaving || Boolean(offer.orderCode) || offer.status === 'rejected'} onClick={saveDraft}><Save size={17} aria-hidden="true" /><strong>{draftSaving ? 'Salvando...' : 'Salvar'}</strong></button><button className="proposal-send-button" type="button" onClick={openModels}><Icon name="send" /><strong>Gerar proposta em PDF</strong></button><button className="proposal-cancel-button proposal-email-button" type="button" disabled={!generated || !offer.proposal} title={generated && offer.proposal ? 'Enviar a proposta por e-mail' : 'Gere a proposta em PDF para enviar por e-mail'} onClick={() => setEmailOpen(true)}><Mail size={17} aria-hidden="true" /><strong>Enviar E-mail</strong></button></div></div>
         {(offer.proposalDraft || unsaved) && <p className={`proposal-draft-status${unsaved ? ' proposal-draft-status--unsaved' : ''}`} role="status">{unsaved ? 'Alterações ainda não salvas.' : <CircleCheck size={16} aria-hidden="true" />}{offer.proposalDraft && ` ${unsaved ? 'Última vez: proposta' : 'Proposta'} ${offer.proposalDraft.selectedKey} salva por ${offer.proposalDraft.savedByName} em ${new Date(offer.proposalDraft.savedAt).toLocaleString('pt-BR', { timeZone: 'America/Bahia', dateStyle: 'short', timeStyle: 'short' })}.`}</p>}
-        {error && <p ref={errorRef} className="workflow-error" role="alert">{error}</p>}
         {generated && <div className="proposal-generated-actions"><DownloadLink url={`/api/offers/${offer.id}/proposal.pdf`} name={`proposta-${offer.code}.pdf`}>Baixar PDF da proposta{offer.proposal?.document ? ` · ${modelLabel(offer.proposal.document)}` : ''}</DownloadLink><button className="proposal-cancel-button" type="button" onClick={() => onNavigate('Ofertas e serviços')}>Retornar às ofertas</button>{!offer.orderCode && offer.status !== 'rejected' && <button className="proposal-cancel-button proposal-decline-button" type="button" disabled={saving} onClick={() => setDeclining(true)}>Cliente recusou a proposta</button>}{offer.status === 'rejected' ? <><span className="proposal-declined-note">Proposta {offer.proposalDecline?.key || offer.proposal?.key} recusada pelo cliente{offer.proposalDecline?.reason ? ` · ${offer.proposalDecline.reason}` : ''}</span>{offer.proposalDecline && <button className="proposal-cancel-button" type="button" onClick={() => setUndoing(true)}>Desfazer recusa</button>}</> : <button className="proposal-send-button" type="button" disabled={saving || Boolean(offer.orderCode)} onClick={() => setAccepting(true)}>{offer.orderCode ? `OS ${offer.orderCode} gerada` : 'Aceitar Oferta'}</button>}{offer.orderCode && <><button className="proposal-cancel-button" type="button" onClick={() => onSelectOrder(offer.orderCode)}>Ver OS</button><button className="proposal-cancel-button proposal-decline-button" type="button" onClick={() => setUnaccepting(true)}>Desfazer aceite</button></>}</div>}
       </main>
       {accepting && <AcceptOfferModal offer={offer} onConfirm={acceptOffer} onClose={() => setAccepting(false)} />}
@@ -1945,6 +1930,8 @@ function ProposalBuilder({ collapsed, onToggle, activeNav, onNavigate, onLogout,
       {undoing && <UndoDeclineModal offer={offer} onConfirm={async () => { await apiRequest(`/api/offers/${encodeURIComponent(offer.id)}/undecline`, jsonOptions('POST', {})); await onRefresh() }} onClose={() => setUndoing(false)} />}
       {declining && <DeclineProposalModal offer={offer} onConfirm={async (decline) => { await apiRequest(`/api/offers/${encodeURIComponent(offer.id)}/decline`, jsonOptions('POST', decline)); await onRefresh() }} onClose={() => setDeclining(false)} />}
       {layoutOpen && <ProposalDocumentModal offer={offer} option={selectedProposal} onClose={() => setLayoutOpen(false)} onSaved={proposalSaved} />}
+      {emailOpen && <ProposalEmailModal offer={offer} onClose={() => setEmailOpen(false)} onSent={proposalEmailSent} />}
+      {emailNotice && <p className="app-toast" role="status"><CircleCheck size={16} aria-hidden="true" />{emailNotice}</p>}
     </div>
   )
 }
@@ -2218,9 +2205,11 @@ function Dashboard({ user, onUpdateUser, collapsed, onToggle, activeNav, onNavig
   if (activeNav === 'Conciliação bancária') return <BankStatementsScreen {...toolProps} />
   if (activeNav === 'Relatórios') return <ReportsScreen {...toolProps} />
   if (activeNav === 'Serviços') return <LaborServicesScreen {...toolProps} />
+  if (activeNav === 'Etapas') return <StagesScreen {...toolProps} />
   if (activeNav === 'Planejamento') return <PlanningScreen {...toolProps} />
   if (activeNav === 'Setores') return <SimpleRegistryScreen key="sectors" {...toolProps} title="Setores" singular="setor" endpoint="/sectors" nameLabel="Nome do setor" countLabel="Em uso por" count={(item) => [[item.employees, 'funcionário', 'funcionários'], [item.machines, 'máquina', 'máquinas'], [item.laborServices, 'serviço', 'serviços']].filter(([total]) => total).map(([total, one, many]) => `${total} ${total === 1 ? one : many}`).join(' · ') || '—'} />
-  if (activeNav === 'Solicitantes') return <RequestersScreen {...toolProps} />
+  if (activeNav === 'Solicitantes') return <RequestersScreen key="requesters" {...toolProps} />
+  if (activeNav === 'Compradores') return <RequestersScreen key="buyers" {...toolProps} kind={contactKinds.buyers} />
   if (activeNav === 'Bancos') return <SimpleRegistryScreen key="banks" {...toolProps} title="Bancos" singular="banco" endpoint="/banks" nameLabel="Nome do banco" fields={[['agency', 'Agência', 20], ['account', 'Conta', 30]]} countLabel="Baixas registradas" count={(item) => item.settlements} />
   if (activeNav === 'Razões de pausas') return <SimpleRegistryScreen key="pause-reasons" {...toolProps} title="Razões de pausas" singular="razão de pausa" article="a" endpoint="/pause-reasons" nameLabel="Razão da pausa" chart />
   if (activeNav === 'Configurações') return <AccountSettings {...toolProps} user={user} onUpdateUser={onUpdateUser} />
@@ -2252,6 +2241,11 @@ function App() {
   const [messageError, setMessageError] = useState(false)
   const [isDashboard, setIsDashboard] = useState(false)
   const [adminUser, setAdminUser] = useState(null)
+  // The stages come from "Etapas": loaded once signed in (this device's last copy first), and every screen is drawn again
+  // when they change.
+  const [, setStageVersion] = useState(0)
+  useEffect(() => onStageCatalogChange(() => setStageVersion((value) => value + 1)), [])
+  useEffect(() => { if (isDashboard) cachedResource('/stages', setStageCatalog).catch(() => {}) }, [isDashboard])
   const [restoringSession, setRestoringSession] = useState(() => !operatorToken && Boolean(window.sessionStorage.getItem('gmac-admin-token')))
   const [restoreError, setRestoreError] = useState('')
   const [restoreAttempt, setRestoreAttempt] = useState(0)

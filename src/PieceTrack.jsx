@@ -1,6 +1,6 @@
 // Pieces of one stage: a slot per piece (up to 30; above that, a continuous bar). Pieces already made are dark blue while
 // someone is working on the OS and turn green when the work stops; a finished stage is all green; what is missing stays gray.
-import { productionStages } from '../server/serviceStages.js'
+import { stageCodeOf } from '../server/serviceStages.js'
 
 export const PIECE_SLOTS_LIMIT = 30
 
@@ -15,7 +15,7 @@ export function workingStageKeys(operation, quantity) {
 }
 
 // Planned time of an operation stage (the OS stores it by stage code) and the time already spent on it, people added up.
-export const stageCode = (stage) => productionStages.find(([, label]) => label === stage?.name)?.[0] ?? null
+export const stageCode = (stage) => stageCodeOf(stage)
 export function stageElapsedMs(operation, stageKey, now = Date.now()) {
   const open = (operation?.activeSessions || []).filter((session) => session.stageKey === stageKey).reduce((sum, session) => sum + Math.max(0, now - Date.parse(session.stageSince || session.startedAt)), 0)
   return Number(operation?.stageTimeMs?.[stageKey] || 0) + open

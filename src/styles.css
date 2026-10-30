@@ -622,6 +622,12 @@ button {
   width: 100%;
 }
 
+/* An open group shows its leader a little stronger than the pages under it, without looking like the active page. */
+.sidebar-nav-group-toggle[aria-expanded="true"] {
+  color: #0b315d;
+  font-weight: 600;
+}
+
 .sidebar-group-chevron {
   flex: 0 0 15px;
   margin-left: auto;
@@ -2267,6 +2273,15 @@ button {
 .offer-empty-state span {
   max-width: 300px;
   font-size: 11px;
+}
+
+/* Labor is filled by the stages: its empty state only explains, it is not a button. */
+.offer-empty-state--static,
+.offer-empty-state--static:hover {
+  min-height: 90px;
+  border-color: #cbdbea;
+  background: transparent;
+  cursor: default;
 }
 
 .offer-material-row--managed {
@@ -6970,7 +6985,7 @@ button {
 .offer-stage-groups { display: grid; gap: 18px; }
 .offer-stage-group { padding-left: 12px; border-left: 3px solid #d8e6f3; }
 .offer-stage-group h3 { margin: 0 0 10px; color: #0c4c91; font-size: 13px; }
-.offer-stage-group--legacy { border-left-color: #e5d2a4; }
+.offer-stage-inactive { margin-left: 8px; padding: 1px 7px; border-radius: 999px; color: #a3283a; background: #fdecee; font-size: 11px; font-weight: 600; }
 .offer-stage-heading { display: flex; align-items: center; gap: 5px; margin-bottom: 8px; }
 .offer-stage-heading h3 { margin: 0; }
 .offer-stage-item { display: flex; align-items: center; gap: 3px; position: relative; }

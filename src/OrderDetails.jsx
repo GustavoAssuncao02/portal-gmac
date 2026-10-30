@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import './orderDetails.css'
-import { productionStages, stageLabel } from '../server/serviceStages.js'
+import { stageCodeOf, stageLabel } from '../server/serviceStages.js'
 import OrderEditModal, { OrderActionModal, orderEditDraft } from './OrderEditModal.jsx'
 import { activeEmployeeNames, activeSessions } from '../server/operationSessions.js'
 import { timeEditableEvents } from '../server/operationEventTime.js'
@@ -400,7 +400,7 @@ function StageList({ order, operation, onSave }) {
   const [options, setOptions] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const codeOf = (stage) => productionStages.find(([, name]) => name === stage.name)?.[0] || stage.name
+  const codeOf = (stage) => stageCodeOf(stage) || stage.name
   const times = order.resources?.stageTimes || {}, plans = order.resources?.stageResources || {}
   const working = workingStageKeys(operation, order.quantity)
   function start() {

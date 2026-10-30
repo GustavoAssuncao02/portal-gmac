@@ -1,4 +1,4 @@
-import { productionStages, stageLabel, stageGroupLabel } from './serviceStages.js'
+import { productionStages, stageCodeOf, stageLabel, stageGroupLabel } from './serviceStages.js'
 import { activeSessions } from './operationSessions.js'
 
 // Planning of the machines and labor services. The factory runs 24 hours a day in Bahia time (UTC-3, no daylight
@@ -21,14 +21,23 @@ export function orderStages(order) {
   const codes = order?.resources?.stages ?? order?.proposal?.stages ?? []
   return codes.map((code) => {
     const name = productionStages.some(([key]) => key === code) ? stageLabel(code) : code
-    const stage = order.operation?.stages?.find((item) => item.name === name)
+    const stage = order.operation?.stages?.find((item) => item.name === name || stageCodeOf(item) === code)
     return { code, name, key: stage?.key ?? null, done: Number(order.operation?.stageCounts?.[stage?.key] || 0), plannedMinutes: Number(order.resources?.stageTimes?.[code]) || 0, resource: order.resources?.stageResources?.[code] || null, group: stageGroupLabel(code) }
   })
 }
 
+// When a stage was finished: the registration that took its pieces to the total of the OS or, without one (counts
+// changed by hand), the completion of the OS. Null when neither is known.
+function stageDoneAt(order, stage, quantity) {
+  const times = (order?.operationEvents || []).filter((event) => event.type === 'stage_progress' && stage?.key && event.stageKey === stage.key && quantity && Number(event.stageTotal) >= quantity).map((event) => Date.parse(event.at)).filter(Number.isFinite)
+  const time = times.length ? Math.min(...times) : Date.parse(order?.operation?.completedAt)
+  return Number.isFinite(time) ? time : null
+}
+
 // Planned, running (someone works on the stage inside the block), done (the stage or the OS is finished) or late
 // (the block started and nobody works on it, or it ended and the stage goes on). `delayMinutes` counts from the start
-// when nothing began and from the end when the work runs over.
+// when nothing began and from the end when the work runs over; `earlyMinutes` is how long before the planned end a
+// done stage was finished.
 export function blockState(block, order, now) {
   const start = blockStart(block), end = blockEnd(block)
   const stage = orderStages(order).find((item) => item.code === block.stageCode)
@@ -36,7 +45,9 @@ export function blockState(block, order, now) {
   const done = order?.operation?.status === 'completed' || Boolean(stage && quantity && stage.done >= quantity)
   const running = Boolean(stage?.key) && activeSessions(order?.operation).some((session) => session.stageKey === stage.key)
   const status = done ? 'done' : now < start ? 'planned' : running ? (now > end ? 'late' : 'running') : 'late'
-  return { status, running, progress: quantity ? Math.min(100, Math.round(100 * (stage?.done || 0) / quantity)) : 0, delayMinutes: status === 'late' ? Math.floor((now - (running ? end : start)) / 60000) : 0, stageName: stage?.name || block.stageCode }
+  const doneAt = done ? stageDoneAt(order, stage, quantity) : null
+  return { status, running, progress: quantity ? Math.min(100, Math.round(100 * (stage?.done || 0) / quantity)) : 0, delayMinutes: status === 'late' ? Math.floor((now - (running ? end : start)) / 60000) : 0,
+    doneAt: doneAt == null ? null : new Date(doneAt).toISOString(), earlyMinutes: doneAt != null && doneAt < end ? Math.floor((end - doneAt) / 60000) : 0, stageName: stage?.name || block.stageCode }
 }
 
 // What is left to plan, stage by stage: the planned time of the stage for the pieces still to make, minus the blocks

@@ -15,7 +15,7 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   const directory = await mkdtemp(path.join(results, 'workflow-'))
   // The copied modules keep their data next to them; a DATA_DIR from the shell would point them at real data.
   delete process.env.DATA_DIR
-  for (const name of ['planning.js', 'planningRules.js', 'offers.js', 'orderHistory.js', 'pieces.js', 'access.js', 'orderMaterials.js', 'pendingMaterials.js', 'operations.js', 'orderEditing.js', 'operatorAuth.js', 'employeeAccess.js', 'employeeActivity.js', 'serviceStages.js', 'machines.js', 'laborServices.js', 'accounts.js', 'reports.js', 'reportData.js', 'documentExports.js', 'payables.js', 'payableRules.js', 'receivables.js', 'bankStatements.js', 'ofx.js', 'materialRequests.js', 'notificationRules.js', 'notificationEvents.js', 'operationSessions.js', 'operationEventTime.js', 'operationManualEvents.js', 'materialRequestCodes.js', 'notifications.js', 'fiscalCatalog.js', 'dataDirectory.js', 'proposalDocuments.js', 'clientDocument.js', 'proposalDefaults.js', 'proposalPdf.js', 'proposalBrand.js', 'proposalMath.js', 'moneyWords.js', 'store.js', 'materialUnits.js', 'banks.js', 'operatorAccount.js', 'registries.js', 'requesters.js','serviceLocation.js', 'materialRequestSources.js', 'inventory.js', 'inventoryAppearance.js', 'materialIcons.js', 'uploads.js', 'machineUsage.js', 'accountPlan.js', 'accountPlanRules.js', 'dre.js', 'dreRules.js', 'dreExport.js', 'passwordReset.js']) {
+  for (const name of ['planning.js', 'planningRules.js', 'offers.js', 'stageLabor.js', 'proposalEmails.js', 'stageCatalog.js', 'orderHistory.js', 'pieces.js', 'access.js', 'orderMaterials.js', 'pendingMaterials.js', 'operations.js', 'orderEditing.js', 'operatorAuth.js', 'employeeAccess.js', 'employeeActivity.js', 'serviceStages.js', 'machines.js', 'laborServices.js', 'accounts.js', 'reports.js', 'reportData.js', 'documentExports.js', 'payables.js', 'payableRules.js', 'receivables.js', 'bankStatements.js', 'ofx.js', 'materialRequests.js', 'notificationRules.js', 'notificationEvents.js', 'operationSessions.js', 'operationEventTime.js', 'operationManualEvents.js', 'materialRequestCodes.js', 'notifications.js', 'fiscalCatalog.js', 'dataDirectory.js', 'proposalDocuments.js', 'clientDocument.js', 'proposalDefaults.js', 'proposalPdf.js', 'proposalBrand.js', 'proposalMath.js', 'moneyWords.js', 'store.js', 'materialUnits.js', 'banks.js', 'operatorAccount.js', 'registries.js', 'requesters.js','serviceLocation.js', 'materialRequestSources.js', 'inventory.js', 'inventoryAppearance.js', 'materialIcons.js', 'uploads.js', 'machineUsage.js', 'accountPlan.js', 'accountPlanRules.js', 'dre.js', 'dreRules.js', 'dreExport.js', 'passwordReset.js']) {
     await copyFile(path.join(root, 'server', name), path.join(directory, name))
   }
   // PDFs use the bundled logo and fonts.
@@ -41,7 +41,9 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   const { default: proposalDocumentsRouter } = await import(pathToFileURL(path.join(directory, 'proposalDocuments.js')))
   const { default: operatorAccountRouter } = await import(pathToFileURL(path.join(directory, 'operatorAccount.js')))
   const { default: registriesRouter } = await import(pathToFileURL(path.join(directory, 'registries.js')))
+  const { default: stageCatalogRouter } = await import(pathToFileURL(path.join(directory, 'stageCatalog.js')))
   const { default: requestersRouter } = await import(pathToFileURL(path.join(directory, 'requesters.js')))
+  const { default: proposalEmailsRouter } = await import(pathToFileURL(path.join(directory, 'proposalEmails.js')))
   const { default: planningRouter } = await import(pathToFileURL(path.join(directory, 'planning.js')))
   const { default: inventoryRouter } = await import(pathToFileURL(path.join(directory, 'inventory.js')))
   const { default: accountPlanRouter } = await import(pathToFileURL(path.join(directory, 'accountPlan.js')))
@@ -144,6 +146,7 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   app.use('/api', machinesRouter(requireAdmin, pool))
   app.use('/api', laborServicesRouter(requireAdmin, pool))
   app.use('/api', registriesRouter(requireAdmin, pool))
+  app.use('/api', stageCatalogRouter(requireAdmin, pool))
   app.use('/api', requestersRouter(accounts, requireAdmin))
   app.use('/api', planningRouter(requireAdmin, pool))
   app.use('/api', operatorAccountRouter(requireAdmin))
@@ -157,6 +160,10 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   // "Esqueci minha senha" never reaches an SMTP server: the e-mails stay in `sentMail`.
   const sentMail = []
   app.use('/api', passwordResetRouter(accounts, requireAdmin, { mailer: { configured: () => true, send: async (message) => { sentMail.push(message) } } }))
+  // The proposal e-mails never reach an SMTP server either: they stay in `proposalMail` (`failMail` makes the next one fail).
+  const proposalMail = []
+  const mailControl = { failNext: false }
+  app.use('/api', proposalEmailsRouter(accounts, requireAdmin, { env: { MAIL_FROM: 'comercial@gmacmetalurgica.com.br' }, mailer: { configured: () => true, send: async (message) => { if (mailControl.failNext) { mailControl.failNext = false; throw Object.assign(new Error('down'), { code: 'ECONNECTION' }) } proposalMail.push(message) } } }))
   app.use('/api', bankStatementsRouter(accounts, requireAdmin))
   // Tests never reach the Anthropic API; they pass a fake analysis.
   app.use('/api', fiscalRouter(requireAdmin))
@@ -186,6 +193,8 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
     operatorToken: issueOperatorToken(),
     mutateStore,
     sentMail,
+    proposalMail,
+    failNextMail: () => { mailControl.failNext = true },
     // A server module of this fixture (same database), for start-up tasks the HTTP routes do not run.
     serverModule: (name) => import(pathToFileURL(path.join(directory, name))),
     saveRequestedMaterial,

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, CalendarClock, CheckCircle2, ChevronLeft, ChevronRight, Gauge, ListChecks, Plus, Trash2, Wrench } from 'lucide-react'
 import { PayableModal } from './PayableModal.jsx'
 import { payableRequest } from './payablesApi.js'
@@ -158,7 +158,7 @@ function DayAgenda({ date, today, now, resources, blocks, actual, selectedAt, on
   const selectedLeft = selectedAt != null && selectedAt >= from && selectedAt < from + DAY_MS ? (selectedAt - from) / 60000 * PX_PER_MINUTE : null
   return <section className="planning-agenda" aria-labelledby="planning-agenda-title">
     <header><h2 id="planning-agenda-title">Agenda por máquina</h2><p>Planejado × realizado · arraste um bloco para mudar o horário, ou clique num espaço vazio para planejar uma OS nesta máquina.</p>
-      <ul className="planning-legend"><li><i className="planning-dot planning-dot--done" />Concluído</li><li><i className="planning-dot planning-dot--running" />Em execução</li><li><i className="planning-dot planning-dot--planned" />Planejado</li><li><i className="planning-dot planning-dot--late" />Atrasado</li><li><i className="planning-dot planning-dot--actual" />Realizado</li></ul></header>
+      <ul className="planning-legend"><li><i className="planning-dot planning-dot--done" />Concluído</li><li><i className="planning-dot planning-dot--running" />Em execução</li><li><i className="planning-dot planning-dot--planned" />Planejado</li><li><i className="planning-dot planning-dot--late" />Atrasado</li><li><i className="planning-dot planning-dot--overrun" />Tempo em atraso</li><li><i className="planning-dot planning-dot--early" />Concluído antes do previsto</li><li><i className="planning-dot planning-dot--actual" />Realizado</li></ul></header>
     <div className="planning-scroll" ref={scroller}>
       <div className="planning-grid" style={{ '--timeline-width': `${width}px`, '--hour-width': `${HOUR_WIDTH}px` }}>
         <div className="planning-corner">Máquina / setor</div>
@@ -183,12 +183,22 @@ function DayAgenda({ date, today, now, resources, blocks, actual, selectedAt, on
               {real.map((item) => { const covered = own.some((block) => block.orderCode === item.orderCode && blockStart(block) < item.end && blockEnd(block) > item.start); return <i key={`${item.orderCode}-${item.start}`} className={`planning-actual${covered ? '' : ' planning-actual--outside'}`} style={{ left: (Math.max(item.start, from) - from) / 60000 * PX_PER_MINUTE, width: Math.max(2, overlap(item.start, item.end, from) * PX_PER_MINUTE) }} title={`${covered ? 'Realizado' : 'Fora do planejamento'}: ${item.employeeName} · ${item.orderCode} · ${clockTime(item.start)}–${item.active ? 'agora' : clockTime(item.end)}`} /> })}
               {own.map((block) => {
                 const start = Math.max(blockStart(block), from), shift = drag?.id === block.id ? drag.shift : 0
-                return <button key={block.id} type="button" className={`planning-block planning-block--${block.status}${drag?.id === block.id ? ' planning-block--dragging' : ''}`} style={{ left: (start - from) / 60000 * PX_PER_MINUTE + shift * PX_PER_MINUTE, width: Math.max(18, overlap(blockStart(block), blockEnd(block), from) * PX_PER_MINUTE - 2) }}
-                  title={`${block.orderCode} · ${block.service} · ${block.stageName}\n${clockTime(blockStart(block))}–${clockTime(blockEnd(block))} (${duration(block.minutes)}) · ${statusLabels[block.status]}${block.delayMinutes ? ` · ${duration(block.delayMinutes)} de atraso` : ''}`}
+                // Past the planned end, a late block grows a red tail up to now; a stage done before the end marks the
+                // unused part of the block. Both show their time on hover, of the mark or of the block.
+                const end = blockEnd(block), dayEnd = from + DAY_MS
+                const overrun = block.status === 'late' && drag?.id !== block.id ? [Math.max(end, from), Math.min(now, dayEnd)] : null
+                const early = block.earlyMinutes > 0 && drag?.id !== block.id ? [Math.max(Date.parse(block.doneAt), start), Math.min(end, dayEnd)] : null
+                return [<button key={block.id} type="button" className={`planning-block planning-block--${block.status}${drag?.id === block.id ? ' planning-block--dragging' : ''}`} style={{ left: (start - from) / 60000 * PX_PER_MINUTE + shift * PX_PER_MINUTE, width: Math.max(18, overlap(blockStart(block), blockEnd(block), from) * PX_PER_MINUTE - 2) }}
+                  title={`${block.orderCode} · ${block.service} · ${block.stageName}\n${clockTime(blockStart(block))}–${clockTime(blockEnd(block))} (${duration(block.minutes)}) · ${statusLabels[block.status]}${block.delayMinutes ? ` · ${duration(block.delayMinutes)} de atraso` : ''}${block.earlyMinutes ? ` · ${duration(block.earlyMinutes)} antes do previsto` : ''}`}
                   onPointerDown={(event) => pointerDown(event, block)} onPointerMove={drag?.id === block.id ? pointerMove : undefined} onPointerUp={(event) => pointerUp(event, block)} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onEdit(block) } }}>
                   <strong>{block.orderCode} · {block.stageName}</strong><span>{shift ? `→ ${clockTime(blockStart(block) + shift * 60000)}` : `${clockTime(blockStart(block))}–${clockTime(blockEnd(block))}`}{block.urgency === 'emergency' ? ' · Emergência' : ''}{block.status === 'late' && block.delayMinutes > 0 && <b> · {duration(block.delayMinutes)} de atraso</b>}{block.status === 'running' && ` · ${block.progress}%`}</span>
                   {block.status === 'running' && <i className="planning-progress" style={{ width: `${block.progress}%` }} aria-hidden="true" />}
-                </button>
+                </button>,
+                overrun && overrun[1] > overrun[0] && <span key={`${block.id}-overrun`} className="planning-overrun" style={{ left: (overrun[0] - from) / 60000 * PX_PER_MINUTE - 2, width: (overrun[1] - overrun[0]) / 60000 * PX_PER_MINUTE + 2 }}
+                  onClick={(event) => { event.stopPropagation(); onEdit(block) }} aria-hidden="true">
+                  <b className="planning-flag">{duration(block.delayMinutes)} de atraso · previsto até {clockTime(end)}</b></span>,
+                early && early[1] > early[0] && <span key={`${block.id}-early`} className="planning-early" style={{ left: (early[0] - from) / 60000 * PX_PER_MINUTE, width: Math.max(4, (early[1] - early[0]) / 60000 * PX_PER_MINUTE - 2) }} aria-hidden="true">
+                  <b className="planning-flag">Concluído {duration(block.earlyMinutes)} antes do previsto · às {clockTime(Date.parse(block.doneAt))}</b></span>]
               })}
             </div>]
         })])}
@@ -256,6 +266,18 @@ function Backlog({ rows, resources, fit, onClearFit, onPlan }) {
   </section>
 }
 
+// A group of the snapshot shows up to four machines; the others scroll inside the list. Cards have different heights
+// (wrapped names, the "Real" line), so the limit is measured on the fourth card.
+const SNAPSHOT_VISIBLE = 4
+function SnapshotList({ children }) {
+  const ref = useRef(null)
+  useLayoutEffect(() => {
+    const list = ref.current, last = list.children[SNAPSHOT_VISIBLE - 1]
+    list.style.maxHeight = list.children.length > SNAPSHOT_VISIBLE ? `${last.offsetTop + last.offsetHeight}px` : ''
+  })
+  return <ul ref={ref}>{children}</ul>
+}
+
 // One moment of the day (the one clicked on the ruler, or now): which machines are planned busy, idle (and until when)
 // or unavailable; up to now, also what really happened.
 function Snapshot({ date, today, now, selectedAt, onSelect, resources, blocks, actual, onFit }) {
@@ -270,13 +292,13 @@ function Snapshot({ date, today, now, selectedAt, onSelect, resources, blocks, a
       <label className="sr-only" htmlFor="planning-snapshot-time">Horário</label>
       <select id="planning-snapshot-time" value={selectedAt == null ? '' : clockTime(Math.floor(selectedAt / SLOT_MS) * SLOT_MS)} onChange={(event) => onSelect(event.target.value ? Date.parse(`${date}T${event.target.value}:00-03:00`) : null)}><option value="">{date === today ? 'Agora' : 'Horário'}</option>{slots.map((slot) => <option key={slot} value={slot}>{slot}</option>)}</select></header>
     {at == null ? <p className="planning-muted">Clique na régua de horas da agenda, ou escolha o horário acima, para ver quais máquinas estarão ocupadas e quais estarão livres.</p>
-      : groups.map(([state, title]) => { const list = rows.filter((row) => row.state === state); return list.length > 0 && <div key={state} className={`planning-snapshot-group planning-snapshot-group--${state}`}><h3>{title} ({list.length} de {rows.length})</h3><ul>{list.map((row) => <li key={row.resource.id}>
+      : groups.map(([state, title]) => { const list = rows.filter((row) => row.state === state); return list.length > 0 && <div key={state} className={`planning-snapshot-group planning-snapshot-group--${state}`}><h3>{title} ({list.length} de {rows.length})</h3><SnapshotList>{list.map((row) => <li key={row.resource.id}>
         <strong>{row.resource.name}</strong>
         {state === 'busy' && <span>{row.block.orderCode} · {row.block.stageName} · até {clockTime(blockEnd(row.block))}</span>}
         {state === 'idle' && <span>Livre {row.freeFrom ? `das ${clockTime(Math.max(row.freeFrom, from))}` : 'desde 00:00'} {row.freeUntil && row.freeUntil < from + DAY_MS ? `às ${clockTime(row.freeUntil)}` : 'até o fim do dia'}{' '}<button type="button" className="planning-link" onClick={() => { const start = Math.max(Math.ceil(Math.max(at, now) / SLOT_MS) * SLOT_MS, row.freeFrom || 0), end = Math.min(row.freeUntil || from + DAY_MS, from + DAY_MS); onFit({ resourceKey: resourceKey(row.resource.type, row.resource.id), name: row.resource.name, start, minutes: Math.max(0, (end - start) / 60000) }) }}>ver o que cabe</button></span>}
         {state === 'unavailable' && <span>{row.resource.maintenance.reason}</span>}
         {past && <small className={row.real.length ? 'planning-real' : 'planning-real planning-real--none'}>{row.real.length ? `Real: ${row.real.map((item) => `${item.employeeName} · ${item.orderCode}`).join(', ')}` : 'Real: parada'}</small>}
-      </li>)}</ul></div> })}
+      </li>)}</SnapshotList></div> })}
   </section>
 }
 

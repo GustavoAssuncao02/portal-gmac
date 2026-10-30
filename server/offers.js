@@ -7,17 +7,18 @@ import { receiveFile } from './uploads.js'
 import express from 'express'
 import { exportPdf } from './documentExports.js'
 import { renderProposalDocument } from './proposalPdf.js'
-import { productionStages, stageLabel, serviceDetails, serviceDescriptionText, readStageLayout, validStageLayout, stagePlanProblem, stagePlanPlace } from './serviceStages.js'
+import { productionStages, stageLabel, stageActive, serviceDetails, serviceDescriptionText, readStageLayout, validStageLayout, stagePlanProblem, stagePlanPlace } from './serviceStages.js'
 import { consumeOrderMaterials } from './orderMaterials.js'
 import { addNotification, workflowSnapshot, recordWorkflowNotifications } from './notificationEvents.js'
 import { assignMaterialRequestCodes } from './materialRequestCodes.js'
 import { adminIdentity } from './accounts.js'
 import { recordOrderEvent } from './orderHistory.js'
 import { cleanStageResources, cleanStageTimes, pieceTracking } from './pieces.js'
+import { migrateStageLabor, stageLaborEntries } from './stageLabor.js'
 import { proposalMargins, PROPOSAL_MARGIN_GAP, declineReasons } from './proposalMath.js'
 import { requireAdminOrOperator } from './access.js'
 import { documentDigits, documentKind, isClientDocument } from './clientDocument.js'
-import { registerOfferRequester } from './requesters.js'
+import { registerOfferContact } from './requesters.js'
 import { currentServiceLocation, serviceLocationLabel, validServiceLocation } from './serviceLocation.js'
 import { formatQuantity, materialUnit, validMaterialUnit, validQuantityFor } from './materialUnits.js'
 
@@ -46,7 +47,6 @@ const handleError = (response, error) => {
 const clean = (value, limit = 500) => String(value ?? '').trim().slice(0, limit)
 const money = (value) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const date = (value) => new Date(value).toLocaleDateString('pt-BR', { timeZone: 'UTC' })
-const stageKeys = productionStages.map(([key]) => key)
 
 function serviceSettings(offer) {
   return { stages: offer.resources?.stages ?? offer.proposal?.stages ?? [], kind: offer.resources?.kind ?? offer.proposal?.kind ?? 'service', strictProcess: serviceDetails(offer.resources).strictProcess }
@@ -103,30 +103,32 @@ router.get('/orders', async (_request, response) => {
 })
 
 router.post('/offers', async (request, response) => {
-  const { cnpj, company, deadline, service, quantity, description, labelNumber, requester } = request.body ?? {}
+  const { cnpj, company, deadline, service, quantity, description, labelNumber, requester, buyer } = request.body ?? {}
   if (!isClientDocument(cnpj) || !clean(company) || !/^\d{4}-\d{2}-\d{2}$/.test(String(deadline || '')) || !clean(service) || !Number.isInteger(Number(quantity)) || Number(quantity) < 1 || !clean(description)) {
     return response.status(400).json({ message: 'Preencha CNPJ (14 dígitos) ou CPF (11), empresa, prazo, peça/serviço, quantidade e descrição.' })
   }
   try {
-    let requesterCreated = false
+    let requesterCreated = false, buyerCreated = false
     const offer = await mutateStore((store) => {
-      const link = registerOfferRequester(store, request.offerClient, requester)
+      const link = registerOfferContact(store, 'requesters', request.offerClient, requester)
+      const buyerLink = registerOfferContact(store, 'buyers', request.offerClient, buyer)
       requesterCreated = link.created
-      const item = { id: randomUUID(), code: nextCode('OF', store.offers), cnpj: clean(cnpj, 18), company: clean(company, 160), requester: link.name, requesterId: link.id, deadline, service: clean(service, 160), quantity: Number(quantity), description: clean(description, 5000), labelNumber: clean(labelNumber, 80), requestedAt: new Date().toISOString(), origin: 'Inserida Manualmente', status: 'review', attachments: [], resources: { materials: [], laborEntries: [] }, proposal: null, orderCode: null }
+      buyerCreated = buyerLink.created
+      const item = { id: randomUUID(), code: nextCode('OF', store.offers), cnpj: clean(cnpj, 18), company: clean(company, 160), requester: link.name, requesterId: link.id, buyer: buyerLink.name, buyerId: buyerLink.id, deadline, service: clean(service, 160), quantity: Number(quantity), description: clean(description, 5000), labelNumber: clean(labelNumber, 80), requestedAt: new Date().toISOString(), origin: 'Inserida Manualmente', status: 'review', attachments: [], resources: { materials: [], laborEntries: [] }, proposal: null, orderCode: null }
       store.offers.unshift(item)
       return item
     })
-    response.status(201).json({ item: offer, requesterCreated })
+    response.status(201).json({ item: offer, requesterCreated, buyerCreated })
   } catch (error) { handleError(response, error) }
 })
 
 router.put('/offers/:id/resources', async (request, response) => {
   const resources = request.body ?? {}
-  if (!Array.isArray(resources.materials) || !Array.isArray(resources.laborEntries)) return response.status(400).json({ message: 'Recursos inválidos.' })
+  if (!Array.isArray(resources.materials) || (resources.laborEntries !== undefined && !Array.isArray(resources.laborEntries))) return response.status(400).json({ message: 'Recursos inválidos.' })
   // Each material is counted in kilos or in units; units are whole numbers.
   if (resources.materials.some((material) => material?.unit != null && !validMaterialUnit(material.unit))) return response.status(400).json({ message: 'Escolha a unidade de cada material: quilo, metro ou unidade.' })
   if (resources.materials.some((material) => !validQuantityFor(material?.quantity, material?.unit))) return response.status(400).json({ message: 'Material contado por unidade aceita só quantidades inteiras.' })
-  if (resources.stages !== undefined && (!Array.isArray(resources.stages) || resources.stages.some((stage) => !stageKeys.includes(stage)))) return response.status(400).json({ message: 'Etapas inválidas.' })
+  if (resources.stages !== undefined && (!Array.isArray(resources.stages) || resources.stages.some((stage) => !productionStages.some(([key]) => key === stage)))) return response.status(400).json({ message: 'Etapas inválidas.' })
   if (resources.stageLayout !== undefined && !validStageLayout(resources.stageLayout)) return response.status(400).json({ message: 'Ordem dos grupos ou subetapas inválida.' })
   if (resources.kind !== undefined && !['service', 'product'].includes(resources.kind)) return response.status(400).json({ message: 'Tipo inválido.' })
   if (resources.manufacturedFrom != null && !['sample', 'drawing'].includes(resources.manufacturedFrom)) return response.status(400).json({ message: 'Origem de fabricação inválida.' })
@@ -151,11 +153,19 @@ router.put('/offers/:id/resources', async (request, response) => {
         const { requestedBy, requestedByName, requestedAt, requestedQuantity, requestRejection, requestReceipt, requestReceipts, ...fields } = material
         return { ...fields, requestedAt: previous?.requestedAt || (previous ? item.requestedAt : new Date().toISOString()), requestedBy: previous?.requestedBy ?? (previous ? null : request.adminId ?? null), requestedByName: previous?.requestedByName ?? (previous ? null : request.adminName || null), requestedQuantity: previous?.requestedQuantity ?? Number(material.purchaseQuantity ?? material.quantity), ...(previous?.requestRejection ? { requestRejection: previous.requestRejection } : {}), ...(previous?.requestReceipt ? { requestReceipt: previous.requestReceipt, requestReceipts: previous.requestReceipts } : {}) }
       })
-      const nextResources = { materials, laborEntries: resources.laborEntries, stages: [...new Set(resources.stages ?? settings.stages)], stageLayout: readStageLayout({ stages: resources.stages ?? settings.stages, stageLayout: resources.stageLayout ?? item.resources?.stageLayout }), kind: resources.kind ?? settings.kind, ...serviceDetails({ ...item.resources, ...resources }), paintColor: clean(resources.paintColor ?? item.resources?.paintColor, 160), serviceDescription: '' }
+      // A deactivated stage stays where it was checked, but cannot be checked again.
+      const reactivated = (resources.stages || []).filter((code) => !settings.stages.includes(code) && !stageActive(code))
+      if (reactivated.length) throw Object.assign(new Error(`A etapa ${reactivated.map(stageLabel).join(', ')} está desativada em Etapas: não pode ser marcada.`), { status: 400 })
+      const nextResources = { materials, laborEntries: [], stages: [...new Set(resources.stages ?? settings.stages)], stageLayout: readStageLayout({ stages: resources.stages ?? settings.stages, stageLayout: resources.stageLayout ?? item.resources?.stageLayout }), kind: resources.kind ?? settings.kind, ...serviceDetails({ ...item.resources, ...resources }), paintColor: clean(resources.paintColor ?? item.resources?.paintColor, 160), serviceDescription: '' }
       nextResources.stageTimes = cleanStageTimes(resources.stageTimes ?? item.resources?.stageTimes, nextResources.stages)
       nextResources.stageResources = cleanStageResources(resources.stageResources ?? item.resources?.stageResources, nextResources.stages, { machines: store.machines, laborServices: store.laborServices })
+      // Labor is not typed: it comes from the time and the machine or service of each stage. An older hand-typed row stays
+      // while the screen still sends it (it can only be removed).
+      const sent = new Set((resources.laborEntries || []).map((entry) => entry?.id))
+      nextResources.laborEntries = stageLaborEntries(nextResources, store, (item.resources?.laborEntries || []).filter((entry) => !entry.stageCode && sent.has(entry.id)))
       // Normal/Emergencial only labels the offer inside the system; changing it keeps the proposal already made.
-      // The planned stage times and resources only guide the team; they do not change the price, so the proposal is kept too.
+      // The planned stage times and resources count through the labor they produce: changing them changes the labor and
+      // so discards the proposal, like any other change of cost.
       // Interno/Externo is a label as well: it does not change the price.
       // The description goes in the proposal: only a different text discards it, not the older details joining it.
       const comparable = (value) => JSON.stringify({ ...value, urgency: undefined, serviceLocation: undefined, stageTimes: undefined, stageResources: undefined, serviceDescription: undefined })
@@ -259,21 +269,27 @@ router.put('/offers/:id/proposal-draft', async (request, response) => {
   } catch (error) { handleError(response, error) }
 })
 
+// Always built from the saved proposal: editing the resources discards the proposal, so it matches the current offer,
+// and files stored by earlier versions are never sent. Also the attachment of the proposal e-mail (proposalEmails.js).
+// Proposals made with the commercial models (A, B, Nestlé, Etiqueta) keep their own document; older ones use the generic layout.
+export async function proposalPdfFile(offer) {
+  const document = offer.proposal.document
+  const content = document ? await renderProposalDocument(document) : await createPdf(offer, offer.proposal, offer.resources, offer.proposal.layout || 'classic', offer.proposal.generatedAt)
+  const name = document ? ({ nestle: `FS-3055-${document.number}`, etiqueta: `Etiqueta-${document.labelNumber}` }[document.model] || `Proposta-${document.quoteNumber}`) : `Proposta-${offer.code}`
+  return { name: `${name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9._-]+/g, '-')}.pdf`, content }
+}
+
 router.get('/offers/:id/proposal.pdf', async (request, response) => {
   try {
     const offer = (await readStore()).offers.find((item) => item.id === request.params.id)
     if (!offer?.proposal) return response.status(404).json({ message: 'Proposta não encontrada.' })
-    // Always built from the saved proposal: editing the resources discards the proposal, so it matches the current offer,
-    // and files stored by earlier versions are never sent.
-    // Proposals made with the commercial models (A, B, Nestlé, Etiqueta) keep their own document; older ones use the generic layout.
-    const document = offer.proposal.document
-    const pdf = document ? await renderProposalDocument(document) : await createPdf(offer, offer.proposal, offer.resources, offer.proposal.layout || 'classic', offer.proposal.generatedAt)
-    const name = document ? ({ nestle: `FS-3055-${document.number}`, etiqueta: `Etiqueta-${document.labelNumber}` }[document.model] || `Proposta-${document.quoteNumber}`) : `Proposta-${offer.code}`
-    response.type('pdf').attachment(`${name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9._-]+/g, '-')}.pdf`).send(pdf)
+    const { name, content } = await proposalPdfFile(offer)
+    response.type('pdf').attachment(name).send(content)
   } catch (error) { handleError(response, error) }
 })
 
 export default function createOffersRouter(pool, requireAdmin, accounts) {
+  migrateStageLabor().catch((error) => console.error('Falha ao montar a mão de obra das etapas nas ofertas abertas:', error.message))
   const configured = express.Router()
   configured.use((request, _response, next) => {
     const actor = adminIdentity(request)

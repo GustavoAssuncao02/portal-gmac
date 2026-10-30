@@ -115,26 +115,30 @@ test('proposal models: drafts from the system, fiscal codes, Nestlé and etiquet
     const several = await f.adminRequest(`/offers/${offer.id}/proposal-document`, 'POST', { model: 'model-a', document: { ...letter, requester: 'Karoline', fiscal: { cnae: [{ code: '3314-7/10' }, letter.fiscal.cnae[0], { code: '3314-7/10' }], nbs: [{ code: '1.2001.50.00' }], ncm: [] } } })
     assert.equal(several.status, 200, JSON.stringify(several.data))
     assert.deepEqual(several.data.item.proposal.document.fiscal.cnae.map((entry) => entry.code), ['3314-7/10', letter.fiscal.cnae[0].code])
+    // Each PDF takes its own quote number: generating again with the number already issued moves to the next one.
+    assert.deepEqual([proposalA.data.item.proposal.document.quoteNumber, several.data.item.proposal.document.quoteNumber], ['13483', '13484'])
     const severalPdf = await fetch(`${f.url}/api/offers/${offer.id}/proposal.pdf`, { headers: f.admin })
     assert.equal(severalPdf.status, 200)
     assert.equal(Buffer.from(await severalPdf.arrayBuffer()).subarray(0, 4).toString(), '%PDF')
     const modelB = (await request(`/offers/${offer.id}/proposal-draft?model=model-b`)).data.draft
-    assert.deepEqual([modelB.quoteNumber, modelB.customerDocument], ['13484', '12.345.678/0001-90'])
+    assert.deepEqual([modelB.quoteNumber, modelB.customerDocument], ['13485', '12.345.678/0001-90'])
     // Model B: items grouped for subtotals.
     const grouped = await request(`/offers/${offer.id}/proposal-document`, 'POST', { model: 'model-b', document: { ...modelB, fiscal: { ...modelB.fiscal, nbs: { code: '1.2001.50.00' } }, items: [{ description: 'Fundação', quantity: 1, unit: 'Un', unitPrice: 1000, group: 'Obra civil' }, { description: 'Parede', quantity: 1, unit: 'Un', unitPrice: 500, group: 'Obra civil' }, { description: 'Cobertura', quantity: 1, unit: 'Un', unitPrice: 800, group: 'Estrutura metálica' }] } })
     assert.equal(grouped.status, 200, JSON.stringify(grouped.data))
     assert.deepEqual([grouped.data.item.proposal.document.items.map((item) => item.group), grouped.data.item.proposal.document.total, grouped.data.item.proposal.document.customerDocument], [['Obra civil', 'Obra civil', 'Estrutura metálica'], 2300, '12.345.678/0001-90'])
     assert.equal((await fetch(`${f.url}/api/offers/${offer.id}/proposal.pdf`, { headers: f.admin })).status, 200)
     // Technician: the company's by default, changeable in each proposal.
-    assert.deepEqual(letter.technician, { name: 'José Jossenilson F. Gomes', registry: 'CREA – 53865', phone: '(75) 99933-5645' })
+    assert.deepEqual(letter.technician, { name: 'José Jossenilson F. Gomes', registry: 'CREA – 53865', phone: '(75) 3616-6626' })
     const restored = await request(`/offers/${offer.id}/proposal-document`, 'POST', { model: 'model-a', document: { ...letter, requester: 'Karoline', technician: { name: 'Maria Souza', registry: 'CREA – 99999', phone: '(75) 98888-7777' }, fiscal: { ...letter.fiscal, nbs: { code: '1.2001.50.00' } } } })
     assert.equal(restored.status, 200)
     assert.deepEqual(restored.data.item.proposal.document.technician, { name: 'Maria Souza', registry: 'CREA – 99999', phone: '(75) 98888-7777' })
-    assert.equal((await request(`/offers/${offer.id}/proposal-draft?model=model-a`)).data.draft.technician.name, 'Maria Souza', 'Reopening keeps the chosen technician')
+    assert.equal(restored.data.item.proposal.document.quoteNumber, '13486', 'An old number sent again is not reused')
+    const reopenedLetter = (await request(`/offers/${offer.id}/proposal-draft?model=model-a`)).data.draft
+    assert.deepEqual([reopenedLetter.technician.name, reopenedLetter.quoteNumber], ['Maria Souza', '13487'], 'Reopening keeps the chosen technician and shows the next quote number')
     assert.equal((await request(`/offers/${offer.id}/proposal-draft?model=model-a&fresh=1`)).data.draft.technician.name, 'José Jossenilson F. Gomes')
     const letterPdf = await fetch(`${f.url}/api/offers/${offer.id}/proposal.pdf`, { headers: f.admin })
-    assert.match(letterPdf.headers.get('content-disposition'), /Proposta-13483\.pdf/)
-    assert.ok(Buffer.from(await letterPdf.arrayBuffer()).toString('latin1').includes('https://wa.me/557536166626?text=Ol%C3%A1%2C%20GMAC!%20Gostaria%20de%20falar%20sobre%20a%20cota%C3%A7%C3%A3o%20n%C2%BA%2013483'), 'Footer WhatsApp link with the quotation')
+    assert.match(letterPdf.headers.get('content-disposition'), /Proposta-13486\.pdf/)
+    assert.ok(Buffer.from(await letterPdf.arrayBuffer()).toString('latin1').includes('https://wa.me/557536166626?text=Ol%C3%A1%2C%20GMAC!%20Gostaria%20de%20falar%20sobre%20a%20cota%C3%A7%C3%A3o%20n%C2%BA%2013486'), 'Footer WhatsApp link with the quotation')
 
     // Settings: price lists are edited by administrators only and drive the next documents.
     const settings = (await request('/proposal-settings')).data.settings

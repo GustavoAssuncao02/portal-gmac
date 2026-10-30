@@ -1,0 +1,64 @@
+/* "Enviar E-mail" of the proposal (ProposalEmailModal.jsx): compose, preview and the e-mails kept on the offer. */
+.proposal-email-modal.payable-modal--wide { width: min(860px, calc(100vw - 24px)); }
+.proposal-email-modal form > fieldset { display: flex; flex-direction: column; gap: 14px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.proposal-email-compose { display: flex; flex-direction: column; gap: 12px; }
+.proposal-email-tabs { display: inline-flex; align-self: flex-start; gap: 2px; padding: 3px; border: 1px solid #cbd9e6; border-radius: 7px; background: #f4f8fb; }
+.proposal-email-tabs button { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 14px; border: 0; border-radius: 5px; color: #48627a; background: transparent; font: inherit; font-size: 13px; cursor: pointer; }
+.proposal-email-tabs button[aria-selected="true"] { color: #ffffff; background: #0c4c91; }
+.proposal-email-row { display: grid; grid-template-columns: 70px minmax(0, 1fr); align-items: center; gap: 4px 12px; }
+.proposal-email-modal .proposal-email-row > label, .proposal-email-label { display: block; color: #48627a; font-size: 13px; font-weight: 600; }
+.proposal-email-row > input { width: 100%; height: 38px; }
+.proposal-email-row > .proposal-email-error { grid-column: 2; }
+.proposal-email-from { color: #17385f; font-size: 14px; font-weight: 600; }
+.proposal-email-addresses { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 38px; padding: 4px 8px; border: 1px solid #cbd9e6; border-radius: 5px; background: #ffffff; cursor: text; }
+.proposal-email-addresses:focus-within { border-color: #0c4c91; box-shadow: 0 0 0 3px #0c4c911f; }
+.proposal-email-addresses--wrong { border-color: #c2414f; }
+.proposal-email-modal .proposal-email-addresses input { flex: 1 1 160px; min-width: 120px; height: 28px; min-height: 0; padding: 0 2px; border: 0; outline: 0; background: transparent; box-shadow: none; }
+.proposal-email-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 4px 3px 10px; border-radius: 999px; color: #0c4c91; background: #e8f1fb; font-size: 13px; overflow-wrap: anywhere; }
+.proposal-email-chip small { padding: 1px 7px; border-radius: 999px; color: #8a5a00; background: #fff1d6; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.proposal-email-chip button { display: inline-grid; place-items: center; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%; color: inherit; background: transparent; cursor: pointer; }
+.proposal-email-chip button:hover { background: #cfe0f4; }
+.proposal-email-error { color: #b42335; font-size: 12px; }
+.proposal-email-field { display: flex; flex-direction: column; gap: 6px; color: #48627a; font-size: 13px; font-weight: 600; }
+.proposal-email-field textarea { min-height: 0; resize: vertical; font-weight: 400; line-height: 1.5; }
+.proposal-email-modal .proposal-email-signature { color: #4a5d72; background: #f8fafc; }
+.proposal-email-missing { display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 10px 12px; border: 1px solid #f0c36d; border-radius: 6px; color: #7a4d00; background: #fff8e6; font-size: 13px; }
+.proposal-email-missing > svg { flex: 0 0 auto; margin-top: 1px; }
+.proposal-email-missing > div { display: grid; flex: 1 1 auto; gap: 6px; min-width: 0; }
+.proposal-email-missing input { width: 100%; max-width: 380px; height: 36px; color: #17385f; background: #ffffff; }
+.proposal-email-missing small { color: #7a4d00; font-size: 12px; }
+.proposal-email-missing--blocked { border-color: #e7a2ab; color: #9b1c2c; background: #fdecee; }
+.proposal-email-info { display: flex; align-items: center; gap: 8px; margin: 0; color: #48627a; font-size: 13px; }
+.proposal-email-files { display: grid; gap: 8px; padding: 12px; border: 1px solid #d7e3ee; border-radius: 6px; background: #f8fafc; }
+.proposal-email-files-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.proposal-email-files-heading strong { display: inline-flex; align-items: center; gap: 6px; color: #17385f; font-size: 13px; }
+.proposal-email-files-heading small { color: #6b7f92; font-size: 12px; }
+.proposal-email-files ul { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.proposal-email-files li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 8px; min-height: 36px; padding: 4px 6px 4px 10px; border: 1px solid #e0e8f0; border-radius: 5px; color: #29435e; background: #ffffff; font-size: 13px; }
+.proposal-email-files li > span { display: flex; align-items: center; gap: 8px; min-width: 0; overflow-wrap: anywhere; }
+.proposal-email-files li em { padding: 1px 7px; border-radius: 999px; color: #0c4c91; background: #e8f1fb; font-size: 11px; font-style: normal; font-weight: 600; }
+.proposal-email-files li small { color: #6b7f92; font-size: 12px; white-space: nowrap; }
+.proposal-email-files li.proposal-email-files-empty { display: block; color: #6b7f92; }
+.proposal-email-files-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.payable-modal > footer .proposal-email-footer-note { flex: 1 1 auto; margin-right: auto; color: #6b7f92; font-size: 12px; text-align: left; }
+.proposal-email-preview { display: grid; gap: 14px; padding: 18px 20px; border: 1px solid #d7e3ee; border-radius: 8px; color: #1f2d3d; background: #ffffff; }
+.proposal-email-preview header { display: grid; gap: 4px; padding-bottom: 12px; border-bottom: 1px solid #e0e8f0; }
+.proposal-email-preview h3 { margin: 0 0 6px; color: #17385f; font-size: 17px; }
+.proposal-email-preview header p { margin: 0; color: #29435e; font-size: 13px; overflow-wrap: anywhere; }
+.proposal-email-preview header p span { display: inline-block; min-width: 42px; color: #6b7f92; font-weight: 600; }
+.proposal-email-preview-body, .proposal-email-preview-signature { font-size: 14px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.proposal-email-preview-signature { padding-top: 12px; border-top: 1px solid #e0e8f0; color: #4a5d72; }
+.proposal-email-preview-files { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.proposal-email-preview-files li { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid #d7e3ee; border-radius: 6px; color: #29435e; background: #f8fafc; font-size: 13px; }
+.proposal-email-preview-files small { color: #6b7f92; }
+.proposal-email-history ul { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.proposal-email-history li button { display: flex; align-items: flex-start; gap: 8px; width: 100%; padding: 8px 10px; border: 1px solid #e0e8f0; border-radius: 6px; color: #29435e; background: #ffffff; font: inherit; text-align: left; cursor: pointer; }
+.proposal-email-history li button:hover { border-color: #0c4c91; }
+.proposal-email-history li button > svg { flex: 0 0 auto; margin-top: 2px; color: #0c4c91; }
+.proposal-email-history li span { display: grid; gap: 2px; min-width: 0; }
+.proposal-email-history li strong { color: #17385f; font-size: 13px; overflow-wrap: anywhere; }
+.proposal-email-history li small { color: #6b7f92; font-size: 12px; overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .proposal-email-row { grid-template-columns: minmax(0, 1fr); }
+  .proposal-email-row > .proposal-email-error { grid-column: 1; }
+}

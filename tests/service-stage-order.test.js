@@ -1,28 +1,33 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { defaultStageLayout, orderedStageSelection, readStageLayout, validStageLayout, legacyStageGroup } from '../server/serviceStages.js'
+import { defaultStageLayout, orderedStageSelection, readStageLayout, validStageLayout } from '../server/serviceStages.js'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
 
-test('stage layout validates complete groups and substeps without losing unchecked options', () => {
+test('stage layout: groups and stages of the catalog, the saved order kept and completed with what it lacks', () => {
   const layout = defaultStageLayout()
+  assert.deepEqual(layout.map((entry) => entry.group), ['Usinagem', 'Pintura', 'Caldeiraria'])
+  // The deactivated stages of the first registration stay in their sectors, at the end (shown only where checked).
+  assert.deepEqual(layout[0].stages.slice(-1), ['machining'])
+  assert.deepEqual(layout[2].stages.slice(-3), ['cutting', 'welding', 'boiler'])
   assert.equal(validStageLayout(layout), true)
   const ordered = [layout[1], layout[2], { ...layout[0], stages: [...layout[0].stages].reverse() }]
   assert.equal(validStageLayout(ordered), true)
   assert.deepEqual(orderedStageSelection(ordered, ['turning', 'assembly', 'painting', 'plasma-cut']), ['painting', 'plasma-cut', 'assembly', 'turning'])
-  assert.equal(ordered.flatMap((entry) => entry.stages).length, 15)
+  assert.equal(ordered.flatMap((entry) => entry.stages).length, 19)
   assert.equal(validStageLayout([layout[0], layout[0], layout[2]]), false)
   assert.equal(validStageLayout([null, layout[1], layout[2]]), false)
-  assert.equal(validStageLayout([{ ...layout[0], stages: layout[0].stages.slice(1) }, ...layout.slice(1)]), false)
-  assert.equal(validStageLayout([{ ...layout[0], stages: ['painting', ...layout[0].stages.slice(1)] }, ...layout.slice(1)]), false)
+  assert.equal(validStageLayout([{ ...layout[0], stages: ['painting', ...layout[0].stages] }, layout[1]]), false, 'a stage only once')
   assert.equal(validStageLayout([{ ...layout[0], stages: Array(7).fill('turning') }, ...layout.slice(1)]), false)
   assert.deepEqual(readStageLayout(), layout)
   assert.deepEqual(readStageLayout({ stageLayout: ordered }), ordered)
-  assert.deepEqual(orderedStageSelection(ordered, ['welding', 'cutting', 'assembly', 'painting', 'boiler']), ['painting', 'assembly', 'welding', 'cutting', 'boiler'])
-  const withLegacy = readStageLayout({ stageLayout: ordered, stages: ['painting', 'welding', 'cutting'] })
-  assert.equal(validStageLayout(withLegacy), true)
-  assert.equal(withLegacy.at(-1).group, legacyStageGroup)
-  const legacyFirst = [withLegacy.at(-1), ...ordered]
-  assert.deepEqual(orderedStageSelection(legacyFirst, ['painting', 'welding', 'cutting']), ['cutting', 'welding', 'painting'])
+  // A saved order that lacks stages or groups (created after it was saved) gets them at the end, in the catalog order.
+  const partial = readStageLayout({ stageLayout: [{ group: 'Caldeiraria', stages: ['polishing'] }, { group: 'Usinagem', stages: ['milling', 'turning'] }] })
+  assert.deepEqual(partial.map((entry) => entry.group), ['Caldeiraria', 'Usinagem', 'Pintura'])
+  assert.deepEqual(partial[0].stages.slice(0, 2), ['polishing', 'cut-bend'])
+  assert.deepEqual(partial[1].stages.slice(0, 3), ['milling', 'turning', 'planing'])
+  // A stage saved under another group goes to the group (sector) it belongs to now.
+  assert.deepEqual(readStageLayout({ stageLayout: [{ group: 'Pintura', stages: ['painting', 'turning'] }] })[0], { group: 'Pintura', stages: ['painting'] })
+  assert.deepEqual(orderedStageSelection(ordered, ['welding', 'cutting', 'assembly', 'painting', 'boiler']), ['painting', 'cutting', 'welding', 'boiler', 'assembly'])
 })
 
 test('custom stage order persists across reload, proposal, PDF and OS without changing existing orders', async (t) => {

@@ -72,7 +72,7 @@ function LetterForm({ model, draft, setDraft, settings, catalog }) {
       <label className="proposal-doc-wide">Cliente (À)<input required maxLength={160} value={draft.customer} onChange={(event) => set('customer', event.target.value)} /></label>
       <label>CNPJ/CPF do cliente<input maxLength={20} value={draft.customerDocument || ''} onChange={(event) => set('customerDocument', event.target.value)} /></label>
       <label>Solicitante<input maxLength={80} value={draft.requester} onChange={(event) => set('requester', event.target.value)} /></label>
-      <label>Aos cuidados de<input maxLength={80} value={draft.attention} onChange={(event) => set('attention', event.target.value)} /></label>
+      <label>Comprador<input maxLength={80} value={draft.attention} onChange={(event) => set('attention', event.target.value)} /></label>
     </div></section>
     <section className="proposal-doc-section proposal-fiscal"><h3><BadgeCheck size={17} aria-hidden="true" />CNAE – Código de atividade – NCM/NBS</h3>
       <div className="proposal-doc-grid proposal-doc-grid--fiscal">

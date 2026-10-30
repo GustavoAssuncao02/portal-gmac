@@ -86,7 +86,12 @@ test('planning: blocks per machine on the 15-minute grid, what is left to plan, 
   const session = { sessionId: started.data.session.id, sessionToken: started.data.sessionToken }
   const stageKey = (await fixture.adminRequest('/operations/orders')).data.items.find((item) => item.code === order.code).operation.stages[0].key
   assert.equal((await fixture.request(`/operations/orders/${order.code}/stages/${stageKey}`, 'POST', { quantity: 10, ...session }, operator)).status, 200)
-  assert.equal((await status()).status, 'done')
+  const done = await status()
+  assert.equal(done.status, 'done')
+  // The last pieces were registered inside the block: the rest of it is the time saved.
+  assert.ok(Date.parse(done.doneAt) >= slot && Date.parse(done.doneAt) <= Date.now())
+  assert.equal(done.earlyMinutes, Math.floor((slot + 3600000 - Date.parse(done.doneAt)) / 60000))
+  assert.ok(done.earlyMinutes > 0 && done.delayMinutes === 0)
   assert.equal((await fixture.adminRequest(`/planning/blocks/${live.id}`, 'DELETE')).status, 204)
   assert.equal((await fixture.adminRequest(`/planning/blocks/${live.id}`, 'DELETE')).status, 404)
   assert.ok(dayStart(today) <= Date.now())

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Plus, Trash2, Save, X, RotateCcw } from 'lucide-react'
 import ServiceStageEditor from './ServiceStageEditor.jsx'
-import { productionStages, stageLabel, serviceDetails, readStageLayout, orderedStageSelection } from '../server/serviceStages.js'
+import { productionStages, stageCodeOf, stageLabel, serviceDetails, readStageLayout, orderedStageSelection, defaultStageResource } from '../server/serviceStages.js'
 import { activeSessions } from '../server/operationSessions.js'
 import { newId } from './newId.js'
 import { cachedResource, payableRequest, money, dateLabel } from './payablesApi.js'
@@ -69,7 +69,7 @@ export function OrderActionModal({ order, action, onConfirm, onClose }) {
 
 export function orderEditDraft(order) {
   const source = structuredClone(order)
-  const stages = source.operation.stages.map((stage) => productionStages.find(([, name]) => name === stage.name)?.[0] || stage.name)
+  const stages = source.operation.stages.map((stage) => stageCodeOf(stage) || stage.name)
   const resources = { materials: [], laborEntries: [], ...source.resources, ...serviceDetails(source.resources), stages, kind: source.resources?.kind || source.proposal?.kind || 'service' }
   resources.stageLayout = readStageLayout(resources)
   return { order: { ...source, resources, proposal: { key: 'A', title: '', materials: 0, labor: 0, serviceValue: 0, margin: 0, discount: 0, ...source.proposal }, attachmentIds: (source.attachments || []).map((item) => item.id) }, stageCounts: Object.fromEntries(stages.map((code, index) => [code, source.operation.stageCounts[source.operation.stages[index].key] || 0])), expectedUpdatedAt: source.updatedAt || source.createdAt, expectedOperation: { status: source.operation.status, stages: source.operation.stages, stageCounts: source.operation.stageCounts, activeSessionIds: activeSessions(source.operation).map((session) => session.id) } }
@@ -104,9 +104,13 @@ export default function OrderEditModal({ order, confirmCompleted, onSave, onUplo
   const resource = (field, value) => setDraft((current) => ({ ...current, order: { ...current.order, resources: { ...current.order.resources, [field]: value } } }))
   const proposal = (field, value) => setDraft((current) => ({ ...current, order: { ...current.order, proposal: { ...current.order.proposal, [field]: value } } }))
   const row = (kind, id, field, value) => resource(kind, resources[kind].map((item) => item.id === id ? { ...item, [field]: value } : item))
+  // A checked stage comes with its default machine or service (Etapas), as in the offer.
   function toggleStage(code) {
-    const selected = resources.stages.includes(code) ? resources.stages.filter((key) => key !== code) : [...resources.stages, code]
+    const adding = !resources.stages.includes(code)
+    const selected = adding ? [...resources.stages, code] : resources.stages.filter((key) => key !== code)
     resource('stages', orderedStageSelection(resources.stageLayout, selected))
+    const preset = adding && !resources.stageResources?.[code] && defaultStageResource(code, resourceOptions)
+    if (preset) resource('stageResources', { ...resources.stageResources, [code]: preset })
   }
   function reorder(layout) {
     setDraft((current) => ({ ...current, order: { ...current.order, resources: { ...current.order.resources, stageLayout: layout, stages: orderedStageSelection(layout, current.order.resources.stages) } } }))

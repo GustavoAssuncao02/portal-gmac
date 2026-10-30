@@ -4,8 +4,8 @@ import { proposalSections } from '../server/offers.js'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
 
 const offer = { code: 'OF-2026-0001', service: 'Estrutura', company: 'Cliente', cnpj: '12345678000190', labelNumber: 'E1', quantity: 5, deadline: '2026-12-20', description: 'Descrição' }
-const resources = { materials: [{ name: 'Chapa', detail: '10 mm', quantity: 20, unitPrice: 12.5 }], laborEntries: [{ resource: 'Torno', hours: 3, hourlyRate: 80 }], stages: ['cutting'], kind: 'service' }
-const proposal = { key: 'A', title: 'Opção A', deadline: '2026-12-20', serviceValue: 5000, materials: 250, labor: 240, margin: 37.77, discount: 3, profit: 4510.55, machine: '3 horas', serviceTime: '3 horas', stages: ['cutting'], kind: 'service' }
+const resources = { materials: [{ name: 'Chapa', detail: '10 mm', quantity: 20, unitPrice: 12.5 }], laborEntries: [{ resource: 'Torno', hours: 3, hourlyRate: 80 }], stages: ['cut-bend'], kind: 'service' }
+const proposal = { key: 'A', title: 'Opção A', deadline: '2026-12-20', serviceValue: 5000, materials: 250, labor: 240, margin: 37.77, discount: 3, profit: 4510.55, machine: '3 horas', serviceTime: '3 horas', stages: ['cut-bend'], kind: 'service' }
 
 test('the customer proposal never shows margin, profit, costs or unit prices', () => {
   const sections = proposalSections(offer, proposal, resources)
@@ -26,7 +26,7 @@ test('the proposal PDF is always built from the saved proposal, so old stored fi
   const fixture = await createWorkflowFixture()
   t.after(() => fixture.close())
   const created = (await fixture.adminRequest('/offers', 'POST', offerDraft)).data.item
-  await fixture.adminRequest(`/offers/${created.id}/resources`, 'PUT', { materials: [], laborEntries: [], stages: ['cutting'], kind: 'service' })
+  await fixture.adminRequest(`/offers/${created.id}/resources`, 'PUT', { materials: [], laborEntries: [], stages: ['cut-bend'], kind: 'service' })
   const generated = await fixture.adminRequest(`/offers/${created.id}/proposal`, 'POST', { layout: 'executive', proposal: { key: 'A', title: 'Opção A', deadline: offerDraft.deadline, serviceValue: 100, margin: 37.77, profit: 4510.55 } })
   assert.equal(generated.status, 200)
   assert.equal(generated.data.item.proposal.pdfId, undefined, 'no PDF file is stored')

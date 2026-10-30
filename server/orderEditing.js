@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { productionStages, stageLabel, readStageLayout, validStageLayout, serviceDetails, stagePlanProblem } from './serviceStages.js'
+import { productionStages, stageLabel, stageActive, stageCodeOf, readStageLayout, validStageLayout, serviceDetails, stagePlanProblem } from './serviceStages.js'
 import { cleanStageResources, cleanStageTimes } from './pieces.js'
 import { realChangedFields } from './orderHistory.js'
 import { activeSessions } from './operationSessions.js'
@@ -62,6 +62,10 @@ export function editOrder(order, state, body, catalog = {}) {
   const known = new Set(productionStages.map(([key]) => key))
   const existingNames = new Set(state.stages.map((stage) => stage.name))
   if (resources.stages.some((key) => typeof key !== 'string' || !known.has(key) && !existingNames.has(key))) fail(400, 'Etapa de serviço inválida.')
+  // A deactivated stage stays in the OS that has it, but cannot be added to another one.
+  const current = new Set([...(order.resources?.stages || []), ...state.stages.map((stage) => stageCodeOf(stage) || stage.name)])
+  const reactivated = resources.stages.filter((key) => known.has(key) && !current.has(key) && !stageActive(key))
+  if (reactivated.length) fail(400, `A etapa ${reactivated.map(stageLabel).join(', ')} está desativada em Etapas: não pode ser marcada.`)
   if (!validStageLayout(resources.stageLayout)) fail(400, 'Ordem dos grupos ou subetapas inválida.')
   if (!['service', 'product'].includes(resources.kind) || typeof resources.strictProcess !== 'boolean' || resources.tempering != null && typeof resources.tempering !== 'boolean' || resources.manufacturedFrom != null && !['sample', 'drawing'].includes(resources.manufacturedFrom) || resources.urgency != null && !['normal', 'emergency'].includes(resources.urgency)) fail(400, 'Confira o tipo e as opções do processo.')
   const rows = (items, labor = false) => {
@@ -94,7 +98,7 @@ export function editOrder(order, state, body, catalog = {}) {
   fields.resources.stageResources = editedStagePlans(order.resources?.stageResources || {}, resources.stageResources, fields.resources.stages, catalog)
   // An OS from before the planned times and resources were mandatory can still be edited; changing its stages, their
   // times or their machines and services asks for the time and the machine or service of every stage.
-  const previousStages = state.stages.map((stage) => productionStages.find(([, label]) => label === stage.name)?.[0] || stage.name)
+  const previousStages = state.stages.map((stage) => stageCodeOf(stage) || stage.name)
   const stagesTouched = JSON.stringify(fields.resources.stages) !== JSON.stringify(previousStages) || JSON.stringify(fields.resources.stageTimes) !== JSON.stringify(order.resources?.stageTimes || {}) || samePlans(fields.resources.stageResources, order.resources?.stageResources) === false
   const problem = stagePlanProblem(fields.resources.stages, fields.resources)
   if (stagesTouched && problem) fail(400, problem)

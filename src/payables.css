@@ -168,6 +168,13 @@
 /* Cadastros (Administradores, Funcionários, Clientes) in the Fornecedores modal style. */
 .registration-modal-form .registration-password { height:38px; margin:0; border-color:#cbd9e6; border-radius:5px; background:white; }.registration-modal-form .registration-password input { min-height:0; height:36px; border:0; }.registration-modal-form .registration-password button { height:36px; flex-basis:40px; width:40px; }
 .registration-modal-form .registration-access-code button { height:38px; margin:0; border-radius:5px; }
+/* Tipo de funcionário: Operador and Administrativo are checked independently (an employee can be both). */
+.registration-modal-form .registration-roles { display:flex; flex-direction:column; gap:7px; }
+.registration-modal-form .registration-roles legend { margin-bottom:7px; padding:0; font-size:13px; }
+.registration-modal-form .registration-roles-options { display:flex; flex-wrap:wrap; gap:8px 24px; }
+.registration-modal-form .registration-roles-options label { flex-direction:row; align-items:center; gap:8px; font-size:14px; cursor:pointer; }
+.registration-modal-form .registration-roles-options input { width:18px; height:18px; min-height:0; margin:0; accent-color:#174f91; }
+.registry-badges { display:inline-flex; flex-wrap:wrap; gap:4px; }
 .admin-tools-main .registration-message { margin:0 0 16px; }
 /* Confirmations of accepting, declining and undoing an offer. */
 .offer-decision-facts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:0; }

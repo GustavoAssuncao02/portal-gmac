@@ -8,7 +8,7 @@ const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DE
 // A finished OS (already confirmed in the panel), created through the same routes the portal uses.
 async function finishedOrder(f, service) {
   const offer = (await f.adminRequest('/offers', 'POST', { ...offerDraft, service })).data.item
-  await f.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], stages: ['cutting'], kind: 'service' })
+  await f.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], stages: ['cut-bend'], kind: 'service' })
   await f.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', title: 'Teste', deadline: offerDraft.deadline, serviceValue: 1000 } })
   const order = (await f.adminRequest(`/offers/${offer.id}/accept`, 'POST')).data.item
   const current = (await f.request('/operations/orders', 'GET', undefined, f.admin)).data.items.find((item) => item.code === order.code)

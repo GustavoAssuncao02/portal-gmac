@@ -143,3 +143,34 @@ test('starting the portal gives every operator already registered a unique code'
     await fixture.close()
   }
 })
+
+test('an employee can be operator and administrative at once: 4-digit code on the tablet and CPF and password in the portal', async () => {
+  const fixture = await createWorkflowFixture({ accountsEnv: env })
+  try {
+    const operator = { Authorization: `Bearer ${fixture.operatorToken}` }
+    assert.equal((await fixture.adminRequest('/employees', 'POST', person(7, { type: 'both', accessCode: '7777' }), fixture.admin)).status, 400, 'the office side needs a password')
+    assert.equal((await fixture.adminRequest('/employees', 'POST', person(7, { type: 'both', accessCode: '7777', password: 'senha123', email: '' }), fixture.admin)).status, 400, 'and an e-mail for "Esqueci minha senha"')
+    const created = await fixture.adminRequest('/employees', 'POST', person(7, { type: 'both', accessCode: '7777', password: 'senha123' }), fixture.admin)
+    assert.equal(created.status, 201)
+    assert.equal(created.data.item.type, 'both')
+    assert.equal(created.data.item.accessCode, '7777')
+    assert.equal(created.data.item.passwordHash, undefined)
+
+    const identified = await fixture.request('/operations/operator/identify', 'POST', { code: '7777' }, operator)
+    assert.equal(identified.status, 200, 'identifies on the shared operator account')
+    const login = await fixture.request('/auth/login', 'POST', { cpf: person(7).cpf, password: 'senha123' })
+    assert.equal(login.status, 200, 'and signs in to the administrative portal')
+    assert.equal(login.data.user.role, 'staff')
+
+    // Editing without a new password keeps it; dropping the office side ends the portal access but keeps the code.
+    const kept = await fixture.adminRequest(`/employees/${created.data.item.id}`, 'PUT', person(7, { type: 'both', accessCode: '7777' }), fixture.admin)
+    assert.equal(kept.status, 200)
+    assert.equal((await fixture.request('/auth/login', 'POST', { cpf: person(7).cpf, password: 'senha123' })).status, 200)
+    const onlyOperator = await fixture.adminRequest(`/employees/${created.data.item.id}`, 'PUT', person(7, { type: 'operator', accessCode: '7777' }), fixture.admin)
+    assert.equal(onlyOperator.data.item.type, 'operator')
+    assert.equal((await fixture.request('/auth/login', 'POST', { cpf: person(7).cpf, password: 'senha123' })).status, 401)
+    assert.equal((await fixture.request('/operations/operator/identify', 'POST', { code: '7777' }, operator)).status, 200)
+  } finally {
+    await fixture.close()
+  }
+})

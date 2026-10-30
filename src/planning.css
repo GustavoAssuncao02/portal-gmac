@@ -43,6 +43,8 @@
 .planning-dot--done { background: #2e9b5a; }
 .planning-dot--late { background: #e3870f; }
 .planning-dot--actual { height: 4px; border-radius: 2px; background: #22a35a; }
+.planning-dot--overrun { background: var(--overrun); }
+.planning-dot--early { border: 2px solid var(--early); background: var(--early-fill); }
 
 .planning-scroll { overflow-x: auto; overscroll-behavior-x: contain; }
 .planning-grid { --label-width: 210px; position: relative; display: grid; grid-template-columns: var(--label-width) var(--timeline-width); width: max-content; }
@@ -78,6 +80,16 @@
 .planning-progress { position: absolute; left: 0; bottom: 0; height: 4px; background: #2f74d0; }
 .planning-actual { position: absolute; bottom: 4px; height: 5px; border-radius: 3px; background: #22a35a; }
 .planning-actual--outside { background: repeating-linear-gradient(135deg, #e3870f 0 4px, #f6c27a 4px 8px); }
+/* Time past the planned end of a late block (a red tail up to now) and the unused end of a block done early. The
+   colors are tokens, picked by hand for each theme in theme.css. */
+.planning-agenda { --overrun: #d92d2d; --overrun-stripe: #e85a5a; --overrun-flag: #b42318; --overrun-flag-ink: #fff; --early: #1d5fa3; --early-fill: #1d5fa333; --early-stripe: #1d5fa314; --early-flag: #174a82; --early-flag-ink: #fff; }
+.planning-overrun, .planning-early { position: absolute; top: 7px; bottom: 13px; }
+.planning-overrun { z-index: 1; border-radius: 0 6px 6px 0; background: repeating-linear-gradient(135deg, var(--overrun) 0 6px, var(--overrun-stripe) 6px 12px); box-shadow: 0 0 0 1px var(--overrun); cursor: pointer; }
+.planning-early { border: 2px solid var(--early); border-radius: 0 6px 6px 0; background: repeating-linear-gradient(135deg, var(--early-fill) 0 5px, var(--early-stripe) 5px 10px); pointer-events: none; }
+.planning-flag { position: absolute; bottom: calc(100% + 6px); right: 0; z-index: 5; padding: 4px 8px; border-radius: 5px; font-size: 12px; white-space: nowrap; opacity: 0; transform: translateY(3px); transition: opacity .12s, transform .12s; pointer-events: none; }
+.planning-overrun .planning-flag { border: 1px solid var(--overrun); background: var(--overrun-flag); color: var(--overrun-flag-ink); }
+.planning-early .planning-flag { border: 1px solid var(--early); background: var(--early-flag); color: var(--early-flag-ink); }
+.planning-overrun:hover .planning-flag, .planning-block:is(:hover, :focus-visible) + :is(.planning-overrun, .planning-early) .planning-flag { opacity: 1; transform: none; }
 .planning-now, .planning-selected { position: absolute; top: 0; bottom: 0; z-index: 2; width: 2px; pointer-events: none; }
 .planning-now { background: #c62f3a; }
 .planning-selected { background: #0c4c91; opacity: .7; }
@@ -124,7 +136,7 @@
 .planning-snapshot-group--busy h3 { color: #1d5fa3; }
 .planning-snapshot-group--idle h3 { color: #4f6680; }
 .planning-snapshot-group--unavailable h3 { color: #9a5b00; }
-.planning-snapshot-group ul { display: grid; gap: 8px; margin: 0 0 8px; padding: 0; list-style: none; }
+.planning-snapshot-group ul { position: relative; display: grid; gap: 8px; margin: 0 0 8px; padding: 0; list-style: none; overflow-y: auto; overscroll-behavior: contain; }
 .planning-snapshot-group li { display: grid; gap: 2px; padding: 8px 10px; border-left: 3px solid #8db4e3; border-radius: 4px; background: #f7fafd; font-size: 13px; }
 .planning-snapshot-group--idle li { border-left-color: #b9cadb; }
 .planning-snapshot-group--unavailable li { border-left-color: #e3930b; }

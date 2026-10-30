@@ -9,7 +9,11 @@ import { documentDigits, documentKind, maskClientDocument } from '../server/clie
 
 // Cadastros > Solicitantes: who asks for the service on behalf of a client. Each requester belongs to one client (a client
 // has many); name and client are required, CPF, e-mail and phone are optional. Same pattern as Clientes: the list on
-// screen, adding and editing in a modal.
+// screen, adding and editing in a modal. Cadastros > Compradores (the client's buyers) is the same screen.
+export const contactKinds = {
+  requesters: { endpoint: '/requesters', title: 'Solicitantes', singular: 'solicitante', plural: 'solicitantes', Singular: 'Solicitante' },
+  buyers: { endpoint: '/buyers', title: 'Compradores', singular: 'comprador', plural: 'compradores', Singular: 'Comprador' },
+}
 const cpfMask = (value) => String(value || '').replace(/\D/g, '').slice(0, 11).replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2')
 const phoneLabel =(value) => {
   const digits = String(value || '').replace(/\D/g, '').slice(0, 11)
@@ -18,9 +22,9 @@ const phoneLabel =(value) => {
 }
 const emptyForm = { name: '', clientId: '', clientName: '', cpf: '', email: '', phone: '' }
 
-export default function RequestersScreen({ Sidebar, WorkspaceTabs, navigationProps }) {
+export default function RequestersScreen({ Sidebar, WorkspaceTabs, navigationProps, kind = contactKinds.requesters }) {
   const [items, setItems] = useState(null), [clients, setClients] = useState([]), [message, setMessage] = useState(''), [editing, setEditing] = useState(null), [removing, setRemoving] = useState(null)
-  const load = () => payableRequest('/requesters').then((result) => setItems(result.items))
+  const load = () => payableRequest(kind.endpoint).then((result) => setItems(result.items))
   useEffect(() => {
     load().catch((caught) => setMessage(caught.message))
     payableRequest('/clients').then((result) => setClients(result.items || [])).catch(() => setClients([]))
@@ -35,21 +39,21 @@ export default function RequestersScreen({ Sidebar, WorkspaceTabs, navigationPro
   const rows = items || []
   const list = useRegistryList(rows, columns, 'name')
   async function save(values) {
-    await payableRequest(editing.id ? `/requesters/${editing.id}` : '/requesters', editing.id ? 'PUT' : 'POST', values)
+    await payableRequest(editing.id ? `${kind.endpoint}/${editing.id}` : kind.endpoint, editing.id ? 'PUT' : 'POST', values)
     await load()
-    setMessage(`Solicitante ${editing.id ? 'atualizado' : 'cadastrado'} com sucesso.`)
+    setMessage(`${kind.Singular} ${editing.id ? 'atualizado' : 'cadastrado'} com sucesso.`)
     setEditing(null)
   }
   async function remove() {
-    await payableRequest(`/requesters/${removing.id}`, 'DELETE')
+    await payableRequest(`${kind.endpoint}/${removing.id}`, 'DELETE')
     await load()
-    setMessage('Solicitante excluído com sucesso.')
+    setMessage(`${kind.Singular} excluído com sucesso.`)
     setRemoving(null)
   }
-  return <AdminWorkspace Sidebar={Sidebar} WorkspaceTabs={WorkspaceTabs} navigationProps={navigationProps} title="Solicitantes">
-    <div className="payable-heading-actions"><button className="admin-tool-button admin-tool-button--primary" type="button" onClick={() => { setMessage(''); setEditing({}) }}><Plus size={17} />Novo solicitante</button></div>
+  return <AdminWorkspace Sidebar={Sidebar} WorkspaceTabs={WorkspaceTabs} navigationProps={navigationProps} title={kind.title}>
+    <div className="payable-heading-actions"><button className="admin-tool-button admin-tool-button--primary" type="button" onClick={() => { setMessage(''); setEditing({}) }}><Plus size={17} />Novo {kind.singular}</button></div>
     {message && <p className={`registration-message ${message.includes('sucesso') ? 'registration-message--success' : 'registration-message--error'}`} role="status">{message}</p>}
-    <RegistryToolbar list={list} total={rows.length} singular="solicitante" plural="solicitantes" placeholder="Nome, cliente, CPF, e-mail ou telefone" />
+    <RegistryToolbar list={list} total={rows.length} singular={kind.singular} plural={kind.plural} placeholder="Nome, cliente, CPF, e-mail ou telefone" />
     <div className="payable-table-scroll"><table className="payable-table payable-registry-table registration-table registry-table registry-table--requester"><thead><tr>{columns.map((column) => <SortHeader key={column.key} column={column} list={list} className={`registry-col-${column.key}`} />)}<th className="registry-col-actions">Ações</th></tr></thead><tbody>
       {list.rows.map((row) => <tr key={row.id}>
         <td className="registry-name"><strong>{row.name}</strong></td>
@@ -62,15 +66,15 @@ export default function RequestersScreen({ Sidebar, WorkspaceTabs, navigationPro
           <button className="payable-icon payable-danger" type="button" title="Excluir" aria-label={`Excluir ${row.name}`} onClick={() => { setMessage(''); setRemoving(row) }}><Trash2 size={16} /></button>
         </div></td>
       </tr>)}
-      {items && !list.rows.length && <tr><td colSpan={columns.length + 1} className="payable-empty">{rows.length ? 'Nenhum cadastro encontrado para a busca.' : 'Nenhum solicitante cadastrado.'}</td></tr>}
+      {items && !list.rows.length && <tr><td colSpan={columns.length + 1} className="payable-empty">{rows.length ? 'Nenhum cadastro encontrado para a busca.' : `Nenhum ${kind.singular} cadastrado.`}</td></tr>}
       {!items && !message && <tr><td colSpan={columns.length + 1} className="payable-empty">Carregando...</td></tr>}
     </tbody></table></div>
-    {editing && <RequesterForm source={editing} clients={clients} onClose={() => setEditing(null)} onSave={save} />}
-    {removing && <RemoveRequester requester={removing} onClose={() => setRemoving(null)} onConfirm={remove} />}
+    {editing && <RequesterForm kind={kind} source={editing} clients={clients} onClose={() => setEditing(null)} onSave={save} />}
+    {removing && <RemoveRequester kind={kind} requester={removing} onClose={() => setRemoving(null)} onConfirm={remove} />}
   </AdminWorkspace>
 }
 
-function RequesterForm({ source, clients, onClose, onSave }) {
+function RequesterForm({ kind, source, clients, onClose, onSave }) {
   const id = useId(), [busy, setBusy] = useState(false), [error, setError] = useState('')
   const [values, setValues] = useState(() => ({ ...emptyForm, ...source, cpf: cpfMask(source.cpf), phone: phoneLabel(source.phone), email: source.email || '' }))
   const update = (field, value) => setValues((current) => ({ ...current, [field]: value }))
@@ -80,7 +84,7 @@ function RequesterForm({ source, clients, onClose, onSave }) {
     setBusy(true); setError('')
     try { await onSave({ name: values.name, clientId: values.clientId, cpf: values.cpf, email: values.email, phone: values.phone }) } catch (caught) { setError(caught.message) } finally { setBusy(false) }
   }
-  return <PayableModal title={source.id ? 'Editar solicitante' : 'Novo solicitante'} busy={busy} onClose={onClose} footer={<><button className="admin-tool-button" type="button" disabled={busy} onClick={onClose}>Cancelar</button><button className="admin-tool-button admin-tool-button--primary" type="submit" form={id} disabled={busy}>Salvar</button></>}>
+  return <PayableModal title={`${source.id ? 'Editar' : 'Novo'} ${kind.singular}`} busy={busy} onClose={onClose} footer={<><button className="admin-tool-button" type="button" disabled={busy} onClick={onClose}>Cancelar</button><button className="admin-tool-button admin-tool-button--primary" type="submit" form={id} disabled={busy}>Salvar</button></>}>
     <form id={id} className="payable-form registration-modal-form" onSubmit={submit}><fieldset disabled={busy}>
       <label>Nome *<input value={values.name} maxLength={160} onChange={(event) => update('name', event.target.value)} required autoFocus /></label>
       <label>Cliente *<ClientPicker clients={clients} text={values.clientName} selectedId={values.clientId} onText={(text) => setValues((current) => ({ ...current, clientName: text, clientId: '' }))} onSelect={(client) => setValues((current) => ({ ...current, clientName: client.name, clientId: String(client.id) }))} /></label>
@@ -117,9 +121,9 @@ function ClientPicker({ clients, text, selectedId, onText, onSelect }) {
   </div>
 }
 
-function RemoveRequester({ requester, onClose, onConfirm }) {
+function RemoveRequester({ kind, requester, onClose, onConfirm }) {
   const [busy, setBusy] = useState(false), [error, setError] = useState('')
-  return <PayableModal title="Excluir solicitante" busy={busy} onClose={onClose} footer={<><button className="admin-tool-button" type="button" disabled={busy} onClick={onClose}>Cancelar</button><button className="admin-tool-button admin-tool-button--primary admin-tool-button--danger" type="button" disabled={busy} onClick={async () => { setBusy(true); setError(''); try { await onConfirm() } catch (caught) { setError(caught.message) } finally { setBusy(false) } }}>Excluir</button></>}>
+  return <PayableModal title={`Excluir ${kind.singular}`} busy={busy} onClose={onClose} footer={<><button className="admin-tool-button" type="button" disabled={busy} onClick={onClose}>Cancelar</button><button className="admin-tool-button admin-tool-button--primary admin-tool-button--danger" type="button" disabled={busy} onClick={async () => { setBusy(true); setError(''); try { await onConfirm() } catch (caught) { setError(caught.message) } finally { setBusy(false) } }}>Excluir</button></>}>
     <p>Excluir <strong>{requester.name}</strong>{requester.clientName ? <> ({requester.clientName})</> : null}?</p>
     {error && <p className="admin-tool-error" role="alert">{error}</p>}
   </PayableModal>

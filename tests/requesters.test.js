@@ -68,3 +68,35 @@ test('an offer names its requester: new names join the client registry and the p
   // The proposal opens with the requester of the offer.
   for (const model of ['model-a', 'etiqueta']) assert.equal((await fixture.adminRequest(`/offers/${fresh.item.id}/proposal-draft?model=${model}`)).data.draft.requester, 'Gustavo Assunção da Silva')
 })
+
+test('buyers are kept like requesters: a registry per client, and the offer registers a new buyer of its client', async (t) => {
+  const fixture = await createWorkflowFixture()
+  t.after(() => fixture.close())
+  const nestle = (await fixture.adminRequest('/clients', 'POST', { name: 'Nestlé', documentType: 'cnpj', document: '60.409.075/0001-52' })).data.item
+  assert.equal((await fixture.adminRequest('/buyers', 'POST', { name: ' ', clientId: nestle.id })).data.message, 'Informe o nome do comprador.')
+  const carla = await fixture.adminRequest('/buyers', 'POST', { name: 'Carla Compras', clientId: nestle.id, email: 'carla@nestle.com' })
+  assert.equal(carla.status, 201)
+  assert.equal(carla.data.item.clientName, 'Nestlé')
+  assert.equal((await fixture.adminRequest('/buyers', 'POST', { name: 'carla compras', clientId: nestle.id })).data.message, 'Este cliente já tem um comprador com esse nome.')
+
+  // Requesters and buyers are separate registries: the same person name does not clash between them.
+  const draft = { ...offerDraft, cnpj: '60.409.075/0001-52', company: 'Nestlé' }
+  const known = (await fixture.adminRequest('/offers', 'POST', { ...draft, requester: 'João Silva', buyer: ' carla compras ' })).data
+  assert.deepEqual([known.requesterCreated, known.buyerCreated, known.item.buyer, known.item.buyerId], [true, false, 'Carla Compras', carla.data.item.id])
+  const fresh = (await fixture.adminRequest('/offers', 'POST', { ...draft, buyer: 'Bruno Suprimentos' })).data
+  assert.deepEqual([fresh.requesterCreated, fresh.buyerCreated], [false, true])
+  assert.deepEqual((await fixture.adminRequest('/buyers')).data.items.map((row) => [row.name, row.clientName]), [['Bruno Suprimentos', 'Nestlé'], ['Carla Compras', 'Nestlé']])
+  assert.deepEqual((await fixture.adminRequest('/requesters')).data.items.map((row) => row.name), ['João Silva'])
+
+  // The letter proposals open with the buyer of the offer in "Comprador" (the former "Aos cuidados de").
+  for (const model of ['model-a', 'model-b']) assert.equal((await fixture.adminRequest(`/offers/${known.item.id}/proposal-draft?model=${model}`)).data.draft.attention, 'Carla Compras')
+  assert.equal((await fixture.adminRequest(`/offers/${fresh.item.id}/proposal-draft?model=model-b`)).data.draft.requester, '')
+
+  // The client cannot be deleted while it has buyers either.
+  await fixture.adminRequest(`/requesters/${(await fixture.adminRequest('/requesters')).data.items[0].id}`, 'DELETE')
+  const blocked = await fixture.adminRequest(`/clients/${nestle.id}`, 'DELETE')
+  assert.equal(blocked.status, 409)
+  assert.match(blocked.data.message, /2 compradores vinculados.*Cadastros > Compradores/)
+  assert.equal((await fixture.adminRequest(`/buyers/${carla.data.item.id}`, 'DELETE')).status, 204)
+  assert.equal((await fixture.adminRequest(`/buyers/${carla.data.item.id}`, 'DELETE')).data.message, 'Comprador não encontrado.')
+})

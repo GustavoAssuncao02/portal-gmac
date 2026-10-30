@@ -1,12 +1,11 @@
 import { randomUUID } from 'node:crypto'
-import { productionStages } from './serviceStages.js'
+import { stageCodeOf } from './serviceStages.js'
 import { materialUnit, wholeUnit } from './materialUnits.js'
 import { workIntervals } from './reportData.js'
 
 // A piece is identified only by its name (not by client): case, accents and extra spaces are ignored.
 export const pieceKey = (name) => String(name ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLocaleLowerCase('pt-BR').replace(/\s+/g, ' ').trim()
 
-const stageCodeOf = (stage) => productionStages.find(([, label]) => label === stage?.name)?.[0] ?? null
 const materialKey = (material) => material.inventoryId != null ? `inventory:${material.inventoryId}` : `name:${pieceKey(material.name)}|${pieceKey(material.detail)}`
 const round = (value, digits) => Math.round(value * 10 ** digits) / 10 ** digits
 
@@ -117,7 +116,7 @@ function stagePlans(stages, planned = {}, history, catalog) {
   }
   const used = new Map()
   for (const interval of workIntervals(history)) {
-    const code = productionStages.find(([, label]) => label === interval.stageName)?.[0]
+    const code = stageCodeOf(interval.stageName)
     const plan = interval.machineId != null ? { type: 'machine', id: interval.machineId } : interval.laborServiceId != null ? { type: 'labor-service', id: interval.laborServiceId } : null
     if (!code || !stages.includes(code) || !registered(plan)) continue
     const key = `${code}|${plan.type}|${plan.id}`

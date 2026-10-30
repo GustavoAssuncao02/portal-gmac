@@ -1,6 +1,27 @@
 // Each commit to main is a new version: add an entry at the top, with what changed in plain words for whoever uses the portal.
 export const releaseNotes = [
   {
+    version: '1.0.06',
+    date: '2026-10-30',
+    notes: [
+      'Funcionários: um funcionário pode ser operador e administrativo ao mesmo tempo',
+      'Cadastros: novo cadastro de Compradores por cliente',
+      'Ofertas: novo campo Comprador, com cadastro automático do comprador novo',
+      'Ofertas: a mão de obra vem do tempo e da máquina ou do serviço de cada etapa',
+      'Propostas: o campo "Aos cuidados de" passou a se chamar Comprador e já vem preenchido',
+      'Propostas: novo botão Enviar E-mail, com prévia, anexos e registro na oferta',
+      'Propostas: o e-mail do cliente e do comprador é cadastrado no primeiro envio',
+      'Propostas: cada PDF gerado recebe um número de cotação próprio',
+      'Propostas: telefone da GMAC atualizado nos modelos',
+      'Ofertas e serviços: "Enviada há" conta a partir do último e-mail da proposta',
+      'Etapas: nova tela para criar, editar e desativar etapas, com as máquinas e os serviços de cada uma',
+      'Operador: no Processo Injessado, a etapa só é liberada quando a anterior termina',
+      'Planejamento: atraso e término antecipado marcados nos blocos das máquinas',
+      'Notificações: o sino avisa quando o portal recebe uma versão nova',
+      'Melhorias gerais: correções de problemas, desempenho e segurança',
+    ],
+  },
+  {
     version: '1.0.05',
     date: '2026-10-28',
     notes: [

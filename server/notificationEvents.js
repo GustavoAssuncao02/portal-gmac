@@ -8,6 +8,17 @@ export function addNotification(store, notice) {
   store.operationalNotifications.push({ id: randomUUID(), at: new Date().toISOString(), ...notice })
 }
 
+// A new version of the portal (src/releaseNotes.js): one notice for everybody, once per version, that only tells about the
+// update; it opens the "Notas de atualização". Returns true when the notice is new.
+export function announceRelease(store, release) {
+  if (!release?.version) return false
+  const id = `release:${release.version}`
+  if ((store.operationalNotifications || []).some((item) => item.id === id)) return false
+  const notes = release.notes || []
+  addNotification(store, { id, type: 'release', version: release.version, title: `Portal atualizado: versão ${release.version}`, description: notes.length ? `${notes.slice(0, 2).join(' · ')}${notes.length > 2 ? ` e mais ${notes.length - 2}` : ''}` : 'Veja o que mudou nas Notas de atualização.' })
+  return true
+}
+
 function requests(store) {
   return materialRequestSources(store.offers, store.orders).flatMap((offer) => (offer.resources?.materials || []).flatMap((material) => {
     const quantity = Number(material.purchaseQuantity ?? (material.stockStatus === 'available' ? 0 : Number(material.quantity) - Number(material.stockAvailable || 0)))

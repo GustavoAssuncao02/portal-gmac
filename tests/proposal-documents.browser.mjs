@@ -79,7 +79,7 @@ try {
   await letter.getByLabel('Solicitante', { exact: true }).fill('Karoline')
   await letter.getByLabel('Valor unitário do item 1', { exact: true }).fill('258,50')
   await letter.getByLabel('Pagamento', { exact: true }).fill('45 DDL')
-  assert.deepEqual([await letter.getByLabel('Técnico responsável', { exact: true }).inputValue(), await letter.getByLabel('Registro (CREA)', { exact: true }).inputValue(), await letter.getByLabel('Contato', { exact: true }).inputValue()], ['José Jossenilson F. Gomes', 'CREA – 53865', '(75) 99933-5645'])
+  assert.deepEqual([await letter.getByLabel('Técnico responsável', { exact: true }).inputValue(), await letter.getByLabel('Registro (CREA)', { exact: true }).inputValue(), await letter.getByLabel('Contato', { exact: true }).inputValue()], ['José Jossenilson F. Gomes', 'CREA – 53865', '(75) 3616-6626'])
   await letter.getByLabel('Técnico responsável', { exact: true }).fill('Maria Souza')
   assert.match(await letter.locator('.proposal-doc-total').innerText(), /R\$\s5\.170,00/)
   await page.screenshot({ path: 'test-results/proposal-model-a-form.png', fullPage: false })

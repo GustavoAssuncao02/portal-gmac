@@ -594,7 +594,7 @@ export async function renderLetter(document) {
   }
   leftLine(`${documentKind(document.customerDocument)}:`, document.customerDocument)
   leftLine('Solicitante:', document.requester)
-  leftLine('Aos cuidados de:', document.attention)
+  leftLine('Comprador:', document.attention)
   const cardLines = [
     [[`${document.city || issuer.city}, ${longDate(document.date)}`, f.calibri]],
     [['Validade: ', f.calibri, INK.muted], [`${document.validityDays} dias corridos · até ${until}`, f.calibri]],

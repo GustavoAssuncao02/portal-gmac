@@ -72,6 +72,10 @@
 :root[data-theme="dark"][data-tone="black"] .account-theme-option.selected { background: #1f1f22; border-color: #80b7f0; color: #f2f2f2; }
 /* Pause reasons pie: the same eight hues stepped for the dark workspace (validated against #0d1c2e). */
 :root[data-theme="dark"] .pause-reasons-chart { --pause-slot-1: #3987e5; --pause-slot-2: #d95926; --pause-slot-3: #199e70; --pause-slot-4: #c98500; --pause-slot-5: #d55181; --pause-slot-6: #008300; --pause-slot-7: #9085e9; --pause-slot-8: #e66767; --pause-other: #5b7a9a; --pause-surface: #0d1c2e; }
+/* Planning: the late tail and the early mark, stepped for each dark surface (#0d1c2e and #0b0b0b) so the red and the
+   blue keep apart from the amber of late blocks and the green of done ones. */
+:root[data-theme="dark"] .planning-agenda { --overrun: #e5484d; --overrun-stripe: #b8343a; --overrun-flag: #4a1518; --overrun-flag-ink: #ffd7d5; --early: #6aa7f0; --early-fill: #6aa7f047; --early-stripe: #6aa7f01a; --early-flag: #13345a; --early-flag-ink: #dcebff; }
+:root[data-theme="dark"][data-tone="black"] .planning-agenda { --overrun: #ff5c5c; --overrun-stripe: #c73a3a; --overrun-flag: #3a1212; --overrun-flag-ink: #ffdcdc; --early: #74b0ff; --early-fill: #74b0ff47; --early-stripe: #74b0ff1a; --early-flag: #0f2238; --early-flag-ink: #e0edff; }
 :root[data-theme="dark"] .receivable-forecast-chart { --forecast-gross: #3987e5; --forecast-net: #d95926; }
 :root[data-theme="dark"] .receivable-forecast-card { background: #112239; border-color: #30485f; }
 :root[data-theme="dark"] .receivable-forecast-card--net { background: #162b43; border-color: #36516f; }

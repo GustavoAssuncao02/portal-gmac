@@ -30,7 +30,14 @@ export default function AccountSettings({ user, onUpdateUser, ...props }) {
   const [notificationBusy, setNotificationBusy] = useState(false)
   const [notificationError, setNotificationError] = useState('')
   const [notificationMessage, setNotificationMessage] = useState('')
-  const [releaseNotesOpen, setReleaseNotesOpen] = useState(false)
+  // The notice of a new version (the bell) opens the notes here, also when this screen is already open.
+  const [releaseNotesOpen, setReleaseNotesOpen] = useState(() => sessionStorage.getItem('gmac-release-notes-open') === '1')
+  useEffect(() => {
+    sessionStorage.removeItem('gmac-release-notes-open')
+    const open = () => { sessionStorage.removeItem('gmac-release-notes-open'); setReleaseNotesOpen(true) }
+    window.addEventListener('gmac-release-notes-open', open)
+    return () => window.removeEventListener('gmac-release-notes-open', open)
+  }, [])
   const [accountOpen, setAccountOpen] = useState(false)
   useEffect(() => {
     let active = true

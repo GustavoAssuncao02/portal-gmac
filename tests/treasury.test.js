@@ -115,7 +115,7 @@ test('a finished OS can be received on the spot: the entry goes to Tesouraria li
     const token = (await f.request('/auth/login', 'POST', { cpf: env.DEMO_ADMIN_CPF, password: env.DEMO_ADMIN_PASSWORD })).data.token
     const request = (route, method, body) => f.request(route, method, body, { Authorization: `Bearer ${token}` })
     const offer = (await f.adminRequest('/offers', 'POST', offerDraft)).data.item
-    await f.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], stages: ['cutting'], kind: 'service' })
+    await f.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], stages: ['cut-bend'], kind: 'service' })
     await f.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', title: 'Teste', deadline: offerDraft.deadline, serviceValue: 1000 } })
     const order = (await f.adminRequest(`/offers/${offer.id}/accept`, 'POST')).data.item
     // R$ 1.020,00 received for an OS of R$ 1.000,00: the R$ 20,00 beyond it is interest.

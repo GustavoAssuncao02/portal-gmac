@@ -47,6 +47,12 @@ function currentStage(order) {
   return order.operation.stages.find((stage) => Number(order.operation.stageCounts[stage.key] || 0) < Number(order.quantity))?.name || (order.operation.stages.length ? 'Todas as etapas concluídas' : 'Etapas não definidas')
 }
 
+// In a mandatory sequence (Processo Injessado) a stage waits until the one before it has every piece; returns that stage.
+function waitingFor(order, index) {
+  const before = order.operation.stages[index - 1]
+  return before && order.resources?.strictProcess !== false && Number(order.operation.stageCounts[before.key] || 0) < Number(order.quantity) ? before : null
+}
+
 function resourceDescription(session) {
   return session?.machineName ? `Máquina: ${session.machineName}` : session?.laborServiceName ? `Serviço: ${session.laborServiceName}` : 'Sem máquina ou serviço informado'
 }
@@ -558,10 +564,11 @@ export default function OperatorDashboard({ token, onLogout }) {
           const plan = stagePlan(selected, stage.key)
           const current = chosenStage === stage.key
           const done = Number(operation.stageCounts[stage.key] || 0) >= Number(selected.quantity)
-          // A finished stage, one without its machine or service, or one whose machine is in maintenance or in use by
-          // someone else, cannot be chosen.
-          const blocked = !plan || Boolean(plan.holder || plan.maintenance) || done && !current
-          return <button className={['operator-picker-option', current && 'operator-picker-option--current', blocked && 'operator-picker-option--taken'].filter(Boolean).join(' ')} type="button" key={stage.key} disabled={busy || blocked} aria-pressed={current} onClick={() => chooseStage(stage.key)}>{index + 1}. {stage.name}<small className="operator-picker-resource">{plan ? `${plan.type === 'machine' ? 'Máquina' : 'Serviço'}: ${plan.name}` : 'Sem máquina ou serviço definido'}</small>{plan?.maintenance ? <small>Máquina em manutenção</small> : plan?.holder ? <small>Em uso por {plan.holder.employeeName} · {plan.holder.orderCode}</small> : done && <small>Etapa concluída</small>}</button>
+          const waiting = waitingFor(selected, index)
+          // A finished stage, one still waiting for the stage before it, one without its machine or service, or one whose
+          // machine is in maintenance or in use by someone else, cannot be chosen.
+          const blocked = !plan || Boolean(plan.holder || plan.maintenance) || (done || waiting) && !current
+          return <button className={['operator-picker-option', current && 'operator-picker-option--current', blocked && 'operator-picker-option--taken'].filter(Boolean).join(' ')} type="button" key={stage.key} disabled={busy || blocked} aria-pressed={current} onClick={() => chooseStage(stage.key)}>{index + 1}. {stage.name}<small className="operator-picker-resource">{plan ? `${plan.type === 'machine' ? 'Máquina' : 'Serviço'}: ${plan.name}` : 'Sem máquina ou serviço definido'}</small>{done ? <small>Etapa concluída</small> : waiting ? <small>Libera ao concluir {waiting.name}</small> : plan?.maintenance ? <small>Máquina em manutenção</small> : plan?.holder && <small>Em uso por {plan.holder.employeeName} · {plan.holder.orderCode}</small>}</button>
         })}</div></section>
       </section> : <section className="operator-detail" aria-label="Detalhes do projeto">
         <div className="operator-detail-top"><button className="operator-back" type="button" onClick={() => openOrder(null)}>← Voltar para as OS</button><button className="operator-outline" type="button" onClick={() => setDialog('info')}>Visualizar informações do projeto</button></div>
@@ -587,7 +594,7 @@ export default function OperatorDashboard({ token, onLogout }) {
               <span className={`operator-stage-number ${count === selected.quantity ? 'done' : ''}`}>{index + 1}</span>
               <strong>{stage.name}</strong><small>{count}/{selected.quantity} peças</small><PieceTrack count={count} quantity={selected.quantity} working={workingStageKeys(operation, selected.quantity).has(stage.key)} alert={alert} label={stage.name} className="operator-stage-pieces" />
               {target > 0 && <small className={`operator-stage-target${alert ? ' operator-stage-target--alert' : ''}`}>Meta {minutesLabel(target)} · {minutesLabel(elapsed / 60000)} feitos</small>}
-              {operation.status !== 'completed' && employee && (!mySession || myCredential) && (chosenStage === stage.key ? <span className="operator-stage-here">{mySession ? 'Você está nesta etapa' : 'Etapa escolhida para começar'}</span> : <button type="button" className="operator-stage-pick" disabled={busy || count >= selected.quantity || Boolean(stagePlan(selected, stage.key)?.holder)} onClick={() => chooseStage(stage.key)}>Trabalhar nesta etapa</button>)}
+              {operation.status !== 'completed' && employee && (!mySession || myCredential) && (chosenStage === stage.key ? <span className="operator-stage-here">{mySession ? 'Você está nesta etapa' : 'Etapa escolhida para começar'}</span> : <button type="button" className="operator-stage-pick" disabled={busy || count >= selected.quantity || Boolean(waitingFor(selected, index)) || Boolean(stagePlan(selected, stage.key)?.holder)} title={waitingFor(selected, index) ? `Libera ao concluir ${waitingFor(selected, index).name}` : undefined} onClick={() => chooseStage(stage.key)}>Trabalhar nesta etapa</button>)}
               {ownedSessions.some((session) => session.stageKey === stage.key) && operation.status !== 'completed' && <div className="operator-stage-action"><input type="number" min="1" max={available} step="1" value={stageQuantity[stage.key] || 1} onChange={(event) => setStageQuantity((current) => ({ ...current, [stage.key]: event.target.value }))} aria-label={`Quantidade concluída em ${stage.name}`} /><button type="button" disabled={busy || available < 1} onClick={() => registerStage(stage)}>Registrar</button></div>}
             </div>
           })}</div>

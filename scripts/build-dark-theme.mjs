@@ -1,7 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import postcss from 'postcss'
 
-const files = ['operator.css', 'employeeActivity.css', 'orderEditing.css', 'orderDetails.css', 'adminHome.css', 'notifications.css', 'adminTools.css', 'payables.css', 'proposalDocuments.css', 'machineHistory.css', 'machineUsage.css', 'batchSettlement.css', 'dre.css', 'cashFlow.css', 'planning.css', 'styles.css', 'desktop.css', 'mobile.css']
+const files = ['operator.css', 'employeeActivity.css', 'orderEditing.css', 'orderDetails.css', 'adminHome.css', 'notifications.css', 'adminTools.css', 'payables.css', 'proposalDocuments.css', 'proposalEmail.css', 'stages.css', 'machineHistory.css', 'machineUsage.css', 'batchSettlement.css', 'dre.css', 'cashFlow.css', 'planning.css', 'styles.css', 'desktop.css', 'mobile.css']
 const allowed = /^(color|background.*|border.*|outline.*|box-shadow|text-shadow|fill|stroke|accent-color|caret-color|text-decoration-color)$/
 const bytes = (hex) => {
   const value = hex.slice(1)
