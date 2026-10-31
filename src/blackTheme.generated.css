@@ -2773,12 +2773,6 @@
 :root[data-theme="dark"][data-tone="black"] .planning-heading p {
     color: #bfc2c5
 }
-:root[data-theme="dark"][data-tone="black"] .planning-live i {
-    box-shadow: 0 0 0 4px #0a0a0b26
-}
-:root[data-theme="dark"][data-tone="black"] .planning-live small {
-    color: #bec2c5
-}
 :root[data-theme="dark"][data-tone="black"] .planning-views {
     border: 1px solid #303133;
     background: #1a1b1c

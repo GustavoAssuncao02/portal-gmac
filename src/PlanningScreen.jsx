@@ -37,7 +37,6 @@ export default function PlanningScreen({ Sidebar, WorkspaceTabs, navigationProps
   const [machine, setMachine] = useState('')
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
-  const [updatedAt, setUpdatedAt] = useState(null)
   const [selectedAt, setSelectedAt] = useState(null)
   const [editing, setEditing] = useState(null)
   const [preview, setPreview] = useState('')
@@ -50,7 +49,7 @@ export default function PlanningScreen({ Sidebar, WorkspaceTabs, navigationProps
     try {
       const result = await payableRequest(`/planning?from=${from}&to=${to}`)
       if (id !== request.current) return
-      setData(result); setError(''); setUpdatedAt(new Date())
+      setData(result); setError('')
     } catch (caught) { if (id === request.current) setError(caught.message) }
   }
   useEffect(() => {
@@ -76,7 +75,7 @@ export default function PlanningScreen({ Sidebar, WorkspaceTabs, navigationProps
   return <div className="dashboard-shell admin-tools-shell planning-shell"><Sidebar {...navigationProps} /><main className="admin-tools-main planning-main"><WorkspaceTabs {...navigationProps} />
     <header className="planning-heading">
       <div><h1>Planejamento</h1><p>Organize os serviços por máquina e acompanhe a execução ao longo do dia.</p></div>
-      <div className="planning-heading-actions"><span className="planning-live" role="status"><i aria-hidden="true" />Atualização a cada 10 s{updatedAt && <small>Última atualização {updatedAt.toLocaleTimeString('pt-BR', { timeZone: 'America/Bahia' })}</small>}</span>
+      <div className="planning-heading-actions">
         <button className="admin-tool-button admin-tool-button--primary" type="button" disabled={!data} onClick={() => setEditing({ plan: {} })}><Plus size={17} aria-hidden="true" />Planejar OS</button></div>
     </header>
     <div className="planning-toolbar">

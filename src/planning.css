@@ -5,9 +5,6 @@
 .planning-heading h1 { margin: 0; color: #17375e; font-size: 28px; }
 .planning-heading p { margin: 4px 0 0; color: #5d738b; font-size: 14px; }
 .planning-heading-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; }
-.planning-live { display: grid; grid-template-columns: auto auto; align-items: center; column-gap: 8px; color: #1f8a4c; font-size: 13px; font-weight: 700; }
-.planning-live i { grid-row: span 2; width: 10px; height: 10px; border-radius: 50%; background: #22a35a; box-shadow: 0 0 0 4px #22a35a26; }
-.planning-live small { grid-column: 2; color: #6b8096; font-weight: 400; }
 
 .planning-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; }
 .planning-views { display: inline-flex; overflow: hidden; border: 1px solid #cbd9e8; border-radius: 8px; background: #fff; }

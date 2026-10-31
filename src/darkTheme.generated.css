@@ -3218,16 +3218,6 @@
 :root[data-theme="dark"] .planning-heading p {
     color: #b6c1ce
 }
-:root[data-theme="dark"] .planning-live {
-    color: #8fe6b3
-}
-:root[data-theme="dark"] .planning-live i {
-    background: #1f9452;
-    box-shadow: 0 0 0 4px #06111d26
-}
-:root[data-theme="dark"] .planning-live small {
-    color: #b7c2cc
-}
 :root[data-theme="dark"] .planning-views {
     border: 1px solid #36516f;
     background: #162b43

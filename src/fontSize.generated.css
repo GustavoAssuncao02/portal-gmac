@@ -571,7 +571,6 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .cash-flow-table td small { font-size: calc(11.5px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .planning-heading h1 { font-size: calc(28px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .planning-heading p { font-size: calc(14px * var(--account-font-scale)); }
-:root:is([data-font-size="small"], [data-font-size="large"]) .planning-live { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .planning-views button { font-size: inherit; font-size: calc(14px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .planning-date > button { font-size: inherit; font-size: calc(14px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .planning-date input { font-size: inherit; }
