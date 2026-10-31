@@ -39,9 +39,11 @@ import { createApiRateLimiter } from './rateLimit.js'
 import { ensureInventoryAppearance } from './inventoryAppearance.js'
 import { configureWeb, serveInterface, trustProxySetting } from './webServer.js'
 import { startDataBackups } from './dataBackup.js'
-import { configureStore, importJsonStore, readStore } from './store.js'
+import { configureStore, importJsonStore, onStoreChange, readStore } from './store.js'
+import { createLiveUpdates } from './liveUpdates.js'
+import { requireAdminOrOperator } from './access.js'
 import { dataDirectory } from './dataDirectory.js'
-import { flag, isProduction } from './envFlags.js'
+import { enabled, flag, isProduction } from './envFlags.js'
 
 const app = express()
 const port = Number(process.env.PORT || 3002)
@@ -94,6 +96,11 @@ await ensureAccountPlan()
 await loadOperatorAccount()
 // The administrators keep their logins across a restart of the API: the open sessions come back from the database.
 await loadAdminSessions()
+// Live updates: the open screens hear of every saved change (store and API writes) instead of asking every 10 seconds.
+const live = createLiveUpdates()
+onStoreChange(live.fromStore)
+app.use('/api', live.fromRequests)
+app.use('/api', live.router(requireAdminOrOperator))
 app.use('/api', restrictStaffFinance)
 const accounts = createAccountService(pool)
 app.use('/api', createOffersRouter(pool, requireAdmin, accounts))
@@ -161,8 +168,10 @@ const server = app.listen(port, host, () => {
   if (interfacePublished) console.log('Interface publicada no mesmo endereço, a partir de dist/.')
   else if (production) console.warn('ATENCAO: dist/ não encontrado. Execute "npm run build" para publicar a interface.')
   if (testLoginEnabled()) console.warn('ATENCAO: acesso sem senha ativado para testes. Desative TEST_LOGIN_ENABLED antes de publicar o portal.')
+  else if (enabled(process.env.TEST_LOGIN_ENABLED)) console.warn('ATENCAO: TEST_LOGIN_ENABLED foi ignorado e o login continua exigindo senha. O acesso sem senha só funciona com a API e o banco neste computador (API_HOST e DB_HOST locais) e sem NODE_ENV=production.')
   siteQuotes.start()
 })
-// Attachments have no size limit: a big file on a slow connection takes as long as it needs. Node would end any request
-// after 5 minutes; the headers still have their own short limit.
+// A big attachment (up to the limit of uploads.js) on a slow connection takes as long as it needs. Node would end any
+// request after 5 minutes; the headers still have their own short limit (60 s), and a body that stalls is dropped by
+// bodyProgressGuard (webServer.js).
 server.requestTimeout = 0

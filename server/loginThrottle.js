@@ -4,6 +4,12 @@
 const WINDOW_MS = 60 * 60 * 1000
 const LIMIT = 5
 
+// A resposta enquanto uma chave está bloqueada: quanto esperar, em minutos inteiros.
+export function blockedMessage(retryAfterMs, reason = 'Muitas tentativas de senha.') {
+  const minutes = Math.max(1, Math.ceil(retryAfterMs / 60000))
+  return `${reason} Aguarde ${minutes === 1 ? 'um minuto' : `${minutes} minutos`} e tente novamente.`
+}
+
 export function createLoginThrottle({ limit = LIMIT, windowMs = WINDOW_MS, now = Date.now } = {}) {
   const failures = new Map()
   const recent = (key) => {

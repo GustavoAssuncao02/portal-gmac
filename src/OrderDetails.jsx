@@ -220,7 +220,7 @@ function OrderHistoryModal({ order, onClose, onEditTime, onAddEvent, Icon }) {
       }
     }
     load()
-    const stopPolling = pollWhileVisible(load, 10000)
+    const stopPolling = pollWhileVisible(load, 10000, ['data', 'finance'])
     return () => { stopPolling(); controller.abort() }
   }, [order.code, retry])
   return <dialog ref={dialog} className="os-history-modal" aria-labelledby="os-history-title" onCancel={(event) => { event.preventDefault(); if (editing) { if (!saving) setEditing(null) } else if (adding) setAdding(false); else onClose() }} onClick={(event) => {

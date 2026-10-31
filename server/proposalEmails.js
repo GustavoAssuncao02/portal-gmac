@@ -124,6 +124,9 @@ export default function createProposalEmailsRouter(accounts, requireAdmin, { mai
   // the new files) and the new files in `files`.
   router.post('/offers/:id/proposal-email', requireAdmin, handle(async (request, response) => {
     if (!mailer.configured()) fail(503, 'O envio de e-mail não está configurado no portal (SMTP). Fale com o TI.')
+    // The files are kept in memory: a form announced over the 20 MB of the e-mail plus its fields, which would be refused
+    // after the upload anyway, is refused before it takes up memory.
+    if (Number(request.get('content-length')) > PROPOSAL_EMAIL_MAX_BYTES + 1024 * 1024) fail(400, 'Os anexos passam de 20 MB, o limite do e-mail.')
     await new Promise((resolve, reject) => upload.array('files', MAX_FILES)(request, response, (error) => error ? reject(error) : resolve()))
     let input
     try { input = JSON.parse(request.body?.email || '{}') } catch { fail(400, 'Dados do e-mail inválidos.') }

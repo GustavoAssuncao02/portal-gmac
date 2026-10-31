@@ -44,7 +44,7 @@ export default function AdminHome({ user, orders, offers, workflowError, workflo
       }
     }
     load()
-    const stopPolling = pollWhileVisible(load, 30000)
+    const stopPolling = pollWhileVisible(load, 30000, ['data', 'finance'])
     return () => { controller.abort(); stopPolling() }
   }, [retry, loadPayables])
   useEffect(() => {
@@ -64,7 +64,7 @@ export default function AdminHome({ user, orders, offers, workflowError, workflo
       }
     }
     load()
-    const stopPolling = pollWhileVisible(() => { setNow(Date.now()); load() }, 60000)
+    const stopPolling = pollWhileVisible(() => { setNow(Date.now()); load() }, 60000, ['data', 'finance'])
     return () => { controller.abort(); stopPolling() }
   }, [retry, loadInventory])
   const summary = adminOverview(orders, offers, inventory, now)

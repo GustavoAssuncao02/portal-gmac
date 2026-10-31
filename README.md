@@ -96,7 +96,7 @@ Abra [http://localhost:5174](http://localhost:5174). A API usa a porta 3002.
 
 Preencha `.env` a partir de `.env.example`. No modo local, configure `DEMO_ADMIN_CPF` (11 dígitos), `DEMO_ADMIN_PASSWORD` e `DEMO_ADMIN_NAME`. Não há senha padrão. `.env`, dados locais, anexos e resultados de testes não são publicados no Git.
 
-Para testes temporários, `TEST_LOGIN_ENABLED=true` em `.env` permite clicar em **Entrar** como administrador ou operador com os campos vazios. O administrador será a conta cadastrada com o CPF de `DEMO_ADMIN_CPF`, ou o primeiro administrador disponível. As sessões e permissões continuam funcionando normalmente; não são criadas contas fictícias. Todos na rede com acesso ao portal poderão entrar sem senha enquanto essa opção estiver ativa. Para restaurar o login obrigatório, altere para `TEST_LOGIN_ENABLED=false` e reinicie `npm run dev`. O acesso de teste é sempre bloqueado com `NODE_ENV=production`, mesmo se a opção estiver ativada.
+Para testes temporários, `TEST_LOGIN_ENABLED=true` em `.env` permite clicar em **Entrar** como administrador ou operador com os campos vazios. O administrador será a conta cadastrada com o CPF de `DEMO_ADMIN_CPF`, ou o primeiro administrador disponível. As sessões e permissões continuam funcionando normalmente; não são criadas contas fictícias. Todos na rede com acesso ao portal poderão entrar sem senha enquanto essa opção estiver ativa. Para restaurar o login obrigatório, altere para `TEST_LOGIN_ENABLED=false` e reinicie `npm run dev`. O acesso de teste só funciona num portal que roda neste computador: a API escutando só nele (`API_HOST` local, como `127.0.0.1`, o padrão) e o banco nele (`DB_HOST` local, como `127.0.0.1` ou `localhost`), e nunca com `NODE_ENV=production`. Um portal publicado escuta na rede e usa o banco da hospedagem, então continua pedindo a senha mesmo com a opção ativada e o `NODE_ENV` ausente ou digitado errado; o servidor avisa no log que ignorou a opção. Na rede local, o acesso continua passando pelo Vite deste computador.
 
 ## Ofertas e ordens de serviço
 
@@ -108,7 +108,7 @@ Para usar esse fluxo, inicie o frontend e a API juntos com `npm run dev`. A conf
 
 No login, escolha **Operador** para usar a conta compartilhada. Configure `OPERATOR_USERNAME` (11 dígitos), `OPERATOR_PASSWORD` e `SESSION_SECRET` em `.env`; não há credencial padrão. O admin cadastra as pessoas em **Funcionários**. Ao iniciar uma OS, o operador escolhe seu nome e a máquina utilizada, ou trabalho manual. Para trocar de máquina, pause e inicie uma nova sessão. A sessão só permite registrar peças, pausar ou concluir com sua credencial privada.
 
-As etapas de cada OS vêm da proposta aceita. Cada etapa conta de 0 até a quantidade de peças da OS; uma etapa posterior só pode registrar peças já concluídas na etapa anterior. O sistema grava início, retomada, peças por etapa, pausa com motivo, conclusão e interrupção administrativa, incluindo horário, funcionário e sessão. O tempo ativo acumulado e o tempo da sessão são mostrados na tela do operador. O painel do admin consulta esses dados a cada 10 segundos.
+As etapas de cada OS vêm da proposta aceita. Cada etapa conta de 0 até a quantidade de peças da OS; uma etapa posterior só pode registrar peças já concluídas na etapa anterior. O sistema grava início, retomada, peças por etapa, pausa com motivo, conclusão e interrupção administrativa, incluindo horário, funcionário e sessão. O tempo ativo acumulado e o tempo da sessão são mostrados na tela do operador. O painel do admin mostra esses dados em tempo real.
 
 Com MySQL configurado, aplique `database/migrations/003_operator_workflow.sql` em bancos existentes. Funcionários, estado operacional e histórico ficam no MySQL, assim como as ofertas e o conteúdo das OS.
 
@@ -152,10 +152,16 @@ Variáveis de ambiente no servidor, além das do banco e das credenciais:
 | `API_HOST` | `0.0.0.0` | Aceitar conexões de fora do contêiner. O padrão `127.0.0.1` só atende a própria máquina. |
 | `PORT` | a porta que a hospedagem encaminha (`8080` no SaveInCloud) | Porta do processo Node. |
 | `NODE_ENV` | `production` | Gera a interface no start, bloqueia o acesso de teste sem senha e deixa a API fechada para outros sites. |
-| `BUILD_ON_START` | `true` num ambiente de teste sem `NODE_ENV=production` | Gera a interface no start, como em produção. Serve para publicar um ambiente de teste com `TEST_LOGIN_ENABLED=true`, que produção sempre bloqueia. |
+| `BUILD_ON_START` | `true` num ambiente de teste sem `NODE_ENV=production` | Gera a interface no start, como em produção. Não libera o acesso sem senha: um portal publicado sempre pede CPF e senha, mesmo com `TEST_LOGIN_ENABLED=true`. |
 | `DATA_DIR` | uma pasta fora do código, ex.: `/home/jelastic/portal-data` | Onde ficam os arquivos enviados (anexos, comprovantes, extratos OFX) e os backups diários (padrão `server/data/`). Os dados ficam no MySQL. Um deploy do GitHub substitui o código; fora dele, os arquivos continuam. |
 | `TRUST_PROXY` | `1` com um balanceador na frente | Faz o servidor enxergar o IP real de cada usuário. Com o padrão `loopback`, atrás de um balanceador todos os usuários contam como um só IP no limite de requisições. |
 | `API_RATE_LIMIT` | `200` ou mais | Requisições por minuto por IP. Usuários da mesma rede saem para a internet com o mesmo IP público e dividem esse limite; aumente se aparecer o erro 429. |
+| `UPLOAD_MAX_MB` | `500` (padrão) | Tamanho máximo de cada anexo (desenhos, modelos, fotos, comprovantes). Aumente se a GMAC precisar receber arquivos maiores. |
+| `UPLOAD_DISK_RESERVE_MB` | `256` (padrão) | Espaço livre que o disco sempre guarda: um anexo que o ocuparia é recusado, para o portal, os backups e os logs nunca ficarem sem espaço. |
+
+Na entrada da hospedagem (balanceador ou nginx à frente do portal), use limites coerentes com estes: corpo da requisição de pelo menos o `UPLOAD_MAX_MB` (no nginx, `client_max_body_size 500m`), para não cortar anexos que o portal aceita, e tempo de leitura do corpo por inatividade (no nginx, `client_body_timeout 60s`), não por duração total.
+
+As telas se atualizam em tempo real por uma conexão que fica aberta (`GET /api/live`, Server-Sent Events). O servidor manda um sinal de vida a cada 25 s; a entrada da hospedagem precisa deixar essa conexão aberta por mais tempo que isso sem inatividade (no nginx, `proxy_read_timeout` de pelo menos 60s) e sem guardar a resposta antes de repassá-la (o portal já envia `X-Accel-Buffering: no`). Se a conexão cair, o navegador reconecta sozinho e, enquanto isso, as telas voltam a se atualizar pelo relógio, como antes.
 | `CORS_ORIGIN` | vazio | Lista de outros sites autorizados a chamar a API. Vazio, em produção, só o próprio portal chama. |
 
 Confirme no painel da hospedagem a porta encaminhada e quantos proxies ficam à frente do contêiner.
@@ -166,7 +172,7 @@ Confirme no painel da hospedagem a porta encaminhada e quantos proxies ficam à 
 - Banco: MySQL no mesmo ambiente. Em `DB_HOST`, use o endereço interno do nó do banco (IP da rede local do ambiente ou `nodeXXXX-env-XXXX...`), porta `3306`. Crie o banco importando `database/schema.sql` (ou um dump do banco local) pelo phpMyAdmin.
 - Sem um administrador na tabela `users`, ninguém entra no portal: leve ao menos o administrador junto com o dump do banco local.
 - O MySQL é obrigatório: sem `DB_HOST`, `DB_USER` e `DB_NAME` o portal não sobe. As tabelas são criadas sozinhas no primeiro start. Se a pasta de `DATA_DIR` ainda tiver um `offers.json` ou `fiscal-catalog.json` da versão anterior e o banco estiver vazio, eles são importados para o banco uma única vez (o `offers.json` vai para `backups/`). O catálogo fiscal também é baixado sozinho.
-- Ambiente de teste igual ao local (login sem senha): não defina `NODE_ENV`, use `TEST_LOGIN_ENABLED=true` e `BUILD_ON_START=true`. Qualquer pessoa com o endereço entra como administrador: não use assim com o portal em uso real.
+- Na hospedagem não existe login sem senha: o portal escuta na rede (`API_HOST=0.0.0.0`) e usa o MySQL de outro nó, então `TEST_LOGIN_ENABLED=true` é ignorado (o log avisa) mesmo sem `NODE_ENV=production`. Um ambiente de teste publicado (`BUILD_ON_START=true`, sem `NODE_ENV`) entra com CPF e senha e deve usar um banco próprio, nunca o banco da empresa. O login sem senha fica só no portal local.
 - Uma reimplantação do contêiner (troca de versão do Node) mantém só as pastas declaradas como volume: inclua a pasta de `DATA_DIR` nos volumes do nó.
 
 **Orçamentos do site gmacmetalurgica.com.br**
@@ -227,7 +233,7 @@ Horas são calculadas pelos intervalos de sessões, incluindo sessões ativas at
 
 As novas etapas são agrupadas em Usinagem, Pintura e Caldeiraria. As etapas antigas e os apontamentos de OS já existentes são preservados. Origem da fabricação, têmpera, cor/tipo da pintura e descrição complementar são gravadas nos recursos da oferta, mantidas no PDF e na OS, e disponibilizadas ao operador sem valores financeiros.
 
-No painel de serviços, **Modo de exibição** abre o painel em tela cheia, sem menu e abas. O botão de sair ou `Esc` restaura a tela normal. A atualização dos dados continua a cada 10 segundos.
+No painel de serviços, **Modo de exibição** abre o painel em tela cheia, sem menu e abas. O botão de sair ou `Esc` restaura a tela normal. A atualização dos dados continua em tempo real.
 
 ## Validação
 

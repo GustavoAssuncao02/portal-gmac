@@ -18,6 +18,7 @@ import { addNotification, completedServiceNotice } from './notificationEvents.js
 import { activeSessions, activeSince } from './operationSessions.js'
 import { editEventTime } from './operationEventTime.js'
 import { addManualEvent, manualEventTypes } from './operationManualEvents.js'
+import { blockedMessage, createLoginThrottle } from './loginThrottle.js'
 import { removeOrderReceivables } from './receivables.js'
 import { pauseReasonNames, sectorRows, SWITCH_PAUSE_REASON } from './registries.js'
 import { formatQuantity } from './materialUnits.js'
@@ -184,6 +185,7 @@ function operatorOrder(order, operation) {
 
 export default function createOperationsRouter(pool) {
   const router = express.Router()
+  const wrongCodes = createLoginThrottle({ limit: 20, windowMs: 10 * 60000 })
   renameLegacyPauseReason(pool).catch((error) => console.error('Falha ao corrigir o motivo de pausa antigo:', error.message))
 
   const employeeRows = () => employeeRecords(pool)
@@ -353,9 +355,16 @@ export default function createOperationsRouter(pool) {
   // The administrative employee signs in with CPF and password: the e-mail is where "Esqueci minha senha" sends the code.
   const requireStaffEmail = (fields) => { if (isStaff(fields) && !fields.email) throw new OperationError(400, 'Informe o e-mail do funcionário administrativo: é para ele que vai o código de "Esqueci minha senha".') }
   const duplicateEntry = (error) => error.code === 'ER_DUP_ENTRY' ? new OperationError(409, /access_code/.test(error.message) ? 'Este código já está em uso por outro operador.' : 'CPF, e-mail ou identificação já cadastrados.') : error
+  // Administrative employees register and edit operators only. The employees who sign in to the portal (administrative,
+  // or operator and administrative) are created, edited, deactivated and deleted by administrators: otherwise an employee
+  // could set the password of another one, or give portal access to an operator, and sign in with it.
+  const onlyAdministratorsFor = (request, ...employees) => {
+    if (request.adminRole !== 'admin' && employees.some(isStaff)) throw new OperationError(403, 'Somente administradores cadastram, alteram, desativam ou excluem funcionários administrativos.')
+  }
 
   router.post('/employees', requireAdmin, async (request, response) => {
     try {
+      onlyAdministratorsFor(request, { type: request.body?.type })
       const access = await accessFields(request.body, null, await employeeRows())
       const fields = { ...await employeeFields(request.body), ...access, active: true }
       requireStaffEmail(fields)
@@ -381,6 +390,7 @@ export default function createOperationsRouter(pool) {
       const employees = await employeeRows()
       const previous = employees.find((item) => String(item.id) === request.params.id)
       if (!previous) throw new OperationError(404, 'Funcionário não encontrado.')
+      onlyAdministratorsFor(request, previous, { type: request.body?.type ?? previous.type })
       const access = await accessFields(request.body, previous, employees)
       const fields = { ...await employeeFields(request.body, previous), ...access }
       requireStaffEmail(fields)
@@ -409,6 +419,7 @@ export default function createOperationsRouter(pool) {
   router.delete('/employees/:id', requireAdmin, async (request, response) => {
     try {
       if (request.adminId === staffAccountId(request.params.id)) throw new OperationError(409, 'Você não pode excluir sua própria conta.')
+      onlyAdministratorsFor(request, (await employeeRows()).find((item) => String(item.id) === request.params.id))
       if ((await employeesWithActivity(pool)).has(String(request.params.id))) throw new OperationError(409, 'Este funcionário já tem registros no sistema. Desative o cadastro em vez de excluir.')
       if (pool) {
         const [result] = await pool.execute('DELETE FROM employees WHERE id = ?', [request.params.id])
@@ -432,6 +443,7 @@ export default function createOperationsRouter(pool) {
       if (!active && request.adminId === staffAccountId(request.params.id)) throw new OperationError(409, 'Você não pode desativar sua própria conta.')
       const previous = (await employeeRows()).find((item) => String(item.id) === request.params.id)
       if (!previous) throw new OperationError(404, 'Funcionário não encontrado.')
+      onlyAdministratorsFor(request, previous)
       if (!active && (await operationOrders()).some((order) => activeSessions(order.operation).some((session) => String(session.employeeId) === String(previous.id)))) throw new OperationError(409, `${previous.name} está trabalhando em uma OS agora. Pause ou conclua o trabalho antes de desativar.`)
       if (pool) await pool.execute('UPDATE employees SET active = ? WHERE id = ?', [active ? 1 : 0, request.params.id])
       else await mutateStore((store) => { Object.assign(store.employees.find((item) => String(item.id) === request.params.id), { active }) })
@@ -505,12 +517,17 @@ export default function createOperationsRouter(pool) {
     } catch (error) { sendError(response, error) }
   })
 
-  // On the shared operator account, each operator identifies with a personal 4-digit code.
+  // On the shared operator account, each operator identifies with a personal 4-digit code. There are only 10,000 codes:
+  // 20 codes that identify nobody in 10 minutes from one address hold that address until the window passes (even a right
+  // code waits). A right code does not clear the count, since the tablets of the factory share one address.
   router.post('/operations/operator/identify', requireOperator, async (request, response) => {
     try {
       const code = String(request.body?.code ?? '')
       if (!/^\d{4}$/.test(code)) throw new OperationError(400, 'Digite o seu código de 4 dígitos.')
+      const blocked = wrongCodes.check(request.ip)
+      if (blocked.blocked) throw new OperationError(429, blockedMessage(blocked.retryAfterMs, 'Muitos códigos errados.'))
       const employee = (await employeeRows()).find((item) => isOperator(item) && item.accessCode === code)
+      if (!employee?.active) wrongCodes.fail(request.ip)
       if (!employee) throw new OperationError(404, 'Código não encontrado. Confira os 4 dígitos.')
       if (!employee.active) throw new OperationError(403, 'Este cadastro está desativado. Procure o administrador.')
       // The operator is who they say (their own code): this device receives a key to each work session they have open,

@@ -58,6 +58,9 @@ export function createQuotesApp({ sendMail, from, origins, trustProxy, rateLimit
   app.post('/api/quotes', limiter, (req, res, next) => {
     if (active >= 2) return res.status(503).json({ error: 'Serviço ocupado. Tente novamente em instantes.' })
     if (!req.is('multipart/form-data')) return res.status(415).json({ error: 'Envie o formulário com multipart/form-data.' })
+    // The files are kept in memory: a form announced over 25 MB of files plus the fields, which would be refused after
+    // the upload anyway, is refused before it takes up memory.
+    if (Number(req.get('content-length')) > 26 * 1024 * 1024) return res.status(413).json({ error: 'Verifique os limites: 10 arquivos, 10 MB por arquivo e 25 MB no total, e o tamanho dos campos.' })
     active++
     let released = false
     const release = () => { if (!released) { released = true; active-- } }

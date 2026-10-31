@@ -39,8 +39,30 @@ function privateApiCache(_request, response, next) {
   next()
 }
 
+// The body of a request has to keep arriving: one that stalls (less than 8 KB in a minute, before it is complete) is
+// dropped, so nobody holds the server's connections by sending a body a few bytes at a time (server.requestTimeout is
+// off, in index.js, for the uploads). Uploads still have no total time: a big file on a slow line takes as long as it
+// needs, since even a very slow line sends far more than 8 KB a minute. Only the arrival of the body counts, never the
+// time the portal takes to answer. Requests without a body are not watched.
+export function bodyProgressGuard({ windowMs = 60000, minBytes = 8192 } = {}) {
+  return (request, response, next) => {
+    if (!request.headers['transfer-encoding'] && !(Number(request.headers['content-length']) > 0)) return next()
+    const socket = request.socket
+    let last = socket.bytesRead
+    const timer = setInterval(() => {
+      if (request.complete || response.writableEnded) return clearInterval(timer)
+      if (socket.bytesRead - last < minBytes) { clearInterval(timer); socket.destroy(); return }
+      last = socket.bytesRead
+    }, windowMs)
+    timer.unref()
+    response.once('close', () => clearInterval(timer))
+    next()
+  }
+}
+
 export function configureWeb(app) {
   app.disable('x-powered-by')
+  app.use(bodyProgressGuard())
   app.use(securityHeaders)
   // JSON, JavaScript and CSS travel compressed (Brotli or gzip); images, videos, PDFs and spreadsheets are left as they are.
   // Brotli level 5 beats gzip on this portal's files (the library default, 4, does not) at a similar cost.
@@ -51,8 +73,9 @@ export function configureWeb(app) {
 function cachePolicy(file) {
   // Vite names these files after their content: a new build changes the name, so the old copy never goes stale.
   if (file.startsWith('assets/')) return `public, max-age=${365 * DAY}, immutable`
-  // Entry points must be confirmed on every visit, so a new build or new login media shows up at once.
-  if (file === 'index.html' || file === 'login-media/manifest.json') return 'no-cache'
+  // Entry points must be confirmed on every visit, so a new build or new login media shows up at once. version.json is
+  // what an open page compares with its own version to ask for a reload after a deploy.
+  if (file === 'index.html' || file === 'login-media/manifest.json' || file === 'version.json') return 'no-cache'
   if (file.startsWith('fonts/')) return `public, max-age=${30 * DAY}`
   // Logos and login media keep their names when replaced: one day fresh, then shown while a new copy is fetched.
   return `public, max-age=${DAY}, stale-while-revalidate=${7 * DAY}`

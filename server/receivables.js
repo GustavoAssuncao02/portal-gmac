@@ -381,7 +381,7 @@ export default function createReceivablesRouter(accounts, requireAdmin, pool = n
     })
     res.json({ items })
   }))
-  // Files of any size: written to the disk first, then recorded; a record that is not saved removes its file.
+  // Files up to the attachment limit (uploads.js): written to the disk first, then recorded; a record that is not saved removes its file.
   router.post('/receivables/uploads', handle(async (req, res) => {
     const file = { id: randomUUID(), name: path.basename(clean(req.query.name, 200)), contentType: clean(req.query.type, 160) || 'application/octet-stream', userId: req.actor.id }
     if (!file.name) fail('Nome de arquivo inválido.')

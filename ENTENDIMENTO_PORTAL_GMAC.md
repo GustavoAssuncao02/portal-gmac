@@ -71,17 +71,18 @@ Falta identificada na oferta/OS
 
 - Cadastrado em **Funcionários** com o tipo **Administrativo** e uma senha (6 a 72 caracteres).
 - Entra pela mesma tela de login do administrador, com CPF e senha, e usa o sistema administrativo normal, **exceto o grupo Gestão Financeira** (Contas a Pagar, Contas a Receber, Tesouraria, Baixa em Lote, Conciliação bancária, Business Intelligence e Classificações). O grupo some do menu, as telas não abrem e a tela inicial não mostra o resumo de contas a pagar.
-- O backend também bloqueia essas telas (`restrictStaffFinance`, resposta 403). Continuam liberadas as etapas financeiras que ficam dentro de outras telas: Fornecedores (em Cadastros), custo da OS, lançamento a receber ao concluir a OS e o financeiro da compra de estoque. Para esse perfil, `GET /api/payables` devolve fornecedores e classificações sem as contas.
+- O backend também bloqueia essas telas (`restrictStaffFinance`, resposta 403), sem diferenciar maiúsculas e minúsculas no endereço, como o próprio Express faz ao casar rotas (`/api/DRE` também é bloqueado). Continuam liberadas as etapas financeiras que ficam dentro de outras telas: Fornecedores (em Cadastros), custo da OS, lançamento a receber ao concluir a OS e o financeiro da compra de estoque. Para esse perfil, `GET /api/payables` devolve fornecedores e classificações sem as contas.
 - Não recebe notificações de contas a pagar ou a receber.
 - No servidor, a sessão tem o papel `staff` e o id `employee-<id do funcionário>`, para não se misturar com os ids dos administradores nas preferências.
-- Por decisão do usuário, por enquanto ele pode acessar o cadastro de Administradores.
+- Por decisão do usuário, por enquanto ele pode acessar o cadastro de Administradores, **somente para consulta e só com ID e nome**: para sessões que não são de administrador, `GET /api/admins` devolve apenas `id` e `name` (sem CPF, e-mail ou nascimento); a tela mostra só essas duas colunas, sem "Novo administrador", editar ou excluir; e o servidor recusa com 403 o `POST`, `PUT` e `DELETE` de `/api/admins`. Sem esse bloqueio o funcionário podia criar um administrador ou trocar a senha ou o e-mail de um e entrar com ele, inclusive na Gestão Financeira. O papel vem sempre da sessão guardada no servidor, nunca do navegador.
+- Em **Funcionários**, ele vê a lista inteira, mas cadastra, edita, desativa e exclui **somente operadores**. Funcionários com acesso ao portal (Administrativo, ou Operador e Administrativo) são geridos só por administradores: o servidor responde 403 ao `POST` com esses tipos, ao `PUT` que edita um deles ou que dá o acesso Administrativo a um operador, e ao `PATCH .../active` e `DELETE` de um deles. Na tela, essas linhas ficam sem editar, desativar ou excluir (o histórico de atividades continua), e a opção Administrativo do formulário fica desabilitada. Sem isso, ele podia trocar a senha de outro funcionário administrativo ou dar acesso ao portal a um operador e entrar com essa conta.
 - Trocar o tipo, a senha ou excluir o funcionário encerra as sessões abertas dele.
 
 ### Operador
 
 - Usa uma conta compartilhada de acesso à área operacional (tablet ou computador).
 - Ao abrir a conta compartilhada, aparece **Entrar**: o funcionário digita o código de 4 dígitos dele e só então vê as OS. O nome não é mais escolhido em uma lista.
-- O código é definido no cadastro do funcionário com o tipo **Operador** (único entre os operadores; o botão **Gerar código** sugere um livre) e pode ser alterado por administradores e funcionários administrativos. Na primeira inicialização após a mudança, os operadores já cadastrados receberam um código automático, que aparece na coluna **Acesso** da lista de funcionários.
+- O código é definido no cadastro do funcionário com o tipo **Operador** (único entre os operadores; o botão **Gerar código** sugere um livre) e pode ser alterado por administradores e funcionários administrativos (no funcionário que também é Administrativo, só por administradores). Na primeira inicialização após a mudança, os operadores já cadastrados receberam um código automático, que aparece na coluna **Acesso** da lista de funcionários.
 - O operador identificado fica guardado na sessão do navegador até sair. A barra lateral tem um único botão de saída, em dois passos: com o funcionário identificado ele é **Sair do funcionário** (volta para **Entrar**, sem sair da conta compartilhada); na tela do código ele vira **Sair da conta do operador** (volta ao login, bloqueado enquanto houver trabalho em andamento neste aparelho).
 - O que acontece depois da identificação está provisório: o usuário vai reformular esse fluxo.
 - Não escolhe máquina nem serviço: cada etapa já vem com a máquina ou o serviço de hora homem definido na oferta. O operador escolhe só a etapa.
@@ -114,6 +115,7 @@ Na configuração local consultada nesta atualização, `TEST_LOGIN_ENABLED=true
 - Alteração de nome/senha em Configurações continua pedindo a senha atual: o modo temporário modifica a entrada no portal, não todas as verificações de segurança.
 - Para voltar ao login obrigatório: `TEST_LOGIN_ENABLED=false` no `.env` e reiniciar o projeto.
 - Com `NODE_ENV=production`, o acesso sem senha é bloqueado mesmo se a opção estiver ativada.
+- Além disso, ele só funciona num portal que roda neste computador: a API escutando só nele (`API_HOST` local, `127.0.0.1` por padrão) e o banco nele (`DB_HOST` local). Um portal publicado escuta na rede (`API_HOST=0.0.0.0`) e usa o MySQL da hospedagem, então continua pedindo senha mesmo com `TEST_LOGIN_ENABLED=true` e o `NODE_ENV` ausente ou digitado errado. Valores ausentes ou inesperados mantêm o acesso bloqueado (`testLoginEnabled` em `server/authLogin.js`), e o servidor avisa no log quando ignora a opção. O acesso de outros computadores da rede local continua passando pelo Vite deste computador. Não existe mais login sem senha na hospedagem; um ambiente de teste publicado deve usar banco próprio.
 
 **Atenção:** enquanto esse modo estiver ativo, qualquer pessoa com acesso ao portal na rede pode entrar como administrador. É uma configuração temporária para ambiente confiável de testes, não uma configuração de produção.
 
@@ -165,6 +167,23 @@ Configurações
 - O cabeçalho contém o sino de notificações e o relógio/data global.
 - Não duplicar sino e relógio nos cabeçalhos internos das telas.
 
+### Aviso de nova versão
+
+- Depois de um deploy, uma página que já estava aberta continua com a interface antiga até ser recarregada. O modal **Nova versão disponível** pede para recarregar ("Recarregar página" ou F5), em todas as telas: login, portal administrativo e tablet do operador.
+- A versão é uma impressão digital do conteúdo das fontes da interface (`scripts/interface-version.mjs`, sobre a mesma lista `interfaceSources` que faz a hospedagem recompilar em `scripts/ensure-build.mjs`). O build embute a versão na página (`__INTERFACE_VERSION__`) e publica `dist/version.json`, enviado sempre sem cache. O mesmo código dá sempre a mesma versão: um deploy só do servidor, ou uma recompilação do mesmo código, não pede recarga a ninguém.
+- A página (`src/NewVersionPrompt.jsx`) compara as duas ao abrir, a cada minuto e sempre que volta a ficar visível ou ganha foco. "Agora não" (para quem está no meio de um formulário) fecha o aviso, que volta em 5 minutos. No desenvolvimento (Vite) não há aviso: a página se atualiza sozinha.
+- As páginas abertas antes do primeiro deploy com este aviso ainda não o têm: precisam de um F5 manual uma única vez.
+
+### Atualização em tempo real
+
+- As telas não perguntam mais ao servidor a cada 10 segundos se algo mudou: cada aba mantém uma conexão aberta (`GET /api/live`, Server-Sent Events) e o servidor avisa, em cerca de 100 ms, que tipo de dado mudou. A tela então busca o que mostra, pelas mesmas rotas e permissões de antes. Só o tipo da mudança viaja pelo canal, nunca os dados.
+- Tipos (`server/liveUpdates.js`): **notifications** (o sino: notificações, marcas de lido e preferências), **finance** (Gestão Financeira: contas, bancos, extratos, DRE, plano de contas, fornecedores) e **data** (todo o resto: ofertas, OS, operação, estoque, máquinas, cadastros, planejamento). Cada tela ouve o tipo que mostra (terceiro argumento de `pollWhileVisible`, em `src/polling.js`; o padrão é `data`).
+- De onde vêm os avisos: toda gravação do armazenamento (`onStoreChange`, em `server/store.js`, só quando algo mudou de fato, inclusive as rotinas do servidor, como lembretes de vencimento e avisos de estoque) e toda requisição de alteração respondida com sucesso (as tabelas próprias de OS, estoque, funcionários e administradores). Mudanças com menos de 80 ms de diferença viram um aviso só.
+- Ritmo na tela: uma mudança isolada aparece em cerca de 250 ms (oferta salva por outra pessoa, medida no navegador) e uma OS aceita chega ao tablet em cerca de 400 ms. Com mudanças seguidas (vários operadores ao mesmo tempo), cada tela faz no máximo 6 atualizações rápidas e depois 1 a cada 10 s, nunca mais que o antigo relógio de 10 s ao longo do tempo. Parada, a tela não consulta nada.
+- Rede de segurança: com o canal aberto, os relógios de 10 s ou menos viram uma conferência a cada minuto sem novidades; os mais longos (30 s, 60 s) seguem como antes. Sem o canal (caiu, ou o navegador não consegue mantê-lo), tudo funciona como antes, pelo relógio.
+- O canal se reconecta sozinho (3 s depois de cair; 30 s se a sessão for recusada) e, ao voltar, todas as telas atualizam uma vez. O servidor manda um sinal de vida a cada 25 s, para o balanceador da hospedagem não fechar a conexão parada, e o navegador reabre o canal se ficar 1 minuto sem ouvir nada. Uma aba escondida por mais de 30 s fecha o canal (ao voltar, atualiza o que mudou), o que também mantém o navegador abaixo do limite de conexões por site em HTTP/1.1. O site publicado usa HTTP/2, que não tem esse limite.
+- Aceita a sessão do administrador, do funcionário administrativo ou do operador (`requireAdminOrOperator`), com o token no cabeçalho `Authorization` (o navegador lê o canal com `fetch`, nunca com o token no endereço). Supõe um único processo da API, como as sessões e o limite de requisições.
+
 ## 5. Início
 
 É a primeira tela administrativa após entrar, com saudação pelo primeiro nome da conta.
@@ -207,7 +226,7 @@ Há histórico de atividades do funcionário. Históricos operacionais devem con
 - Filtros Todas, Em funcionamento e Ociosas, com resumos de quantidade.
 - Status calculado a partir das sessões reais de trabalho, não de uma escolha manual ou de um status fictício salvo no cadastro.
 - Lista mostra operador atual, início de uso e total utilizado no dia.
-- Atualização da tela a cada 10 segundos.
+- Atualização em tempo real (ver Atualização em tempo real, na seção 4).
 - Ícone de informação ao lado do início de uso abre histórico com funcionário, OS, início, fim, duração e motivo de encerramento quando houver.
 - A troca de máquina durante o trabalho registra um evento e separa os intervalos de utilização, sem exigir pausar toda a sessão.
 - Abaixo dos resumos, **Funcionários ociosos (agora)** lista os operadores sem trabalho aberto em nenhuma OS, com o horário, o motivo e a OS da última parada de hoje (`GET /operations/idle-employees`, só administração); quem está parado há mais tempo vem primeiro.
@@ -335,7 +354,7 @@ Exemplo: uma OS de 20 peças com Pintura = 20, Caldeiraria = 8 e Usinagem = 5 po
 - É possível editar ícone e usar uma foto própria. As imagens são reduzidas para armazenamento compacto, com validação no backend; não guardar o original em alta resolução sem necessidade.
 - A API reduz a foto para até 256 x 256, em WebP, com limite de 48.000 bytes para a imagem compacta.
 - Estoque baixo corresponde a disponível menor ou igual ao mínimo.
-- Tela consulta atualizações a cada 10 segundos.
+- A tela se atualiza em tempo real (ver Atualização em tempo real, na seção 4).
 - O histórico individual registra cadastro/movimentos, quantidades, valores, saldo, origem/destino, OS e responsável quando essa identificação está registrada.
 - A OS vinculada no histórico pode ser aberta por clique.
 
@@ -416,7 +435,7 @@ Pedido para uma OS com 10 kg pendentes
 - Filtros de prazo incluem Dentro do prazo, Próximo do prazo, Em cima do prazo e Atrasado, além do filtro de concluídos ainda não confirmados.
 - O status de prazo é diferente do estado operacional, como Aguardando, Em execução ou Pausado.
 - Busca por informações do serviço, cliente e código da OS.
-- Atualização periódica de 10 segundos; não é uma transmissão contínua por WebSocket.
+- Atualização em tempo real pelo canal de avisos do servidor (Server-Sent Events, não WebSocket); ver Atualização em tempo real, na seção 4.
 - Material pendente destaca a linha e oferece um botão que abre modal com nomes e quantidades faltantes.
 - O modal possui **Ir ao pedido**, que abre Pedidos de material e destaca as linhas relacionadas com uma piscada vermelha suave, temporária, voltando ao normal.
 - **Modo de exibição** coloca o painel em tela cheia para acompanhamento na TV. Saída pelo controle da tela ou `Esc`.
@@ -432,7 +451,7 @@ Pedido para uma OS com 10 kg pendentes
 
 ### Área do operador
 
-- Lista projetos com busca e filtros de estado; consulta novas OS a cada 10 segundos.
+- Lista projetos com busca e filtros de estado; novas OS aparecem em tempo real.
 - Depois do código, a tela mostra só **Selecione uma OS** (lista com busca e filtros). Ao tocar numa OS, a lista some e aparece só a OS, com **← Voltar para as OS**.
 - Na OS, o trabalho segue três quadrados grandes, nesta ordem: **1 Selecionar etapa** abre a lista das etapas, cada uma com a máquina ou o serviço definido na oferta; escolher a etapa volta para a OS, já com o recurso dela. Não existe tela para escolher máquina ou serviço. Fica bloqueada a etapa concluída, a sem recurso definido (OS antiga) e a que tem a máquina em uso por outra pessoa ou em manutenção. **2 Iniciar trabalho** começa na etapa escolhida e, enquanto o operador identificado trabalha, vira **Pausar trabalho**; escolher outra etapa nesse momento leva a sessão para ela, com o recurso dela. **3 Concluir serviço** segue a regra de antes (todas as peças em todas as etapas). A OS abre na primeira etapa aberta.
 - Ao registrar a última peça da última etapa, abre sozinho o modal **Concluir serviço** (com **Agora não**).
@@ -474,7 +493,7 @@ Pedido para uma OS com 10 kg pendentes
 - Depois dessa confirmação, o serviço sai do painel de andamento e aparece em **Serviços concluídos**.
 - Lista mantém a apresentação do processo e o acesso à OS, do mais recente para o menos recente.
 - A coluna **Colaboradores** mostra todos que trabalharam na OS (eventos de início e retomada, campo `collaborators` de `GET /operations/orders`), e o filtro **Colaborador** mostra só as OS de uma pessoa. Os títulos ordenam a tabela: números e datas começam do maior, texto de A a Z; clicar de novo inverte.
-- Serviços concluídos e Ofertas e serviços atualizam a cada 10 segundos, como o painel em andamento.
+- Serviços concluídos e Ofertas e serviços se atualizam em tempo real, como o painel em andamento.
 - Com o MySQL configurado, o estado da operação (status, sessões, conclusão) fica na tabela `order_operations`, e **não** em `operation` da OS. Qualquer regra do servidor fora de `operations.js` que precise saber se a OS está concluída deve ler essa tabela (como o recebimento faz com `operationStates`); ler `order.operation` só vale sem banco. Foi esse o motivo de "A OS precisa estar concluída para programar o recebimento" aparecer para uma OS já concluída pelo operador (`tests/receivable-os-status.mysql.mjs`).
 - Consultar um serviço concluído não apaga nem reinicia seu histórico.
 
@@ -572,7 +591,7 @@ eceived da API, como em "Dar baixa"). A janela avisa a diferença numa linha dis
 
 ## 13. Notificações
 
-O sino fica no cabeçalho superior e é compartilhado pelas telas administrativas. Consulta atualizações a cada 10 segundos.
+O sino fica no cabeçalho superior e é compartilhado pelas telas administrativas. Atualiza em tempo real quando muda uma notificação (ver Atualização em tempo real, na seção 4).
 
 | Evento | Comportamento padrão |
 | --- | --- |
@@ -751,6 +770,18 @@ npm run dev
 - Ao atingir o limite, retornam HTTP 429 e orientação de espera; arquivos da interface não entram nessa contagem.
 - O proxy de desenvolvimento encaminha o IP real e substitui cabeçalhos de encaminhamento fornecidos pelo cliente.
 - O limite fica em memória por processo. Múltiplas instâncias exigiriam armazenamento compartilhado e revisão da configuração de proxy.
+- **Tentativas de senha e código** (`server/loginThrottle.js`, em memória; ao bloquear, HTTP 429 com quantos minutos esperar; enquanto bloqueado, nem a senha certa entra por aquela origem):
+  - Login com CPF (administrador e administrativo): 5 senhas erradas por hora para cada par IP + CPF (acertar zera o par) e 30 senhas erradas por hora por IP, somando todos os CPFs (acertar não zera, para quem tem uma conta não "limpar" o contador). O bloqueio é da origem: de outro endereço, o dono da conta continua entrando, então ninguém trava a conta de outra pessoa.
+  - Conta compartilhada do operador: 10 senhas erradas em 15 minutos por IP; acertar zera. A janela é curta porque os tablets da fábrica saem pelo mesmo IP.
+  - Código de 4 dígitos do operador: 20 códigos que não identificam ninguém em 10 minutos por IP; acertar não zera (os tablets dividem o IP).
+  - Senha atual em Configurações: 5 erradas por hora por conta; salvar com a certa zera.
+  - Esqueci minha senha já tinha seus limites (por CPF, por IP e 5 tentativas por código).
+  - Os limites por IP dependem de `TRUST_PROXY` correto na hospedagem; sem ele, todos os usuários aparecem com o IP do balanceador e dividem os contadores.
+- **Arquivos e corpo das requisições**:
+  - Anexos (`server/uploads.js`): até 500 MB por arquivo (`UPLOAD_MAX_MB`), um arquivo por envio; o tamanho anunciado é conferido antes do envio e os bytes são contados durante ele. O disco guarda uma reserva de 256 MB (`UPLOAD_DISK_RESERVE_MB`): um anexo que a ocuparia é recusado com 507.
+  - JSON: 100 KB (padrão do `express.json`). Extrato OFX: 10 MB. E-mail da proposta: 20 MB no total e 10 arquivos. Orçamento do site: 10 arquivos, 10 MB cada e 25 MB no total, no máximo 2 envios simultâneos; o e-mail da proposta e o orçamento recusam antes de carregar na memória um envio que já anuncia mais que o limite.
+  - Tempo: os cabeçalhos têm 60 s (padrão do Node). O corpo não tem prazo total (um anexo grande em conexão lenta leva o tempo que precisar), mas precisa continuar chegando: menos de 8 KB em um minuto antes de terminar derruba a conexão (`bodyProgressGuard`, em `server/webServer.js`). O tempo que o portal leva para responder não conta.
+- **Dependências** (`npm audit`, 31/10/2026): atualizados, só em versões de correção, `vite` 6.4.5, `body-parser` 1.20.9 (o `express.json` de todas as rotas), `qs` 6.16.2 e `ip-address` 10.7.5 (do limite de requisições). Restam 8 alertas moderados de uma única cadeia, `exceljs` → `archiver` → `glob`/`readdir-glob` → `minimatch` (lentidão com um padrão glob malicioso): o portal usa o `exceljs` só para gerar planilhas, e nenhum padrão vindo de usuário chega ao `minimatch` (o `exceljs` não usa `archive.glob`/`directory`). O `exceljs` 4.4.0 é a versão mais recente; a "correção" do npm é rebaixá-lo para 4.1.1, incompatível. Rever quando sair versão nova do `exceljs`.
 - Existem rotas administrativas protegidas e rotas legadas sem exigência explícita de autenticação. Não afirmar que toda a API já foi endurecida para produção.
 - Antes de publicar, revisar autenticação por rota, cookies/tokens, permissões, proxy, persistência, backup e o desligamento do modo sem senha. Ambiente funcional na LAN não equivale a implantação segura na internet.
 

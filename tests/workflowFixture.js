@@ -15,7 +15,7 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   const directory = await mkdtemp(path.join(results, 'workflow-'))
   // The copied modules keep their data next to them; a DATA_DIR from the shell would point them at real data.
   delete process.env.DATA_DIR
-  for (const name of ['planning.js', 'planningRules.js', 'offers.js', 'stageLabor.js', 'proposalEmails.js', 'stageCatalog.js', 'orderHistory.js', 'pieces.js', 'access.js', 'orderMaterials.js', 'pendingMaterials.js', 'operations.js', 'orderEditing.js', 'operatorAuth.js', 'employeeAccess.js', 'employeeActivity.js', 'serviceStages.js', 'machines.js', 'laborServices.js', 'accounts.js', 'reports.js', 'reportData.js', 'documentExports.js', 'payables.js', 'payableRules.js', 'receivables.js', 'bankStatements.js', 'ofx.js', 'materialRequests.js', 'notificationRules.js', 'notificationEvents.js', 'operationSessions.js', 'operationEventTime.js', 'operationManualEvents.js', 'materialRequestCodes.js', 'notifications.js', 'fiscalCatalog.js', 'dataDirectory.js', 'proposalDocuments.js', 'clientDocument.js', 'proposalDefaults.js', 'proposalPdf.js', 'proposalBrand.js', 'proposalMath.js', 'moneyWords.js', 'store.js', 'materialUnits.js', 'banks.js', 'operatorAccount.js', 'registries.js', 'requesters.js','serviceLocation.js', 'materialRequestSources.js', 'inventory.js', 'inventoryAppearance.js', 'materialIcons.js', 'uploads.js', 'machineUsage.js', 'accountPlan.js', 'accountPlanRules.js', 'dre.js', 'dreRules.js', 'dreExport.js', 'passwordReset.js']) {
+  for (const name of ['loginThrottle.js', 'liveUpdates.js','planning.js','planningRules.js', 'offers.js', 'stageLabor.js', 'proposalEmails.js', 'stageCatalog.js', 'orderHistory.js', 'pieces.js', 'access.js', 'orderMaterials.js', 'pendingMaterials.js', 'operations.js', 'orderEditing.js', 'operatorAuth.js', 'employeeAccess.js', 'employeeActivity.js', 'serviceStages.js', 'machines.js', 'laborServices.js', 'accounts.js', 'reports.js', 'reportData.js', 'documentExports.js', 'payables.js', 'payableRules.js', 'receivables.js', 'bankStatements.js', 'ofx.js', 'materialRequests.js', 'notificationRules.js', 'notificationEvents.js', 'operationSessions.js', 'operationEventTime.js', 'operationManualEvents.js', 'materialRequestCodes.js', 'notifications.js', 'fiscalCatalog.js', 'dataDirectory.js', 'proposalDocuments.js', 'clientDocument.js', 'proposalDefaults.js', 'proposalPdf.js', 'proposalBrand.js', 'proposalMath.js', 'moneyWords.js', 'store.js', 'materialUnits.js', 'banks.js', 'operatorAccount.js', 'registries.js', 'requesters.js','serviceLocation.js', 'materialRequestSources.js', 'inventory.js', 'inventoryAppearance.js', 'materialIcons.js', 'uploads.js', 'machineUsage.js', 'accountPlan.js', 'accountPlanRules.js', 'dre.js', 'dreRules.js', 'dreExport.js', 'passwordReset.js']) {
     await copyFile(path.join(root, 'server', name), path.join(directory, name))
   }
   // PDFs use the bundled logo and fonts.
@@ -57,6 +57,14 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   // Same compression, cache and security headers as the published portal.
   configureWeb(app)
   app.use(express.json())
+  // Live updates, as in server/index.js.
+  const { createLiveUpdates } = await import(pathToFileURL(path.join(directory, 'liveUpdates.js')))
+  const { onStoreChange } = await import(pathToFileURL(path.join(directory, 'store.js')))
+  const { requireAdminOrOperator } = await import(pathToFileURL(path.join(directory, 'access.js')))
+  const live = createLiveUpdates()
+  onStoreChange(live.fromStore)
+  app.use('/api', live.fromRequests)
+  app.use('/api', live.router(requireAdminOrOperator))
   app.use('/api', restrictStaffFinance)
   // Every classification belongs to a group of accounts and every receivable has a revenue classification. Most tests are
   // not about it: a classification created without a group goes to a test group (with the next free code), and a
@@ -209,7 +217,10 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
       return this.request(route, method, body, headers)
     },
     async close() {
-      await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
+      // Open live connections (GET /api/live) would keep the server waiting: they are closed with it.
+      const closing = new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
+      server.closeAllConnections()
+      await closing
       await storeDatabase.drop()
       await rm(directory, { recursive: true, force: true })
     },

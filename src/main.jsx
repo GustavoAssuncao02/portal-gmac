@@ -49,6 +49,7 @@ import ServiceStageEditor from './ServiceStageEditor.jsx'
 import MaterialAppearance, { MaterialVisual } from './MaterialAppearance.jsx'
 import MachineHistoryModal from './MachineHistoryModal.jsx'
 import MachineUsageBI from './MachineUsageBI.jsx'
+import NewVersionPrompt from './NewVersionPrompt.jsx'
 import { useMobileModal } from './useMobileModal.js'
 import { ThemeContext, useAccountTheme } from './accountTheme.js'
 import { pollWhileVisible } from './polling.js'
@@ -1179,36 +1180,41 @@ function RegistrationScreen({ kind, collapsed, onToggle, activeNav, onNavigate, 
   const singular = isEmployee ? 'funcionário' : isClient ? 'cliente' : 'administrador'
   const title = isEmployee ? 'Funcionários' : isClient ? 'Clientes' : 'Administradores'
   const cpfMask = (value) => value.replace(/\D/g, '').slice(0, 11).replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2')
+  // Administrative employees only see the administrators (ID and name: the server sends nothing else to them) and edit
+  // operators only: the server refuses their changes to administrators and to the employees who sign in to the portal.
+  const staffViewer = viewer?.role === 'staff'
+  const readOnly = kind === 'admin' && staffViewer
+  const locked = (record) => isEmployee && staffViewer && worksInOffice(record.type)
   // The name has the room; documents are formatted; the actions stay at the right. Headers sort, the search finds any field.
   const listColumns = isClient
     ? [{ key: 'name', label: 'Nome / razão social', value: (row) => row.name, search: true }, { key: 'notes', value: (row) => row.notes, search: true, hidden: true }, { key: 'document', label: 'CPF / CNPJ', value: (row) => row.document, search: true }, { key: 'email', label: 'E-mail', value: (row) => row.email || '', search: true }]
     : [...(isEmployee ? [] : [{ key: 'id', label: 'ID', value: (row) => Number(row.id), numeric: true }]), { key: 'name', label: 'Nome', value: (row) => row.name, search: true },
       ...(isEmployee ? [{ key: 'type', label: 'Tipo', value: (row) => employeeTypeLabel(row.type) }, { key: 'sector', label: 'Setor', value: (row) => row.sectorName || '', search: true }, { key: 'accessCode', label: 'Código', value: (row) => row.accessCode || '', search: true }] : []),
-      { key: 'cpf', label: 'CPF', value: (row) => row.cpf, search: true }, { key: 'email', label: 'E-mail', value: (row) => row.email || '', search: true }, { key: 'birthDate', label: 'Nascimento', value: (row) => row.birthDate || '' }]
+      ...(readOnly ? [] : [{ key: 'cpf', label: 'CPF', value: (row) => row.cpf, search: true }, { key: 'email', label: 'E-mail', value: (row) => row.email || '', search: true }, { key: 'birthDate', label: 'Nascimento', value: (row) => row.birthDate || '' }])]
   const list = useRegistryList(records, listColumns, 'name')
   const shownColumns = listColumns.filter((column) => !column.hidden)
   const navigationProps = { collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs }
   // Same pattern as Fornecedores: only the list on screen; adding and editing happen in a modal.
   return <AdminWorkspace Sidebar={Sidebar} WorkspaceTabs={WorkspaceTabs} navigationProps={navigationProps} title={title}>
-    <div className="payable-heading-actions">{kind === 'admin' && viewer?.role !== 'staff' && <button className="admin-tool-button" type="button" onClick={() => setPasswordHistory(true)}><History size={17} />Histórico de senhas</button>}<button className="admin-tool-button admin-tool-button--primary" type="button" onClick={newRecord}><Plus size={17} />Novo {singular}</button></div>
+    <div className="payable-heading-actions">{kind === 'admin' && viewer?.role !== 'staff' && <button className="admin-tool-button" type="button" onClick={() => setPasswordHistory(true)}><History size={17} />Histórico de senhas</button>}{!readOnly && <button className="admin-tool-button admin-tool-button--primary" type="button" onClick={newRecord}><Plus size={17} />Novo {singular}</button>}</div>
     {message && <p className={`registration-message ${message.includes('sucesso') ? 'registration-message--success' : 'registration-message--error'}`} role="status">{message}</p>}
-    <RegistryToolbar list={list} total={records.length} singular={singular} plural={title.toLowerCase()} placeholder={isClient ? 'Nome, nome fantasia, CPF/CNPJ ou e-mail' : isEmployee ? 'Nome, código, CPF ou e-mail' : 'Nome, CPF ou e-mail'} />
-    <div className="payable-table-scroll"><table className={`payable-table payable-registry-table registration-table registry-table registry-table--${kind}`}><thead><tr>{shownColumns.map((column) => <SortHeader key={column.key} column={column} list={list} className={`registry-col-${column.key}`} />)}<th className="registry-col-actions">Ações</th></tr></thead><tbody>
+    <RegistryToolbar list={list} total={records.length} singular={singular} plural={title.toLowerCase()} placeholder={isClient ? 'Nome, nome fantasia, CPF/CNPJ ou e-mail' : isEmployee ? 'Nome, código, CPF ou e-mail' : readOnly ? 'Nome' : 'Nome, CPF ou e-mail'} />
+    <div className="payable-table-scroll"><table className={`payable-table payable-registry-table registration-table registry-table registry-table--${kind}`}><thead><tr>{shownColumns.map((column) => <SortHeader key={column.key} column={column} list={list} className={`registry-col-${column.key}`} />)}{!readOnly && <th className="registry-col-actions">Ações</th>}</tr></thead><tbody>
       {list.rows.map((record) => <tr key={record.id}>
         {!isEmployee && !isClient && <td data-label="ID" className="payable-id">{`ADM-${String(record.id).padStart(3, '0')}`}</td>}
         <td className="registry-name"><strong>{record.name}</strong>{isClient && record.notes && <small title={record.notes}>{record.notes}</small>}{isEmployee && record.active === false && <small className="registry-inactive">Desativado</small>}</td>
         {isEmployee && <><td data-label="Tipo"><span className="registry-badges">{operatesMachines(record.type) && <span className="registry-badge registry-badge--operator">Operador</span>}{worksInOffice(record.type) && <span className="registry-badge registry-badge--admin">Administrativo</span>}</span></td><td data-label="Setor">{record.sectorName || <span className="registry-empty">—</span>}</td><td data-label="Código" className="registry-code">{!operatesMachines(record.type) ? <span className="registry-empty">—</span> : record.accessCode || <span className="registry-empty">—</span>}</td></>}
-        <td data-label={isClient ? 'CPF / CNPJ' : 'CPF'} className="registry-document"><span>{isClient && <span className="registry-doc-type">{record.documentType === 'cpf' ? 'CPF' : 'CNPJ'}</span>}{documentLabel(isClient ? record.document : record.cpf)}</span></td>
+        {!readOnly && <><td data-label={isClient ? 'CPF / CNPJ' : 'CPF'} className="registry-document"><span>{isClient && <span className="registry-doc-type">{record.documentType === 'cpf' ? 'CPF' : 'CNPJ'}</span>}{documentLabel(isClient ? record.document : record.cpf)}</span></td>
         <td data-label="E-mail">{record.email || <span className="registry-empty">—</span>}</td>
-        {!isClient && <td data-label="Nascimento">{record.birthDate ? record.birthDate.split('-').reverse().join('/') : <span className="registry-empty">—</span>}</td>}
-        <td className="registry-actions"><div className="payable-registry-actions">
-          <button className="payable-icon" type="button" title="Editar" aria-label={`Editar ${record.name}`} onClick={() => !isEmployee && !isClient && Number(record.id) === 0 ? onNavigate('Configurações') : editRecord(record)}><Pencil size={16} /></button>
+        {!isClient && <td data-label="Nascimento">{record.birthDate ? record.birthDate.split('-').reverse().join('/') : <span className="registry-empty">—</span>}</td>}</>}
+        {!readOnly && <td className="registry-actions"><div className="payable-registry-actions">
+          {!locked(record) && <><button className="payable-icon" type="button" title="Editar" aria-label={`Editar ${record.name}`} onClick={() => !isEmployee && !isClient && Number(record.id) === 0 ? onNavigate('Configurações') : editRecord(record)}><Pencil size={16} /></button>
           {isEmployee && record.hasActivity ? <button className={`payable-icon${record.active === false ? ' payable-icon--inactive' : ''}`} type="button" title={record.active === false ? 'Reativar' : 'Desativar'} aria-label={`${record.active === false ? 'Reativar' : 'Desativar'} ${record.name}`} onClick={() => toggleActive(record)}><Power size={16} /></button>
-            : <button className="payable-icon payable-danger" type="button" title="Excluir" aria-label={`Excluir ${record.name}`} onClick={() => deleteRecord(record.id)}><Trash2 size={16} /></button>}
+            : <button className="payable-icon payable-danger" type="button" title="Excluir" aria-label={`Excluir ${record.name}`} onClick={() => deleteRecord(record.id)}><Trash2 size={16} /></button>}</>}
           {isEmployee && <button className="payable-icon" type="button" title="Histórico de atividades" aria-label={`Ver histórico de ${record.name}`} onClick={() => setActivityEmployee(record)}><Info size={16} /></button>}
-        </div></td>
+        </div></td>}
       </tr>)}
-      {!list.rows.length && <tr><td colSpan={shownColumns.length + 1} className="payable-empty">{records.length ? 'Nenhum cadastro encontrado para a busca.' : 'Nenhum cadastro.'}</td></tr>}
+      {!list.rows.length && <tr><td colSpan={shownColumns.length + (readOnly ? 0 : 1)} className="payable-empty">{records.length ? 'Nenhum cadastro encontrado para a busca.' : 'Nenhum cadastro.'}</td></tr>}
     </tbody></table></div>
     {formOpen && <PayableModal title={`${editingId !== null ? 'Editar' : 'Novo'} ${singular}`} busy={saving} onClose={clearForm} footer={<><button className="admin-tool-button" type="button" disabled={saving} onClick={clearForm}>Cancelar</button><button className="admin-tool-button admin-tool-button--primary" type="submit" form={formId} disabled={saving}>Salvar</button></>}>
       <form id={formId} className="payable-form registration-modal-form" onSubmit={handleSubmit}><fieldset disabled={saving}>
@@ -1220,8 +1226,8 @@ function RegistrationScreen({ kind, collapsed, onToggle, activeNav, onNavigate, 
           <label>Observação<textarea rows={3} maxLength={1000} value={form.notes || ''} onChange={(event) => update('notes', event.target.value)} placeholder="Opcional" /></label>
         </> : <>
           {isEmployee && <fieldset className="registration-roles"><legend>Tipo de funcionário</legend>
-            <div className="registration-roles-options"><label><input type="checkbox" checked={operatesMachines(form.type)} onChange={(event) => changeEmployeeRole('operator', event.target.checked)} />Operador</label><label><input type="checkbox" checked={worksInOffice(form.type)} onChange={(event) => changeEmployeeRole('staff', event.target.checked)} />Administrativo</label></div>
-            <small className="payable-hint">{[operatesMachines(form.type) && 'Operador: entra na conta do operador com o código de 4 dígitos.', worksInOffice(form.type) && 'Administrativo: entra no sistema com CPF e senha, sem a Gestão Financeira.'].filter(Boolean).join(' ')}</small></fieldset>}
+            <div className="registration-roles-options"><label><input type="checkbox" checked={operatesMachines(form.type)} onChange={(event) => changeEmployeeRole('operator', event.target.checked)} />Operador</label><label><input type="checkbox" checked={worksInOffice(form.type)} disabled={staffViewer} onChange={(event) => changeEmployeeRole('staff', event.target.checked)} />Administrativo</label></div>
+            <small className="payable-hint">{[operatesMachines(form.type) && 'Operador: entra na conta do operador com o código de 4 dígitos.', worksInOffice(form.type) && 'Administrativo: entra no sistema com CPF e senha, sem a Gestão Financeira.', staffViewer && 'Somente administradores dão o acesso Administrativo.'].filter(Boolean).join(' ')}</small></fieldset>}
           {/* Setores são só dos operadores (fila do tablet); o administrativo não usa. */}
           {isEmployee && operatesMachines(form.type) && <SectorPicker by="id" value={form.sectorIds || []} onChange={(ids) => update('sectorIds', ids)} hint="Opcional. O operador vê no tablet a fila planejada dos seus setores. Para criar um setor novo, use Cadastros › Setores." />}
           {/* Operators may be registered without birth date and e-mail; administrative employees need the e-mail (the reset code goes to it) and administrators need both. */}
@@ -2573,8 +2579,10 @@ function App() {
   )
 }
 
+// The new version notice covers every screen: login, administrative portal and the operator's tablet.
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <App />
+    <NewVersionPrompt />
   </StrictMode>,
 )

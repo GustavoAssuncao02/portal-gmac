@@ -68,7 +68,9 @@ test('administrative employees sign in with CPF and password and use everything 
     const created = await fixture.adminRequest('/employees', 'POST', person(4, { type: 'administrative', password: 'senha123', accessCode: '1111', identification: '' }), fixture.admin)
     assert.equal(created.status, 201, 'no 3-digit identification is required')
     assert.equal(created.data.item.identification, null)
-    assert.equal((await fixture.adminRequest('/employees', 'POST', person(5, { type: 'administrative', password: 'senha123', identification: '' }), fixture.admin)).status, 201, 'several administrative employees without identification')
+    const second = await fixture.adminRequest('/employees', 'POST', person(5, { type: 'administrative', password: 'senha123', identification: '' }), fixture.admin)
+    assert.equal(second.status, 201, 'several administrative employees without identification')
+    const other = second.data.item
     assert.equal(created.data.item.accessCode, undefined, 'administrative employees have no operator code')
     const employee = created.data.item
     const operator = { Authorization: `Bearer ${fixture.operatorToken}` }
@@ -86,7 +88,8 @@ test('administrative employees sign in with CPF and password and use everything 
     const admin = (await fixture.request('/auth/login', 'POST', { cpf: env.DEMO_ADMIN_CPF, password: env.DEMO_ADMIN_PASSWORD })).data
     assert.equal(admin.user.role, 'admin')
 
-    for (const route of ['/receivables', '/receivables/history', '/payables/history', '/payables/order-costs', '/classifications', '/account-groups', '/dre', '/dre-adjustments', '/bank-statements', '/ai-reconciliations']) {
+    // Express matches routes without regard to case, so an upper-case address must be blocked too.
+    for (const route of ['/receivables', '/receivables/history', '/payables/history', '/payables/order-costs', '/classifications', '/account-groups', '/dre', '/dre-adjustments', '/bank-statements', '/ai-reconciliations', '/Payables/history', '/DRE', '/Receivables', '/Bank-Statements', '/Classifications', '/PAYABLES/BATCH']) {
       const result = await fixture.request(route, 'GET', undefined, staff)
       assert.equal(result.status, 403, route)
       assert.equal(result.data.message, 'Seu acesso não inclui a Gestão Financeira.')
@@ -98,6 +101,38 @@ test('administrative employees sign in with CPF and password and use everything 
       assert.equal((await fixture.request(route, 'GET', undefined, staff)).status, 200, route)
     }
     assert.ok((await fixture.request('/notifications', 'GET', undefined, staff)).data.items.every((item) => !['payable', 'receivable'].includes(item.type)))
+
+    // Seeing the administrators is not managing them: creating one, or setting the password or e-mail of one, would let
+    // the employee sign in as administrator.
+    const target = (await fixture.adminRequest('/admins', 'POST', { name: 'Admin Alvo', birthDate: '1990-01-01', cpf: '00000000009', email: 'alvo@example.invalid', password: 'original1' }, fixture.admin)).data.item
+    const targetFields = { name: target.name, birthDate: '1990-01-01', cpf: target.cpf, email: target.email }
+    for (const [method, route, body] of [['POST', '/admins', { name: 'Invasor', birthDate: '1990-01-01', cpf: '00000000008', email: 'invasor@example.invalid', password: 'invasor1' }], ['PUT', `/admins/${target.id}`, { ...targetFields, password: 'tomada12' }], ['PUT', `/admins/${target.id}`, { ...targetFields, email: 'invasor@example.invalid' }], ['DELETE', `/admins/${target.id}`]]) {
+      const result = await fixture.request(route, method, body, staff)
+      assert.equal(result.status, 403, `${method} ${route}`)
+      assert.equal(result.data.message, 'Somente administradores criam, alteram ou excluem administradores.')
+    }
+    assert.equal((await fixture.request('/auth/login', 'POST', { cpf: '00000000008', password: 'invasor1' })).status, 401, 'no administrator was created')
+    assert.equal((await fixture.request('/auth/login', 'POST', { cpf: target.cpf, password: 'tomada12' })).status, 401, 'the password was not changed')
+    assert.equal((await fixture.adminRequest('/admins', 'GET', undefined, fixture.admin)).data.items.find((item) => item.id === target.id).email, 'alvo@example.invalid', 'nor the e-mail')
+    assert.equal((await fixture.request('/auth/login', 'POST', { cpf: target.cpf, password: 'original1' })).data.user.role, 'admin')
+    assert.equal((await fixture.adminRequest(`/admins/${target.id}`, 'PUT', { ...targetFields, name: 'Admin Renomeado' }, fixture.admin)).status, 200, 'an administrator still edits administrators')
+    // Without an administrator session the list of administrators has only who they are: no CPF, e-mail or birth date.
+    assert.deepEqual((await fixture.request('/admins', 'GET', undefined, staff)).data.items.find((item) => item.id === target.id), { id: target.id, name: 'Admin Renomeado' })
+    assert.equal((await fixture.adminRequest('/admins', 'GET', undefined, fixture.admin)).data.items.find((item) => item.id === target.id).cpf, target.cpf)
+
+    // The employee registers and edits operators, but not the employees who sign in to the portal: setting the password of
+    // another one, or giving portal access to an operator, would let them sign in as someone else.
+    const registered = await fixture.request('/employees', 'POST', person(6, { accessCode: '6666' }), staff)
+    assert.equal(registered.status, 201, 'operators are still registered by administrative employees')
+    assert.equal((await fixture.request(`/employees/${registered.data.item.id}`, 'PUT', person(6, { accessCode: '6767' }), staff)).data.item.accessCode, '6767')
+    for (const [method, route, body] of [['POST', '/employees', person(3, { type: 'administrative', password: 'senha123' })], ['POST', '/employees', person(3, { type: 'both', accessCode: '3333', password: 'senha123' })], ['PUT', `/employees/${registered.data.item.id}`, person(6, { type: 'both', accessCode: '6767', password: 'senha123' })], ['PUT', `/employees/${other.id}`, person(5, { type: 'administrative', password: 'tomada12' })], ['PATCH', `/employees/${other.id}/active`, { active: false }], ['DELETE', `/employees/${other.id}`]]) {
+      const result = await fixture.request(route, method, body, staff)
+      assert.equal(result.status, 403, `${method} ${route}`)
+      assert.equal(result.data.message, 'Somente administradores cadastram, alteram, desativam ou excluem funcionários administrativos.')
+    }
+    assert.equal((await fixture.request('/auth/login', 'POST', { cpf: person(6).cpf, password: 'senha123' })).status, 401, 'the operator got no portal access')
+    assert.equal((await fixture.request('/auth/login', 'POST', { cpf: other.cpf, password: 'senha123' })).status, 200, 'the other employee keeps the password and stays active')
+    assert.equal((await fixture.adminRequest(`/employees/${other.id}`, 'PUT', person(5, { type: 'administrative', password: 'nova1234' }), fixture.admin)).status, 200, 'an administrator still manages them')
 
     const renamed = await fixture.request('/account', 'PATCH', { name: 'Funcionária Quatro', currentPassword: 'senha123' }, staff)
     assert.equal(renamed.status, 200)
@@ -114,6 +149,25 @@ test('administrative employees sign in with CPF and password and use everything 
 
     const promoted = await fixture.adminRequest(`/employees/${employee.id}`, 'PUT', person(4, { type: 'administrative' }), fixture.admin)
     assert.equal(promoted.status, 400, 'becoming administrative requires a password')
+  } finally {
+    await fixture.close()
+  }
+})
+
+test('the 4-digit code cannot be guessed: 20 codes that identify nobody in 10 minutes hold the address', async () => {
+  const fixture = await createWorkflowFixture({ accountsEnv: env })
+  try {
+    const operator = { Authorization: `Bearer ${fixture.operatorToken}` }
+    const identify = (code) => fixture.request('/operations/operator/identify', 'POST', { code }, operator)
+    await fixture.adminRequest('/employees', 'POST', person(1, { accessCode: '4321' }), fixture.admin)
+    // A typo on the tablet still just asks to check the digits, and the right code goes in.
+    assert.equal((await identify('4312')).status, 404)
+    assert.equal((await identify('4321')).status, 200)
+    assert.equal((await identify('12')).status, 400, 'an incomplete code is not a guess')
+    for (let code = 0; code < 19; code += 1) assert.equal((await identify(String(code).padStart(4, '0'))).status, 404)
+    const held = await identify('4321')
+    assert.equal(held.status, 429, 'after 20 wrong codes even the right one waits')
+    assert.match(held.data.message, /^Muitos códigos errados\. Aguarde 10 minutos/)
   } finally {
     await fixture.close()
   }

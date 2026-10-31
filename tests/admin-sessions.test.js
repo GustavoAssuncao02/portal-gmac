@@ -41,3 +41,17 @@ test('administrator logins survive a restart of the API and a new password ends 
   assert.equal(await signedIn(changed.data.token), true)
   assert.equal(await signedIn(token), false)
 })
+
+// The current password asked in Configurações is a password check too: a session left open could try passwords there.
+test('the current password in Configurações cannot be guessed: 5 wrong ones per hour, then a pause', async (t) => {
+  const fixture = await createWorkflowFixture({ accountsEnv: env })
+  t.after(() => fixture.close())
+  const session = { Authorization: `Bearer ${(await fixture.request('/auth/login', 'POST', { cpf: env.DEMO_ADMIN_CPF, password: env.DEMO_ADMIN_PASSWORD })).data.token}` }
+  const save = (currentPassword) => fixture.request('/account', 'PATCH', { name: env.DEMO_ADMIN_NAME, currentPassword }, session)
+  for (let i = 0; i < 4; i += 1) assert.equal((await save('errada1')).status, 403)
+  assert.equal((await save(env.DEMO_ADMIN_PASSWORD)).status, 200, 'a few typos do not get in the way, and the right one clears the count')
+  for (let i = 0; i < 5; i += 1) assert.equal((await save('errada1')).data.message, 'Senha atual incorreta.')
+  const held = await save(env.DEMO_ADMIN_PASSWORD)
+  assert.equal(held.status, 429, 'even the right one waits')
+  assert.match(held.data.message, /^Muitas tentativas com a senha atual errada\. Aguarde 60 minutos/)
+})

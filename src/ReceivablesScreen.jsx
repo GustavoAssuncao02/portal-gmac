@@ -201,7 +201,7 @@ export default function ReceivablesScreen(props) {
   useEffect(() => {
     let active = true
     const load = () => payableRequest('/receivables').then((result) => { if (active) { setData(result); setError(''); setLoading(false) } }).catch((caught) => { if (active) { setError(caught.message); setLoading(false) } })
-    load(); const stopPolling = pollWhileVisible(load, 30000)
+    load(); const stopPolling = pollWhileVisible(load, 30000, ['finance'])
     // The bell opens a receivable directly.
     const open = (event) => { setDetailId(event.detail); sessionStorage.removeItem('gmac-receivable-open') }
     window.addEventListener('gmac-receivable-open', open); sessionStorage.removeItem('gmac-receivable-open')

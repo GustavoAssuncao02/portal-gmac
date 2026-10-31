@@ -71,7 +71,7 @@ export default function BatchSettlementScreen(props) {
   useEffect(() => {
     let active = true
     const run = () => load().catch((caught) => { if (active) setError(caught.message) }).finally(() => { if (active) setLoading(false) })
-    run(); const stop = pollWhileVisible(run, 8000)
+    run(); const stop = pollWhileVisible(run, 8000, ['finance'])
     return () => { active = false; stop() }
   }, [])
   const change = async (route, method, body) => { try { setBatch(await payableRequest(route, method, body)); setError('') } catch (caught) { setError(caught.message); load().catch(() => {}) } }

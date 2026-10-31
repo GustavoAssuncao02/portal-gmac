@@ -7,6 +7,7 @@ import { notificationDefaults, notificationOptions, notificationSoundDefault, va
 import { employeeRecords, isStaff, staffAccountId } from './employeeAccess.js'
 import { clientContactKinds, clientRequesters } from './requesters.js'
 import { recordPasswordChange } from './passwordReset.js'
+import { blockedMessage, createLoginThrottle } from './loginThrottle.js'
 
 const sessions = new Map()
 const safe = ({ id, name, birthDate, cpf, email, createdAt, role }) => ({ id, name, birthDate, cpf, email, createdAt, role: role || 'admin' })
@@ -95,9 +96,10 @@ export function requireAdmin(request, response, next) {
 }
 
 // Administrative employees keep the finance steps embedded in other screens (OS costs and completion, stock purchases),
-// but not the Gestão Financeira screens themselves.
-const financeArea = /^\/(payables|receivables|classifications|account-groups|dre|dre-adjustments|bank-statements|ai-reconciliations)(\/|$)/
-const staffFinanceRoutes = [['GET', /^\/payables$/], ['POST', /^\/payables(\/uploads)?$/], ['GET', /^\/payables\/order-costs\/[^/]+$/], ['GET', /^\/receivables\/order\/[^/]+$/], ['POST', /^\/receivables$/]]
+// but not the Gestão Financeira screens themselves. Express matches routes without regard to case (/api/DRE reaches
+// /dre), so these patterns ignore case too: otherwise an upper-case letter in the address would skip the block.
+const financeArea = /^\/(payables|receivables|classifications|account-groups|dre|dre-adjustments|bank-statements|ai-reconciliations)(\/|$)/i
+const staffFinanceRoutes = [['GET', /^\/payables$/i], ['POST', /^\/payables(\/uploads)?$/i], ['GET', /^\/payables\/order-costs\/[^/]+$/i], ['GET', /^\/receivables\/order\/[^/]+$/i], ['POST', /^\/receivables$/i]]
 export function restrictStaffFinance(request, response, next) {
   if (!financeArea.test(request.path) || adminIdentity(request)?.role !== 'staff') return next()
   if (staffFinanceRoutes.some(([method, route]) => request.method === method && route.test(request.path))) return next()
@@ -325,6 +327,10 @@ export function createAccountService(pool, env = process.env) {
 export function createAccountsRouter(service) {
   const router = express.Router()
   router.use(['/admins', '/clients', '/account', '/auth/logout', '/auth/session'], requireAdmin)
+  // Administrative employees see the list of administrators, but only an administrator session (the role kept by the
+  // server, never one sent by the browser) creates, edits or deletes one: otherwise an employee could create an
+  // administrator or set the password or e-mail of one and sign in with it, Gestão Financeira included.
+  const onlyAdministrators = (request, response, next) => request.adminRole === 'admin' ? next() : response.status(403).json({ message: 'Somente administradores criam, alteram ou excluem administradores.' })
   router.get('/auth/session', async (request, response, next) => {
     try {
       const user = await service.account(request.adminId)
@@ -347,23 +353,37 @@ export function createAccountsRouter(service) {
   router.patch('/account/appearance', async (request, response, next) => {
     try { response.json({ settings: await service.updateAppearanceSettings(request.adminId, request.body) }) } catch (error) { next(error) }
   })
+  // The current password asked in Configurações is a password check too: a session left open (or stolen) could try
+  // passwords there. 5 wrong ones per hour for the account, as on the login; saving with the right one clears the count.
+  const currentPasswords = createLoginThrottle()
   router.patch('/account', async (request, response, next) => {
+    const key = String(request.adminId)
+    const blocked = currentPasswords.check(key)
+    if (blocked.blocked) return response.status(429).json({ message: blockedMessage(blocked.retryAfterMs, 'Muitas tentativas com a senha atual errada.') })
     try {
       const user = await service.updateAccount(request.adminId, request.body)
+      currentPasswords.succeed(key)
       if (request.body?.password) await recordPasswordChange('self', user)
       response.json({ user, token: await issueAdminToken(user) })
-    } catch (error) { next(error) }
+    } catch (error) {
+      // The only 403 of updateAccount is "Senha atual incorreta."
+      if (error.status === 403) currentPasswords.fail(key)
+      next(error)
+    }
   })
+  // Without an administrator session the list of administrators keeps only who they are: no CPF, e-mail or birth date.
+  const visible = (request, kind, items) => kind === 'admins' && request.adminRole !== 'admin' ? items.map(({ id, name }) => ({ id, name })) : items
   for (const kind of ['admins', 'clients']) {
-    router.get(`/${kind}`, async (_request, response, next) => { try { response.json({ items: await service[kind]() }) } catch (error) { next(error) } })
-    for (const method of ['post', 'put']) router[method](method === 'post' ? `/${kind}` : `/${kind}/:id`, async (request, response, next) => {
+    const changes = kind === 'admins' ? [onlyAdministrators] : []
+    router.get(`/${kind}`, async (request, response, next) => { try { response.json({ items: visible(request, kind, await service[kind]()) }) } catch (error) { next(error) } })
+    for (const method of ['post', 'put']) router[method](method === 'post' ? `/${kind}` : `/${kind}/:id`, ...changes, async (request, response, next) => {
       try {
         const item = await service.save(kind, request.params.id, request.body)
         if (kind === 'admins' && method === 'put' && request.body?.password) await recordPasswordChange('admin', item, { id: request.adminId, name: request.adminName })
         response.json({ item })
       } catch (error) { next(error) }
     })
-    router.delete(`/${kind}/:id`, async (request, response, next) => {
+    router.delete(`/${kind}/:id`, ...changes, async (request, response, next) => {
       try {
         if (kind === 'admins' && String(request.adminId) === request.params.id) fail(409, 'Você não pode excluir sua própria conta.')
         await service.remove(kind, request.params.id)

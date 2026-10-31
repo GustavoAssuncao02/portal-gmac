@@ -84,7 +84,7 @@ export default function PayablesScreen({ mode = 'accounts', accountFilters, ...p
   useEffect(() => {
     let active = true
     const load = () => payableRequest('/payables').then((result) => { if (active) { setData(result); setError(''); setLoading(false) } }).catch((caught) => { if (active) { setError(caught.message); setLoading(false) } })
-    load(); const stopPolling = pollWhileVisible(load, 30000)
+    load(); const stopPolling = pollWhileVisible(load, 30000, ['finance'])
     const open = (event) => { setDetailId(event.detail); sessionStorage.removeItem('gmac-payable-open') }
     window.addEventListener('gmac-payable-open', open); sessionStorage.removeItem('gmac-payable-open')
     return () => { active = false; stopPolling(); window.removeEventListener('gmac-payable-open', open) }

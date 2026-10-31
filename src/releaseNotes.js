@@ -1,6 +1,19 @@
 // Each commit to main is a new version: add an entry at the top, with what changed in plain words for whoever uses the portal.
 export const releaseNotes = [
   {
+    version: '1.0.07',
+    date: '2026-10-31',
+    notes: [
+      'Telas: atualização em tempo real',
+      'Atualizações: aviso para recarregar a página quando sair uma versão nova',
+      'Administradores: o funcionário administrativo apenas consulta a lista',
+      'Funcionários: só administradores alteram funcionários administrativos',
+      'Acesso: limite de tentativas também no login do operador, no código de acesso e na senha atual',
+      'Anexos: limite de 500 MB por arquivo',
+      'Melhorias gerais: correções de problemas, desempenho e segurança',
+    ],
+  },
+  {
     version: '1.0.06',
     date: '2026-10-30',
     notes: [

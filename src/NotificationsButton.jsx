@@ -40,7 +40,7 @@ export default function NotificationsButton({ onOpenAccount, onOpenReceivable, o
       }).catch(() => { if (active) setError(open ? 'Não foi possível marcar as notificações como lidas. Abra o sino novamente para tentar.' : 'Não foi possível carregar as notificações.') })
     }
     const settingsChanged = () => refresh(true)
-    refresh(); const stopPolling = pollWhileVisible(() => refresh(), 10000)
+    refresh(); const stopPolling = pollWhileVisible(() => refresh(), 10000, ['notifications'])
     window.addEventListener('gmac-notification-settings-changed', settingsChanged)
     return () => { active = false; stopPolling(); window.removeEventListener('gmac-notification-settings-changed', settingsChanged) }
   }, [open, token])

@@ -10,7 +10,8 @@ import { enabled, isProduction } from '../server/envFlags.js'
 // and the interface is rebuilt whenever a source is newer than the last build, before the server starts.
 // Locally nothing happens: development uses Vite and the tests build on their own.
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const sources = ['src', 'public', 'index.html', 'vite.config.js', 'package-lock.json', 'scripts/build-dark-theme.mjs']
+// What the interface is built from (also its version, in interface-version.mjs).
+export const interfaceSources = ['src', 'public', 'index.html', 'vite.config.js', 'package-lock.json', 'scripts/build-dark-theme.mjs', 'scripts/interface-version.mjs']
 
 function newest(target) {
   if (!existsSync(target)) return 0
@@ -28,7 +29,7 @@ export function dependenciesOutdated() {
 export function interfaceOutdated() {
   const built = path.join(root, 'dist', 'index.html')
   if (!existsSync(built)) return true
-  return Math.max(...sources.map((source) => newest(path.join(root, source)))) > statSync(built).mtimeMs
+  return Math.max(...interfaceSources.map((source) => newest(path.join(root, source)))) > statSync(built).mtimeMs
 }
 
 export function ensureInterfaceBuild({ env = process.env } = {}) {

@@ -30,7 +30,7 @@ export default function TreasuryScreen(props) {
     let active = true
     const load = () => loadAll().then((result) => { if (active) { setData(result); setError('') } }).catch((caught) => { if (active) setError(caught.message) })
     load()
-    const stopPolling = pollWhileVisible(load, 30000)
+    const stopPolling = pollWhileVisible(load, 30000, ['finance'])
     return () => { active = false; stopPolling() }
   }, [])
   useEffect(() => { setPage(1) }, [filters, pageSize])

@@ -1,12 +1,13 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import devNetworkPlugin from './scripts/dev-network.mjs'
+import interfaceVersionPlugin from './scripts/interface-version.mjs'
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'PORT')
   const apiPort = Number(process.env.PORT || env.PORT || 3002)
   return {
-    plugins: [react(), devNetworkPlugin()],
+    plugins: [react(), devNetworkPlugin(), interfaceVersionPlugin()],
     build: {
       rollupOptions: {
         output: {

@@ -23,6 +23,7 @@ async function fixture(t) {
   await writeFile(path.join(directory, 'fonts', 'inter.woff2'), randomBytes(512))
   await writeFile(path.join(directory, 'images', 'gmac-logo.png'), randomBytes(512))
   await writeFile(path.join(directory, 'login-media', 'manifest.json'), '{"items":[]}')
+  await writeFile(path.join(directory, 'version.json'), '{"version":"abc123"}')
   await writeFile(path.join(directory, 'login-media', 'video-01.mp4'), video)
   const app = express()
   app.set('trust proxy', 'loopback')
@@ -51,6 +52,8 @@ test('the built interface is cached by how each file changes', async (t) => {
   assert.equal(await policy('/'), 'no-cache')
   assert.equal(await policy('/index.html'), 'no-cache')
   assert.equal(await policy('/login-media/manifest.json'), 'no-cache')
+  // An open page compares its version with this file to ask for a reload after a deploy.
+  assert.equal(await policy('/version.json'), 'no-cache')
   assert.equal(await policy('/fonts/inter.woff2'), 'public, max-age=2592000')
   assert.equal(await policy('/images/gmac-logo.png'), 'public, max-age=86400, stale-while-revalidate=604800')
   assert.equal(await policy('/login-media/video-01.mp4'), 'public, max-age=86400, stale-while-revalidate=604800')

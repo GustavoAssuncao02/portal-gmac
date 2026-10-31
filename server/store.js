@@ -162,17 +162,25 @@ function plan(base, draft) {
   const steps = { tables: [], register: [], unregister: [], clear: [], upserts: [], deletes: [], values: [], removeValues: [] }
   const collections = new Map(), values = new Map()
   const taken = new Set([...base.collections.values()].map((entry) => entry.tableName))
+  // The names whose data changed (offers, payables...), for whoever follows the changes (onStoreChange).
+  const touched = new Set()
+  const size = () => Object.values(steps).reduce((total, list) => total + list.length, 0)
   for (const name of new Set([...Object.keys(base.data), ...Object.keys(draft)])) {
+    const before = size()
+    planName(name)
+    if (size() > before) touched.add(name)
+  }
+  function planName(name) {
     const next = draft[name]
     const previous = base.collections.get(name)
     const keyField = Array.isArray(next) ? keyFieldOf(next, previous?.keyField) : null
     if (next === undefined || !keyField) {
       if (previous) { steps.unregister.push(name); steps.clear.push(previous.tableName) }
-      if (next === undefined) { if (base.values.has(name)) steps.removeValues.push(name); continue }
+      if (next === undefined) { if (base.values.has(name)) steps.removeValues.push(name); return }
       const json = JSON.stringify(next)
       if (base.values.get(name) !== json) steps.values.push([name, json])
       values.set(name, json)
-      continue
+      return
     }
     if (base.values.has(name)) steps.removeValues.push(name)
     let tableName = previous?.tableName
@@ -192,7 +200,19 @@ function plan(base, draft) {
     collections.set(name, { tableName, keyField, records: nextRecords })
   }
   const changed = Object.values(steps).some((list) => list.length)
-  return { steps, changed, collections, values }
+  return { steps, changed, collections, values, touched }
+}
+
+// Who wants to know, after each saved change, which names of the store changed (live updates of the screens).
+const changeListeners = new Set()
+export function onStoreChange(listener) {
+  changeListeners.add(listener)
+  return () => changeListeners.delete(listener)
+}
+function announce(names) {
+  for (const listener of changeListeners) {
+    try { listener(names) } catch (error) { console.error('Falha ao avisar uma mudança dos dados:', error.message) }
+  }
 }
 
 function batches(rows, size) {
@@ -250,6 +270,7 @@ export function mutateStore(change, { commit, rollback } = {}) {
       await connection.query('COMMIT')
       open = false
       cache = writes.changed ? { revision: base.revision + 1, data: structuredClone(draft), collections: writes.collections, values: writes.values } : base
+      if (writes.changed) announce([...writes.touched])
       return result
     } catch (error) {
       if (open) await connection.query('ROLLBACK').catch(() => {})
