@@ -97,16 +97,50 @@ try {
   await agenda.getByLabel('Agenda de Plasma 01').locator('.planning-block').filter({ hasText: 'Corte a plasma' }).waitFor()
   assert.doesNotMatch(await backlog.locator('tr').filter({ hasText: order.code }).innerText(), /Corte a plasma/, 'only the Tornearia is left to plan')
 
-  // Dragging the Torno block one hour later moves it on the server.
-  const box = await block.boundingBox()
-  await page.mouse.move(box.x + 20, box.y + box.height / 2)
-  await page.mouse.down()
-  await page.mouse.move(box.x + 60, box.y + box.height / 2, { steps: 4 })
-  await page.mouse.move(box.x + 20 + 88, box.y + box.height / 2, { steps: 4 })
-  await page.mouse.up()
-  await page.waitForFunction((start) => document.querySelector('[aria-label="Agenda de Torno 01"] .planning-block span')?.textContent.startsWith(start), clockTime(slot + 3600000))
+  // Dragging the Torno block one hour later: it stays there at once, while the server has not answered yet, and the
+  // server keeps it.
+  const dragBy = async (pixels) => {
+    const box = await torno.locator('.planning-block').first().boundingBox()
+    await page.mouse.move(box.x + 20, box.y + box.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(box.x + 60, box.y + box.height / 2, { steps: 4 })
+    await page.mouse.move(box.x + 20 + pixels, box.y + box.height / 2, { steps: 4 })
+    await page.mouse.up()
+  }
+  const blockTime = (start) => page.waitForFunction((value) => document.querySelector('[aria-label="Agenda de Torno 01"] .planning-block span')?.textContent.startsWith(value), start)
+  const blockRoute = '**/api/planning/blocks/*'
+  let release
+  const answer = new Promise((resolve) => { release = resolve })
+  await page.route(blockRoute, async (route) => { await answer; await route.continue() })
+  await dragBy(88)
+  await blockTime(clockTime(slot + 3600000))
+  const saved = page.waitForResponse((response) => response.url().includes('/api/planning/blocks/') && response.request().method() === 'PUT')
+  release()
+  assert.equal((await saved).status(), 200)
+  await page.unroute(blockRoute)
   const moved = (await fixture.adminRequest(`/planning?from=${today}`)).data.blocks.find((item) => item.resourceId === 'torno')
   assert.equal(moved.start, new Date(slot + 3600000).toISOString())
+  // Refused by the server, the block goes back to where it was and the reason shows.
+  await page.route(blockRoute, (route) => route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ message: 'Recusado pelo servidor de teste.' }) }))
+  await dragBy(88)
+  await page.getByRole('alert').getByText('Recusado pelo servidor de teste.').waitFor()
+  await blockTime(clockTime(slot + 3600000))
+  await page.unroute(blockRoute)
+  // Over another block of the same machine, the clash is told at once and nothing goes to the server.
+  if (localDay(slot + 4 * 3600000) === today) {
+    const other = (await fixture.adminRequest('/planning/blocks', 'POST', { orderCode: order.code, stageCode: 'turning', resourceType: 'machine', resourceId: 'torno', start: new Date(slot + 3 * 3600000).toISOString(), minutes: 60 })).data.item
+    await torno.locator('.planning-block').nth(1).waitFor()
+    let sent = 0
+    const count = (request) => { if (request.url().includes('/api/planning/blocks/') && request.method() === 'PUT') sent += 1 }
+    page.on('request', count)
+    await dragBy(88)
+    await page.getByRole('alert').getByText(new RegExp(`Torno 01 já tem a ${order.code} · Tornearia das ${clockTime(slot + 3 * 3600000)}`)).waitFor()
+    await blockTime(clockTime(slot + 3600000))
+    page.off('request', count)
+    assert.equal(sent, 0, 'a clash seen on the screen does not reach the server')
+    assert.equal((await fixture.adminRequest(`/planning/blocks/${other.id}`, 'DELETE')).status, 204)
+    await torno.locator('.planning-block').nth(1).waitFor({ state: 'detached' })
+  }
 
   // A click on the block opens it.
   await torno.locator('.planning-block').first().click()

@@ -20,6 +20,7 @@ const monthLabel = (date) => new Date(`${date}T12:00:00Z`).toLocaleDateString('p
 const slots = Array.from({ length: 96 }, (_, index) => `${String(Math.floor(index / 4)).padStart(2, '0')}:${String(index % 4 * 15).padStart(2, '0')}`)
 // Minutes of a block (or a real interval) inside one day.
 const overlap = (start, end, from) => Math.max(0, Math.min(end, from + DAY_MS) - Math.max(start, from)) / 60000
+const placedAt = (block, start) => ({ ...block, start, end: new Date(Date.parse(start) + block.minutes * 60000).toISOString() })
 
 function rangeOf(view, date) {
   if (view === 'day') return [date, date]
@@ -43,14 +44,39 @@ export default function PlanningScreen({ Sidebar, WorkspaceTabs, navigationProps
   const [fit, setFit] = useState(null)
   const [from, to] = rangeOf(view, date)
   const request = useRef(0)
+  // Blocks dragged on the agenda that the server has not confirmed yet: they stay where they were dropped, even when a
+  // reading of the plan that started before the move arrives later.
+  const moving = useRef(new Map())
+  const withMoves = (result) => result && moving.current.size ? { ...result, blocks: result.blocks.map((block) => moving.current.has(block.id) ? placedAt(block, moving.current.get(block.id)) : block) } : result
 
   async function refresh() {
     const id = ++request.current
     try {
       const result = await payableRequest(`/planning?from=${from}&to=${to}`)
       if (id !== request.current) return
-      setData(result); setError('')
+      setData(withMoves(result)); setError('')
     } catch (caught) { if (id === request.current) setError(caught.message) }
+  }
+  // The block goes to its new place at once and the server confirms behind; if it refuses, the block goes back and the
+  // reason shows. A clash with another block of the machine already on the screen is refused here, without moving.
+  async function moveBlock(block, start) {
+    const end = start + block.minutes * 60000
+    const clash = block.resourceType === 'machine' && data.blocks.find((item) => item.id !== block.id && resourceKey(item.resourceType, item.resourceId) === resourceKey(block.resourceType, block.resourceId) && blockStart(item) < end && start < blockEnd(item))
+    if (clash) return setError(`${block.resourceName} já tem a ${clash.orderCode} · ${clash.stageName} das ${clockTime(blockStart(clash))} às ${clockTime(blockEnd(clash))}${localDay(blockStart(clash)) !== localDay(start) ? ` de ${shortDate(localDay(blockStart(clash)))}` : ''}.`)
+    const target = new Date(start).toISOString()
+    moving.current.set(block.id, target)
+    setData(withMoves); setError('')
+    try {
+      await payableRequest(`/planning/blocks/${block.id}`, 'PUT', { orderCode: block.orderCode, stageCode: block.stageCode, resourceType: block.resourceType, resourceId: block.resourceId, start: target, minutes: block.minutes, quantity: block.quantity })
+    } catch (caught) {
+      // A newer drag of the same block takes over: only the latest move puts it back.
+      if (moving.current.get(block.id) !== target) return
+      moving.current.delete(block.id)
+      setData((current) => current && { ...current, blocks: current.blocks.map((item) => item.id === block.id ? placedAt(item, block.start) : item) })
+      return setError(caught.message)
+    }
+    if (moving.current.get(block.id) === target) moving.current.delete(block.id)
+    refresh()
   }
   useEffect(() => {
     setData((current) => current && current.from === from && current.to === to ? current : null)
@@ -90,7 +116,7 @@ export default function PlanningScreen({ Sidebar, WorkspaceTabs, navigationProps
     {error && <p className="admin-tool-error" role="alert">{error}</p>}
     {!data ? <p className="planning-loading">Carregando planejamento...</p> : <>
       <Indicators view={view} from={from} to={to} date={date} machines={machines} blocks={blocks} now={now} />
-      {view === 'day' && <DayAgenda date={date} today={today} now={now} resources={resources} blocks={blocks} actual={data.actual} selectedAt={selectedAt} onSelect={setSelectedAt} onPlan={(fields) => setEditing({ plan: fields })} onEdit={(block) => setEditing({ block })} onMoved={refresh} onError={setError} />}
+      {view === 'day' && <DayAgenda date={date} today={today} now={now} resources={resources} blocks={blocks} actual={data.actual} selectedAt={selectedAt} onSelect={setSelectedAt} onPlan={(fields) => setEditing({ plan: fields })} onEdit={(block) => setEditing({ block })} onMove={moveBlock} />}
       {view === 'week' && <WeekTable from={from} machines={machines} blocks={blocks} today={today} onOpen={openDay} />}
       {view === 'month' && <MonthCalendar from={from} month={date.slice(0, 7)} sectors={sector ? [sector] : allSectors} resources={data.resources} blocks={blocks} today={today} onOpen={openDay} />}
       <div className="planning-lower">
@@ -123,8 +149,9 @@ function Indicators({ view, from, to, date, machines, blocks, now }) {
 }
 
 // The day of every machine on a 24-hour ruler. A click on the ruler picks a moment (15-minute steps); a click on an
-// empty part of a row plans there; a block is moved by dragging it sideways, or opened by a click.
-function DayAgenda({ date, today, now, resources, blocks, actual, selectedAt, onSelect, onPlan, onEdit, onMoved, onError }) {
+// empty part of a row plans there; a block is moved by dragging it sideways (it stays where it is dropped while the
+// server confirms), or opened by a click.
+function DayAgenda({ date, today, now, resources, blocks, actual, selectedAt, onSelect, onPlan, onEdit, onMove }) {
   const scroller = useRef(null)
   const [drag, setDrag] = useState(null)
   const from = dayStart(date)
@@ -135,10 +162,6 @@ function DayAgenda({ date, today, now, resources, blocks, actual, selectedAt, on
   const services = resources.filter((item) => item.type === 'labor-service' && blocks.some((block) => block.resourceType === item.type && String(block.resourceId) === item.id))
   if (services.length) groups.push(['Serviços (hora homem)', services])
   const width = 24 * HOUR_WIDTH
-  async function drop(block, minutes) {
-    const start = new Date(blockStart(block) + minutes * 60000).toISOString()
-    try { await payableRequest(`/planning/blocks/${block.id}`, 'PUT', { orderCode: block.orderCode, stageCode: block.stageCode, resourceType: block.resourceType, resourceId: block.resourceId, start, minutes: block.minutes, quantity: block.quantity }); onError(''); onMoved() } catch (caught) { onError(caught.message) }
-  }
   function pointerDown(event, block) {
     if (event.button !== 0) return
     event.stopPropagation()
@@ -151,7 +174,7 @@ function DayAgenda({ date, today, now, resources, blocks, actual, selectedAt, on
     const current = drag
     setDrag(null)
     if (!current?.moved) return onEdit(block)
-    if (current.shift) drop(block, current.shift)
+    if (current.shift) onMove(block, blockStart(block) + current.shift * 60000)
   }
   const nowLeft = date === today ? (now - from) / 60000 * PX_PER_MINUTE : null
   const selectedLeft = selectedAt != null && selectedAt >= from && selectedAt < from + DAY_MS ? (selectedAt - from) / 60000 * PX_PER_MINUTE : null
@@ -169,7 +192,7 @@ function DayAgenda({ date, today, now, resources, blocks, actual, selectedAt, on
           {selectedLeft != null && <b className="planning-selected-label" style={{ left: selectedLeft }}>{clockTime(selectedAt)}</b>}
         </div>
         {groups.map(([group, items]) => [<div key={`group-${group}`} className="planning-group"><span>{group}</span></div>, ...items.map((resource) => {
-          const own = blocks.filter((block) => block.resourceType === resource.type && String(block.resourceId) === resource.id)
+          const own = blocks.filter((block) => block.resourceType === resource.type && String(block.resourceId) === resource.id && overlap(blockStart(block), blockEnd(block), from) > 0)
           const planned = own.reduce((sum, block) => sum + overlap(blockStart(block), blockEnd(block), from), 0)
           const real = actual.filter((item) => item.resourceType === resource.type && item.resourceId === resource.id)
           return [<div key={`label-${resource.type}-${resource.id}`} className={`planning-label${resource.maintenance ? ' planning-label--maintenance' : ''}`}>
