@@ -84,3 +84,7 @@
 :root[data-theme="dark"] .app-toast svg { color: #4fbf99; }
 :root[data-theme="dark"][data-tone="black"] .app-toast { border-color: #333336; border-left-color: #4fbf99; color: #ececec; background: #1a1a1a; box-shadow: 0 10px 28px #000000; }
 :root[data-theme="dark"][data-tone="black"] .app-toast svg { color: #4fbf99; }
+
+/* Calculadora de pesos e medidas: in the light theme the three panels have no frame (styles.css), but the dark themes give
+   them a border and a background, so the content needs room from that border. */
+:root[data-theme="dark"] :is(.calculator-materials, .calculator-formats, .calculator-measures) { padding: 16px; }
