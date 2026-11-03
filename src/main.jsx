@@ -52,7 +52,7 @@ import MachineUsageBI from './MachineUsageBI.jsx'
 import NewVersionPrompt from './NewVersionPrompt.jsx'
 import { useMobileModal } from './useMobileModal.js'
 import { ThemeContext, useAccountTheme } from './accountTheme.js'
-import { pollWhileVisible } from './polling.js'
+import { latestOnly, pollWhileVisible } from './polling.js'
 import { newId } from './newId.js'
 import { History, Monitor, Minimize2, Plus, Pencil, Trash2, Clock3, CreditCard, HandCoins, Banknote, Landmark, ChartColumn, Tags, FileChartColumn, FilePenLine, FolderTree, ChartNoAxesCombined, Truck, WalletCards, ChevronLeft, ChevronRight, ChevronDown, UsersRound, Menu, X, Info, ArrowLeft, ListChecks, Layers, CircleCheck, CircleX, ArrowUpDown, ArrowUp, ArrowDown, Building2, CirclePause, Power, Factory, Wrench, CalendarClock, Save, Contact, ShoppingCart, Mail, ListOrdered } from 'lucide-react'
 import { proposalCosts, proposalPricing, hoursText, marginLimits, PROPOSAL_MARGIN_GAP } from '../server/proposalMath.js'
@@ -1051,8 +1051,12 @@ function RegistrationScreen({ kind, collapsed, onToggle, activeNav, onNavigate, 
   const [saving, setSaving] = useState(false)
   const formId = `registration-form-${kind}`
 
+  const [readRecords] = useState(() => latestOnly(() => apiRequest(endpoint)))
+  const showRecords = (data) => setRecords(data.items)
   useEffect(() => {
-    apiRequest(endpoint).then((data) => setRecords(data.items)).catch((error) => setMessage(error.message))
+    readRecords(showRecords).catch((error) => setMessage(error.message))
+    // A client registered elsewhere (another tab, another person) enters the list.
+    if (isClient) return pollWhileVisible(() => readRecords(showRecords).catch(() => {}), 30000)
   }, [endpoint])
 
   function formatClientDocument(value, documentType = form.documentType) {
@@ -1100,7 +1104,7 @@ function RegistrationScreen({ kind, collapsed, onToggle, activeNav, onNavigate, 
 
     try {
       await apiRequest(editingId !== null ? `${endpoint}/${editingId}` : endpoint, jsonOptions(editingId !== null ? 'PUT' : 'POST', form))
-      setRecords((await apiRequest(endpoint)).items)
+      await readRecords(showRecords)
       setMessage(`${isClient ? 'Cliente' : 'Administrador'} ${editingId !== null ? 'atualizado' : 'cadastrado'} com sucesso.`)
       clearForm()
     } catch (error) { setMessage(error.message) }
@@ -1303,12 +1307,16 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
   const manualClient = documentDigits(manualForm.cnpj) ? clients.find((item) => documentDigits(item.document) === documentDigits(manualForm.cnpj)) : null
   // Shown on the list itself: the creation modal is already closed when something after the creation fails.
   const [pageNotice, setPageNotice] = useState('')
+  const [readClients] = useState(() => latestOnly(() => apiRequest('/api/clients')))
   useEffect(() => {
     if (!manualOpen) return
     apiRequest('/api/pieces').then((data) => setPieces(data.items || [])).catch(() => setPieces([]))
-    apiRequest('/api/clients').then((data) => setClients(data.items || [])).catch(() => setClients([]))
     apiRequest('/api/requesters').then((data) => setRequesters(data.items || [])).catch(() => setRequesters([]))
     apiRequest('/api/buyers').then((data) => setBuyers(data.items || [])).catch(() => setBuyers([]))
+    // A client registered while the form is open (another tab, another person) enters the list.
+    const loadClients = () => readClients((data) => setClients(data.items || [])).catch(() => {})
+    loadClients()
+    return pollWhileVisible(loadClients, 30000)
   }, [manualOpen])
   const filteredOffers = offers.filter((offer) => {
     const query = search.trim().toLocaleLowerCase()

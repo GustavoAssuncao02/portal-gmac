@@ -11,7 +11,7 @@ import { filterPayables, todayBahia, shiftMonth, validDate, dueLabel } from '../
 import { payableAnalytics } from './payableAnalytics.js'
 import FinanceTrendChart from './FinanceTrendChart.jsx'
 import { sumOf, dueShortcuts } from './financeFilters.js'
-import { pollWhileVisible } from './polling.js'
+import { latestOnly, pollWhileVisible } from './polling.js'
 import './payables.css'
 import { useBanks, bankOptionLabel } from './BankSelect.jsx'
 import ClassificationSelect from './ClassificationSelect.jsx'
@@ -80,10 +80,11 @@ export default function PayablesScreen({ mode = 'accounts', accountFilters, ...p
     setFilters({ ...initialFilters(), ...accountFilters })
     setAdvanced(Boolean(accountFilters?.start || accountFilters?.end))
   }, [mode, accountFilters])
-  async function refresh() { const result = await payableRequest('/payables'); setData(result); setVersion((v) => v + 1); setError(''); return result }
+  const [readPayables] = useState(() => latestOnly(() => payableRequest('/payables')))
+  async function refresh() { const result = await readPayables(setData); setVersion((v) => v + 1); setError(''); return result }
   useEffect(() => {
     let active = true
-    const load = () => payableRequest('/payables').then((result) => { if (active) { setData(result); setError(''); setLoading(false) } }).catch((caught) => { if (active) { setError(caught.message); setLoading(false) } })
+    const load = () => readPayables((result) => { if (active) { setData(result); setError('') } }).catch((caught) => { if (active) setError(caught.message) }).finally(() => { if (active) setLoading(false) })
     load(); const stopPolling = pollWhileVisible(load, 30000, ['finance'])
     const open = (event) => { setDetailId(event.detail); sessionStorage.removeItem('gmac-payable-open') }
     window.addEventListener('gmac-payable-open', open); sessionStorage.removeItem('gmac-payable-open')

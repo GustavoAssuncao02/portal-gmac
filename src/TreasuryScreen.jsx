@@ -9,7 +9,7 @@ import { ReceivableForm, ReceiptForm, ReceivableDetails } from './ReceivablesScr
 import { money, dateLabel, payableRequest, downloadPayables } from './payablesApi.js'
 import { settlementMethods } from '../server/payableRules.js'
 import { treasuryMovements, filterMovements, movementTotals, periodShortcuts } from './treasuryMovements.js'
-import { pollWhileVisible } from './polling.js'
+import { latestOnly, pollWhileVisible } from './polling.js'
 import './payables.css'
 import { useBanks, bankOptionLabel } from './BankSelect.jsx'
 
@@ -25,10 +25,11 @@ export default function TreasuryScreen(props) {
   const [data, setData] = useState(null), [error, setError] = useState(''), [notice, setNotice] = useState(''), [version, setVersion] = useState(0)
   const [filters, setFilters] = useState(initialFilters), [page, setPage] = useState(1), [pageSize, setPageSize] = useState(20), [sort, setSort] = useState({ key: 'date', direction: -1 })
   const [form, setForm] = useState(null), [detail, setDetail] = useState(null), [settling, setSettling] = useState(null), [confirm, setConfirm] = useState(null)
-  async function refresh() { const result = await loadAll(); setData(result); setVersion((value) => value + 1); setError(''); return result }
+  const [readAll] = useState(() => latestOnly(loadAll))
+  async function refresh() { const result = await readAll(setData); setVersion((value) => value + 1); setError(''); return result }
   useEffect(() => {
     let active = true
-    const load = () => loadAll().then((result) => { if (active) { setData(result); setError('') } }).catch((caught) => { if (active) setError(caught.message) })
+    const load = () => readAll((result) => { if (active) { setData(result); setError('') } }).catch((caught) => { if (active) setError(caught.message) })
     load()
     const stopPolling = pollWhileVisible(load, 30000, ['finance'])
     return () => { active = false; stopPolling() }

@@ -7,7 +7,7 @@ import { todayBahia, cents, dueLabel, matchesSearch, shiftMonth, treasuryEntry }
 import MoneyInput from './MoneyInput.jsx'
 import { InstallmentFields, withInstallments, installmentPayload } from './ReceivableInstallments.jsx'
 import { sumOf, dueShortcuts } from './financeFilters.js'
-import { pollWhileVisible } from './polling.js'
+import { latestOnly, pollWhileVisible } from './polling.js'
 import ReceivableForecast from './ReceivableForecast.jsx'
 import BankSelect, { useBanks, bankOptionLabel } from './BankSelect.jsx'
 import ClassificationSelect, { RevenueTermHint } from './ClassificationSelect.jsx'
@@ -197,10 +197,11 @@ export default function ReceivablesScreen(props) {
   const [data, setData] = useState({ items: [], clients: [] }), [loading, setLoading] = useState(true), [error, setError] = useState(''), [version, setVersion] = useState(0)
   const [filters, setFilters] = useState(initialFilters), [detailId, setDetailId] = useState(() => sessionStorage.getItem('gmac-receivable-open') || ''), [form, setForm] = useState(null), [receiving, setReceiving] = useState(null), [history, setHistory] = useState(null), [exporting, setExporting] = useState(false)
   const [page, setPage] = useState(1), [pageSize, setPageSize] = useState(20), [sort, setSort] = useState({ key: 'dueDate', direction: 1 }), [selected, setSelected] = useState([])
-  async function refresh() { const result = await payableRequest('/receivables'); setData(result); setVersion((v) => v + 1); setError(''); return result }
+  const [readReceivables] = useState(() => latestOnly(() => payableRequest('/receivables')))
+  async function refresh() { const result = await readReceivables(setData); setVersion((v) => v + 1); setError(''); return result }
   useEffect(() => {
     let active = true
-    const load = () => payableRequest('/receivables').then((result) => { if (active) { setData(result); setError(''); setLoading(false) } }).catch((caught) => { if (active) { setError(caught.message); setLoading(false) } })
+    const load = () => readReceivables((result) => { if (active) { setData(result); setError('') } }).catch((caught) => { if (active) setError(caught.message) }).finally(() => { if (active) setLoading(false) })
     load(); const stopPolling = pollWhileVisible(load, 30000, ['finance'])
     // The bell opens a receivable directly.
     const open = (event) => { setDetailId(event.detail); sessionStorage.removeItem('gmac-receivable-open') }

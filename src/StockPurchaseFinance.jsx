@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { CalendarClock, CircleCheck } from 'lucide-react'
 import { PayableModal } from './PayableModal.jsx'
 import PayableForm from './PayableForm.jsx'
 import { money, decimal, payableRequest } from './payablesApi.js'
+import { latestOnly, pollWhileVisible } from './polling.js'
 import { formatQuantity } from '../server/materialUnits.js'
 import './payables.css'
 
@@ -15,10 +16,13 @@ export default function StockPurchaseFinance({ purchase, onClose }) {
   const [mode, setMode] = useState(null), [data, setData] = useState(null), [busy, setBusy] = useState(false), [error, setError] = useState('')
   const quantity = Number(purchase.quantity) || 0, unitPrice = Number(purchase.unitPrice) || 0, totalCents = Math.round(quantity * unitPrice * 100)
   const amount = formatQuantity(quantity, purchase.unit)
+  const [readPayables] = useState(() => latestOnly(() => payableRequest('/payables')))
   async function choose(next) {
     setBusy(true); setError('')
-    try { setData(await payableRequest('/payables')); setMode(next) } catch (caught) { setError(caught.message) } finally { setBusy(false) }
+    try { await readPayables(setData); setMode(next) } catch (caught) { setError(caught.message) } finally { setBusy(false) }
   }
+  // While the form is open, a supplier registered elsewhere (another tab, another person) enters its list.
+  useEffect(() => { if (mode) return pollWhileVisible(() => readPayables(setData).catch(() => {}), 30000, ['finance']) }, [mode])
   if (mode) return <PayableForm treasury={mode === 'treasury'} single prefill={{ value: totalCents ? decimal(totalCents) : '', description: `Compra de material: ${purchase.name}${purchase.detail ? ` · ${purchase.detail}` : ''} (${amount})` }} suppliers={data.suppliers} classifications={data.classifications} orders={data.orders || []} items={data.items} onClose={onClose} onSaved={async () => onClose()} />
   return <PayableModal title="Lançar esta compra no financeiro?" busy={busy} onClose={onClose} footer={<button type="button" className="admin-tool-button" disabled={busy} onClick={onClose}>Não lançar agora</button>}>
     <p className="finance-choice-summary"><strong>{purchase.name}</strong>{purchase.detail ? ` · ${purchase.detail}` : ''} entrou no estoque: {amount}{totalCents ? <> × {money(Math.round(unitPrice * 100))} = <strong>{money(totalCents)}</strong></> : ''}.</p>

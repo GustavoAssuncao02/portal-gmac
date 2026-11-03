@@ -31,6 +31,12 @@ export function topicOfRoute(path) {
   if (first === 'notifications') return 'notifications'
   return financeRoutes.has(first) ? 'finance' : 'data'
 }
+// Clients are a registration ("data") that Contas a Receber and the Tesouraria also list ("finance").
+export function topicsOfRoute(path) {
+  const topic = topicOfRoute(path)
+  if (!topic) return []
+  return String(path).split('/').filter(Boolean)[0].toLowerCase() === 'clients' ? [topic, 'finance'] : [topic]
+}
 
 export function createLiveUpdates({ coalesceMs = COALESCE_MS, heartbeatMs = HEARTBEAT_MS } = {}) {
   const clients = new Set()
@@ -54,8 +60,8 @@ export function createLiveUpdates({ coalesceMs = COALESCE_MS, heartbeatMs = HEAR
   // tables): every write answered with success.
   function fromRequests(request, response, next) {
     if (['GET', 'HEAD', 'OPTIONS'].includes(request.method)) return next()
-    const topic = topicOfRoute(request.path)
-    if (topic) response.once('finish', () => { if (response.statusCode < 400) publish([topic]) })
+    const changed = topicsOfRoute(request.path)
+    if (changed.length) response.once('finish', () => { if (response.statusCode < 400) publish(changed) })
     next()
   }
 

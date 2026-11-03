@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
-import { topicOfName, topicOfRoute } from '../server/liveUpdates.js'
+import { topicOfName, topicOfRoute, topicsOfRoute } from '../server/liveUpdates.js'
 
 const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Teste' }
 
@@ -51,6 +51,19 @@ test('each change is told by kind: the bell, Gestão Financeira or the rest of t
   assert.equal(topicOfRoute('/payables/7/pay'), 'finance')
   assert.equal(topicOfRoute('/notifications/read-all'), 'notifications')
   for (const path of ['/auth/login', '/account', '/live']) assert.equal(topicOfRoute(path), null, path)
+  assert.deepEqual(topicsOfRoute('/clients/5'), ['data', 'finance'], 'Contas a Receber and the Tesouraria list the clients')
+  assert.deepEqual(topicsOfRoute('/suppliers'), ['finance'])
+  assert.deepEqual(topicsOfRoute('/orders/1'), ['data'])
+  assert.deepEqual(topicsOfRoute('/auth/login'), [])
+})
+
+test('a saved client reaches the finance screens as well as the registrations', async (t) => {
+  const fixture = await createWorkflowFixture({ accountsEnv: env })
+  t.after(() => fixture.close())
+  const admin = await listen(fixture, fixture.admin)
+  t.after(() => admin.close())
+  assert.equal((await fixture.adminRequest('/clients', 'POST', { name: 'Cliente ao vivo', documentType: 'cnpj', document: '11222333000181', email: '' })).status, 200)
+  assert.deepEqual(await admin.next(), ['data', 'finance'])
 })
 
 test('the open screens hear of a change in a fraction of a second, only when something really changed', async (t) => {

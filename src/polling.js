@@ -13,6 +13,19 @@ const MIN_GAP_MS = 1000
 const BURST = 6
 const REFILL_MS = 10000
 
+// A screen reads the same data from its timer, from live updates and after a save, and the answers can arrive out of
+// order: an older one arriving last would bring back the list from before the save. `latestOnly(read)` returns a function
+// that reads and hands the answer to `show`, unless the answer of a read started later is already on the screen.
+export function latestOnly(read) {
+  let started = 0, shown = 0
+  return async (show) => {
+    const id = ++started
+    const result = await read()
+    if (id > shown) { shown = id; show(result) }
+    return result
+  }
+}
+
 // Repeats `run` like setInterval, but only while the tab is visible. A hidden tab stops asking the server
 // and catches up the moment it is shown again, so the screen is never older than it would be with the tab open.
 export function pollWhileVisible(run, intervalMs, topics = ['data']) {
@@ -49,7 +62,9 @@ export function pollWhileVisible(run, intervalMs, topics = ['data']) {
   }
   const stopListening = subscribeLive(topics, changed)
   const resume = () => {
-    if (document.visibilityState === 'hidden' || !missed) return
+    // Hidden without the live connection, nothing tells this tab what changes meanwhile: it reads again when shown.
+    if (document.visibilityState === 'hidden') { if (!isLiveConnected()) missed = true; return }
+    if (!missed) return
     missed = false
     execute()
   }

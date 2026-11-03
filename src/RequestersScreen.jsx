@@ -3,6 +3,7 @@ import { Pencil, Plus, Trash2 } from 'lucide-react'
 import AdminWorkspace from './AdminWorkspace.jsx'
 import { PayableModal } from './PayableModal.jsx'
 import { payableRequest } from './payablesApi.js'
+import { latestOnly, pollWhileVisible } from './polling.js'
 import { RegistryToolbar, SortHeader, documentLabel, useRegistryList } from './RegistryList.jsx'
 import { normalizeSearch } from './offerResources.js'
 import { documentDigits, documentKind, maskClientDocument } from '../server/clientDocument.js'
@@ -25,9 +26,13 @@ const emptyForm = { name: '', clientId: '', clientName: '', cpf: '', email: '', 
 export default function RequestersScreen({ Sidebar, WorkspaceTabs, navigationProps, kind = contactKinds.requesters }) {
   const [items, setItems] = useState(null), [clients, setClients] = useState([]), [message, setMessage] = useState(''), [editing, setEditing] = useState(null), [removing, setRemoving] = useState(null)
   const load = () => payableRequest(kind.endpoint).then((result) => setItems(result.items))
+  const [readClients] = useState(() => latestOnly(() => payableRequest('/clients')))
   useEffect(() => {
     load().catch((caught) => setMessage(caught.message))
-    payableRequest('/clients').then((result) => setClients(result.items || [])).catch(() => setClients([]))
+    // The form offers the registered clients: one registered elsewhere (another tab, another person) enters the list.
+    const loadClients = () => readClients((result) => setClients(result.items || [])).catch(() => {})
+    loadClients()
+    return pollWhileVisible(loadClients, 30000)
   }, [])
   const columns = [
     { key: 'name', label: 'Nome', value: (row) => row.name, search: true },
