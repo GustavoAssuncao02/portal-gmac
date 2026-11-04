@@ -13,6 +13,7 @@ import FinanceTrendChart from './FinanceTrendChart.jsx'
 import { sumOf, dueShortcuts } from './financeFilters.js'
 import { latestOnly, pollWhileVisible } from './polling.js'
 import './payables.css'
+import { readListState, saveListState, useListState, useResetOnChange } from './savedListState.js'
 import { useBanks, bankOptionLabel } from './BankSelect.jsx'
 import ClassificationSelect from './ClassificationSelect.jsx'
 
@@ -70,16 +71,28 @@ function MiniBI({ rows, banks, onOpen }) {
 export default function PayablesScreen({ mode = 'accounts', accountFilters, ...props }) {
   const banks = useBanks()
   const [data, setData] = useState({ items: [], suppliers: [], classifications: [] }), [loading, setLoading] = useState(true), [error, setError] = useState(''), [version, setVersion] = useState(0)
-  const [filters, setFilters] = useState(initialFilters), [advanced, setAdvanced] = useState(false), [page, setPage] = useState(1), [pageSize, setPageSize] = useState(20), [sort, setSort] = useState({ key: 'dueDate', direction: 1 }), [selected, setSelected] = useState([])
+  const [filters, setFilters] = useState(() => accountFilters ? { ...initialFilters(), ...accountFilters } : readListState('payables', 'filters', initialFilters)), [advanced, setAdvanced] = useState(() => accountFilters ? Boolean(accountFilters.start || accountFilters.end) : readListState('payables', 'advanced', false)), [page, setPage] = useListState('payables', 'page', 1), [pageSize, setPageSize] = useListState('payables', 'pageSize', 20), [sort, setSort] = useListState('payables', 'sort', { key: 'dueDate', direction: 1 }), [selected, setSelected] = useState([])
   const [detailId, setDetailId] = useState(() => sessionStorage.getItem('gmac-payable-open') || ''), [form, setForm] = useState(null), [payRows, setPayRows] = useState(null), [confirm, setConfirm] = useState(null), [history, setHistory] = useState(null), [registry, setRegistry] = useState(null), [exporting, setExporting] = useState(false)
   // Fornecedores: the same list as the other registrations (search, count, sortable headers, formatted document).
   const supplierColumns = [{ key: 'name', label: 'Nome / razão social', value: (row) => row.name, search: true }, { key: 'document', label: 'CPF/CNPJ', value: (row) => row.document, search: true }, { key: 'email', label: 'E-mail', value: (row) => row.email || '', search: true }, { key: 'phone', label: 'Telefone', value: (row) => row.phone || '', search: true }, { key: 'notes', value: (row) => row.notes || '', search: true, hidden: true }]
   const supplierList = useRegistryList(data.suppliers || [], supplierColumns, 'name')
   useEffect(() => {
     if (mode !== 'accounts') return
-    setFilters({ ...initialFilters(), ...accountFilters })
-    setAdvanced(Boolean(accountFilters?.start || accountFilters?.end))
+    // A shortcut of the home screen is temporary; the menu goes back to what was chosen in the list.
+    if (accountFilters) {
+      setFilters({ ...initialFilters(), ...accountFilters })
+      setAdvanced(Boolean(accountFilters.start || accountFilters.end))
+      setPage(1)
+      return
+    }
+    setFilters(readListState('payables', 'filters', initialFilters))
+    setAdvanced(readListState('payables', 'advanced', false))
   }, [mode, accountFilters])
+  useEffect(() => {
+    if (mode !== 'accounts' || accountFilters) return
+    saveListState('payables', 'filters', filters)
+    saveListState('payables', 'advanced', advanced)
+  }, [mode, accountFilters, filters, advanced])
   const [readPayables] = useState(() => latestOnly(() => payableRequest('/payables')))
   async function refresh() { const result = await readPayables(setData); setVersion((v) => v + 1); setError(''); return result }
   useEffect(() => {
@@ -90,7 +103,8 @@ export default function PayablesScreen({ mode = 'accounts', accountFilters, ...p
     window.addEventListener('gmac-payable-open', open); sessionStorage.removeItem('gmac-payable-open')
     return () => { active = false; stopPolling(); window.removeEventListener('gmac-payable-open', open) }
   }, [mode])
-  useEffect(() => { setPage(1); setSelected([]) }, [filters, pageSize, mode])
+  useResetOnChange([filters, pageSize], () => { setPage(1); setSelected([]) })
+  useEffect(() => { setSelected([]) }, [mode])
   const filtered = filterPayables(data.items, filters).sort((a, b) => { const av = a[sort.key] ?? '', bv = b[sort.key] ?? ''; return sort.direction * (typeof av === 'number' ? av - bv : String(av).localeCompare(String(bv), 'pt-BR')) })
   const pages = Math.max(1, Math.ceil(filtered.length / pageSize)), currentPage = Math.min(page, pages), visible = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize)
   const selection = data.items.filter((r) => selected.includes(r.id))

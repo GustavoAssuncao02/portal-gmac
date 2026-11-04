@@ -66,6 +66,7 @@ import { operationElapsed } from '../server/operationSessions.js'
 import { formatQuantity, materialUnit, materialUnits, quantityStep, unitPriceLabel, wholeUnit } from '../server/materialUnits.js'
 import { currentEntryMode, materialTotal, minutesLabel, switchEntryMode, withEntryMode } from '../server/entryMode.js'
 import EntryModeChoice from './EntryModeChoice.jsx'
+import { clearListStates } from './savedListState.js'
 import './styles.css'
 import './desktop.css'
 import './mobile.css'
@@ -2389,6 +2390,7 @@ function App() {
         if (response.status === 401) {
           window.sessionStorage.removeItem('gmac-admin-token')
           window.sessionStorage.removeItem('gmac-admin-workspace')
+          clearListStates()
           setRestoringSession(false)
           return
         }
@@ -2513,6 +2515,7 @@ function App() {
 
   function enterAdmin(user, token) {
     window.sessionStorage.removeItem('gmac-admin-workspace')
+    clearListStates()
     setRestoringSession(false)
     if (token) window.sessionStorage.setItem('gmac-admin-token', token)
     else window.sessionStorage.removeItem('gmac-admin-token')
@@ -2530,6 +2533,7 @@ function App() {
     apiRequest('/api/auth/logout', { method: 'POST' }).catch(() => {})
     window.sessionStorage.removeItem('gmac-admin-token')
     window.sessionStorage.removeItem('gmac-admin-workspace')
+    clearListStates()
     setRestoringSession(false)
     setIsDashboard(false)
     setAdminUser(null)

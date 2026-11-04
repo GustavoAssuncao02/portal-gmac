@@ -10,6 +10,7 @@ import { money, dateLabel, payableRequest, downloadPayables } from './payablesAp
 import { treasuryMovements, filterMovements, movementTotals, periodShortcuts } from './treasuryMovements.js'
 import { latestOnly, pollWhileVisible } from './polling.js'
 import './payables.css'
+import { useListState, useResetOnChange } from './savedListState.js'
 import { useBanks, bankOptionLabel } from './BankSelect.jsx'
 
 const sortFields = [['date', 'Data'], ['id', 'ID'], ['documentNumber', 'Documento'], ['type', 'Tipo'], ['name', 'Favorecido / Pagador'], ['description', 'Descrição'], ['origin', 'Origem'], ['cents', 'Valor']]
@@ -22,7 +23,7 @@ const loadAll = async () => { const [payables, receivables] = await Promise.all(
 export default function TreasuryScreen(props) {
   const banks = useBanks()
   const [data, setData] = useState(null), [error, setError] = useState(''), [notice, setNotice] = useState(''), [version, setVersion] = useState(0)
-  const [filters, setFilters] = useState(initialFilters), [page, setPage] = useState(1), [pageSize, setPageSize] = useState(20), [sort, setSort] = useState({ key: 'date', direction: -1 })
+  const [filters, setFilters] = useListState('treasury', 'filters', initialFilters), [page, setPage] = useListState('treasury', 'page', 1), [pageSize, setPageSize] = useListState('treasury', 'pageSize', 20), [sort, setSort] = useListState('treasury', 'sort', { key: 'date', direction: -1 })
   const [form, setForm] = useState(null), [detail, setDetail] = useState(null), [settling, setSettling] = useState(null), [confirm, setConfirm] = useState(null)
   const [readAll] = useState(() => latestOnly(loadAll))
   async function refresh() { const result = await readAll(setData); setVersion((value) => value + 1); setError(''); return result }
@@ -33,7 +34,7 @@ export default function TreasuryScreen(props) {
     const stopPolling = pollWhileVisible(load, 30000, ['finance'])
     return () => { active = false; stopPolling() }
   }, [])
-  useEffect(() => { setPage(1) }, [filters, pageSize])
+  useResetOnChange([filters, pageSize], () => setPage(1))
 
   const inPeriod = filterMovements(treasuryMovements(data?.payables.items, data?.receivables.items), filters)
   const totals = movementTotals(inPeriod)

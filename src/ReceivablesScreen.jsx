@@ -12,6 +12,7 @@ import ReceivableForecast from './ReceivableForecast.jsx'
 import BankSelect, { useBanks, bankOptionLabel } from './BankSelect.jsx'
 import ClassificationSelect, { RevenueTermHint } from './ClassificationSelect.jsx'
 import './payables.css'
+import { useListState, useResetOnChange } from './savedListState.js'
 
 export const receiptMethods = { pix: 'Pix', boleto: 'Boleto', transfer: 'Transferência', card: 'Cartão', cash: 'Dinheiro' }
 const statusText = { pending: 'Pendente', overdue: 'Vencido', received: 'Recebido' }
@@ -195,8 +196,8 @@ export function ReceivableDetails({ id, refreshVersion, onClose, onEdit, onRecei
 export default function ReceivablesScreen(props) {
   const banks = useBanks()
   const [data, setData] = useState({ items: [], clients: [] }), [loading, setLoading] = useState(true), [error, setError] = useState(''), [version, setVersion] = useState(0)
-  const [filters, setFilters] = useState(initialFilters), [detailId, setDetailId] = useState(() => sessionStorage.getItem('gmac-receivable-open') || ''), [form, setForm] = useState(null), [receiving, setReceiving] = useState(null), [history, setHistory] = useState(null), [exporting, setExporting] = useState(false)
-  const [page, setPage] = useState(1), [pageSize, setPageSize] = useState(20), [sort, setSort] = useState({ key: 'dueDate', direction: 1 }), [selected, setSelected] = useState([])
+  const [filters, setFilters] = useListState('receivables', 'filters', initialFilters), [detailId, setDetailId] = useState(() => sessionStorage.getItem('gmac-receivable-open') || ''), [form, setForm] = useState(null), [receiving, setReceiving] = useState(null), [history, setHistory] = useState(null), [exporting, setExporting] = useState(false)
+  const [page, setPage] = useListState('receivables', 'page', 1), [pageSize, setPageSize] = useListState('receivables', 'pageSize', 20), [sort, setSort] = useListState('receivables', 'sort', { key: 'dueDate', direction: 1 }), [selected, setSelected] = useState([])
   const [readReceivables] = useState(() => latestOnly(() => payableRequest('/receivables')))
   async function refresh() { const result = await readReceivables(setData); setVersion((v) => v + 1); setError(''); return result }
   useEffect(() => {
@@ -208,7 +209,7 @@ export default function ReceivablesScreen(props) {
     window.addEventListener('gmac-receivable-open', open); sessionStorage.removeItem('gmac-receivable-open')
     return () => { active = false; stopPolling(); window.removeEventListener('gmac-receivable-open', open) }
   }, [])
-  useEffect(() => { setPage(1); setSelected([]) }, [filters, pageSize])
+  useResetOnChange([filters, pageSize], () => { setPage(1); setSelected([]) })
   // A bank shows the receipts that entered it, whatever the situation filter.
   const inPeriod = (row) => (!filters.start || row.dueDate >= filters.start) && (!filters.end || row.dueDate <= filters.end) && matches(row, filters.search) && (!filters.bankId || row.receipt?.bankId === filters.bankId)
   const base = data.items.filter(inPeriod)

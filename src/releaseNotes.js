@@ -8,6 +8,7 @@ export const releaseNotes = [
       'Planejamento: novo mapa da fábrica em tempo real',
       'OS: aumento na quantidade baixa a diferença do estoque e pede o que faltar',
       'Contas a Pagar, Contas a Receber e Tesouraria: novas colunas nas listas',
+      'Contas a Pagar, Contas a Receber e Tesouraria: ordenação e filtros mantidos ao trocar de tela',
       'Listas: ordenação pelos títulos das colunas em mais telas',
       'Máquinas: valor da hora na lista',
       'Etapas: novo histórico de alterações',

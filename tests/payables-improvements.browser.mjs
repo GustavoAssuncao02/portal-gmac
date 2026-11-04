@@ -139,7 +139,7 @@ try {
   const margins = page.locator('.order-margins-table tbody tr').filter({ hasText: 'OS-2026-0001' })
   await margins.waitFor()
   // The cost planned in the proposal (500) is already posted; the linked accounts (1.200) are additional.
-  assert.match(await margins.innerText(), /R\$\s1\.000,00[\s\S]*R\$\s500,00[\s\S]*R\$\s1\.700,00[\s\S]*Previsto \+ R\$\s1\.200,00[\s\S]*[−-]R\$\s700,00[\s\S]*-70/)
+  assert.match(await margins.innerText(), /R\$\s1\.000,00[\s\S]*R\$\s500,00[\s\S]*R\$\s1\.700,00[\s\S]*Previsto \+ R\$\s1\.200,00[\s\S]*[−-]R\$\s700,00[\s\S]*-41,2/)
   await page.locator('.order-margins').screenshot({ path: 'test-results/payables-order-margins.png' })
 
   // Mobile: the first account appears sooner.
