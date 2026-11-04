@@ -9,6 +9,7 @@ import PieceTrack, { workingStageKeys, stageCode, stageElapsedMs, minutesLabel }
 import { currentPieceProgress, groupProjectStages, stageGroupTone, isEmergency, emergenciesFirst } from './serviceProgress.js'
 import ServicePanelRow from './ServicePanelRow.jsx'
 import { servicePanelOrders } from './servicePanels.js'
+import { SortableRows, SortHeader } from './RegistryList.jsx'
 import './operator.css'
 
 // Every stage comes with its machine or service from the offer; an OS from before that rule may still lack one.
@@ -46,6 +47,19 @@ function formatMoment(value) {
 function currentStage(order) {
   return order.operation.stages.find((stage) => Number(order.operation.stageCounts[stage.key] || 0) < Number(order.quantity))?.name || (order.operation.stages.length ? 'Todas as etapas concluídas' : 'Etapas não definidas')
 }
+
+const panelPieces = (order) => currentPieceProgress(order.operation, order.quantity)
+const panelColumns = [
+  { key: 'code', label: 'OS / Serviço', value: (order) => order.code },
+  { key: 'company', label: 'Cliente', value: (order) => order.company },
+  { key: 'operator', label: 'Operador', value: (order) => (order.operation?.activeSessions || []).map((session) => session.employeeName).join(', ') },
+  { key: 'stage', label: 'Etapa atual', value: (order) => panelPieces(order).stages.find((stage) => !stage.filled)?.name },
+  { key: 'pieces', label: 'Peças concluídas', value: (order) => panelPieces(order).completedPieces, numeric: true },
+  { key: 'progress', label: 'Progresso', value: (order) => panelPieces(order).completedPieces / (Number(order.quantity) || 1), numeric: true },
+  { key: 'active', label: 'Tempo ativo', value: (order) => Number(order.operation?.accumulatedMs) || 0, numeric: true },
+  { key: 'remaining', label: 'Tempo restante', value: (order) => Date.parse(order.deliveryDeadline || order.deadline) || null, numeric: true },
+  { key: 'status', label: 'Status', value: (order) => order.operation?.status },
+]
 
 // In a mandatory sequence (Processo Injessado) a stage waits until the one before it has every piece; returns that stage.
 function waitingFor(order, index) {
@@ -508,8 +522,8 @@ export default function OperatorDashboard({ token, onLogout }) {
       {/* Before the code, the tablet follows every open OS as the administrators' panel does, without opening any. */}
       <section className="operator-overview" aria-labelledby="operator-entry-title">
         <header className="operator-overview-header"><h1 id="operator-entry-title">Projetos em andamento</h1><p>Acompanhamento em tempo real de todas as OS abertas.</p></header>
-        <div className="admin-os-table-wrap"><table className="admin-os-table"><thead><tr>{['OS / Serviço', 'Cliente', 'Operador', 'Etapa atual', 'Peças concluídas', 'Progresso', 'Tempo ativo', 'Tempo restante', 'Status'].map((label) => <th key={label}>{label}</th>)}</tr></thead>
-          <tbody>{emergenciesFirst(servicePanelOrders(orders)).map((order) => <ServicePanelRow key={order.code} order={order} now={now} />)}</tbody></table>
+        <div className="admin-os-table-wrap"><SortableRows rows={emergenciesFirst(servicePanelOrders(orders))} columns={panelColumns}>{(sorted) => <table className="admin-os-table"><thead><tr>{sorted.columns.map((column) => <SortHeader key={column.key} column={column} list={sorted} />)}</tr></thead>
+          <tbody>{sorted.rows.map((order) => <ServicePanelRow key={order.code} order={order} now={now} />)}</tbody></table>}</SortableRows>
           {!servicePanelOrders(orders).length && <p className="admin-os-empty">Nenhuma OS em andamento.</p>}</div>
       </section>
       <section className={`operator-entry-card${entering ? ' operator-entry-card--keypad' : ''}`} aria-label="Entrar com o código do funcionário">

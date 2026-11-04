@@ -1,0 +1,56 @@
+/* Mapa da fábrica no Planejamento. O desenho tem cores próprias (é uma ilustração) e fica igual nos temas. */
+.factory-map { margin: 14px 0 18px; padding: 14px 16px 16px; border: 1px solid #d8e1ea; border-radius: 12px; background: #fff; }
+.factory-map--closed { padding-bottom: 14px; }
+.factory-map-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 20px; }
+.factory-map-heading h2 { margin: 0; color: #17375e; font-size: 17px; }
+.factory-map-heading p { margin: 2px 0 0; color: #5d738b; font-size: 13px; }
+.factory-map-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.factory-map-count { display: inline-flex; align-items: center; gap: 7px; color: #5d738b; font-size: 13px; font-weight: 600; }
+.factory-map-count i { width: 9px; height: 9px; border-radius: 50%; background: #9aa5b1; }
+.factory-map-count--on { color: #17375e; }
+.factory-map-count--on i { background: #16a34a; }
+.factory-map-outside { margin: 10px 0 0; color: #5d738b; font-size: 13px; line-height: 1.4; }
+.factory-map-outside strong { color: #17375e; }
+.factory-map-warning { margin: 10px 0 0; color: #a15c07; font-size: 13px; }
+.factory-map-scroll { margin-top: 12px; overflow-x: auto; border-radius: 8px; -webkit-overflow-scrolling: touch; }
+.factory-map-canvas { position: relative; min-width: 1240px; background: #e6e8eb; line-height: 0; }
+.factory-map-scene { position: absolute; inset: 0; display: block; width: 100%; height: 100%; pointer-events: none; transform: translateZ(0); }
+.factory-map-stations { position: relative; display: block; width: 100%; height: auto; user-select: none; }
+.factory-map-vignette { position: absolute; inset: 0; background: radial-gradient(ellipse 78% 78% at 50% 60%, rgba(5, 11, 20, 0) 60%, rgba(5, 11, 20, .3) 100%); pointer-events: none; }
+
+.factory-sign rect { fill: #17375e; filter: drop-shadow(0 3px 4px rgba(0, 0, 0, .45)); }
+.factory-sign text { fill: #fff; font: 700 17px Inter, 'Segoe UI', Arial, sans-serif; letter-spacing: .04em; }
+.factory-floor-mark { fill: none; stroke-width: 3; opacity: .6; }
+.factory-station { cursor: pointer; outline: none; }
+.factory-hit { fill: transparent; }
+.factory-station-label { fill: #4c5158; font: 600 14px Inter, 'Segoe UI', Arial, sans-serif; paint-order: stroke; stroke: rgba(235, 237, 240, .92); stroke-width: 3px; }
+.factory-station-label--working { fill: #17375e; font-weight: 700; }
+.factory-station-label--unregistered { fill: #777c83; font-weight: 500; }
+.factory-station--active .factory-floor-mark, .factory-station:focus-visible .factory-floor-mark { stroke: #f5821f; stroke-width: 4.5; opacity: 1; }
+.factory-station-label--active { fill: #0f2a4a; }
+.factory-labels { pointer-events: none; }
+.factory-worker-mark { fill: #fff; font: 700 5.6px Inter, Arial, sans-serif; }
+
+/* Os quadros do funcionário: cada um aparece na sua vez, sem transição; o cenário e o equipamento não se movem. */
+/* O portal desliga as animações das telas administrativas (animation: none !important); este seletor é a exceção do mapa. */
+.factory-map .factory-worker .factory-frame { visibility: hidden; animation: factory-frame-step 1500ms steps(1, end) infinite !important; animation-delay: calc(var(--factory-index) * 250ms - var(--factory-delay, 0ms)) !important; }
+@keyframes factory-frame-step {
+  0% { visibility: visible; }
+  16.667%, 100% { visibility: hidden; }
+}
+
+.factory-details { position: absolute; z-index: 2; width: max-content; max-width: 300px; padding: 10px 13px; transform: translateX(-50%); border-radius: 9px; background: #0f2a4a; color: #fff; line-height: 1.35; box-shadow: 0 8px 22px rgba(0, 0, 0, .3); pointer-events: none; }
+.factory-details--above { transform: translate(-50%, -100%); }
+.factory-details > div + div { margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, .2); }
+.factory-details strong, .factory-details span, .factory-details em, .factory-details small { display: block; }
+.factory-details strong { font-size: 14px; }
+.factory-details span { color: #dbe6f2; font-size: 13px; }
+.factory-details em { margin-top: 3px; color: #f9b478; font-size: 13px; font-style: normal; font-weight: 600; font-variant-numeric: tabular-nums; }
+.factory-details small { margin-top: 3px; color: #b8c8d9; font-size: 12px; }
+
+:root[data-theme="dark"] .factory-map { border-color: rgba(255, 255, 255, .12); background: transparent; }
+:root[data-theme="dark"] .factory-map-heading h2, :root[data-theme="dark"] .factory-map-count--on { color: #e6eef7; }
+:root[data-theme="dark"] .factory-map-heading p, :root[data-theme="dark"] .factory-map-count, :root[data-theme="dark"] .factory-map-outside { color: #a9b8c9; }
+:root[data-theme="dark"] .factory-map-outside strong { color: #e6eef7; }
+
+.factory-map { min-width: 0; }

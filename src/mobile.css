@@ -118,10 +118,11 @@
   .machine-row > span::before { font-size: 12px; color: #698097; }
   .machine-row > span:nth-child(2)::before { content: 'Tipo'; }
   .machine-row > span:nth-child(3)::before { content: 'Setor'; }
-  .machine-row > span:nth-child(4)::before { content: 'Status'; }
-  .machine-row > span:nth-child(5)::before { content: 'Operador'; }
-  .machine-row > span:nth-child(6)::before { content: 'Início de uso'; }
-  .machine-row > span:nth-child(7)::before { content: 'Tempo de uso hoje'; }
+  .machine-row > span:nth-child(4)::before { content: 'Valor/hora'; }
+  .machine-row > span:nth-child(5)::before { content: 'Status'; }
+  .machine-row > span:nth-child(6)::before { content: 'Operador'; }
+  .machine-row > span:nth-child(7)::before { content: 'Início de uso'; }
+  .machine-row > span:nth-child(8)::before { content: 'Tempo de uso hoje'; }
   .machine-status { font-size: 12px; width: fit-content; white-space: normal; }
   .row-actions { grid-column: 1 / -1; justify-content: flex-end; gap: 8px; }
   .dashboard-shell .row-actions button { width: 44px; height: 44px; }
@@ -356,7 +357,7 @@
   .payable-table td::before { content: attr(data-label); color: #698097; font-size: 12px; font-weight: normal; }
   .payable-table td:first-child { grid-column: 1; grid-row: 1; }
   .payable-table td:nth-child(2) { grid-column: 2; grid-row: 1; text-align: right; align-self: center; }
-  .payable-table td:nth-child(3), .payable-table td:nth-child(4), .payable-table td:nth-child(5) { grid-column: 1 / -1; }
+  .payable-table td:nth-child(3), .payable-table td:nth-child(4), .payable-table td:nth-child(5), .payable-table td.payable-classification { grid-column: 1 / -1; }
   .payable-table td:first-child::before, .payable-table td:nth-child(2)::before { display: none; }
   .payable-table td:first-child input { width: 24px; height: 24px; margin: 10px; cursor: pointer; }
   .payable-table td.payable-empty { grid-column: 1 / -1; }

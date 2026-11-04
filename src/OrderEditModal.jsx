@@ -6,7 +6,9 @@ import { activeSessions } from '../server/operationSessions.js'
 import { newId } from './newId.js'
 import { cachedResource, payableRequest, money, dateLabel } from './payablesApi.js'
 import './orderEditing.css'
-import { materialUnit, materialUnits, quantityStep } from '../server/materialUnits.js'
+import { formatQuantity, materialUnit, materialUnits, quantityStep } from '../server/materialUnits.js'
+import { minutesLabel, quantityChanges, switchEntryMode, withEntryMode } from '../server/entryMode.js'
+import EntryModeChoice from './EntryModeChoice.jsx'
 
 function useDialog(dialog) {
   useEffect(() => {
@@ -98,6 +100,11 @@ export default function OrderEditModal({ order, confirmCompleted, onSave, onUplo
   const data = draft.order
   const resources = data.resources
   const locked = busy || saved.current
+  // Launched per piece: what a new quantity of pieces changes, told before saving.
+  const perPiece = resources.entryMode === 'piece'
+  const pieces = Number(data.quantity) || 1
+  const sized = perPiece ? withEntryMode(resources, pieces) : resources
+  const recalculated = perPiece && pieces !== Number(order.quantity) ? quantityChanges(order.resources, sized) : null
   const deadlineChanged = (data.deadline || '') !== (order.deadline || '')
   const close = () => { if (!pending.current) onClose() }
   const update = (field, value) => setDraft((current) => ({ ...current, order: { ...current.order, [field]: value } }))
@@ -150,18 +157,19 @@ export default function OrderEditModal({ order, confirmCompleted, onSave, onUplo
           {tab === 'data' && <div className="os-edit-grid">
             {field('Peça / Serviço', 'service', { required: true, maxLength: 160 })}{field('Cliente', 'company', { required: true, maxLength: 160 })}
             {field('CNPJ/CPF', 'cnpj', { required: true, maxLength: 18, inputMode: 'numeric' })}{field('Número da etiqueta', 'labelNumber', { maxLength: 80 })}
-            {field('Quantidade de peças', 'quantity', { type: 'number', min: 1, step: 1, required: true })}{field('Prazo solicitado', 'deadline', { type: 'date', required: true })}{deadlineChanged && <label className="os-edit-field os-edit-wide os-deadline-reason">Justificativa da alteração do prazo<textarea required minLength={10} maxLength={1000} rows={3} value={deadlineReason} onChange={(event) => setDeadlineReason(event.target.value)} placeholder="Explique por que o prazo de entrega desta OS foi alterado" /></label>}
+            {field('Quantidade de peças', 'quantity', { type: 'number', min: 1, step: 1, required: true })}{field('Prazo solicitado', 'deadline', { type: 'date', required: true })}{recalculated && <div className="os-edit-wide os-quantity-notice" role="status"><strong>Lançado por peça: ao salvar, materiais e tempos serão recalculados para {pieces} {pieces === 1 ? 'peça' : 'peças'}.</strong><ul>{recalculated.materials.map((row) => <li key={row.id}>{row.name}: {formatQuantity(row.before, row.unit)} → {formatQuantity(row.after, row.unit)}{row.consumed > row.after ? ` · ${formatQuantity(row.consumed - row.after, row.unit)} a mais já baixados do estoque` : ''}</li>)}{recalculated.stages.map((row) => <li key={row.code}>{stageLabel(row.code)}: {minutesLabel(row.before)} → {minutesLabel(row.after)}</li>)}</ul><small>Ao aumentar, a diferença sai do estoque ao salvar e o que faltar vira pedido de material. Ao diminuir, nada volta sozinho para o estoque. O valor da OS não muda: se precisar, ajuste em Proposta e anexos.</small></div>}{deadlineChanged && <label className="os-edit-field os-edit-wide os-deadline-reason">Justificativa da alteração do prazo<textarea required minLength={10} maxLength={1000} rows={3} value={deadlineReason} onChange={(event) => setDeadlineReason(event.target.value)} placeholder="Explique por que o prazo de entrega desta OS foi alterado" /></label>}
             <label className="os-edit-field">Data da solicitação<input type="date" value={data.requestedAt?.slice(0, 10) || ''} onChange={(event) => update('requestedAt', event.target.value ? `${event.target.value}T03:00:00.000Z` : '')} required /></label>
             <label className="os-edit-field os-edit-wide">Descrição da OS<textarea aria-label="Descrição da OS" rows={3} maxLength={5000} value={data.description} onChange={(event) => update('description', event.target.value)} required /></label>
           </div>}
           {tab === 'resources' && <>
-            <div className="os-edit-section-heading"><h3>Materiais</h3><button className="os-button" type="button" onClick={() => resource('materials', [...resources.materials, { id: newId(), name: '', detail: '', unit: 'kg', quantity: 1, unitPrice: 0 }])}><Plus size={16} />Adicionar material</button></div>
+            <EntryModeChoice value={perPiece ? 'piece' : 'total'} onChange={(mode) => { if (mode !== (perPiece ? 'piece' : 'total')) setDraft((current) => ({ ...current, order: { ...current.order, resources: switchEntryMode(current.order.resources, mode, pieces) } })) }} />
+            <div className="os-edit-section-heading"><h3>Materiais</h3><button className="os-button" type="button" onClick={() => resource('materials', [...resources.materials, { id: newId(), name: '', detail: '', unit: 'kg', quantity: 1, ...(perPiece ? { quantityPerPiece: 1 } : {}), unitPrice: 0 }])}><Plus size={16} />Adicionar material</button></div>
             {resources.materials.map((item) => <div className="os-edit-resource-row" key={item.id}>
               <label className="os-edit-field">Material<input value={item.name} maxLength={160} onChange={(event) => row('materials', item.id, 'name', event.target.value)} required /></label>
               <label className="os-edit-field">Especificação<input value={item.detail || ''} maxLength={500} onChange={(event) => row('materials', item.id, 'detail', event.target.value)} /></label>
               {/* A material linked to the stock keeps the unit of its registration. */}
               <label className="os-edit-field">Unidade<select value={materialUnit(item.unit)} disabled={item.inventoryId != null} onChange={(event) => row('materials', item.id, 'unit', event.target.value)}>{materialUnits.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
-              <label className="os-edit-field">{`Quantidade (${materialUnit(item.unit)})`}<input type="number" min={quantityStep(item.unit)} step={quantityStep(item.unit)} value={item.quantity} onChange={(event) => row('materials', item.id, 'quantity', event.target.value)} required /></label>
+              {perPiece && item.quantityPerPiece != null ? <label className="os-edit-field">{`Quantidade por peça (${materialUnit(item.unit)})`}<input type="number" min="0.0001" step="any" value={item.quantityPerPiece} onChange={(event) => row('materials', item.id, 'quantityPerPiece', event.target.value)} required /><small>{formatQuantity(sized.materials.find((entry) => entry.id === item.id)?.quantity, item.unit)} no total</small></label> : <label className="os-edit-field">{`Quantidade (${materialUnit(item.unit)})`}<input type="number" min={quantityStep(item.unit)} step={quantityStep(item.unit)} value={item.quantity} onChange={(event) => row('materials', item.id, 'quantity', event.target.value)} required /></label>}
               <label className="os-edit-field">{`Valor/${materialUnit(item.unit)} (R$)`}<input type="number" min="0" step="0.01" value={item.unitPrice} onChange={(event) => row('materials', item.id, 'unitPrice', event.target.value)} required /></label>
               <button className="os-icon-button" type="button" title="Remover material" aria-label={`Remover material ${item.name || 'sem nome'}`} onClick={() => resource('materials', resources.materials.filter((entry) => entry.id !== item.id))}><Trash2 size={16} /></button>
             </div>)}
@@ -169,13 +177,13 @@ export default function OrderEditModal({ order, confirmCompleted, onSave, onUplo
             {resources.laborEntries.map((item) => <div className="os-edit-resource-row" key={item.id}>
               <label className="os-edit-field">Tipo de recurso<select aria-label="Tipo de recurso" value={item.type} onChange={(event) => row('laborEntries', item.id, 'type', event.target.value)}><option value="machine">Hora máquina</option><option value="person">Hora homem</option></select></label>
               <label className="os-edit-field">Recurso<input value={item.resource} maxLength={160} onChange={(event) => row('laborEntries', item.id, 'resource', event.target.value)} required /></label>
-              <label className="os-edit-field">Horas previstas<input type="number" min="0" step="0.01" value={item.hours} onChange={(event) => row('laborEntries', item.id, 'hours', event.target.value)} required /></label>
+              <label className="os-edit-field">Horas previstas<input type="number" min="0" step="0.01" value={perPiece && item.stageCode ? sized.laborEntries.find((entry) => entry.id === item.id)?.hours ?? item.hours : item.hours} readOnly={perPiece && Boolean(item.stageCode)} title={perPiece && item.stageCode ? 'Calculado: tempo por peça da etapa × quantidade' : undefined} onChange={(event) => row('laborEntries', item.id, 'hours', event.target.value)} required /></label>
               <label className="os-edit-field">Valor/hora (R$)<input type="number" min="0" step="0.01" value={item.hourlyRate} onChange={(event) => row('laborEntries', item.id, 'hourlyRate', event.target.value)} required /></label>
               <button className="os-icon-button" type="button" title="Remover mão de obra" aria-label={`Remover recurso ${item.resource || 'sem nome'}`} onClick={() => resource('laborEntries', resources.laborEntries.filter((entry) => entry.id !== item.id))}><Trash2 size={16} /></button>
             </div>)}
           </>}
           {tab === 'process' && <div className="offer-process-settings os-edit-process">
-            <ServiceStageEditor layout={resources.stageLayout} stages={resources.stages} onLayoutChange={reorder} onToggle={toggleStage} disabled={locked} stageTimes={resources.stageTimes} onStageTime={(code, minutes) => { const next = { ...resources.stageTimes }; if (minutes) next[code] = minutes; else delete next[code]; resource('stageTimes', next) }} stageResources={resources.stageResources} resourceOptions={resourceOptions} onStageResource={(code, choice) => { const next = { ...resources.stageResources }; if (choice) next[code] = choice; else delete next[code]; resource('stageResources', next) }} />
+            <ServiceStageEditor layout={resources.stageLayout} stages={resources.stages} onLayoutChange={reorder} onToggle={toggleStage} disabled={locked} stageTimes={perPiece ? resources.stageTimesPerPiece : resources.stageTimes} pieces={perPiece ? pieces : null} onStageTime={(code, minutes) => { const field = perPiece ? 'stageTimesPerPiece' : 'stageTimes', next = { ...resources[field] }; if (minutes) next[code] = minutes; else delete next[code]; resource(field, next) }} stageResources={resources.stageResources} resourceOptions={resourceOptions} onStageResource={(code, choice) => { const next = { ...resources.stageResources }; if (choice) next[code] = choice; else delete next[code]; resource('stageResources', next) }} />
             {resources.stages.filter((key) => !productionStages.some(([code]) => code === key)).map((key) => <label key={key} className="os-edit-checkbox"><input type="checkbox" checked onChange={() => toggleStage(key)} />{key}</label>)}
             <div className="os-edit-grid">
               <label className="os-edit-field">Tipo<select aria-label="Tipo" value={resources.kind} onChange={(event) => resource('kind', event.target.value)}><option value="service">Serviço</option><option value="product">Produto</option></select></label>

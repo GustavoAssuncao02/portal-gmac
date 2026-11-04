@@ -5646,6 +5646,23 @@
 :root[data-theme="dark"][data-tone="black"][data-theme="dark"] .download-link, :root[data-theme="dark"][data-tone="black"][data-theme="dark"] .proposal-generated-actions .download-link, :root[data-theme="dark"][data-tone="black"][data-theme="dark"] .operator-info-files .operator-info-download {
     color: #bec1c5
 }
+:root[data-theme="dark"][data-tone="black"] .offer-entry-mode {
+    border: 1px solid #303133;
+    background: #232425
+}
+:root[data-theme="dark"][data-tone="black"] .offer-entry-mode legend {
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .offer-entry-mode p {
+    color: #bfc2c5
+}
+:root[data-theme="dark"][data-tone="black"] .os-quantity-notice {
+    border: 1px solid #303133;
+    background: #302a1a
+}
+:root[data-theme="dark"][data-tone="black"][data-theme="dark"] .offer-entry-mode {
+    border-color: #3031332e
+}
 @media (min-width: 2200px) {
     :root[data-theme="dark"][data-tone="black"] .proposal-card-column + .proposal-card-column {
         border-top: 1px solid #303133
@@ -5992,6 +6009,13 @@
 }
 :root[data-theme="dark"][data-tone="black"] .os-attachments .os-attachment-download {
     color: #bec2c5
+}
+:root[data-theme="dark"][data-tone="black"] .offer-entry-mode {
+    border-color: #ffffff2e
+}
+:root[data-theme="dark"][data-tone="black"] .os-quantity-notice {
+    background: #f2b7051f;
+    border-color: #f2b70566
 }
 :root[data-theme="dark"][data-tone="black"] {
     background: #111212;

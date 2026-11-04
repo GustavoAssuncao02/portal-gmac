@@ -15,9 +15,11 @@ test('offer: Interno by default, Externo kept without discarding the proposal; s
     const base = { materials: [], laborEntries: [], kind: 'service', stages: ['turning', 'painting'] }
     assert.equal((await fixture.adminRequest(route, 'PUT', base)).data.item.resources.serviceLocation, 'internal')
     await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', deadline: offerDraft.deadline, serviceValue: 100 } })
+    const onlyLocation = (await fixture.adminRequest(route, 'PUT', { ...base, serviceLocation: 'external' })).data.item
+    assert.ok(onlyLocation.proposal, 'the type of service does not discard the proposal')
     const external = (await fixture.adminRequest(route, 'PUT', { ...base, serviceLocation: 'external', stageResources: { turning: { type: 'machine', id: machine.id }, painting: { type: 'labor-service', id: service.id } } })).data.item
     assert.equal(external.resources.serviceLocation, 'external')
-    assert.ok(external.proposal, 'the type of service and the stage resources do not discard the proposal')
+    assert.equal(external.proposal, null, 'another machine or service changes the labor, and so discards the proposal')
     assert.deepEqual(external.resources.stageResources, { turning: { type: 'machine', id: machine.id, name: 'Torno CNC' }, painting: { type: 'labor-service', id: service.id, name: service.name } })
     assert.equal((await fixture.adminRequest(route, 'PUT', { ...base, serviceLocation: 'remote' })).status, 400)
     assert.equal((await fixture.adminRequest(route, 'PUT', { ...base, stageResources: { turning: { type: 'machine', id: 'inexistente' } } })).status, 400)

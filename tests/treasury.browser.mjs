@@ -78,7 +78,7 @@ try {
   const notice = page.locator('.treasury-notice')
   assert.match((await notice.innerText()).replace(/\s/g, ' '), /^Saída PAG-\d{6} de R\$ 200,00 registrada\.$/)
   const diesel = rows.filter({ hasText: 'Diesel do caminhão' })
-  assert.match((await diesel.innerText()).replace(/\s+/g, ' '), /Saída Posto Avenida Diesel do caminhão Combustível Dinheiro Tesouraria − R\$ 200,00/)
+  assert.match((await diesel.innerText()).replace(/\s+/g, ' '), /Saída Posto Avenida Diesel do caminhão Combustível Tesouraria − R\$ 200,00/)
 
   // Money in, with the form of Contas a Receber.
   await page.getByRole('button', { name: 'Nova entrada', exact: true }).click()
@@ -93,7 +93,7 @@ try {
   await entry.getByRole('button', { name: 'Salvar entrada', exact: true }).click()
   await entry.waitFor({ state: 'detached' })
   assert.match((await notice.innerText()).replace(/\s/g, ' '), /^Entrada REC-\d{6} de R\$ 300,00 registrada\.$/)
-  assert.match((await rows.filter({ hasText: 'Venda de cavaco' }).innerText()).replace(/\s+/g, ' '), /Entrada Ferro Velho Central Venda de cavaco Receita de teste Dinheiro Tesouraria \+ R\$ 300,00/)
+  assert.match((await rows.filter({ hasText: 'Venda de cavaco' }).innerText()).replace(/\s+/g, ' '), /Entrada Ferro Velho Central Venda de cavaco Receita de teste Tesouraria \+ R\$ 300,00/)
   assert.equal((await metric('Saldo do período')).replace(/\s/g, ' '), 'R$ 4.659,63')
 
   // Filters.
@@ -237,7 +237,7 @@ try {
   await schedule.getByRole('button', { name: 'Registrar e concluir', exact: true }).click()
   await service.waitFor({ state: 'detached' })
   await navigate('Tesouraria')
-  assert.match((await rows.filter({ hasText: order.code }).first().innerText()).replace(/\s+/g, ' '), /Entrada Teste de fluxo .*Transferência Tesouraria .*\+ R\$ 2\.450,00/)
+  assert.match((await rows.filter({ hasText: order.code }).first().innerText()).replace(/\s+/g, ' '), /Entrada Teste de fluxo .*Tesouraria .*\+ R\$ 2\.450,00/)
   // The OS keeps its own value; the R$ 50,00 beyond it is interest.
   const posted = (await api('/receivables')).data.items.find((item) => item.orderCode === order.code)
   assert.deepEqual([posted.valueCents, posted.receipt.interestCents, posted.receipt.discountCents, posted.receipt.finalCents], [240000, 5000, 0, 245000])

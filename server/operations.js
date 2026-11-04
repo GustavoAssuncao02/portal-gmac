@@ -1,3 +1,4 @@
+import { consumeOrderIncrease } from './orderMaterials.js'
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto'
 import express from 'express'
 import { mutateStore, readStore } from './offers.js'
@@ -210,10 +211,10 @@ export default function createOperationsRouter(pool) {
       for (const event of events) await connection.execute('INSERT INTO order_operation_events (id, order_code, data, occurred_at) VALUES (?, ?, ?, ?)', [event.id, code, JSON.stringify(event), new Date(event.at)])
     }
     const result = (current, state, events) => ({ order: current, operation: publicOperation(current, state), event: events.at(-1) || null, events })
-    if (!pool) return mutateStore((store) => {
+    if (!pool) return mutateStore(async (store) => {
       const current = store.orders.find((item) => item.code === code)
       const state = normalizeSessions(current.operation || defaultOperation(current))
-      const events = eventList(change(state, current, store))
+      const events = eventList(await change(state, current, store))
       current.operation = state
       current.operationEvents ||= []
       current.operationEvents.push(...events)
@@ -229,7 +230,7 @@ export default function createOperationsRouter(pool) {
         await connection.execute('INSERT IGNORE INTO order_operations (order_code, data) VALUES (?, ?)', [code, JSON.stringify(defaultOperation(current))])
         const [rows] = await connection.execute('SELECT data FROM order_operations WHERE order_code = ? FOR UPDATE', [code])
         const state = normalizeSessions(json(rows[0].data))
-        const events = eventList(change(state, current, store))
+        const events = eventList(await change(state, current, store, connection))
         await connection.execute('UPDATE order_operations SET data = ? WHERE order_code = ?', [JSON.stringify(state), code])
         await saveEvents(connection, events)
         return result(current, state, events)
@@ -622,9 +623,11 @@ export default function createOperationsRouter(pool) {
 
   router.put('/operations/orders/:code', requireAdmin, async (request, response) => {
     try {
-      const result = await changeOperation(request.params.code, (state, order, store) => {
-        const previousMaterialIds = new Set((order.resources?.materials || []).map((material) => material.id))
+      const result = await changeOperation(request.params.code, async (state, order, store, connection) => {
+        const previousMaterials = structuredClone(order.resources?.materials || [])
+        const previousMaterialIds = new Set(previousMaterials.map((material) => material.id))
         const changes = editOrder(order, state, { ...request.body, actorName: request.adminName }, { machines: store.machines, laborServices: store.laborServices })
+        if (connection) await consumeOrderIncrease(connection, order, previousMaterials)
         for (const material of order.resources.materials) if (!previousMaterialIds.has(material.id)) Object.assign(material, { requestedBy: request.adminId, requestedByName: request.adminName || null, requestedAt: new Date().toISOString(), requestedQuantity: material.purchaseQuantity ?? material.quantity })
         const offer = store.offers.find((item) => item.id === order.offerId)
         if (!offer) throw new OperationError(409, 'A oferta vinculada à OS não foi encontrada.')

@@ -6551,6 +6551,28 @@
 :root[data-theme="dark"][data-theme="dark"] .download-link, :root[data-theme="dark"][data-theme="dark"] .proposal-generated-actions .download-link, :root[data-theme="dark"][data-theme="dark"] .operator-info-files .operator-info-download {
     color: #a9c1da
 }
+:root[data-theme="dark"] .offer-entry-mode {
+    border: 1px solid #36516f;
+    background: #203c59
+}
+:root[data-theme="dark"] .offer-entry-mode legend {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .offer-entry-mode p {
+    color: #b7c2cd
+}
+:root[data-theme="dark"] .os-quantity-notice {
+    border: 1px solid #36516f;
+    background: #3c3520;
+    color: #ecd389
+}
+:root[data-theme="dark"][data-theme="dark"] .offer-entry-mode {
+    border-color: #36516f2e
+}
+:root[data-theme="dark"][data-theme="dark"] .os-quantity-notice {
+    background: #98791b1f;
+    border-color: #ae944766
+}
 @media (min-width: 2200px) {
     :root[data-theme="dark"] .proposal-card-column + .proposal-card-column {
         border-top: 1px solid #36516f

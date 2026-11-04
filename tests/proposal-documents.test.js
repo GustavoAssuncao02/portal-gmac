@@ -73,7 +73,9 @@ test('proposal models: drafts from the system, fiscal codes, Nestlé and etiquet
 
     // An offer with planned resources.
     const offer = (await f.adminRequest('/offers', 'POST', { ...offerDraft, company: 'Nestlé Brasil Ltda', service: 'Tampa graxadeira', description: 'Fabricação de 20 unidades, conforme amostra', quantity: 20, labelNumber: '5319' })).data.item
-    await f.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [{ id: 'm1', name: 'Aço SAE 1020', detail: 'redondo 2"', quantity: 4, unitPrice: 10 }], laborEntries: [{ id: 'l1', type: 'machine', resource: 'Torno CNC 01', hours: 25, hourlyRate: 120 }, { id: 'l2', type: 'labor', resource: 'Ajustagem', hours: 2, hourlyRate: 50 }], stages: ['machining'] })
+    // The labor comes from the time and the machine or service of each stage.
+    await f.mutateStore((store) => { store.machines = [...(store.machines || []), { id: 'torno01', name: 'Torno CNC 01', hourlyRate: 120 }, { id: 'centro5', name: 'Centro de usinagem 5 eixos', hourlyRate: 100 }]; store.laborServices = [...(store.laborServices || []), { id: 'ajuste', name: 'Ajustagem', hourlyRate: 50 }, { id: 'cald', name: 'Caldeiraria', hourlyRate: 50 }] })
+    await f.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [{ id: 'm1', name: 'Aço SAE 1020', detail: 'redondo 2"', quantity: 4, unitPrice: 10 }], laborEntries: [], stages: ['turning', 'assembly'], stageTimes: { turning: 1500, assembly: 120 }, stageResources: { turning: { type: 'machine', id: 'torno01' }, assembly: { type: 'labor-service', id: 'ajuste' } } })
 
     // Etiqueta: every line of the price list, quantities from the system, unmatched resources left for the user.
     const etiqueta = (await request(`/offers/${offer.id}/proposal-draft?model=etiqueta`)).data.draft
@@ -151,7 +153,7 @@ test('proposal models: drafts from the system, fiscal codes, Nestlé and etiquet
 
     // Nestlé FS-3055 from the planned resources; once accepted, the receivable of the OS suggests the sheet total.
     const talisca = (await f.adminRequest('/offers', 'POST', { ...offerDraft, company: 'Nestlé Brasil Ltda', service: 'Talisca', description: 'Fabricação de talisca lado direito e lado esquerdo, conforme desenho', quantity: 1, labelNumber: '2022906' })).data.item
-    await f.adminRequest(`/offers/${talisca.id}/resources`, 'PUT', { materials: [{ id: 'm', name: 'Aço Inox 316L', quantity: 4, unitPrice: 30 }], laborEntries: [{ id: 'a', type: 'machine', resource: 'Centro de usinagem 5 eixos', hours: 5, hourlyRate: 100 }, { id: 'b', type: 'labor', resource: 'Caldeiraria', hours: 3, hourlyRate: 50 }], stages: ['machining'] })
+    await f.adminRequest(`/offers/${talisca.id}/resources`, 'PUT', { materials: [{ id: 'm', name: 'Aço Inox 316L', quantity: 4, unitPrice: 30 }], laborEntries: [], stages: ['machining-center', 'cut-bend'], stageTimes: { 'machining-center': 300, 'cut-bend': 180 }, stageResources: { 'machining-center': { type: 'machine', id: 'centro5' }, 'cut-bend': { type: 'labor-service', id: 'cald' } } })
     const nestle = (await request(`/offers/${talisca.id}/proposal-draft?model=nestle`)).data.draft
     assert.deepEqual([nestle.issuerId, nestle.number, nestle.labor.find((row) => row.id === 'fs-l11').quantity, nestle.labor.find((row) => row.id === 'fs-l14').quantity, nestle.materials.find((row) => row.id === 'fs-m2').quantity], ['metalurgica', '2022906', 5, 3, 4])
     const sheet = await request(`/offers/${talisca.id}/proposal-document`, 'POST', { model: 'nestle', document: { ...nestle, requester: 'Ionei' } })

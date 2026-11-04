@@ -39,6 +39,20 @@ export function cleanStageTimes(value, stages) {
   return result
 }
 
+// Time of one piece, in minutes: it can be a fraction (30 seconds are 0,5).
+export function cleanStagePerPiece(value, stages) {
+  if (value == null) return {}
+  if (typeof value !== 'object' || Array.isArray(value)) throw Object.assign(new Error('Tempos por peça inválidos.'), { status: 400 })
+  const result = {}
+  for (const [code, minutes] of Object.entries(value)) {
+    if (minutes == null || minutes === '' || !stages.includes(code)) continue
+    const number = Number(minutes)
+    if (!Number.isFinite(number) || number <= 0 || number > 1000000) throw Object.assign(new Error('Informe o tempo de uma peça em cada etapa.'), { status: 400 })
+    result[code] = number
+  }
+  return result
+}
+
 export function materialTotals(materials = []) {
   const totals = {}
   for (const material of materials) totals[materialKey(material)] = (totals[materialKey(material)] || 0) + Math.max(0, Number(material.quantity) || 0)
@@ -144,19 +158,19 @@ export function pieceSuggestion({ offers, orders, name, quantity, prices = new M
     const perPiece = averages.materials[materialKey(material)] ?? (Number(material.quantity) || 0) / sourcePieces
     // Units are whole: a scaled quantity of units is rounded up.
     const unit = materialUnit(material.unit), quantity = wholeUnit(unit) ? Math.ceil(round(perPiece * pieces, 3)) : round(perPiece * pieces, 3)
-    return { id: randomUUID(), name: material.name, detail: material.detail || '', inventoryId: material.inventoryId ?? null, unit, quantity, unitPrice: prices.get(String(material.inventoryId)) ?? Number(material.unitPrice || 0), icon: material.icon || '▰', requestedAt: now }
+    return { id: randomUUID(), name: material.name, detail: material.detail || '', inventoryId: material.inventoryId ?? null, unit, quantity, quantityPerPiece: round(perPiece, 4), unitPrice: prices.get(String(material.inventoryId)) ?? Number(material.unitPrice || 0), icon: material.icon || '▰', requestedAt: now }
   }).filter((material) => material.quantity > 0)
   const stages = [...(resources.stages || [])]
-  const stageTimes = {}
+  const stageTimes = {}, stageTimesPerPiece = {}
   for (const code of stages) {
     const perPiece = averages.stages[code] ?? (Number(resources.stageTimes?.[code]) || 0) / sourcePieces
-    if (perPiece > 0) stageTimes[code] = Math.max(1, Math.round(perPiece * pieces))
+    if (perPiece > 0) { stageTimes[code] = Math.max(1, Math.round(perPiece * pieces)); stageTimesPerPiece[code] = round(perPiece, 2) || 0.01 }
   }
   const laborEntries = (resources.laborEntries || []).map(({ stockStatus, ...entry }) => ({ ...entry, id: randomUUID() }))
   const stageResources = stagePlans(stages, resources.stageResources, history.filter(sameKey(key)), catalog)
   return {
     key, name: source.service, source: source.code, samples: averages.samples,
-    resources: { materials, laborEntries, stages, stageLayout: resources.stageLayout, kind: resources.kind || 'service', manufacturedFrom: resources.manufacturedFrom ?? null, tempering: resources.tempering ?? null, paintColor: resources.paintColor || '', serviceDescription: resources.serviceDescription || '', strictProcess: resources.strictProcess !== false, stageTimes, stageResources },
+    resources: { entryMode: 'piece', stageTimesPerPiece, materials, laborEntries, stages, stageLayout: resources.stageLayout, kind: resources.kind || 'service', manufacturedFrom: resources.manufacturedFrom ?? null, tempering: resources.tempering ?? null, paintColor: resources.paintColor || '', serviceDescription: resources.serviceDescription || '', strictProcess: resources.strictProcess !== false, stageTimes, stageResources },
   }
 }
 

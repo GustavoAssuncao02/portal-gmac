@@ -4,6 +4,7 @@ import AdminWorkspace from './AdminWorkspace.jsx'
 import { PayableModal } from './PayableModal.jsx'
 import { payableRequest } from './payablesApi.js'
 import PauseReasonsChart from './PauseReasonsChart.jsx'
+import { SortableRows, SortHeader, cellValue } from './RegistryList.jsx'
 
 // A registration made only of names (Setores, Razões de pausas): list, add, rename and delete in a modal, like Classificações.
 // `countLabel`/`count` show how many records use each item, when the screen has that information; `fields` adds text
@@ -20,14 +21,14 @@ export default function SimpleRegistryScreen({ title, singular, article = 'o', e
   return <AdminWorkspace Sidebar={Sidebar} WorkspaceTabs={WorkspaceTabs} navigationProps={navigationProps} title={title}>
     <div className="payable-heading-actions"><button className="admin-tool-button admin-tool-button--primary" type="button" onClick={() => setEditing({})}><Plus size={17} />{New} {singular}</button></div>
     {error && <p className="admin-tool-error" role="alert">{error}</p>}
-    <div className="payable-table-scroll"><table className="payable-table payable-registry-table simple-registry-table"><thead><tr><th>{nameLabel}</th>{fields.map(([key, label]) => <th key={key}>{label}</th>)}{countLabel && <th className="simple-registry-count">{countLabel}</th>}<th>Ações</th></tr></thead><tbody>
-      {(items || []).map((item) => <tr key={item.id}><td>{item.name}</td>{fields.map(([key, label]) => <td key={key} data-label={label}>{item[key] || '—'}</td>)}{countLabel && <td className="simple-registry-count" data-label={countLabel}>{count(item)}</td>}<td><div className="payable-registry-actions">
+    <div className="payable-table-scroll"><SortableRows rows={items || []} columns={[{ key: 'name', label: nameLabel, value: (item) => item.name }, ...fields.map(([key, label]) => ({ key, label, value: (item) => item[key] })), ...(countLabel ? [{ key: 'count', label: countLabel, value: (item) => cellValue(count(item)), numeric: true }] : [])]}>{(sorted) => <table className="payable-table payable-registry-table simple-registry-table"><thead><tr>{sorted.columns.map((column) => <SortHeader key={column.key} column={column} list={sorted} className={column.key === 'count' ? 'simple-registry-count' : undefined} />)}<th>Ações</th></tr></thead><tbody>
+      {sorted.rows.map((item) => <tr key={item.id}><td>{item.name}</td>{fields.map(([key, label]) => <td key={key} data-label={label}>{item[key] || '—'}</td>)}{countLabel && <td className="simple-registry-count" data-label={countLabel}>{count(item)}</td>}<td><div className="payable-registry-actions">
         <button className="payable-icon" type="button" title="Editar" aria-label={`Editar ${item.name}`} onClick={() => setEditing(item)}><Pencil size={16} /></button>
         <button className="payable-icon payable-danger" type="button" title="Excluir" aria-label={`Excluir ${item.name}`} onClick={() => setRemoving(item)}><Trash2 size={16} /></button>
       </div></td></tr>)}
       {items && !items.length && <tr><td colSpan={fields.length + (countLabel ? 3 : 2)} className="payable-empty">Nenhum cadastro.</td></tr>}
       {!items && !error && <tr><td colSpan={fields.length + (countLabel ? 3 : 2)} className="payable-empty">Carregando...</td></tr>}
-    </tbody></table></div>
+    </tbody></table>}</SortableRows></div>
     {chart && <PauseReasonsChart reasons={items || []} version={version} />}
     {editing && <NameForm title={`${editing.id ? 'Editar' : New} ${singular}`} label={nameLabel} fields={fields} source={editing} onClose={() => setEditing(null)} onSave={async (values) => { await payableRequest(editing.id ? `${endpoint}/${editing.id}` : endpoint, editing.id ? 'PUT' : 'POST', values); setEditing(null); refresh() }} />}
     {removing && <RemoveConfirm title={`Excluir ${singular}`} name={removing.name} onClose={() => setRemoving(null)} onConfirm={async () => { await payableRequest(`${endpoint}/${removing.id}`, 'DELETE'); setRemoving(null); refresh() }} />}

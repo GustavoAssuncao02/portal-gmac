@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { productionStages, stageLabel, stageActive, stageCodeOf, readStageLayout, validStageLayout, serviceDetails, stagePlanProblem } from './serviceStages.js'
-import { cleanStageResources, cleanStageTimes } from './pieces.js'
+import { cleanStagePerPiece, cleanStageResources, cleanStageTimes } from './pieces.js'
+import { validEntryMode, withEntryMode } from './entryMode.js'
 import { realChangedFields } from './orderHistory.js'
 import { activeSessions } from './operationSessions.js'
 import { isClientDocument } from './clientDocument.js'
@@ -57,7 +58,11 @@ export function editOrder(order, state, body, catalog = {}) {
   if (typeof source.requestedAt !== 'string' || !Number.isFinite(Date.parse(source.requestedAt))) fail(400, 'Informe uma data de solicitação válida.')
   date(source.requestedAt.slice(0, 10), 'Data da solicitação')
   fields.requestedAt = new Date(source.requestedAt).toISOString()
-  const resources = source.resources || {}
+  // Launched per piece, materials and times follow the quantity of the OS. What the customer pays (the proposal) does not change.
+  const entryMode = source.resources?.entryMode ?? order.resources?.entryMode
+  if (entryMode !== undefined && !validEntryMode(entryMode)) fail(400, 'Forma de lançamento inválida.')
+  if (entryMode === 'piece' && source.resources?.materials?.some((item) => item?.quantityPerPiece != null && !(Number(item.quantityPerPiece) > 0))) fail(400, 'Informe a quantidade por peça de cada material.')
+  const resources = withEntryMode({ ...source.resources, entryMode }, fields.quantity)
   if (!Array.isArray(resources.stages) || !resources.stages.length || resources.stages.length > 32 || new Set(resources.stages).size !== resources.stages.length) fail(400, 'Selecione de 1 a 32 etapas sem repetições.')
   const known = new Set(productionStages.map(([key]) => key))
   const existingNames = new Set(state.stages.map((stage) => stage.name))
@@ -90,11 +95,20 @@ export function editOrder(order, state, body, catalog = {}) {
       const unchangedMaterial = previous?.name === name && (previous.detail || '') === detail && materialUnit(previous.unit) === unit
       const quantity = numeric(item.quantity, 'Quantidade do material', { min: 0.001 })
       if (!validQuantityFor(quantity, unit)) fail(400, `${name}: material contado por unidade aceita só quantidades inteiras.`)
-      const stockAvailable = Number(previous?.stockAvailable || 0)
-      return { ...(unchangedMaterial ? previous : {}), id: previous && !unchangedMaterial ? randomUUID() : id, name, detail, unit, quantity, unitPrice: numeric(item.unitPrice, unitPriceLabel(unit)), ...(unchangedMaterial && previous.stockAvailable != null ? { purchaseQuantity: Math.max(0, Number((quantity - stockAvailable).toFixed(3))), stockStatus: previous.inventoryId == null ? 'unknown' : stockAvailable <= 0 ? 'missing' : stockAvailable < quantity ? 'partial' : 'available' } : {}) }
+      // What already left the stock for this OS counts, not what the stock had at that moment: the rest is still pending.
+      const covered = Number(previous?.inventoryConsumedQuantity ?? previous?.stockAvailable ?? 0)
+      return { ...(unchangedMaterial ? previous : {}), id: previous && !unchangedMaterial ? randomUUID() : id, name, detail, unit, quantity, unitPrice: numeric(item.unitPrice, unitPriceLabel(unit)), ...(unchangedMaterial && previous.stockAvailable != null ? { purchaseQuantity: Math.max(0, Number((quantity - covered).toFixed(3))), stockStatus: previous.inventoryId == null ? 'unknown' : covered <= 0 ? 'missing' : covered < quantity ? 'partial' : 'available' } : {}) }
     })
   }
   fields.resources = { ...order.resources, materials: rows(resources.materials), laborEntries: rows(resources.laborEntries, true), stages: [...resources.stages], stageLayout: readStageLayout(resources), kind: resources.kind, ...serviceDetails(resources), serviceLocation: serviceDetails(order.resources).serviceLocation, paintColor: text(resources.paintColor || ''), serviceDescription: text(resources.serviceDescription || '', 5000), stageTimes: cleanStageTimes(resources.stageTimes ?? order.resources?.stageTimes, resources.stages) }
+  delete fields.resources.entryMode
+  delete fields.resources.stageTimesPerPiece
+  if (entryMode) fields.resources.entryMode = entryMode
+  if (entryMode === 'piece') fields.resources.stageTimesPerPiece = cleanStagePerPiece(resources.stageTimesPerPiece, resources.stages)
+  fields.resources.materials = fields.resources.materials.map(({ quantityPerPiece, ...material }, index) => {
+    const typed = resources.materials[index]?.quantityPerPiece
+    return entryMode === 'piece' && Number(typed) > 0 ? { ...material, quantityPerPiece: Number(typed) } : material
+  })
   fields.resources.stageResources = editedStagePlans(order.resources?.stageResources || {}, resources.stageResources, fields.resources.stages, catalog)
   // An OS from before the planned times and resources were mandatory can still be edited; changing its stages, their
   // times or their machines and services asks for the time and the machine or service of every stage.

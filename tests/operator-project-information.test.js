@@ -25,7 +25,7 @@ test('operator project data includes technical details and files but excludes fi
   const fixture = await createWorkflowFixture({ inventoryPool })
   t.after(() => fixture.close())
   const offer = (await fixture.adminRequest('/offers', 'POST', offerDraft)).data.item
-  const resources = { materials: [{ id: 'material', name: 'Aluminio', detail: 'Chapa 10 mm', quantity: 12.5, unitPrice: 999, stockAvailable: 8, stockStatus: 'partial', purchaseQuantity: 4.5 }], laborEntries: [{ id: 'machine', type: 'machine', resource: 'Torno CNC', hours: 2, hourlyRate: 777 }], kind: 'product', stages: ['cutting', 'assembly'] }
+  const resources = { materials: [{ id: 'material', name: 'Aluminio', detail: 'Chapa 10 mm', quantity: 12.5, unitPrice: 999, stockAvailable: 8, stockStatus: 'partial', purchaseQuantity: 4.5 }], laborEntries: [], kind: 'product', stages: ['turning', 'assembly'], stageTimes: { turning: 120 } }
   await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', resources)
   const upload = await fetch(`${fixture.url}/api/offers/${offer.id}/attachments?name=desenho-tecnico.txt&type=text/plain`, { method: 'POST', headers: { ...fixture.admin, 'Content-Type': 'application/octet-stream' }, body: Buffer.from('Especificacao tecnica da peca') })
   assert.equal(upload.status, 201)
@@ -47,7 +47,7 @@ test('operator project data includes technical details and files but excludes fi
   assert.equal(item.resources.materials[0].purchaseQuantity, 4.5)
   assert.equal(item.resources.laborEntries[0].hours, 2)
   assert.equal(item.attachments[0].name, 'desenho-tecnico.txt')
-  assert.deepEqual(item.operation.stages.map((stage) => stage.name), ['Corte', 'Montagem'])
+  assert.deepEqual(item.operation.stages.map((stage) => stage.name), ['Tornearia', 'Montagem'])
   // The files of the OS are opened by the operator account, never without a session.
   const fileUrl = `${fixture.url}/api/offers/${offer.id}/attachments/${item.attachments[0].id}`
   assert.equal((await fetch(fileUrl)).status, 401)

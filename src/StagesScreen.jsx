@@ -2,7 +2,7 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useEffect, useId, useState } from 'react'
-import { ArrowDown, ArrowUp, GripVertical, Pencil, Plus, Power, Trash2, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, GripVertical, Info, Pencil, Plus, Power, Trash2, X } from 'lucide-react'
 import AdminWorkspace from './AdminWorkspace.jsx'
 import { PayableModal } from './PayableModal.jsx'
 import { cachedResource, payableRequest } from './payablesApi.js'
@@ -15,6 +15,18 @@ import './stages.css'
 // default a new offer comes with; with none, the offer offers every machine and service). A stage already used is
 // deactivated instead of deleted.
 const choiceKey = (choice) => `${choice.type}:${choice.id}`
+const historyLabels = { created: 'Etapa criada', edited: 'Etapa alterada', activated: 'Etapa reativada', deactivated: 'Etapa desativada', deleted: 'Etapa excluída', reordered: 'Ordem das etapas alterada' }
+
+// Who created, changed, activated or deactivated: of one stage, or of all of them (the deleted ones and the order too).
+function StageHistory({ stage, onClose }) {
+  const [rows, setRows] = useState(null), [error, setError] = useState('')
+  useEffect(() => { payableRequest(`/stages/history${stage ? `?code=${encodeURIComponent(stage.code)}` : ''}`).then((result) => setRows(result.items)).catch((caught) => setError(caught.message)) }, [])
+  return <PayableModal title={stage ? `Histórico · ${stage.name}` : 'Histórico geral · Etapas'} wide onClose={onClose}>
+    {error && <p className="admin-tool-error" role="alert">{error}</p>}
+    {!rows && !error && <p className="payable-muted">Carregando...</p>}
+    {rows && <ol className="payable-history">{rows.map((row) => <li key={row.id}><div><strong>{historyLabels[row.type] || row.type}</strong>{!stage && row.stageName && <span>{row.stageName}</span>}</div><small>{new Date(row.at).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })} · {row.userName}</small>{row.changes.map((text) => <p key={text}>{text}</p>)}</li>)}{!rows.length && <li>Nenhuma alteração registrada.</li>}</ol>}
+  </PayableModal>
+}
 
 function Sortable({ ids, onMove, children }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }))
@@ -34,7 +46,7 @@ function SortableRow({ id, label, disabled, className, children }) {
 }
 
 export default function StagesScreen({ Sidebar, WorkspaceTabs, navigationProps }) {
-  const [data, setData] = useState(null), [message, setMessage] = useState(''), [editing, setEditing] = useState(null), [busy, setBusy] = useState(false)
+  const [data, setData] = useState(null), [message, setMessage] = useState(''), [editing, setEditing] = useState(null), [busy, setBusy] = useState(false), [history, setHistory] = useState(null)
   const [machines, setMachines] = useState([]), [laborServices, setLaborServices] = useState([])
   useEffect(() => {
     let active = true
@@ -64,7 +76,7 @@ export default function StagesScreen({ Sidebar, WorkspaceTabs, navigationProps }
   }
 
   return <AdminWorkspace Sidebar={Sidebar} WorkspaceTabs={WorkspaceTabs} navigationProps={navigationProps} title="Etapas">
-    <div className="payable-heading-actions"><button className="admin-tool-button admin-tool-button--primary" type="button" disabled={!data} onClick={() => { setMessage(''); setEditing({}) }}><Plus size={17} />Nova etapa</button></div>
+    <div className="payable-heading-actions"><button className="payable-icon" type="button" title="Histórico geral" aria-label="Histórico geral das etapas" onClick={() => setHistory({})}><Info size={21} /></button><button className="admin-tool-button admin-tool-button--primary" type="button" disabled={!data} onClick={() => { setMessage(''); setEditing({}) }}><Plus size={17} />Nova etapa</button></div>
     {message && <p className={`registration-message ${message.includes('sucesso') ? 'registration-message--success' : 'registration-message--error'}`} role="status">{message}</p>}
     <p className="stages-intro">As etapas aparecem nas ofertas por setor, nesta ordem: arraste <GripVertical size={13} aria-hidden="true" /> para mudar a ordem dos setores e das etapas. A <strong>primeira máquina ou serviço</strong> de cada etapa já vem escolhida na oferta; com mais de uma, dá para trocar entre elas. Sem nenhuma, a oferta mostra todas.</p>
     {!data && !message && <p className="payable-muted">Carregando...</p>}
@@ -78,6 +90,7 @@ export default function StagesScreen({ Sidebar, WorkspaceTabs, navigationProps }
                 <div className="stages-row-name"><strong>{row.name}</strong>{!row.active && <span className="stages-badge">Desativada</span>}</div>
                 <div className="stages-row-resources">{row.resources.length ? row.resources.map((choice, index) => <span key={choiceKey(choice)} className={`stages-chip${index === 0 ? ' stages-chip--default' : ''}`}>{resourceName(choice)}{index === 0 && <small>padrão</small>}</span>) : <span className="stages-any">Qualquer máquina ou serviço</span>}</div>
                 <div className="payable-registry-actions">
+                  <button className="payable-icon" type="button" title="Histórico" aria-label={`Ver histórico de ${row.name}`} onClick={() => setHistory({ stage: row })}><Info size={16} /></button>
                   <button className="payable-icon" type="button" title="Editar" aria-label={`Editar ${row.name}`} disabled={busy} onClick={() => { setMessage(''); setEditing(row) }}><Pencil size={16} /></button>
                   {row.inUse || !row.active ? <button className={`payable-icon${row.active ? '' : ' payable-icon--inactive'}`} type="button" title={row.active ? 'Desativar' : 'Reativar'} aria-label={`${row.active ? 'Desativar' : 'Reativar'} ${row.name}`} disabled={busy} onClick={() => toggle(row)}><Power size={16} /></button>
                     : <button className="payable-icon payable-danger" type="button" title="Excluir" aria-label={`Excluir ${row.name}`} disabled={busy} onClick={() => remove(row)}><Trash2 size={16} /></button>}
@@ -88,6 +101,7 @@ export default function StagesScreen({ Sidebar, WorkspaceTabs, navigationProps }
         </SortableRow>)}
       </Sortable>
     </div>}
+    {history && <StageHistory stage={history.stage} onClose={() => setHistory(null)} />}
     {editing && <StageForm source={editing} sectors={data.sectors} machines={machines} laborServices={laborServices} onClose={() => setEditing(null)} onSave={async (values) => {
       apply(await payableRequest(editing.code ? `/stages/${encodeURIComponent(editing.code)}` : '/stages', editing.code ? 'PUT' : 'POST', values))
       setMessage(`Etapa ${editing.code ? 'atualizada' : 'cadastrada'} com sucesso.`)

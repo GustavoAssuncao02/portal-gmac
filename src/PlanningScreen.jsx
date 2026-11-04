@@ -4,8 +4,10 @@ import { PayableModal } from './PayableModal.jsx'
 import { payableRequest } from './payablesApi.js'
 import { pollWhileVisible } from './polling.js'
 import { DAY_MS, SLOT_MS, addDays, blockEnd, blockStart, clockTime, dayStart, localDay, operatorQueue, planningSnapshot, resourceKey } from '../server/planningRules.js'
+import { SortableRows, SortHeader } from './RegistryList.jsx'
 import './adminTools.css'
 import './planning.css'
+import FactoryMap from './FactoryMap.jsx'
 
 const HOUR_WIDTH = 88
 const PX_PER_MINUTE = HOUR_WIDTH / 60
@@ -104,6 +106,7 @@ export default function PlanningScreen({ Sidebar, WorkspaceTabs, navigationProps
       <div className="planning-heading-actions">
         <button className="admin-tool-button admin-tool-button--primary" type="button" disabled={!data} onClick={() => setEditing({ plan: {} })}><Plus size={17} aria-hidden="true" />Planejar OS</button></div>
     </header>
+    <FactoryMap />
     <div className="planning-toolbar">
       <div className="planning-views" role="group" aria-label="Período">{[['day', 'Dia'], ['week', 'Semana'], ['month', 'Mês']].map(([value, label]) => <button key={value} type="button" aria-pressed={view === value} onClick={() => setView(value)}>{label}</button>)}</div>
       <div className="planning-date"><button type="button" aria-label="Anterior" title="Anterior" onClick={() => move(-1)}><ChevronLeft size={18} /></button><input type="date" aria-label="Data" value={date} onChange={(event) => event.target.value && setDate(event.target.value)} /><button type="button" aria-label="Próximo" title="Próximo" onClick={() => move(1)}><ChevronRight size={18} /></button><button type="button" className="planning-today" onClick={() => setDate(localDay(Date.now()))}>Hoje</button></div>
@@ -277,14 +280,14 @@ function Backlog({ rows, resources, fit, onClearFit, onPlan }) {
   const orders = groupBacklog(rows).filter(fits)
   return <section className="planning-backlog" aria-labelledby="planning-backlog-title">
     <header><h2 id="planning-backlog-title">Serviços para planejar</h2><p>{fit ? <>OS com etapa em <strong>{fit.name}</strong> que cabe no horário livre de {duration(fit.minutes)} a partir das {clockTime(fit.start)}. <button type="button" className="planning-link" onClick={onClearFit}>Mostrar todas</button></> : 'Cada OS com as suas etapas e a máquina de cada uma. Use Planejar, ou arraste a OS para uma máquina na agenda.'}</p></header>
-    <div className="planning-table-scroll"><table><thead><tr><th>OS</th><th>Etapas a planejar</th><th>Prazo</th><th><span className="sr-only">Ação</span></th></tr></thead>
-      <tbody>{orders.map((order) => <tr key={order.orderCode} draggable onDragStart={(event) => { event.dataTransfer.setData('text/plain', JSON.stringify({ orderCode: order.orderCode })); event.dataTransfer.effectAllowed = 'copy' }}>
+    <div className="planning-table-scroll"><SortableRows rows={orders} columns={[{ key: "OS", label: "OS", value: (order) => order.orderCode }, { key: "Etapas a planejar", label: "Etapas a planejar", value: (order) => order.stages.length, numeric: true }, { key: "Prazo", label: "Prazo", value: (order) => order.deadline, numeric: true }, { key: "Ação", label: "Ação" }]}>{(sorted) => <table><thead><tr><SortHeader column={sorted.columns[0]} list={sorted} /><SortHeader column={sorted.columns[1]} list={sorted} /><SortHeader column={sorted.columns[2]} list={sorted} /><th><span className="sr-only">Ação</span></th></tr></thead>
+      <tbody>{sorted.rows.map((order) => <tr key={order.orderCode} draggable onDragStart={(event) => { event.dataTransfer.setData('text/plain', JSON.stringify({ orderCode: order.orderCode })); event.dataTransfer.effectAllowed = 'copy' }}>
         <td><strong>{order.orderCode}</strong><small>{order.service} · {order.company}</small></td>
         <td><ol className="planning-backlog-stages">{order.stages.map((stage) => <li key={stage.stageCode}><b>{stage.position}</b><span><strong>{stage.stageName}</strong> · {nameOf(stage)}<small>{stage.toPlanMinutes == null ? <span className="planning-warning">Sem tempo previsto</span> : `${duration(stage.toPlanMinutes)} a planejar`} · {stage.done} de {stage.quantity} peças</small></span></li>)}</ol></td>
         <td>{order.deadline ? fullDate(order.deadline) : '—'}{order.urgency === 'emergency' && <span className="planning-emergency">Emergência</span>}</td>
         <td><button className="admin-tool-button" type="button" onClick={() => onPlan({ orderCode: order.orderCode })}>Planejar</button></td>
       </tr>)}
-      {!orders.length && <tr><td colSpan={4} className="planning-empty">{fit ? 'Nenhuma etapa desta máquina cabe nesse intervalo.' : 'Tudo planejado: nenhuma OS aguardando.'}</td></tr>}</tbody></table></div>
+      {!orders.length && <tr><td colSpan={4} className="planning-empty">{fit ? 'Nenhuma etapa desta máquina cabe nesse intervalo.' : 'Tudo planejado: nenhuma OS aguardando.'}</td></tr>}</tbody></table>}</SortableRows></div>
   </section>
 }
 

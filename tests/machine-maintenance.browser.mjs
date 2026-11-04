@@ -19,7 +19,7 @@ try {
   await fixture.mutateStore((store) => { store.machines = [{ id: 'torno', name: 'Torno 01', sectors: ['Usinagem'], sector: 'Usinagem', hourlyRate: 80 }, { id: 'fresa', name: 'Fresa 02', sectors: ['Usinagem'], sector: 'Usinagem', hourlyRate: 90 }] })
   const ana = (await fixture.adminRequest('/employees', 'POST', { name: 'Ana Teste', cpf: '00000000001' })).data.item
   const offer = (await fixture.adminRequest('/offers', 'POST', offerDraft)).data.item
-  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], kind: 'service', stages: ['turning', 'milling'], stageResources: { turning: { type: 'machine', id: 'torno' }, milling: { type: 'machine', id: 'fresa' } } })
+  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], kind: 'service', strictProcess: false, stages: ['turning', 'milling'], stageResources: { turning: { type: 'machine', id: 'torno' }, milling: { type: 'machine', id: 'fresa' } } })
   await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', serviceValue: 100, deadline: offerDraft.deadline } })
   const order = (await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')).data.item
 
@@ -34,7 +34,7 @@ try {
   await admin.getByRole('button', { name: 'Adicionar máquina', exact: true }).click()
   const added = admin.getByRole('dialog', { name: 'Adicionar máquina' })
   await added.getByRole('button', { name: 'Caldeiraria', exact: true }).waitFor()
-  assert.deepEqual(await added.getByRole('group', { name: 'Setor' }).getByRole('button').allTextContents(), ['Caldeiraria', 'Usinagem'])
+  assert.deepEqual(await added.getByRole('group', { name: 'Setor' }).getByRole('button').allTextContents(), ['Caldeiraria', 'Pintura', 'Usinagem'])
   assert.equal(await added.getByRole('textbox', { name: 'Setor' }).count(), 0, 'no typed sector')
   await added.getByLabel('Nome da máquina').fill('Serra fita 03')
   await added.getByLabel('Valor da hora (R$)').fill('60')
@@ -47,7 +47,7 @@ try {
   await admin.locator('.machine-row').filter({ hasText: 'Serra fita 03' }).getByText('Caldeiraria e Usinagem').waitFor()
   const row = admin.locator('.machine-row').filter({ hasText: 'Torno 01' })
   await row.click()
-  await admin.getByRole('button', { name: 'Manutenção', exact: true }).click()
+  await row.getByRole('button', { name: 'Manutenção de Torno 01', exact: true }).click()
   const dialog = admin.getByRole('dialog', { name: 'Colocar em manutenção' })
   await dialog.getByRole('button', { name: 'Colocar em manutenção', exact: true }).click()
   assert.equal(await dialog.isVisible(), true, 'the reason is required')
@@ -84,7 +84,7 @@ try {
   await milling.getByText('Máquina: Fresa 02').waitFor()
   assert.equal(await milling.isDisabled(), false, 'a stage on a free machine can still be chosen')
 
-  await admin.getByRole('button', { name: 'Liberar máquina', exact: true }).click()
+  await row.getByRole('button', { name: 'Liberar Torno 01', exact: true }).click()
   const release = admin.getByRole('dialog', { name: 'Liberar máquina' })
   assert.match(await release.innerText(), /Motivo: Troca do rolamento do cabeçote/)
   await release.getByRole('button', { name: 'Liberar máquina', exact: true }).click()

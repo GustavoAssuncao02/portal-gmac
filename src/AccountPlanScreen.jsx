@@ -3,7 +3,7 @@ import { Plus, Pencil, Power, Trash2, Save } from 'lucide-react'
 import AdminWorkspace from './AdminWorkspace.jsx'
 import { PayableModal } from './PayableModal.jsx'
 import { ConfirmAction } from './PayablesScreen.jsx'
-import { RegistryToolbar, SortHeader, useRegistryList } from './RegistryList.jsx'
+import { RegistryToolbar, SortHeader, useRegistryList, SortableRows } from './RegistryList.jsx'
 import ClassificationSelect from './ClassificationSelect.jsx'
 import { payableRequest } from './payablesApi.js'
 import { dreLines, behaviors, automaticSettings, natureOf, compareCodes } from '../server/accountPlanRules.js'
@@ -96,10 +96,10 @@ export default function AccountPlanScreen({ mode = 'classifications', ...props }
     {error && <p className="admin-tool-error" role="alert">{error}<button className="admin-tool-button" type="button" onClick={() => load().catch((caught) => setError(caught.message))}>Tentar novamente</button></p>}
     {!data ? !error && <p>Carregando...</p> : mode === 'groups' ? <>
       <p className="payable-muted account-plan-intro">Cada classificação pertence a um grupo de contas, e cada grupo indica em que linha da DRE suas classificações entram.</p>
-      <div className="payable-table-scroll"><table className="payable-table payable-registry-table account-plan-table"><thead><tr><th className="account-plan-code">Código</th><th>Grupo de contas</th><th>Linha da DRE</th><th className="simple-registry-count">Classificações</th><th>Status</th><th>Ações</th></tr></thead><tbody>
-        {groups.map((row) => <tr key={row.id} className={row.inactive ? 'account-plan-row--inactive' : ''}><td className="account-plan-code" data-label="Código">{row.code}</td><td data-label="Grupo de contas"><strong>{row.name}</strong></td><td data-label="Linha da DRE">{dreLines[row.dreLine]?.label}</td><td className="simple-registry-count" data-label="Classificações">{row.count}</td><td data-label="Status">{row.inactive ? 'Desativado' : 'Ativo'}</td><td>{actions('group', row)}</td></tr>)}
+      <div className="payable-table-scroll"><SortableRows rows={groups} columns={[{ key: "Código", label: "Código", value: (row) => row.code }, { key: "Grupo de contas", label: "Grupo de contas", value: (row) => row.name }, { key: "Linha da DRE", label: "Linha da DRE", value: (row) => dreLines[row.dreLine]?.label }, { key: "Classificações", label: "Classificações", value: (row) => row.count, numeric: true }, { key: "Status", label: "Status", value: (row) => row.inactive ? 'Desativado' : 'Ativo' }, { key: "Ações", label: "Ações" }]}>{(sorted) => <table className="payable-table payable-registry-table account-plan-table"><thead><tr><SortHeader column={sorted.columns[0]} list={sorted} className="account-plan-code" /><SortHeader column={sorted.columns[1]} list={sorted} /><SortHeader column={sorted.columns[2]} list={sorted} /><SortHeader column={sorted.columns[3]} list={sorted} className="simple-registry-count" /><SortHeader column={sorted.columns[4]} list={sorted} /><th>Ações</th></tr></thead><tbody>
+        {sorted.rows.map((row) => <tr key={row.id} className={row.inactive ? 'account-plan-row--inactive' : ''}><td className="account-plan-code" data-label="Código">{row.code}</td><td data-label="Grupo de contas"><strong>{row.name}</strong></td><td data-label="Linha da DRE">{dreLines[row.dreLine]?.label}</td><td className="simple-registry-count" data-label="Classificações">{row.count}</td><td data-label="Status">{row.inactive ? 'Desativado' : 'Ativo'}</td><td>{actions('group', row)}</td></tr>)}
         {!groups.length && <tr><td colSpan={6} className="payable-empty">Nenhum grupo cadastrado.</td></tr>}
-      </tbody></table></div>
+      </tbody></table>}</SortableRows></div>
       <AutomaticSettings settings={data.settings} items={items} onSaved={load} />
     </> : <>
       <div className="account-plan-toolbar"><RegistryToolbar list={list} total={items.length} singular="classificação" plural="classificações" placeholder="Código, nome ou linha da DRE" /><label>Grupo de contas<select aria-label="Filtrar por grupo de contas" value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)}><option value="">Todos os grupos</option>{groups.map((row) => <option key={row.id} value={row.id}>{row.code} · {row.name}</option>)}</select></label></div>

@@ -1067,7 +1067,7 @@ button {
 
 .machine-row {
   display: grid;
-  grid-template-columns: 245px 188px 150px 220px 178px 130px 170px 126px;
+  grid-template-columns: 245px 188px 150px 110px 220px 178px 130px 170px 126px;
   min-height: 44px;
   align-items: center;
   border-top: 1px solid #e4eaf2;
@@ -7489,3 +7489,22 @@ button {
 .offers-page-notice-close { flex: none; padding: 0 4px; border: 0; background: none; color: inherit; font-size: 18px; line-height: 1; cursor: pointer; }
 /* Text only for screen readers (also used by the stage order and the piece field). */
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Títulos que ordenam a tabela: o botão fica igual ao texto do título. */
+.sort-header-button { display: inline-flex; gap: 6px; align-items: center; padding: 0; border: 0; background: none; font: inherit; font-weight: inherit; color: inherit; text-align: inherit; cursor: pointer; }
+.sort-header-button svg { flex: none; }
+
+/* Forma de lançamento (por peça ou total do pedido), na oferta e na edição da OS. */
+.offer-entry-mode { margin: 0 0 18px; padding: 12px 14px; border: 1px solid #d8e4ef; border-radius: 6px; background: #f6f9fc; }
+.offer-entry-mode legend { padding: 0 6px; font-size: 12px; font-weight: 700; color: #0c4c91; }
+.offer-entry-mode label { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; cursor: pointer; }
+.offer-entry-mode p { margin: 8px 0 0; font-size: 12px; color: #5f7489; }
+.offer-quantity-cell { display: flex; flex-direction: column; gap: 2px; }
+.offer-quantity-cell small, .offer-resource-totals small, .offer-stage-total { display: block; font-size: 11px; font-weight: 400; opacity: .75; }
+.offer-stage-total { margin-left: 8px; white-space: nowrap; }
+.os-quantity-notice { padding: 12px 14px; border: 1px solid #f2d27a; border-radius: 6px; background: #fff8e3; color: #5c4708; font-size: 13px; }
+.os-quantity-notice ul { margin: 6px 0; padding-left: 18px; }
+.os-quantity-notice small { display: block; opacity: .85; }
+:root[data-theme="dark"] .offer-entry-mode { background: transparent; border-color: rgba(255, 255, 255, .18); }
+:root[data-theme="dark"] .offer-entry-mode legend, :root[data-theme="dark"] .offer-entry-mode p { color: inherit; }
+:root[data-theme="dark"] .os-quantity-notice { background: rgba(242, 183, 5, .12); border-color: rgba(242, 183, 5, .4); color: inherit; }

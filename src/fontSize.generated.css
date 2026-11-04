@@ -1113,6 +1113,11 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .operator-info-files .operator-info-download { font-size: calc(12px * var(--account-font-scale)); }
 @media screen and (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .proposal-generated-actions .download-link { font-size: calc(14px * var(--account-font-scale)); } }
 :root:is([data-font-size="small"], [data-font-size="large"]) .offers-page-notice-close { font-size: calc(18px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .sort-header-button { font-size: inherit; }
+:root:is([data-font-size="small"], [data-font-size="large"]) .offer-entry-mode legend { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .offer-entry-mode p { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .offer-quantity-cell small, :root:is([data-font-size="small"], [data-font-size="large"]) .offer-resource-totals small, :root:is([data-font-size="small"], [data-font-size="large"]) .offer-stage-total { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .os-quantity-notice { font-size: calc(13px * var(--account-font-scale)); }
 @media (min-width: 1101px) {:root:is([data-font-size="small"], [data-font-size="large"]) .sidebar .nav-item { font-size: calc(14px * var(--account-font-scale)); } }
 @media (min-width: 1101px) {:root:is([data-font-size="small"], [data-font-size="large"]) .sidebar .sidebar-submenu .nav-item { font-size: calc(13px * var(--account-font-scale)); } }
 @media (min-width: 1101px) {:root:is([data-font-size="small"], [data-font-size="large"]) .offers-board .offers-search input { font-size: calc(14px * var(--account-font-scale)); } }

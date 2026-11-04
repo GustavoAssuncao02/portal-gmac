@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { pollWhileVisible } from './polling.js'
+import { SortableRows, SortHeader } from './RegistryList.jsx'
 import './employeeActivity.css'
 import './machineHistory.css'
 
@@ -56,10 +57,10 @@ export default function MachineHistoryModal({ machine, subject = 'machine', load
     <header className="employee-activity-heading"><div><span>{subject === 'service' ? 'Histórico de uso do serviço' : 'Histórico de uso da máquina'}</span><h2 id="machine-history-title">{machine.name}</h2><p>{[machine.type, machine.sector].filter(Boolean).join(' · ')}</p></div><button className="employee-activity-close" type="button" onClick={onClose} title="Fechar histórico" aria-label="Fechar histórico"><X size={18} /></button></header>
     <div className="employee-activity-filters"><label>Período<select aria-label="Período" value={period} onChange={(event) => setPeriod(event.target.value)}>{periods.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>{period === 'date' && <label>Data específica<input type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label>}<span role="status">{items === null ? 'Carregando...' : `${items.length} ${items.length === 1 ? 'utilização' : 'utilizações'}`}</span></div>
     {error && <div className="employee-activity-error"><p role="alert">{error}</p><button type="button" onClick={() => setRetry((value) => value + 1)}>Tentar novamente</button></div>}
-    <div className="employee-activity-content" aria-busy={items === null}><div className="employee-activity-table-scroll"><table><thead><tr><th>Operador</th><th>OS / Serviço</th><th>Início</th><th>Encerramento</th><th>Tempo no período</th><th>Situação</th></tr></thead><tbody>
-      {items === null ? <tr><td colSpan={6} className="employee-activity-empty">Carregando histórico...</td></tr> : items.length ? items.map((item) => <tr key={item.id}>
+    <div className="employee-activity-content" aria-busy={items === null}><div className="employee-activity-table-scroll"><SortableRows rows={items || []} columns={[{ key: "Operador", label: "Operador", value: (item) => item.employeeName }, { key: "OS / Serviço", label: "OS / Serviço", value: (item) => item.orderCode }, { key: "Início", label: "Início", value: (item) => item.startedAt, numeric: true }, { key: "Encerramento", label: "Encerramento", value: (item) => item.endedAt, numeric: true }, { key: "Tempo no período", label: "Tempo no período", value: (item) => item.durationMs, numeric: true }, { key: "Situação", label: "Situação", value: (item) => item.active ? 'Em andamento' : item.endedBy }]}>{(sorted) => <table><thead><tr><SortHeader column={sorted.columns[0]} list={sorted} /><SortHeader column={sorted.columns[1]} list={sorted} /><SortHeader column={sorted.columns[2]} list={sorted} /><SortHeader column={sorted.columns[3]} list={sorted} /><SortHeader column={sorted.columns[4]} list={sorted} /><SortHeader column={sorted.columns[5]} list={sorted} /></tr></thead><tbody>
+      {items === null ? <tr><td colSpan={6} className="employee-activity-empty">Carregando histórico...</td></tr> : items.length ? sorted.rows.map((item) => <tr key={item.id}>
         <td data-label="Operador"><strong>{item.employeeName}</strong></td><td data-label="OS / Serviço"><strong>{item.orderCode}</strong><span>{item.service}</span></td><td data-label="Início">{moment(item.startedAt)}</td><td data-label="Encerramento">{item.endedAt ? moment(item.endedAt) : 'Em andamento'}</td><td data-label="Tempo no período" className="machine-history-duration">{duration(item.durationMs)}</td><td data-label="Situação"><span className={`machine-history-status ${item.active ? 'machine-history-status--active' : ''}`}>{item.active ? 'Em uso' : endings[item.endedBy] || 'Utilização encerrada'}</span>{item.reason && <small>{item.reason}</small>}</td>
       </tr>) : <tr><td colSpan={6} className="employee-activity-empty">{period === 'date' && !date ? 'Selecione uma data.' : 'Nenhuma utilização registrada neste período.'}</td></tr>}
-    </tbody></table></div></div>
+    </tbody></table>}</SortableRows></div></div>
   </dialog>
 }

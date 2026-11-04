@@ -9,6 +9,7 @@ import './payables.css'
 import { batchByClassification, openBalanceByMonth, palette } from './batchSettlement.js'
 import './batchSettlement.css'
 import BankSelect from './BankSelect.jsx'
+import { SortableRows, SortHeader } from './RegistryList.jsx'
 
 const pickerColumns = [['id', 'ID'], ['supplierName', 'Fornecedor'], ['description', 'Descrição'], ['classificationName', 'Classificação'], ['dueDate', 'Vencimento'], ['valueCents', 'Valor']]
 
@@ -50,7 +51,7 @@ function EvolutionChart({ rows }) {
         <circle className="batch-dot batch-dot--after" cx={cx} cy={y(row.after)} r="4"><title>{monthLabel(row.month)} · após a baixa: {money(row.after)}</title></circle>
         <text className="batch-axis" x={cx} y={height - 12} textAnchor="middle">{monthLabel(row.month)}</text></g> })}
     </svg>}
-    {rows.length > 0 && <div className="payable-table-scroll"><table className="payable-table batch-evolution-table"><thead><tr><th>Mês</th><th>Agora</th><th>Após a baixa</th><th>Redução</th></tr></thead><tbody>{rows.map((row) => <tr key={row.month}><td data-label="Mês">{monthLabel(row.month)}</td><td data-label="Agora">{money(row.now)}</td><td data-label="Após a baixa">{money(row.after)}</td><td data-label="Redução">{money(row.now - row.after)}</td></tr>)}</tbody></table></div>}
+    {rows.length > 0 && <div className="payable-table-scroll"><SortableRows rows={rows} columns={[{ key: "Mês", label: "Mês", value: (row) => row.month, numeric: true }, { key: "Agora", label: "Agora", value: (row) => row.now, numeric: true }, { key: "Após a baixa", label: "Após a baixa", value: (row) => row.after, numeric: true }, { key: "Redução", label: "Redução", value: (row) => row.now - row.after, numeric: true }]}>{(sorted) => <table className="payable-table batch-evolution-table"><thead><tr><SortHeader column={sorted.columns[0]} list={sorted} /><SortHeader column={sorted.columns[1]} list={sorted} /><SortHeader column={sorted.columns[2]} list={sorted} /><SortHeader column={sorted.columns[3]} list={sorted} /></tr></thead><tbody>{sorted.rows.map((row) => <tr key={row.month}><td data-label="Mês">{monthLabel(row.month)}</td><td data-label="Agora">{money(row.now)}</td><td data-label="Após a baixa">{money(row.after)}</td><td data-label="Redução">{money(row.now - row.after)}</td></tr>)}</tbody></table>}</SortableRows></div>}
   </section>
 }
 

@@ -17,7 +17,7 @@
   .sidebar-account { min-height: 60px; padding-top: 8px; padding-bottom: 8px; }
   .sidebar > .logout-button { margin-bottom: 10px; min-height: 36px; }
   .machine-table { min-width: 1080px; }
-  .machine-row { grid-template-columns: minmax(170px, 1.5fr) minmax(130px, 1.1fr) minmax(105px, .8fr) minmax(165px, 1fr) minmax(130px, 1fr) minmax(100px, .7fr) minmax(130px, .9fr) minmax(120px, .7fr); }
+  .machine-row { grid-template-columns: minmax(170px, 1.5fr) minmax(130px, 1.1fr) minmax(105px, .8fr) minmax(100px, .7fr) minmax(165px, 1fr) minmax(130px, 1fr) minmax(100px, .7fr) minmax(130px, .9fr) minmax(120px, .7fr); }
   .machine-row > * { padding: 10px 12px; overflow-wrap: anywhere; }
   .machine-row > .row-actions { padding-inline: 6px; }
   .machine-name { gap: 10px; }

@@ -48,7 +48,7 @@ test('stage times follow the operator, and new offers of the piece come with the
     const machine = (await fixture.adminRequest('/machines', 'POST', { name: 'Torno', type: 'Torno', sector: 'Usinagem', hourlyRate: 100 }, admin)).data.item
     const ana = (await fixture.adminRequest('/employees', 'POST', { name: 'Ana', birthDate: '1990-01-01', cpf: '00000000001', email: 'ana@example.invalid' }, admin)).data.item
     const offer = (await fixture.adminRequest('/offers', 'POST', { ...offerDraft, service: 'Porca Sextavada M48', quantity: 10 })).data.item
-    const resources = { materials: [{ id: 'm1', name: 'Aço 1045', quantity: 20, unitPrice: 10 }], laborEntries: [], kind: 'service', stages: ['turning', 'cut-bend'], stageTimes: { turning: 60, 'cut-bend': 120 } }
+    const resources = { materials: [{ id: 'm1', name: 'Aço 1045', quantity: 20, unitPrice: 10 }], laborEntries: [], kind: 'service', strictProcess: false, stages: ['turning', 'cut-bend'], stageTimes: { turning: 60, 'cut-bend': 120 } }
     assert.equal((await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { ...resources, stageTimes: { turning: 1.5 } })).status, 400)
     assert.equal((await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', resources)).status, 200)
     await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', deadline: offerDraft.deadline, serviceValue: 100 } })

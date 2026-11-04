@@ -16,6 +16,8 @@
 .payable-table tbody tr:hover { background:#edf5fd; }
 .payable-table :is(td:first-child,th:first-child) { width:36px; }
 .payable-table input[type=checkbox] { width:16px; height:16px; accent-color:#0c4c91; }
+/* A description can reach 5000 characters: the list shows the start and the full text stays in the tooltip and the details. */
+.receivable-description { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:3; line-clamp:3; overflow:hidden; }
 .payable-value,.payable-id { white-space:nowrap; font-variant-numeric:tabular-nums; font-weight:600; }
 .payable-status { display:inline-flex; flex-direction:column; gap:3px; font-size:12px; white-space:nowrap; }
 .payable-status strong { width:fit-content; padding:4px 7px; border-radius:4px; font-size:11px; }
@@ -93,7 +95,7 @@
 .treasury-type { display:inline-block; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:600; white-space:nowrap; }
 .treasury-type--in { background:#e9f7ee; color:#137b44; }.treasury-type--out { background:#fcecef; color:#b42c3c; }
 .treasury-value--in { color:#137b44; }.treasury-value--out { color:#b42c3c; }
-@media(max-width:760px) { .treasury-intro { margin-top:0; }.treasury-summary { grid-template-columns:minmax(0,1fr); gap:10px; }.treasury-table td.treasury-value { text-align:left; }.payable-toolbar.treasury-toolbar { grid-template-columns:repeat(2,minmax(0,1fr)); }.treasury-toolbar > .admin-tool-button { grid-column:1 / -1; }.treasury-date input { flex:1; } }
+@media(max-width:760px) { .treasury-intro { margin-top:0; }.treasury-summary { grid-template-columns:minmax(0,1fr); gap:10px; }.treasury-table td.treasury-value { text-align:left; }.treasury-table td[data-label="Descrição"] { grid-column:1 / -1; }.payable-toolbar.treasury-toolbar { grid-template-columns:repeat(2,minmax(0,1fr)); }.treasury-toolbar > .admin-tool-button { grid-column:1 / -1; }.treasury-date input { flex:1; } }
 .finance-choice-summary { margin:0 0 18px; font-size:14px; line-height:1.6; }
 .finance-choice { display:grid; gap:12px; }.finance-choice--pair { grid-template-columns:repeat(2,minmax(0,1fr)); margin:18px 0 4px; }
 .finance-choice button { display:flex; align-items:flex-start; gap:12px; padding:14px 16px; border:1px solid #c6d9ea; border-radius:6px; background:#fff; color:#0c4c91; font:inherit; text-align:left; cursor:pointer; }

@@ -132,7 +132,7 @@ export function orderCosts(store, order) {
   const costCents = estimatedCostCents + extraCostCents
   const receivables = (store.receivables || []).filter((row) => row.orderCode === order.code && !row.inactive)
   const marginCents = value.valueCents - costCents
-  return { code: order.code, service: order.service, company: order.company, status: order.operation?.status || 'waiting', ...value, estimatedCostCents, expectedMarginPercent: Number(proposal.margin || 0), extraCostCents, costCents, paidCostCents, pendingCostCents: extraCostCents - paidCostCents, marginCents, marginPercent: value.valueCents ? Math.round(marginCents / value.valueCents * 1000) / 10 : null, receivableCents: receivables.reduce((sum, row) => sum + row.valueCents, 0), receivedCents: receivables.reduce((sum, row) => sum + (row.receipt?.finalCents || 0), 0), payables: linked.map((row) => view(row, store)) }
+  return { code: order.code, service: order.service, company: order.company, status: order.operation?.status || 'waiting', ...value, estimatedCostCents, expectedMarginPercent: Number(proposal.margin || 0), extraCostCents, costCents, paidCostCents, pendingCostCents: extraCostCents - paidCostCents, marginCents, marginPercent: costCents ? Math.round(marginCents / costCents * 1000) / 10 : null, receivableCents: receivables.reduce((sum, row) => sum + row.valueCents, 0), receivedCents: receivables.reduce((sum, row) => sum + (row.receipt?.finalCents || 0), 0), payables: linked.map((row) => view(row, store)) }
 }
 export function activeNotifications(store, userId) {
   const { payableReminderDays } = notificationSettings(store, userId)

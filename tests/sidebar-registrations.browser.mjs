@@ -9,7 +9,7 @@ const errors = []
 page.on('pageerror', (error) => errors.push(error.message))
 const sidebar = page.locator('.sidebar')
 const group = sidebar.getByRole('button', { name: 'Cadastros', exact: true })
-const members = ['Fornecedores', 'Administradores', 'Funcion\u00e1rios', 'Setores', 'Clientes', 'Bancos', 'Raz\u00f5es de pausas']
+const members = ['Fornecedores', 'Administradores', 'Funcion\u00e1rios', 'Setores', 'Clientes', 'Solicitantes', 'Compradores', 'Bancos', 'Raz\u00f5es de pausas']
 const navigate = (name) => sidebar.getByRole('button', { name: name === 'Dashboard' ? 'In\u00edcio' : name, exact: true }).click()
 
 try {

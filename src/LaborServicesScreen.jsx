@@ -4,6 +4,7 @@ import AdminWorkspace from './AdminWorkspace.jsx'
 import SectorPicker from './SectorPicker.jsx'
 import MachineHistoryModal from './MachineHistoryModal.jsx'
 import { pollWhileVisible } from './polling.js'
+import { SortableRows, SortHeader } from './RegistryList.jsx'
 
 const money = (value) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 async function request(path, options = {}) {
@@ -88,15 +89,15 @@ export default function LaborServicesScreen(props) {
       <button className="admin-tool-button labor-service-danger" type="button" disabled={!selected} onClick={() => setRemoving(selected)}><Trash2 size={17} />Remover serviço</button>
     </div></div>
     {error && <div className="admin-tool-error" role="alert">{error}<button className="admin-tool-button" type="button" onClick={() => setRetry((value) => value + 1)}>Tentar novamente</button></div>}
-    <section className="labor-services-list" aria-labelledby="labor-services-list-title"><header><h2 id="labor-services-list-title">Lista de serviços</h2><span>{items.length} cadastrados</span></header><table><thead><tr><th>Serviço</th><th>Tipo</th><th>Setor</th><th>Valor/hora</th><th>Tempo utilizado</th><th>Ações</th></tr></thead><tbody>
-      {loading ? <tr><td colSpan={6} className="reports-empty">Carregando serviços...</td></tr> : visible.map((item) => <tr key={item.id} className={selectedId === item.id ? 'selected' : ''} onClick={() => setSelectedId(item.id)}>
+    <section className="labor-services-list" aria-labelledby="labor-services-list-title"><header><h2 id="labor-services-list-title">Lista de serviços</h2><span>{items.length} cadastrados</span></header><SortableRows rows={visible} columns={[{ key: "Serviço", label: "Serviço", value: (item) => item.name }, { key: "Tipo", label: "Tipo", value: (item) => item.type }, { key: "Setor", label: "Setor", value: (item) => item.sector }, { key: "Valor/hora", label: "Valor/hora", value: (item) => Number(item.hourlyRate), numeric: true }, { key: "Tempo utilizado", label: "Tempo utilizado", value: (item) => item.usage || '00:00:00', numeric: true }, { key: "Ações", label: "Ações" }]}>{(sorted) => <table><thead><tr><SortHeader column={sorted.columns[0]} list={sorted} /><SortHeader column={sorted.columns[1]} list={sorted} /><SortHeader column={sorted.columns[2]} list={sorted} /><SortHeader column={sorted.columns[3]} list={sorted} /><SortHeader column={sorted.columns[4]} list={sorted} /><th>Ações</th></tr></thead><tbody>
+      {loading ? <tr><td colSpan={6} className="reports-empty">Carregando serviços...</td></tr> : sorted.rows.map((item) => <tr key={item.id} className={selectedId === item.id ? 'selected' : ''} onClick={() => setSelectedId(item.id)}>
         <td data-label="Serviço"><span className="labor-service-name"><Wrench size={18} aria-hidden="true" /><strong>{item.name}</strong></span></td><td data-label="Tipo">{item.type || '—'}</td><td data-label="Setor">{item.sector || '—'}</td><td data-label="Valor/hora">{money(item.hourlyRate)}</td><td data-label="Tempo utilizado">{item.usage || '00:00:00'}</td><td data-label="Ações"><div className="labor-service-actions">
           <button type="button" aria-label={`Ver histórico de ${item.name}`} title="Histórico de uso" onClick={(event) => { event.stopPropagation(); setHistory(item) }}><Info size={17} /></button>
           <button type="button" aria-label={`Editar ${item.name}`} title="Editar serviço" onClick={(event) => { event.stopPropagation(); setEditing(item) }}><Pencil size={17} /></button>
           <button className="labor-service-danger" type="button" aria-label={`Remover ${item.name}`} title="Remover serviço" onClick={(event) => { event.stopPropagation(); setRemoving(item) }}><Trash2 size={17} /></button>
         </div></td>
       </tr>)}{!loading && !visible.length && <tr><td colSpan={6} className="reports-empty">Nenhum serviço encontrado.</td></tr>}
-    </tbody></table></section>
+    </tbody></table>}</SortableRows></section>
     {editing !== undefined && <ServiceDialog item={editing} onSave={save} onClose={() => setEditing(undefined)} />}
     {removing && <ServiceDialog item={removing} removing onSave={save} onClose={() => setRemoving(null)} />}
     {history && <MachineHistoryModal machine={history} subject="service" loadHistory={loadHistory} onClose={() => setHistory(null)} />}

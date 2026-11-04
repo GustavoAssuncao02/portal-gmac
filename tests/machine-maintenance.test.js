@@ -10,7 +10,7 @@ test('maintenance takes a machine out of use, waits for the work on it to pause 
   await fixture.mutateStore((store) => { store.machines = [{ id: 'torno', name: 'Torno 01', sectors: ['Usinagem'], sector: 'Usinagem', hourlyRate: 80 }, { id: 'fresa', name: 'Fresa 02', sectors: ['Usinagem'], sector: 'Usinagem', hourlyRate: 90 }] })
   const ana = (await fixture.adminRequest('/employees', 'POST', { name: 'Ana Teste', cpf: '00000000001' })).data.item
   const offer = (await fixture.adminRequest('/offers', 'POST', offerDraft)).data.item
-  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], kind: 'service', stages: ['turning', 'milling'], stageResources: { turning: { type: 'machine', id: 'torno' } } })
+  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], kind: 'service', strictProcess: false, stages: ['turning', 'milling'], stageResources: { turning: { type: 'machine', id: 'torno' } } })
   await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', serviceValue: 100, deadline: offerDraft.deadline } })
   const order = (await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')).data.item
   const maintenance = (id, body, headers) => fixture.request(`/machines/${id}/maintenance`, 'POST', body, headers)

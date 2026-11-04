@@ -6,6 +6,7 @@ import { money, dateLabel, payableRequest, downloadBlob } from './payablesApi.js
 import { todayBahia, shiftMonth } from '../server/payableRules.js'
 import { dreColumns, dreCell, visibleDreRows, variation, changeTone, monthBefore, monthLabel, periodLabel, viewLabels, viewHints, entrySourceLabels, entryKindLabels, percentText } from '../server/dreRules.js'
 import { useBanks, bankOptionLabel } from './BankSelect.jsx'
+import { SortableRows, SortHeader } from './RegistryList.jsx'
 import './payables.css'
 import './dre.css'
 
@@ -26,9 +27,9 @@ function EntriesModal({ report, target, onClose, onOpen }) {
   const total = entries.reduce((sum, entry) => sum + entry.valueCents, 0)
   return <PayableModal title={`${target.label} · ${target.month ? monthLabel(target.month) : periodLabel(report)}`} wide onClose={onClose}>
     <p className="payable-muted">{entries.length} {entries.length === 1 ? 'lançamento' : 'lançamentos'} · total {money(total)} · visão {viewLabels[report.view].toLocaleLowerCase('pt-BR')}</p>
-    {!entries.length ? <p>Nenhum lançamento.</p> : <div className="payable-table-scroll"><table className="payable-table dre-entries-table"><thead><tr><th>Data</th><th>Origem</th><th>ID</th><th>Nome</th><th>Descrição</th><th className="dre-value">Valor</th></tr></thead><tbody>
-      {entries.map((entry, index) => <tr key={`${entry.refId}:${entry.kind}:${index}`}><td data-label="Data">{dateLabel(entry.date)}</td><td data-label="Origem">{entrySourceLabels[entry.source]}{entry.kind !== 'principal' && entry.kind !== 'adjustment' ? <small>{entryKindLabels[entry.kind]}</small> : null}</td><td data-label="ID"><button type="button" className="payable-link" onClick={() => onOpen(entry)}>{entry.refId}</button></td><td data-label="Nome">{entry.name || '—'}</td><td data-label="Descrição">{entry.description || '—'}</td><td data-label="Valor" className={`dre-value${entry.valueCents < 0 ? ' dre-negative' : ''}`}>{money(entry.valueCents)}</td></tr>)}
-    </tbody></table></div>}
+    {!entries.length ? <p>Nenhum lançamento.</p> : <div className="payable-table-scroll"><SortableRows rows={entries} columns={[{ key: "Data", label: "Data", value: (entry) => entry.date, numeric: true }, { key: "Origem", label: "Origem", value: (entry) => entrySourceLabels[entry.source] }, { key: "ID", label: "ID", value: (entry) => entry.refId }, { key: "Nome", label: "Nome", value: (entry) => entry.name }, { key: "Descrição", label: "Descrição", value: (entry) => entry.description }, { key: "Valor", label: "Valor", value: (entry) => entry.valueCents, numeric: true }]}>{(sorted) => <table className="payable-table dre-entries-table"><thead><tr><SortHeader column={sorted.columns[0]} list={sorted} /><SortHeader column={sorted.columns[1]} list={sorted} /><SortHeader column={sorted.columns[2]} list={sorted} /><SortHeader column={sorted.columns[3]} list={sorted} /><SortHeader column={sorted.columns[4]} list={sorted} /><SortHeader column={sorted.columns[5]} list={sorted} className="dre-value" /></tr></thead><tbody>
+      {sorted.rows.map((entry, index) => <tr key={`${entry.refId}:${entry.kind}:${index}`}><td data-label="Data">{dateLabel(entry.date)}</td><td data-label="Origem">{entrySourceLabels[entry.source]}{entry.kind !== 'principal' && entry.kind !== 'adjustment' ? <small>{entryKindLabels[entry.kind]}</small> : null}</td><td data-label="ID"><button type="button" className="payable-link" onClick={() => onOpen(entry)}>{entry.refId}</button></td><td data-label="Nome">{entry.name || '—'}</td><td data-label="Descrição">{entry.description || '—'}</td><td data-label="Valor" className={`dre-value${entry.valueCents < 0 ? ' dre-negative' : ''}`}>{money(entry.valueCents)}</td></tr>)}
+    </tbody></table>}</SortableRows></div>}
   </PayableModal>
 }
 

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { mkdir } from 'node:fs/promises'
 import { chromium } from 'playwright'
 import { createWorkflowFixture } from './workflowFixture.js'
-import { todayBahia } from '../server/payableRules.js'
+import { shiftMonth, todayBahia } from '../server/payableRules.js'
 
 const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Gustavo' }
 const fixture = await createWorkflowFixture({ accountsEnv: env })
@@ -18,7 +18,10 @@ const nav = async (name) => {
   if (!await item.isVisible()) await page.locator('.sidebar').getByRole('button', { name: 'Gestão Financeira', exact: true }).click()
   await item.click()
 }
-const tomorrow = new Date(Date.parse(todayBahia()) + 86400000).toISOString().slice(0, 10)
+// Dates from today: only the account due tomorrow enters "Próximos 7 dias", and none is overdue, whenever the test runs.
+const inDays = (days) => new Date(Date.parse(todayBahia()) + days * 86400000).toISOString().slice(0, 10)
+const tomorrow = inDays(1), rentDue = inDays(45)
+const rentEnd = shiftMonth(rentDue, 11).split('-').reverse().join('/')
 // A tiny valid PNG for the preview check.
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64')
 try {
@@ -43,7 +46,7 @@ try {
   await page.getByRole('button', { name: 'Nova conta a pagar', exact: true }).click()
   await modal().getByLabel('Descrição', { exact: true }).fill('Barras de aço para OS')
   await modal().getByLabel('Valor', { exact: true }).fill('1.234,56')
-  await modal().getByLabel('Vencimento', { exact: true }).fill('2026-12-10')
+  await modal().getByLabel('Vencimento', { exact: true }).fill(inDays(40))
   await modal().getByLabel('Valor', { exact: true }).blur()
   assert.equal(await modal().getByLabel('Valor', { exact: true }).inputValue(), '1.234,56')
   await modal().getByRole('button', { name: 'Cadastrar fornecedor', exact: true }).click()
@@ -71,9 +74,9 @@ try {
   await modal().getByLabel('Fornecedor', { exact: true }).selectOption({ label: 'Fornecedor habitual' })
   await modal().getByLabel('Descrição', { exact: true }).fill('Aluguel do galpão')
   await modal().getByLabel('Valor', { exact: true }).fill('3000')
-  await modal().getByLabel('Vencimento', { exact: true }).fill('2026-11-05')
+  await modal().getByLabel('Vencimento', { exact: true }).fill(rentDue)
   await modal().getByRole('radio', { name: 'Recorrente', exact: true }).check()
-  await modal().getByText('Serão criadas 12 contas de R$ 3.000,00, até 05/10/2027.').waitFor()
+  await modal().getByText(`Serão criadas 12 contas de R$ 3.000,00, até ${rentEnd}.`).waitFor()
   await page.screenshot({ path: 'test-results/payables-recurring-ahead.png' })
   await modal().getByRole('button', { name: 'Salvar conta', exact: true }).click()
   await page.waitForFunction(() => !document.querySelector('.payable-form'))

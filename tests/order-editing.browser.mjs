@@ -57,7 +57,7 @@ for (const device of ['desktop', 'iPhone 15', 'iPhone 15 Pro Max']) {
     await dialog.getByLabel('Descrição da OS', { exact: true }).fill('Descricao alterada com o historico mantido.')
     await dialog.getByRole('tab', { name: 'Recursos', exact: true }).click()
     await dialog.getByLabel('Material', { exact: true }).fill('Aco inox')
-    await dialog.getByLabel('Horas previstas', { exact: true }).fill('4')
+    await dialog.getByLabel('Horas previstas', { exact: true }).first().fill('4')
     await dialog.getByRole('tab', { name: 'Processo', exact: true }).click()
     await dialog.getByLabel('Cor/Tipo', { exact: true }).fill('Azul industrial')
     await dialog.getByLabel('Fabricado a partir de', { exact: true }).selectOption('drawing')

@@ -21,6 +21,40 @@ export async function allocateReceivedMaterial(connection, result, { order, rema
   return { allocatedQuantity: quantity, balance, orderCode: order.code }
 }
 
+// An OS that needs more of a material takes the increase from the stock when it is saved, as in the acceptance; what the
+// stock does not have stays pending as a material request. Only the increase counts: a request already open is not touched,
+// and a smaller quantity gives nothing back by itself. Runs in the transaction that saves the OS.
+export async function consumeOrderIncrease(connection, order, previousMaterials = []) {
+  const materials = order.resources?.materials || []
+  for (const material of materials) {
+    const before = previousMaterials.find((item) => item.id === material.id)
+    if (!before || before.stockAvailable == null || material.inventoryId == null) continue
+    const increase = kg(Number(material.quantity) - Number(before.quantity))
+    const pending = Number(material.purchaseQuantity) || 0
+    if (!(increase > 0) || !(pending > 0)) continue
+    const [[item]] = await connection.execute('SELECT id, unit, quantity_kg, unit_price FROM inventory_materials WHERE id = ? FOR UPDATE', [material.inventoryId])
+    if (!item) continue
+    const quantity = kg(Math.min(increase, pending, Number(item.quantity_kg)))
+    if (!(quantity > 0)) continue
+    const balance = kg(Number(item.quantity_kg) - quantity)
+    await connection.execute('UPDATE inventory_materials SET quantity_kg = ? WHERE id = ?', [balance, item.id])
+    await connection.execute(
+      `INSERT INTO inventory_movements
+        (material_id, movement_type, quantity_kg, unit_price_kg, balance_after_kg, destination, order_code, notes)
+       VALUES (?, 'exit', ?, ?, ?, ?, ?, ?)`,
+      [item.id, quantity, Number(item.unit_price), balance, 'Utilizado na ordem de serviço', order.code, `Aumento da quantidade na OS: ${formatQuantity(before.quantity, item.unit)} → ${formatQuantity(material.quantity, item.unit)}.`],
+    )
+    const consumed = kg(Number(before.inventoryConsumedQuantity ?? Number(before.quantity) - (Number(before.purchaseQuantity) || 0)) + quantity)
+    const remaining = kg(Math.max(0, Number(material.quantity) - consumed))
+    Object.assign(material, { inventoryConsumedQuantity: consumed, stockAvailable: consumed, purchaseQuantity: remaining, stockStatus: remaining > 0 ? 'partial' : 'available' })
+    const group = materials.filter((entry) => entry.inventoryId === material.inventoryId)
+    const groupPending = kg(group.reduce((total, entry) => total + (Number(entry.purchaseQuantity) || 0), 0))
+    for (const entry of group) Object.assign(entry, { groupPurchaseQuantity: groupPending, groupStockStatus: groupPending > 0 ? 'partial' : 'available' })
+    const summary = order.inventoryConsumption?.materials?.find((row) => row.inventoryId === material.inventoryId)
+    if (summary) Object.assign(summary, { quantity: kg(group.reduce((total, entry) => total + Number(entry.quantity), 0)), consumedQuantity: kg(group.reduce((total, entry) => total + (Number(entry.inventoryConsumedQuantity) || 0), 0)), purchaseQuantity: groupPending, balance })
+  }
+}
+
 export function orderMaterialPlan(materials, inventory) {
   const groups = new Map()
   for (const [index, material] of materials.entries()) {

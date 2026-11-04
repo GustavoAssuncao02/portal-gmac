@@ -7,6 +7,8 @@ const fixture = await createWorkflowFixture()
 const browser = await chromium.launch({ headless: true })
 const context = await browser.newContext({ viewport: { width: 1366, height: 900 } })
 const page = await context.newPage()
+// Without the live connection (a network that blocks it) the ten-second timer keeps the tablet up to date.
+await page.route('**/api/live', (route) => route.abort())
 const errors = []
 const requests = []
 let documentLoads = 0

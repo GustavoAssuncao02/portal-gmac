@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { FileDown, Sheet, RefreshCw, Search } from 'lucide-react'
 import AdminWorkspace from './AdminWorkspace.jsx'
+import { SortableRows, SortHeader, cellValue } from './RegistryList.jsx'
 
 const types = [['employees', 'Funcion\u00e1rios'], ['clients', 'Clientes'], ['admins', 'Administradores'], ['employee-hours', 'Horas trabalhadas'], ['machine-hours', 'Horas de m\u00e1quinas'], ['service-hours', 'Servi\u00e7os'], ['orders', 'Ordens de servi\u00e7o']]
 const today = () => new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10)
@@ -76,7 +77,7 @@ export default function ReportsScreen(props) {
     {report && <section className="reports-result" aria-label="Resultado do relatório"><div className="reports-result-heading"><h2>{report.title}</h2><small>{new Date(report.generatedAt).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })}</small></div><dl className="reports-summary">{report.summary.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
       {report.kind === 'orders' && <p className="reports-period-basis">Data de criação da OS: {report.start} a {report.end}</p>}
       <div className="reports-section-tabs" role="tablist" aria-label="Seções do relatório">{report.sections.map((item, index) => <button key={item.name} type="button" role="tab" aria-selected={section === index} onClick={() => setSection(index)}>{item.name}<span>{item.rows.length}</span></button>)}</div>
-      <div className="reports-table-scroll" role="tabpanel" aria-label={part.name}><table><thead><tr>{part.columns.map((label) => <th key={label}>{label}</th>)}</tr></thead><tbody>{part.rows.map((row, index) => <tr key={index}>{row.map((value, column) => <td key={column}>{value ?? '\u2014'}</td>)}</tr>)}</tbody></table>{!part.rows.length && <p className="reports-empty">Nenhum registro encontrado.</p>}</div>
+      <div className="reports-table-scroll" role="tabpanel" aria-label={part.name}><SortableRows rows={part.rows} columns={part.columns.map((label, index) => ({ key: label, label, value: (row) => cellValue(row[index]) }))}>{(sorted) => <table><thead><tr>{sorted.columns.map((column) => <SortHeader key={column.key} column={column} list={sorted} />)}</tr></thead><tbody>{sorted.rows.map((row, index) => <tr key={index}>{row.map((value, column) => <td key={column}>{value ?? '\u2014'}</td>)}</tr>)}</tbody></table>}</SortableRows>{!part.rows.length && <p className="reports-empty">Nenhum registro encontrado.</p>}</div>
       {report.notes.map((note) => <p className="reports-note" key={note}>{note}</p>)}
     </section>}
   </AdminWorkspace>

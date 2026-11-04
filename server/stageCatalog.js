@@ -103,6 +103,23 @@ async function renameInOrders(pool, from, to) {
   })
 }
 
+// Who did what in the catalog, with the date, kept in the store as `stageEvents` (the "i" of the Etapas screen).
+function recordStage(store, request, type, row, changes = []) {
+  store.stageEvents ||= []
+  store.stageEvents.push({ id: randomUUID(), at: new Date().toISOString(), type, stageCode: row?.code ?? null, stageName: row?.name ?? null, userId: request.adminId ?? null, userName: request.adminName || 'Administrador', changes })
+}
+// What an edit changed, in words.
+function stageChanges(store, before, after) {
+  const sector = (id) => (store.sectors || []).find((row) => row.id === id)?.name || 'Sem setor'
+  const resource = (choice) => (choice.type === 'machine' ? store.machines : store.laborServices)?.find((item) => String(item.id) === String(choice.id))?.name || 'Não cadastrado'
+  const resources = (list) => (list || []).map(resource).join(', ') || 'Qualquer máquina ou serviço'
+  const changes = []
+  if (before.name !== after.name) changes.push(`Nome: ${before.name} → ${after.name}`)
+  if (before.sectorId !== after.sectorId) changes.push(`Setor: ${sector(before.sectorId)} → ${sector(after.sectorId)}`)
+  if (resources(before.resources) !== resources(after.resources)) changes.push(`Máquinas e serviços: ${resources(before.resources)} → ${resources(after.resources)}`)
+  return changes
+}
+
 export default function createStageCatalogRouter(requireAdmin, pool) {
   const router = express.Router()
   const handle = (task) => async (request, response, next) => {
@@ -120,11 +137,18 @@ export default function createStageCatalogRouter(requireAdmin, pool) {
     if (!(await readStore()).stageCatalog) await ensureStageCatalog()
     await answer(response)
   }))
+  router.get('/stages/history', requireAdmin, handle(async (request, response) => {
+    const events = (await readStore()).stageEvents || []
+    const code = request.query.code ? String(request.query.code) : null
+    response.set('Cache-Control', 'no-store').json({ items: events.filter((row) => !code || row.stageCode === code).reverse() })
+  }))
   router.post('/stages', requireAdmin, handle(async (request, response) => {
     await mutateStore((store) => {
       store.stageCatalog ||= seededCatalog(store)
       const now = new Date().toISOString()
-      store.stageCatalog.stages.push({ code: `stage-${randomUUID().slice(0, 8)}`, ...stageFields(request.body, store), active: true, aliases: [], createdAt: now, updatedAt: now })
+      const row = { code: `stage-${randomUUID().slice(0, 8)}`, ...stageFields(request.body, store), active: true, aliases: [], createdAt: now, updatedAt: now }
+      store.stageCatalog.stages.push(row)
+      recordStage(store, request, 'created', row)
     })
     await answer(response, 201)
   }))
@@ -135,6 +159,8 @@ export default function createStageCatalogRouter(requireAdmin, pool) {
       if (!row) fail(404, 'Etapa não encontrada.')
       const fields = stageFields(request.body, store, row)
       const before = row.name
+      const changes = stageChanges(store, row, fields)
+      if (changes.length) recordStage(store, request, 'edited', { code: row.code, name: fields.name }, changes)
       if (!sameText(before, fields.name)) row.aliases = [...new Set([...(row.aliases || []).filter((alias) => !sameText(alias, fields.name)), before])]
       Object.assign(row, fields, { updatedAt: new Date().toISOString() })
       return before !== fields.name ? { from: before, to: fields.name } : null
@@ -148,6 +174,7 @@ export default function createStageCatalogRouter(requireAdmin, pool) {
       store.stageCatalog ||= seededCatalog(store)
       const row = store.stageCatalog.stages.find((entry) => entry.code === request.params.code)
       if (!row) fail(404, 'Etapa não encontrada.')
+      if (row.active !== request.body.active) recordStage(store, request, request.body.active ? 'activated' : 'deactivated', row)
       Object.assign(row, { active: request.body.active, updatedAt: new Date().toISOString() })
     })
     await answer(response)
@@ -159,6 +186,7 @@ export default function createStageCatalogRouter(requireAdmin, pool) {
       if (!row) fail(404, 'Etapa não encontrada.')
       if (stageInUse(store, row)) fail(409, `A etapa ${row.name} já foi usada em ofertas ou OS: desative-a em vez de excluir.`)
       store.stageCatalog.stages = store.stageCatalog.stages.filter((entry) => entry !== row)
+      recordStage(store, request, 'deleted', row)
     })
     await answer(response)
   }))
@@ -172,6 +200,7 @@ export default function createStageCatalogRouter(requireAdmin, pool) {
       const rows = store.stageCatalog.stages.map((row, index) => ({ row, index }))
       store.stageCatalog.stages = rows.sort((left, right) => rank(stages, left.row.code) - rank(stages, right.row.code) || left.index - right.index).map(({ row }) => row)
       store.stageCatalog.groupOrder = [...new Set(groups.map(String).filter((id) => (store.sectors || []).some((row) => row.id === id)))]
+      recordStage(store, request, 'reordered', null)
     })
     await answer(response)
   }))

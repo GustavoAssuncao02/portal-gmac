@@ -47,16 +47,17 @@ test('the proposal, the acceptance and the stage changes of an OS ask for the ti
   await save({ stageTimes: times, stageResources: plans })
   assert.equal((await generate()).status, 200)
 
-  // A proposal generated before the rule (or a time or a machine removed afterwards) still needs them to become an OS.
-  await save({ stageTimes: { turning: 120 }, stageResources: plans })
+  // A proposal generated before the rule still needs them to become an OS. (Changing a time or a machine on the screen
+  // discards the proposal, so only an older offer gets here: it is written straight to the store.)
+  await fixture.mutateStore((store) => { const item = store.offers.find((row) => row.id === offer.id); delete item.resources.stageTimes.painting })
   let refused = await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')
   assert.equal(refused.status, 400)
   assert.match(refused.data.message, /Pintura.*Preencha nos detalhes da oferta antes de aceitar/)
-  await save({ stageTimes: times, stageResources: { turning: plans.turning } })
+  await fixture.mutateStore((store) => { const item = store.offers.find((row) => row.id === offer.id); item.resources.stageTimes.painting = times.painting; delete item.resources.stageResources.painting })
   refused = await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')
   assert.equal(refused.status, 400)
   assert.match(refused.data.message, /Escolha a máquina ou o serviço da etapa: Pintura\. Preencha nos detalhes da oferta antes de aceitar/)
-  await save({ stageTimes: times, stageResources: plans })
+  await fixture.mutateStore((store) => { const item = store.offers.find((row) => row.id === offer.id); item.resources.stageResources.painting = { type: 'labor-service', id: service.id, name: service.name } })
   const accepted = (await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')).data.item
   assert.deepEqual(accepted.resources.stageTimes, times)
   assert.deepEqual(Object.keys(accepted.resources.stageResources), ['turning', 'painting'])
