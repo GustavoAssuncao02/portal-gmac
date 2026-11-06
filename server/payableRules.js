@@ -44,8 +44,11 @@ export function shiftMonth(value, months) {
   target.setUTCDate(Math.min(day, last))
   return target.toISOString().slice(0, 10)
 }
+// No practical limit on installments or occurrences generated ahead; the ceiling only guards against a typo creating
+// an absurd number of accounts (1200 = 100 years of monthly accounts).
+export const MAX_SERIES = 1200
 export function makeInstallments(valueCents, dueDate, count) {
-  if (!Number.isInteger(count) || count < 1 || count > 120) throw new Error('Informe de 1 a 120 parcelas.')
+  if (!Number.isInteger(count) || count < 1 || count > MAX_SERIES) throw new Error('Informe um número válido de parcelas.')
   const base = Math.floor(valueCents / count)
   return Array.from({ length: count }, (_, index) => ({ valueCents: base + (index < valueCents % count ? 1 : 0), dueDate: shiftMonth(dueDate, index) }))
 }

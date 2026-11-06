@@ -276,3 +276,14 @@
 @media(max-width:760px) { .classification-split-row { grid-template-columns: minmax(0, 1fr) auto; } .classification-split-row > :nth-child(2) { grid-column: 1; } }
 .classification-split :is(select, input) { font-size: 12px; }
 .payable-modal--form .classification-split legend { font-size: 12px; }
+/* Red trash on each row of the financial lists (Contas a Pagar, Contas a Receber, Tesouraria). */
+.payable-table .payable-actions-col { width:48px; padding-left:4px; padding-right:8px; text-align:right; }
+.payable-row-delete { color:#c62828; border-color:#f3c4c4; }
+.payable-row-delete:hover { background:#fdecec; color:#a11b1b; }
+:root[data-theme="dark"] .payable-row-delete { color:#ff8a8a; border-color:#7a3434; }
+:root[data-theme="dark"] .payable-row-delete:hover { background:#4a1f1f; color:#ffb4b4; }
+.delete-account-summary { margin:0 0 12px; line-height:1.5; }
+.delete-account-scope { display:grid; gap:10px; margin:14px 0 0; padding:12px 14px; border:1px solid #d7e3ef; border-radius:8px; }
+.delete-account-scope legend { padding:0 4px; font-weight:600; }
+.delete-account-scope label { display:flex; gap:8px; align-items:center; cursor:pointer; }
+@media(max-width:760px) { .payable-table td.payable-actions-col { text-align:left; } }

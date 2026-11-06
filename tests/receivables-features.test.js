@@ -26,7 +26,7 @@ test('recurring contracts, attachments, receipts with proof, bulk receipt and be
 
     // Recurring contracts are generated ahead; each occurrence stays independent.
     assert.equal((await request('/receivables', 'POST', { ...base, value: '1500', dueDate: shiftMonth(todayBahia(), 1), kind: 'recurring' })).status, 400, 'Recurrence is required')
-    assert.equal((await request('/receivables', 'POST', { ...base, value: '1500', dueDate: shiftMonth(todayBahia(), 1), kind: 'recurring', recurrence: 'monthly', ahead: 25 })).status, 400)
+    assert.equal((await request('/receivables', 'POST', { ...base, value: '1500', dueDate: shiftMonth(todayBahia(), 1), kind: 'recurring', recurrence: 'monthly', ahead: 1201 })).status, 400)
     const contractFile = await upload('/receivables/uploads', 'contrato.pdf')
     const contract = await request('/receivables', 'POST', { ...base, value: '1500', dueDate: shiftMonth(todayBahia(), 1), kind: 'recurring', recurrence: 'monthly', ahead: 11, fileIds: [contractFile.data.item.id] })
     assert.equal(contract.status, 201)

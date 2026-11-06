@@ -5,7 +5,7 @@ import path from 'node:path'
 import { dataDirectory } from './dataDirectory.js'
 import { readStore, mutateStore } from './offers.js'
 import { exportPdf, exportWorkbook } from './reports.js'
-import { cents, validDate, todayBahia, payableStatus, daysUntil, makeInstallments, shiftMonth, filterPayables, settlementMethods, treasuryEntry, classificationParts, splitInstallments } from './payableRules.js'
+import { cents, validDate, todayBahia, payableStatus, daysUntil, makeInstallments, shiftMonth, filterPayables, settlementMethods, treasuryEntry, classificationParts, splitInstallments, MAX_SERIES } from './payableRules.js'
 import { notificationSettings } from './accounts.js'
 import { assertNotReconciled, reconciledTransaction } from './bankStatements.js'
 import { orderValue } from './receivables.js'
@@ -94,7 +94,7 @@ function installments(body, valueCents, dueDate) {
   if (body.installments !== undefined && !Array.isArray(body.installments)) fail('Parcelas inválidas.')
   let rows
   try { rows = body.installments === undefined ? makeInstallments(valueCents, dueDate, count) : body.installments.map((row) => ({ valueCents: cents(row.value), dueDate: row.dueDate })) } catch (error) { fail(error.message) }
-  if (!Number.isInteger(count) || count < 1 || count > 120 || rows.length !== count || rows.some((row) => !validDate(row.dueDate) || row.valueCents <= 0) || rows.reduce((sum, row) => sum + row.valueCents, 0) !== valueCents) fail('A soma das parcelas deve ser exatamente igual ao valor total, com datas e valores válidos.')
+  if (!Number.isInteger(count) || count < 1 || count > MAX_SERIES || rows.length !== count || rows.some((row) => !validDate(row.dueDate) || row.valueCents <= 0) || rows.reduce((sum, row) => sum + row.valueCents, 0) !== valueCents) fail('A soma das parcelas deve ser exatamente igual ao valor total, com datas e valores válidos.')
   return rows
 }
 // With `store`, the bank of the settlement is required once banks are registered (Cadastros > Bancos).
@@ -123,6 +123,39 @@ function view(row, store) {
 }
 // Real cost of an OS against its price. The materials and labor planned in the proposal are already part of it;
 // every payable linked to the OS (archived ones were still paid) is an additional cost that came up later.
+
+// Deleting an account: money already paid keeps its history (deactivate it instead); a Tesouraria entry posted by mistake
+// is removed directly. An installment plan with a paid installment keeps its structure. The history keeps the data.
+const paidHistory = (store, row) => Boolean(row.payment) || store.payableEvents.some((e) => e.accountId === row.id && ['paid', 'reversed'].includes(e.type))
+const relatedPayables = (store, row) => row.groupId ? store.payables.filter((r) => r.groupId === row.groupId) : row.seriesId ? store.payables.filter((r) => r.seriesId === row.seriesId) : [row]
+function payableDeleteBlock(store, row) {
+  if (!row.treasury && paidHistory(store, row)) return 'Conta com pagamento: preserve o histórico; desative quando paga.'
+  if (!row.treasury && row.groupId && relatedPayables(store, row).some((r) => paidHistory(store, r))) return 'Há parcela paga neste parcelamento: preserve o histórico; desative quando paga.'
+  if (!row.treasury && store.payables.some((r) => r.previousId === row.id)) return 'Conta com recorrência seguinte vinculada: exclua antes a conta seguinte.'
+  if (reconciledTransaction(store, 'payable', row.id)) return 'Lançamento conciliado: desfaça antes a conciliação em Conciliação bancária.'
+  return null
+}
+// The other installments / occurrences that can go along with this one ("esta e as demais").
+const deletablePayables = (store, row) => payableDeleteBlock(store, row) ? [] : relatedPayables(store, row).filter((r) => !payableDeleteBlock(store, r))
+function removePayables(store, actor, row, all) {
+  const block = payableDeleteBlock(store, row)
+  if (block) fail(block, 409)
+  assertNotReconciled(store, 'payable', row.id, 'excluir')
+  const targets = all ? deletablePayables(store, row) : [row]
+  const plan = row.groupId ? 'Parcelamento' : row.seriesId ? 'Recorrência' : ''
+  for (const item of targets) event(store, actor, 'deleted', item.id, { details: { account: item, text: plan && targets.length > 1 ? `${plan} excluído (${targets.length} contas)` : plan ? `${plan}: só esta conta excluída` : '' } })
+  const ids = new Set(targets.map((r) => r.id))
+  store.payables = store.payables.filter((r) => !ids.has(r.id))
+  // What remains of the plan is numbered again, so "parcela x de y" and the total stay right.
+  const rest = relatedPayables(store, row).filter((r) => r !== row && !ids.has(r.id))
+  if (row.groupId && rest.length) {
+    rest.sort((a, b) => a.installmentNumber - b.installmentNumber).forEach((r, index) => { r.installmentNumber = index + 1; r.installmentCount = rest.length; r.originalTotalCents = rest.reduce((sum, item) => sum + item.valueCents, 0) })
+  } else if (row.seriesId && rest.length) {
+    rest.sort((a, b) => a.dueDate.localeCompare(b.dueDate)).forEach((r, index) => { r.seriesIndex = index + 1; r.seriesCount = rest.length })
+  }
+  return [...ids]
+}
+
 export function orderCosts(store, order) {
   const value = orderValue(order), proposal = order.proposal || {}
   const linked = (store.payables || []).filter((row) => row.orderCode === order.code)
@@ -239,7 +272,7 @@ export default function createPayablesRouter(accounts, requireAdmin) {
       return rows
     }); res.json({ items: result })
   }))
-  router.get('/payables/:id', handle(async (req, res) => { const store = await sweep(), row = find(store, req.params.id); const siblings = row.groupId ? store.payables.filter((r) => r.groupId === row.groupId) : []; res.json({ item: view(row, store), siblings: siblings.map((r) => view(r, store)), structureLocked: siblings.some((r) => r.payment), canDelete: row.treasury ? !reconciledTransaction(store, 'payable', row.id) : !row.payment && !row.groupId && !store.payableEvents.some((e) => e.accountId === row.id && ['paid', 'reversed'].includes(e.type)) && !store.payables.some((r) => r.previousId === row.id), history: store.payableEvents.filter((e) => e.accountId === row.id).reverse() }) }))
+  router.get('/payables/:id', handle(async (req, res) => { const store = await sweep(), row = find(store, req.params.id); const siblings = row.groupId ? store.payables.filter((r) => r.groupId === row.groupId) : []; res.json({ item: view(row, store), siblings: siblings.map((r) => view(r, store)), structureLocked: siblings.some((r) => r.payment), canDelete: !payableDeleteBlock(store, row), deleteBlock: payableDeleteBlock(store, row), deleteOthers: deletablePayables(store, row).filter((r) => r.id !== row.id).length, history: store.payableEvents.filter((e) => e.accountId === row.id).reverse() }) }))
   router.post('/payables', handle(async (req, res) => {
     const result = await mutateStore((store) => {
       init(store)
@@ -255,7 +288,7 @@ export default function createPayablesRouter(accounts, requireAdmin) {
       const groupId = common.kind === 'installment' ? randomUUID() : null
       // Recurring accounts can be generated ahead so future months show up in planning; each occurrence stays independent.
       const ahead = common.kind === 'recurring' ? Number(body.ahead || 0) : 0
-      if (!Number.isInteger(ahead) || ahead < 0 || ahead > 24) fail('Informe de 0 a 24 ocorrências futuras.')
+      if (!Number.isInteger(ahead) || ahead < 0 || ahead > MAX_SERIES) fail('Informe um número válido de ocorrências futuras.')
       const seriesId = ahead ? randomUUID() : null
       // Each occurrence is issued in its own month, so the DRE by competência spreads the contract over its months.
       const step = common.recurrence === 'yearly' ? 12 : 1
@@ -349,7 +382,7 @@ export default function createPayablesRouter(accounts, requireAdmin) {
   router.post('/payables/:id/pay', handle(async (req, res) => { const item = await mutateStore((store) => { init(store); const row = find(store, req.params.id); editable(row); const data = payment(req.body, row.valueCents, false, billMethods, store); data.receipts = claimFiles(store, req.body.fileIds || [], req.actor); row.payment = data; row.lastStatus = 'paid'; event(store, req.actor, 'paid', row.id, { details: row.payment }); for (const file of data.receipts) event(store, req.actor, 'attachment_added', row.id, { details: { name: file.name, receipt: true } }); return row }); res.json({ item }) }))
   router.post('/payables/:id/reverse', handle(async (req, res) => { const item = await mutateStore((store) => { init(store); const row = find(store, req.params.id); if (!row.payment || row.inactive) fail('Reative a conta antes de estornar.', 409); assertNotReconciled(store, 'payable', row.id, 'estornar'); const reason = clean(req.body.reason); if (reason.length < 10) fail('Informe um motivo com pelo menos 10 caracteres.'); event(store, req.actor, 'reversed', row.id, { reason, details: { payment: row.payment } }); row.payment = null; row.lastStatus = payableStatus(row); return row }); res.json({ item }) }))
   router.post('/payables/:id/activation', handle(async (req, res) => { const item = await mutateStore((store) => { init(store); const row = find(store, req.params.id); if (!row.payment || typeof req.body.inactive !== 'boolean') fail('Somente contas pagas podem ser desativadas ou reativadas.'); if (req.body.inactive) assertNotReconciled(store, 'payable', row.id, 'desativar'); if (row.inactive !== req.body.inactive) { row.inactive = req.body.inactive; event(store, req.actor, row.inactive ? 'deactivated' : 'reactivated', row.id) } return row }); res.json({ item }) }))
-  router.delete('/payables/:id', handle(async (req, res) => { await mutateStore((store) => { init(store); const row = find(store, req.params.id); /* A Tesouraria entry posted by mistake is removed directly; the history keeps its data. */ if (!row.treasury && (row.payment || store.payableEvents.some((e) => e.accountId === row.id && ['paid', 'reversed'].includes(e.type)) || row.groupId || store.payables.some((r) => r.previousId === row.id))) fail('Conta com pagamento, parcelamento ou vínculo: preserve o histórico; desative quando paga.', 409); assertNotReconciled(store, 'payable', row.id, 'excluir'); event(store, req.actor, 'deleted', row.id, { details: { account: row } }); store.payables = store.payables.filter((r) => r.id !== row.id) }); res.json({ ok: true }) }))
+  router.delete('/payables/:id', handle(async (req, res) => { const removed = await mutateStore((store) => { init(store); return removePayables(store, req.actor, find(store, req.params.id), req.query.scope === 'all') }); res.json({ ok: true, removed }) }))
   // Files up to the attachment limit (uploads.js): written to the disk first, then recorded; a record that is not saved removes its file.
   router.post('/payables/uploads', handle(async (req, res) => {
     const file = { id: randomUUID(), name: path.basename(clean(req.query.name, 200)), contentType: clean(req.query.type, 160) || 'application/octet-stream', userId: req.actor.id }

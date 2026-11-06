@@ -5,7 +5,7 @@ import path from 'node:path'
 import { dataDirectory } from './dataDirectory.js'
 import { readStore, mutateStore } from './offers.js'
 import { exportPdf, exportWorkbook } from './reports.js'
-import { cents, validDate, todayBahia, daysUntil, makeInstallments, shiftMonth, matchesSearch, treasuryEntry } from './payableRules.js'
+import { cents, validDate, todayBahia, daysUntil, makeInstallments, shiftMonth, matchesSearch, treasuryEntry, MAX_SERIES } from './payableRules.js'
 import { notificationSettings } from './accounts.js'
 import { assertNotReconciled, reconciledTransaction } from './bankStatements.js'
 import { normalizeText } from './ofx.js'
@@ -46,6 +46,13 @@ function deletionBlock(store, row, group = groupOf(store, row)) {
   for (const item of group) { try { assertNotReconciled(store, 'receivable', item.id, 'excluir') } catch (error) { return { message: error.message, status: error.status || 409 } } }
   return null
 }
+// The other accounts that can be deleted along with this one: the rest of its installment plan, or the occurrences of
+// its recurring contract that have no receipt (each occurrence is independent).
+function deletableOthers(store, row) {
+  if (row.groupId) return groupOf(store, row)
+  if (!row.seriesId) return [row]
+  return store.receivables.filter((item) => item.seriesId === row.seriesId && (item === row || !deletionBlock(store, item, [item])))
+}
 const linkedReceivables = (store, orderCode) => store.receivables.filter((row) => row.orderCode === orderCode && !row.inactive)
 // Reopening an OS may take the accounts posted for it along (the user decides); the history keeps what was deleted.
 export function removeOrderReceivables(store, actor, orderCode) {
@@ -82,14 +89,14 @@ function partsOf(body, common, creating = false) {
 function splitParts(body, common, creating) {
   if (common.kind === 'recurring' && creating) {
     const ahead = Number(body.ahead ?? 0)
-    if (!Number.isInteger(ahead) || ahead < 0 || ahead > 24) fail('Informe de 0 a 24 ocorrências futuras.')
+    if (!Number.isInteger(ahead) || ahead < 0 || ahead > MAX_SERIES) fail('Informe um número válido de ocorrências futuras.')
     // Each occurrence is issued in its own month, so the DRE by competência spreads the contract over its months.
     const step = common.recurrence === 'yearly' ? 12 : 1
     return Array.from({ length: ahead + 1 }, (_, index) => ({ valueCents: common.valueCents, issueDate: shiftMonth(common.issueDate, index * step), dueDate: shiftMonth(common.dueDate, index * step) }))
   }
   if (common.kind !== 'installment') return [{ valueCents: common.valueCents, dueDate: common.dueDate }]
   const count = Number(body.count)
-  if (!Number.isInteger(count) || count < 2 || count > 120) fail('Informe de 2 a 120 parcelas.')
+  if (!Number.isInteger(count) || count < 2 || count > MAX_SERIES) fail('Informe um número válido de parcelas (a partir de 2).')
   if (body.installments !== undefined && !Array.isArray(body.installments)) fail('Parcelas inválidas.')
   let rows
   try { rows = body.installments?.length ? body.installments.map((row) => ({ valueCents: cents(row.value), dueDate: row.dueDate })) : makeInstallments(common.valueCents, common.dueDate, count) } catch (error) { fail(error.message) }
@@ -259,7 +266,7 @@ export default function createReceivablesRouter(accounts, requireAdmin, pool = n
   }))
   router.get('/receivables/:id', handle(async (req, res) => {
     const store = await readStore(); init(store); const row = find(store, req.params.id), group = groupOf(store, row)
-    res.json({ item: view(row, store), siblings: row.groupId ? group.map((item) => view(item, store)) : [], structureLocked: group.some((item) => item.receipt), canDelete: row.treasury ? !reconciledTransaction(store, 'receivable', row.id) : group.every((item) => !hasReceiptHistory(store, item) && !reconciledTransaction(store, 'receivable', item.id)), history: store.receivableEvents.filter((e) => e.accountId === row.id).reverse() })
+    res.json({ item: view(row, store), siblings: row.groupId ? group.map((item) => view(item, store)) : [], structureLocked: group.some((item) => item.receipt), canDelete: !deletionBlock(store, row, group), deleteBlock: deletionBlock(store, row, group)?.message || null, deleteOthers: deletionBlock(store, row, group) ? 0 : deletableOthers(store, row).length - 1, history: store.receivableEvents.filter((e) => e.accountId === row.id).reverse() })
   }))
   router.post('/receivables', handle(async (req, res) => {
     const treasury = req.body.treasury === true
@@ -433,15 +440,23 @@ export default function createReceivablesRouter(accounts, requireAdmin, pool = n
     res.json({ item })
   }))
   router.delete('/receivables/:id', handle(async (req, res) => {
-    await mutateStore((store) => {
+    const removed = await mutateStore((store) => {
       init(store); const row = find(store, req.params.id), group = groupOf(store, row)
       const block = deletionBlock(store, row, group)
       if (block) fail(block.message, block.status)
-      for (const item of group) event(store, req.actor, 'deleted', item.id, { details: { account: item, text: row.groupId ? `Parcelamento excluído (${group.length} parcelas)` : '' } })
-      store.receivables = store.receivables.filter((item) => !group.includes(item))
-      return group.map((item) => item.id)
+      // "Só esta" or "esta e as demais"; without a choice an installment plan goes as a whole, as before.
+      const all = req.query.scope ? req.query.scope === 'all' : Boolean(row.groupId)
+      const targets = !all ? [row] : row.groupId ? group : deletableOthers(store, row)
+      const plan = row.groupId ? 'Parcelamento' : row.seriesId ? 'Recorrência' : ''
+      for (const item of targets) event(store, req.actor, 'deleted', item.id, { details: { account: item, text: plan && targets.length > 1 ? `${plan} excluído (${targets.length} contas)` : plan ? `${plan}: só esta conta excluída` : '' } })
+      store.receivables = store.receivables.filter((item) => !targets.includes(item))
+      // What remains of the plan is numbered again, so "parcela x de y" and the total stay right.
+      const rest = row.groupId ? store.receivables.filter((item) => item.groupId === row.groupId) : row.seriesId ? store.receivables.filter((item) => item.seriesId === row.seriesId) : []
+      if (row.groupId) rest.sort((a, b) => a.installmentNumber - b.installmentNumber).forEach((item, index) => { item.installmentNumber = index + 1; item.installmentCount = rest.length; item.originalTotalCents = rest.reduce((sum, other) => sum + other.valueCents, 0) })
+      else rest.sort((a, b) => a.dueDate.localeCompare(b.dueDate)).forEach((item, index) => { item.seriesIndex = index + 1; item.seriesCount = rest.length })
+      return targets.map((item) => item.id)
     })
-    res.json({ ok: true })
+    res.json({ ok: true, removed })
   }))
   router.post('/receivables/export', handle(async (req, res) => {
     const store = await readStore(); init(store)

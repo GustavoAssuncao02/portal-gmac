@@ -1,6 +1,15 @@
 // Each commit to main is a new version: add an entry at the top, with what changed in plain words for whoever uses the portal.
 export const releaseNotes = [
   {
+    version: '1.0.10',
+    date: '2026-11-06',
+    notes: [
+      'Contas a Pagar, Contas a Receber e Tesouraria: lixeira vermelha em cada lançamento para excluir, com confirmação',
+      'Contas parceladas e recorrentes: ao excluir, escolha apagar só aquele lançamento ou também os demais',
+      'Contas recorrentes e parceladas: sem o limite de 24 ocorrências futuras e de 120 parcelas',
+    ],
+  },
+  {
     version: '1.0.09',
     date: '2026-11-04',
     notes: [

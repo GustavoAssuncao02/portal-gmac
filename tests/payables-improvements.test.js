@@ -24,7 +24,7 @@ test('recurring accounts can be generated ahead, OS links are validated and the 
     const supplier = (await request('/suppliers', 'POST', { name: 'Aluguel Galpao', document: '12345678000190' })).data.item
     const category = (await request('/classifications', 'POST', { name: 'Aluguel' })).data.item
     const base = { supplierId: supplier.id, classificationId: category.id, issueDate: todayBahia(), value: '1500.00', dueDate: '2026-01-31', kind: 'recurring', recurrence: 'monthly' }
-    assert.equal((await request('/payables', 'POST', { ...base, ahead: 25 })).status, 400)
+    assert.equal((await request('/payables', 'POST', { ...base, ahead: 1201 })).status, 400)
     const series = await request('/payables', 'POST', { ...base, ahead: 11 })
     assert.equal(series.status, 201)
     const rows = series.data.items
@@ -48,5 +48,40 @@ test('recurring accounts can be generated ahead, OS links are validated and the 
     assert.equal((await request('/payables')).data.orders[0].code, 'OS-2026-0001')
     assert.equal((await request('/payables')).data.items.find((row) => row.id === steel.id).supplierDocument, '12345678000190')
     assert.equal((await request('/payables/order-costs/OS-9999')).status, 404)
+  } finally { await f.close() }
+})
+
+test('a payable is deleted alone or with the rest of its installment plan / recurring series; paid ones stay', async () => {
+  const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Gustavo' }
+  const f = await createWorkflowFixture({ accountsEnv: env })
+  try {
+    const token = (await f.request('/auth/login', 'POST', { cpf: env.DEMO_ADMIN_CPF, password: env.DEMO_ADMIN_PASSWORD })).data.token
+    const request = (route, method, body) => f.request(route, method, body, { Authorization: `Bearer ${token}` })
+    const supplier = (await request('/suppliers', 'POST', { name: 'Receita', document: '12345678000190' })).data.item
+    const category = (await request('/classifications', 'POST', { name: 'Parcelamentos' })).data.item
+    const base = { supplierId: supplier.id, classificationId: category.id, issueDate: todayBahia(), value: '300.00', dueDate: '2026-12-10' }
+    const ids = async () => (await request('/payables')).data.items.map((row) => row.id)
+
+    // More than 24 occurrences ahead can be generated now.
+    const series = (await request('/payables', 'POST', { ...base, kind: 'recurring', recurrence: 'monthly', ahead: 137 })).data.items
+    assert.equal(series.length, 138)
+    assert.equal((await request(`/payables/${series[0].id}`)).data.deleteOthers, 137)
+    // Only this one: the rest of the series is numbered again.
+    assert.deepEqual((await request(`/payables/${series[1].id}?scope=one`, 'DELETE')).data.removed, [series[1].id])
+    assert.equal((await request(`/payables/${series[2].id}`)).data.item.seriesCount, 137)
+    // A paid occurrence stays when the others go.
+    assert.equal((await request(`/payables/${series[0].id}/pay`, 'POST', { date: todayBahia(), method: 'pix' })).status, 200)
+    assert.equal((await request(`/payables/${series[0].id}`)).data.canDelete, false)
+    assert.equal((await request(`/payables/${series[3].id}?scope=all`, 'DELETE')).data.removed.length, 136)
+    assert.deepEqual((await ids()).filter((id) => series.some((row) => row.id === id)), [series[0].id])
+
+    // Installments: one goes and the plan is renumbered; then the rest goes together.
+    const parts = (await request('/payables', 'POST', { ...base, kind: 'installment', count: 3 })).data.items
+    assert.equal((await request(`/payables/${parts[0].id}`)).data.canDelete, true)
+    await request(`/payables/${parts[1].id}?scope=one`, 'DELETE')
+    const left = (await request(`/payables/${parts[2].id}`)).data.item
+    assert.deepEqual([left.installmentNumber, left.installmentCount, left.originalTotalCents], [2, 2, 20000])
+    assert.equal((await request(`/payables/${parts[0].id}?scope=all`, 'DELETE')).data.removed.length, 2)
+    assert.ok(!(await ids()).some((id) => parts.some((row) => row.id === id)))
   } finally { await f.close() }
 })
