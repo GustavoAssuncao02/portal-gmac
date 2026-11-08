@@ -2030,6 +2030,16 @@
 :root[data-theme="dark"][data-tone="black"] .bank-closing-pending li {
     border-bottom: 1px solid #303133
 }
+:root[data-theme="dark"][data-tone="black"] .bank-settlement-list li {
+    border-bottom: 1px solid #303133
+}
+:root[data-theme="dark"][data-tone="black"] .bank-settlement-list li span {
+    color: #bfc2c5
+}
+:root[data-theme="dark"][data-tone="black"] .bank-settlement-method {
+    background: #232425;
+    color: #ebebec
+}
 :root[data-theme="dark"][data-tone="black"] .bank-closing-history span, :root[data-theme="dark"][data-tone="black"] .bank-closing-history small {
     color: #bfc2c5
 }
@@ -2120,6 +2130,54 @@
 }
 :root[data-theme="dark"][data-tone="black"] .admin-tools-main .bank-match-bank {
     color: #bec2c5
+}
+:root[data-theme="dark"][data-tone="black"] .payable-row-delete {
+    border-color: #303133
+}
+:root[data-theme="dark"][data-tone="black"] .payable-row-delete:hover {
+    background: #301a1a
+}
+:root[data-theme="dark"][data-tone="black"][data-theme="dark"] .payable-row-delete {
+    border-color: #303133
+}
+:root[data-theme="dark"][data-tone="black"] .delete-account-scope {
+    border: 1px solid #303133
+}
+:root[data-theme="dark"][data-tone="black"] .invoice-import-card {
+    border: 1px solid #303133;
+    border-left: 3px solid #47494c;
+    background: #1a1b1c
+}
+:root[data-theme="dark"][data-tone="black"] .invoice-import-card--off {
+    border-left-color: #303133;
+    background: #232425
+}
+:root[data-theme="dark"][data-tone="black"] .invoice-import-card--saved {
+    border-left-color: #303133;
+    background: #1a3027
+}
+:root[data-theme="dark"][data-tone="black"] .invoice-import-card > header small {
+    color: #bfc2c5
+}
+:root[data-theme="dark"][data-tone="black"] .invoice-import-warning {
+    background: #30291a
+}
+:root[data-theme="dark"][data-tone="black"] .invoice-import-client > span {
+    color: #bfc2c5
+}
+:root[data-theme="dark"][data-tone="black"] .invoice-import-client small {
+    color: #bfc2c5
+}
+:root[data-theme="dark"][data-tone="black"] .invoice-import-client--missing {
+    border-left: 3px solid #303133;
+    background: #301b1a
+}
+:root[data-theme="dark"][data-tone="black"] .invoice-import-net {
+    color: #bfc2c5
+}
+:root[data-theme="dark"][data-tone="black"] .invoice-import-problems li {
+    border-left: 3px solid #303133;
+    background: #301b1a
 }
 :root[data-theme="dark"][data-tone="black"] .proposal-model-step > p {
     color: #bfc2c5
@@ -5885,6 +5943,9 @@
 }
 :root[data-theme="dark"][data-tone="black"] .registry-empty {
     color: #8e9399
+}
+:root[data-theme="dark"][data-tone="black"] .payable-row-delete:hover {
+    background: #3b1919
 }
 :root[data-theme="dark"][data-tone="black"] .fiscal-badge--main {
     background: #202022;

@@ -1,12 +1,12 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { Plus, Search, RotateCcw, Info, FileDown, Sheet, Check, Pencil, Undo2, Trash2, Save, Link2, ArrowUpDown, ChevronLeft, ChevronRight, Download, Eye, Upload } from 'lucide-react'
+import { Plus, Search, RotateCcw, Info, FileDown, Sheet, Check, Pencil, Undo2, Trash2, Save, Link2, ArrowUpDown, ChevronLeft, ChevronRight, Download, Eye, Upload, FileUp } from 'lucide-react'
 import AdminWorkspace from './AdminWorkspace.jsx'
 import { PayableModal, FilePicker, FilePreview, previewable } from './PayableModal.jsx'
 import { money, decimal, dateLabel, payableRequest, downloadBlob, uploadFiles, downloadFile } from './payablesApi.js'
 import { todayBahia, cents, dueLabel, matchesSearch, shiftMonth, treasuryEntry } from '../server/payableRules.js'
 import MoneyInput from './MoneyInput.jsx'
 import { InstallmentFields, withInstallments, installmentPayload } from './ReceivableInstallments.jsx'
-import { sumOf, dueShortcuts } from './financeFilters.js'
+import { amountOf, sumOf, dueShortcuts } from './financeFilters.js'
 import { latestOnly, pollWhileVisible } from './polling.js'
 import ReceivableForecast from './ReceivableForecast.jsx'
 import BankSelect, { useBanks, bankOptionLabel } from './BankSelect.jsx'
@@ -14,16 +14,20 @@ import ClassificationSelect, { RevenueTermHint } from './ClassificationSelect.js
 import './payables.css'
 import { useListState, useResetOnChange } from './savedListState.js'
 import DeleteAccountModal, { DeleteRowButton } from './DeleteAccountModal.jsx'
+import ClientQuickForm from './ClientQuickForm.jsx'
+import ReceivableInvoiceImport, { readInvoicePdf, invoiceDrafts } from './ReceivableInvoiceImport.jsx'
 
 export const receiptMethods = { pix: 'Pix', boleto: 'Boleto', transfer: 'Transferência', card: 'Cartão', cash: 'Dinheiro' }
 const statusText = { pending: 'Pendente', overdue: 'Vencido', received: 'Recebido' }
 const historyLabels = { created: 'Conta criada', edited: 'Conta editada', received: 'Recebimento baixado', reversed: 'Recebimento estornado', deleted: 'Conta excluída', status_changed: 'Status alterado', attachment_added: 'Anexo adicionado', attachment_removed: 'Anexo removido' }
-const sortFields = [['id', 'ID'], ['customerName', 'Cliente'], ['documentNumber', 'Documento'], ['description', 'Descrição'], ['orderCode', 'Origem'], ['valueCents', 'Valor'], ['dueDate', 'Vencimento'], ['installmentNumber', 'Parcela'], ['status', 'Status']]
+const sortFields = [['id', 'ID'], ['customerName', 'Cliente'], ['documentNumber', 'Documento'], ['description', 'Descrição'], ['orderCode', 'Origem'], ['valueCents', 'Valor líquido'], ['dueDate', 'Vencimento'], ['installmentNumber', 'Parcela'], ['status', 'Status']]
 const kinds = [['single', 'Parcela única'], ['installment', 'Recebimento parcelado'], ['recurring', 'Contrato recorrente']]
 const documentLabel = (digits) => !digits ? '—' : digits.length === 14 ? digits.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') : digits.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4')
 const safeCents = (value) => { try { return cents(value || '0') } catch { return 0 } }
-// Same search as Contas a Pagar: text, value as typed in Brazil and the payer CPF/CNPJ.
-const matches = (row, search) => matchesSearch({ id: row.id, supplierName: row.customerName, supplierDocument: row.customerDocument, description: row.description, documentNumber: row.documentNumber, orderCode: row.orderCode, valueCents: row.valueCents }, search)
+// Same search as Contas a Pagar: text, value as typed in Brazil (gross or net of ISS) and the payer CPF/CNPJ.
+const matches = (row, search) => [row.valueCents, amountOf(row)].some((valueCents) => matchesSearch({ id: row.id, supplierName: row.customerName, supplierDocument: row.customerDocument, description: row.description, documentNumber: row.documentNumber, orderCode: row.orderCode, valueCents }, search))
+// The value column is the net one, so it sorts by it.
+const sortValue = (row, key) => key === 'valueCents' ? amountOf(row) : row[key]
 const initialFilters = () => ({ search: '', status: '', start: '', end: '', bankId: '' })
 const beforeIssueMessage = 'A data prevista de recebimento não pode ser anterior à data de emissão.'
 
@@ -36,27 +40,6 @@ async function exportReceivables(body) {
   const response = await fetch('/api/receivables/export', { method: 'POST', headers: { Authorization: `Bearer ${sessionStorage.getItem('gmac-admin-token') || ''}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
   if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || 'Falha ao exportar.')
   downloadBlob(await response.blob(), `gmac-${body.id || 'contas-a-receber'}.${body.format}`)
-}
-
-// Created over the receivable form so the draft is kept while the client is registered.
-function ClientQuickForm({ onClose, onCreated }) {
-  const formId = useId(), [draft, setDraft] = useState({ name: '', document: '', email: '' }), [busy, setBusy] = useState(false), [error, setError] = useState('')
-  async function save(event) {
-    event.preventDefault(); setBusy(true); setError('')
-    try {
-      if (![11, 14].includes(draft.document.length)) throw new Error('Informe um CPF (11 dígitos) ou CNPJ (14 dígitos).')
-      const result = await payableRequest('/clients', 'POST', { ...draft, documentType: draft.document.length === 14 ? 'cnpj' : 'cpf' })
-      await onCreated(result.item)
-    } catch (caught) { setError(caught.message) } finally { setBusy(false) }
-  }
-  return <PayableModal title="Novo cliente" busy={busy} onClose={onClose} footer={<><button className="admin-tool-button" type="button" disabled={busy} onClick={onClose}>Cancelar</button><button className="admin-tool-button admin-tool-button--primary" type="submit" form={formId} disabled={busy}><Save size={16} />Salvar cliente</button></>}>
-    <form id={formId} className="payable-form" onSubmit={save}><fieldset disabled={busy}>
-      <label>Nome / razão social<input required maxLength={120} value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></label>
-      <label>CPF/CNPJ<input required inputMode="numeric" maxLength={18} value={draft.document} onChange={(event) => setDraft({ ...draft, document: event.target.value.replace(/\D/g, '') })} /></label>
-      <label>E-mail<input type="email" maxLength={160} value={draft.email} placeholder="Opcional" onChange={(event) => setDraft({ ...draft, email: event.target.value })} /></label>
-      {error && <p className="admin-tool-error" role="alert">{error}</p>}
-    </fieldset></form>
-  </PayableModal>
 }
 
 // `treasury` posts money already received (Tesouraria): the same account data, with the receipt date and
@@ -199,7 +182,8 @@ export function ReceivableDetails({ id, refreshVersion, onClose, onEdit, onRecei
 export default function ReceivablesScreen(props) {
   const banks = useBanks()
   const [data, setData] = useState({ items: [], clients: [] }), [loading, setLoading] = useState(true), [error, setError] = useState(''), [version, setVersion] = useState(0)
-  const [filters, setFilters] = useListState('receivables', 'filters', initialFilters), [detailId, setDetailId] = useState(() => sessionStorage.getItem('gmac-receivable-open') || ''), [form, setForm] = useState(null), [receiving, setReceiving] = useState(null), [history, setHistory] = useState(null), [exporting, setExporting] = useState(false), [deleting, setDeleting] = useState(null)
+  const [filters, setFilters] = useListState('receivables', 'filters', initialFilters), [detailId, setDetailId] = useState(() => sessionStorage.getItem('gmac-receivable-open') || ''), [form, setForm] = useState(null), [receiving, setReceiving] = useState(null), [history, setHistory] = useState(null), [exporting, setExporting] = useState(false), [deleting, setDeleting] = useState(null), [importing, setImporting] = useState(null), [reading, setReading] = useState(''), [notice, setNotice] = useState('')
+  const invoiceInput = useRef(null)
   const [page, setPage] = useListState('receivables', 'page', 1), [pageSize, setPageSize] = useListState('receivables', 'pageSize', 20), [sort, setSort] = useListState('receivables', 'sort', { key: 'dueDate', direction: 1 }), [selected, setSelected] = useState([])
   const [readReceivables] = useState(() => latestOnly(() => payableRequest('/receivables')))
   async function refresh() { const result = await readReceivables(setData); setVersion((v) => v + 1); setError(''); return result }
@@ -216,31 +200,45 @@ export default function ReceivablesScreen(props) {
   // A bank shows the receipts that entered it, whatever the situation filter.
   const inPeriod = (row) => (!filters.start || row.dueDate >= filters.start) && (!filters.end || row.dueDate <= filters.end) && matches(row, filters.search) && (!filters.bankId || row.receipt?.bankId === filters.bankId)
   const base = data.items.filter(inPeriod)
-  const filtered = base.filter((row) => filters.status === 'all' || (filters.status ? row.status === filters.status : filters.bankId || row.status !== 'received')).sort((a, b) => { const av = a[sort.key] ?? '', bv = b[sort.key] ?? ''; return sort.direction * (typeof av === 'number' ? av - bv : String(av).localeCompare(String(bv), 'pt-BR')) || a.id.localeCompare(b.id) })
+  const filtered = base.filter((row) => filters.status === 'all' || (filters.status ? row.status === filters.status : filters.bankId || row.status !== 'received')).sort((a, b) => { const av = sortValue(a, sort.key) ?? '', bv = sortValue(b, sort.key) ?? ''; return sort.direction * (typeof av === 'number' ? av - bv : String(av).localeCompare(String(bv), 'pt-BR')) || a.id.localeCompare(b.id) })
   const pages = Math.max(1, Math.ceil(filtered.length / pageSize)), currentPage = Math.min(page, pages), visible = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize)
   const selection = data.items.filter((row) => selected.includes(row.id))
   const pageSelected = visible.length > 0 && visible.every((row) => selected.includes(row.id))
   const selectPage = (checked) => setSelected(checked ? [...new Set([...selected, ...visible.map((row) => row.id)])] : selected.filter((rowId) => !visible.some((row) => row.id === rowId)))
   const sortBy = (key) => setSort({ key, direction: sort.key === key ? -sort.direction : 1 })
   const totals = { pending: 0, overdue: 0, received: 0 }
-  for (const row of data.items) totals[row.status] += row.receipt ? row.receipt.finalCents : row.valueCents
+  for (const row of data.items) totals[row.status] += amountOf(row)
+  // Each PDF is read on its own; a file that fails does not stop the others and is listed with the pages not read.
+  async function readInvoices(files) {
+    if (!files.length) return
+    setError(''); setNotice('')
+    const results = [], problems = []
+    for (const [index, file] of files.entries()) {
+      setReading(files.length > 1 ? `Lendo ${index + 1} de ${files.length}...` : 'Lendo a nota...')
+      try { const result = await readInvoicePdf(file); results.push(result); problems.push(...result.problems.map((item) => ({ ...item, source: result.source }))) } catch (caught) { problems.push({ source: file.name, page: null, message: caught.message }) }
+    }
+    setReading('')
+    setImporting({ rows: invoiceDrafts(results, data.classifications || []), problems })
+  }
   async function exportRows(format, ids) { setExporting(true); setError(''); try { await exportReceivables({ format, filters, ids }) } catch (caught) { setError(caught.message) } finally { setExporting(false) } }
   return <AdminWorkspace {...props} title="Contas a Receber">
-    <div className="payable-heading-actions"><button type="button" className="payable-icon" title="Histórico geral" aria-label="Histórico geral" onClick={async () => { try { setHistory((await payableRequest('/receivables/history')).items) } catch (caught) { setError(caught.message) } }}><Info size={21} /></button><button className="admin-tool-button admin-tool-button--primary" onClick={() => setForm({})}><Plus size={17} />Nova conta a receber</button></div>
+    <div className="payable-heading-actions"><button type="button" className="payable-icon" title="Histórico geral" aria-label="Histórico geral" onClick={async () => { try { setHistory((await payableRequest('/receivables/history')).items) } catch (caught) { setError(caught.message) } }}><Info size={21} /></button><button className="admin-tool-button admin-tool-button--primary" onClick={() => setForm({})}><Plus size={17} />Nova conta a receber</button><button type="button" className="admin-tool-button admin-tool-button--primary" disabled={Boolean(reading)} title="Escolha um ou vários PDFs de NFS-e ou NF-e (DANFE); um PDF pode ter várias notas" onClick={() => invoiceInput.current.click()}><FileUp size={17} />{reading || 'Importar notas (PDF)'}</button><input ref={invoiceInput} type="file" accept=".pdf,application/pdf" multiple hidden aria-label="PDF das notas" onChange={(event) => { const files = [...event.target.files]; event.target.value = ''; readInvoices(files) }} /></div>
+    {notice && <p className="bank-notice" role="status">{notice}</p>}
     {error && <p className="admin-tool-error" role="alert">{error}<button className="admin-tool-button" onClick={() => refresh().catch((caught) => setError(caught.message))}>Tentar novamente</button></p>}
     {loading ? <p>Carregando...</p> : <>
-      <div className="receivable-summary">{[['pending', 'A receber'], ['overdue', 'Vencido'], ['received', 'Recebido']].map(([key, label]) => <article className={`payable-metric payable-metric--${key === 'received' ? 'paid' : key}`} key={key}><span>{label}</span><strong>{money(totals[key])}</strong><small>{data.items.filter((row) => row.status === key).length} contas</small></article>)}</div>
+      <div className="receivable-summary">{[['pending', 'A receber (líquido)'], ['overdue', 'Vencido (líquido)'], ['received', 'Recebido']].map(([key, label]) => <article className={`payable-metric payable-metric--${key === 'received' ? 'paid' : key}`} key={key}><span>{label}</span><strong>{money(totals[key])}</strong><small>{data.items.filter((row) => row.status === key).length} contas</small></article>)}</div>
       <div className="payable-toolbar"><label className="payable-search"><Search size={18} /><input aria-label="Busca rápida" placeholder="ID, cliente, CNPJ, valor, descrição, documento ou OS" value={filters.search} onChange={(event) => setFilters({ ...filters, search: event.target.value })} /></label><label className="payable-bank-filter"><span className="sr-only">Banco do recebimento</span><select aria-label="Banco do recebimento" value={filters.bankId} onChange={(event) => setFilters({ ...filters, bankId: event.target.value })}><option value="">Todos os bancos</option>{(banks || []).map((bank) => <option key={bank.id} value={bank.id}>{bankOptionLabel(bank)}</option>)}</select></label><button className="admin-tool-button" onClick={() => setFilters(initialFilters())}><RotateCcw size={16} />Limpar filtros</button><button className="admin-tool-button" disabled={exporting} onClick={() => exportRows('pdf')}><FileDown size={16} />PDF</button><button className="admin-tool-button" disabled={exporting} onClick={() => exportRows('xlsx')}><Sheet size={16} />Excel</button></div>
       <div className="payable-quick-filters"><div className="payable-status-filters" role="group" aria-label="Situação">{[['pending', 'Pendentes'], ['overdue', 'Vencidas'], ['received', 'Recebidas'], ['all', 'Todas']].map(([key, label]) => { const group = key === 'all' ? base : base.filter((row) => row.status === key); return <button className="admin-tool-button" aria-pressed={filters.status === key} key={key} onClick={() => setFilters({ ...filters, status: filters.status === key ? '' : key })}>{label}<span>{group.length}</span><small>{money(sumOf(group))}</small></button> })}</div>
         <div className="payable-status-filters payable-due-filters" role="group" aria-label="Vencimento"><span className="payable-quick-label" aria-hidden="true">Vencimento:</span>{dueShortcuts().map(([key, label, start, end]) => { const active = filters.start === start && filters.end === end; return <button className="admin-tool-button" aria-pressed={active} key={key} onClick={() => setFilters({ ...filters, start: active ? '' : start, end: active ? '' : end })}>{label}</button> })}</div></div>
       {selected.length > 0 && <div className="payable-bulk-actions"><strong>{selection.length} selecionadas · {money(sumOf(selection))}</strong><button className="payable-link" onClick={() => setSelected(filtered.map((row) => row.id))}>Selecionar todas as contas do filtro atual ({filtered.length})</button><button className="admin-tool-button" disabled={!selection.length || selection.some((row) => row.receipt)} onClick={() => setReceiving({ rows: selection, bulk: true })}><Check size={15} />Dar baixa</button><button className="admin-tool-button" disabled={exporting} onClick={() => exportRows('pdf', selected)}><FileDown size={15} />PDF</button><button className="admin-tool-button" disabled={exporting} onClick={() => exportRows('xlsx', selected)}><Sheet size={15} />Excel</button></div>}
       <div className="payable-mobile-controls"><label>Ordenar por<select aria-label="Ordenar por" value={sort.key} onChange={(event) => setSort({ ...sort, key: event.target.value })}>{sortFields.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label><button className="payable-icon" type="button" aria-label={sort.direction === 1 ? 'Ordem crescente; inverter ordenação' : 'Ordem decrescente; inverter ordenação'} title="Inverter ordenação" onClick={() => setSort({ ...sort, direction: -sort.direction })}><ArrowUpDown size={18} /></button><label className="payable-mobile-select"><input type="checkbox" checked={pageSelected} onChange={(event) => selectPage(event.target.checked)} />Selecionar contas da página</label></div>
-      <div className="payable-table-scroll"><table className="payable-table receivable-table"><thead><tr><th><input type="checkbox" aria-label="Selecionar contas da página" checked={pageSelected} onChange={(event) => selectPage(event.target.checked)} /></th>{sortFields.map(([key, label]) => <th key={key} aria-sort={sort.key === key ? sort.direction === 1 ? 'ascending' : 'descending' : 'none'}><button onClick={() => sortBy(key)}>{label}<ArrowUpDown size={12} /></button></th>)}<th className="payable-actions-col"><span className="sr-only">Excluir</span></th></tr></thead><tbody>{visible.map((row) => <tr key={row.id} tabIndex={0} onClick={() => setDetailId(row.id)} onKeyDown={(event) => { if (event.key === 'Enter' && event.target === event.currentTarget) setDetailId(row.id) }}><td onClick={(event) => event.stopPropagation()}><label className="payable-row-select"><input type="checkbox" aria-label={`Selecionar ${row.id}`} checked={selected.includes(row.id)} onChange={(event) => setSelected(event.target.checked ? [...selected, row.id] : selected.filter((rowId) => rowId !== row.id))} /></label></td><td className="payable-id">{row.id}</td><td data-label="Cliente">{row.customerName}</td><td data-label="Documento" title="Documento / boleto / NF">{row.documentNumber || '—'}</td><td data-label="Descrição" title={row.description || undefined}><span className="receivable-description">{row.description || '—'}</span></td><td data-label="Origem">{row.orderCode || (row.treasury ? 'Tesouraria' : row.kind === 'recurring' ? 'Contrato' : 'Manual')}</td><td data-label="Valor" className="payable-value">{money(row.valueCents)}</td><td data-label="Vencimento">{dateLabel(row.dueDate)}</td><td data-label="Parcela">{row.groupId ? `${row.installmentNumber} de ${row.installmentCount}` : '—'}</td><td data-label="Status"><ReceivableStatus row={row} />{row.reconciled && <small className="receivable-reconciled"><Link2 size={12} aria-hidden="true" />Conciliada</small>}</td><td className="payable-actions-col"><DeleteRowButton id={row.id} onClick={() => setDeleting(row.id)} /></td></tr>)}{!visible.length && <tr><td colSpan={11} className="payable-empty">Nenhuma conta encontrada.</td></tr>}</tbody></table></div>
+      <div className="payable-table-scroll"><table className="payable-table receivable-table"><thead><tr><th><input type="checkbox" aria-label="Selecionar contas da página" checked={pageSelected} onChange={(event) => selectPage(event.target.checked)} /></th>{sortFields.map(([key, label]) => <th key={key} aria-sort={sort.key === key ? sort.direction === 1 ? 'ascending' : 'descending' : 'none'}><button onClick={() => sortBy(key)}>{label}<ArrowUpDown size={12} /></button></th>)}<th className="payable-actions-col"><span className="sr-only">Excluir</span></th></tr></thead><tbody>{visible.map((row) => <tr key={row.id} tabIndex={0} onClick={() => setDetailId(row.id)} onKeyDown={(event) => { if (event.key === 'Enter' && event.target === event.currentTarget) setDetailId(row.id) }}><td onClick={(event) => event.stopPropagation()}><label className="payable-row-select"><input type="checkbox" aria-label={`Selecionar ${row.id}`} checked={selected.includes(row.id)} onChange={(event) => setSelected(event.target.checked ? [...selected, row.id] : selected.filter((rowId) => rowId !== row.id))} /></label></td><td className="payable-id">{row.id}</td><td data-label="Cliente">{row.customerName}</td><td data-label="Documento" title="Documento / boleto / NF">{row.documentNumber || '—'}</td><td data-label="Descrição" title={row.description || undefined}><span className="receivable-description">{row.description || '—'}</span></td><td data-label="Origem">{row.orderCode || (row.treasury ? 'Tesouraria' : row.kind === 'recurring' ? 'Contrato' : 'Manual')}</td><td data-label="Valor líquido" className="payable-value" title={row.issCents && !row.receipt ? `${money(row.valueCents)} − ${money(row.issCents)} de ISS retido` : undefined}>{money(amountOf(row))}</td><td data-label="Vencimento">{dateLabel(row.dueDate)}</td><td data-label="Parcela">{row.groupId ? `${row.installmentNumber} de ${row.installmentCount}` : '—'}</td><td data-label="Status"><ReceivableStatus row={row} />{row.reconciled && <small className="receivable-reconciled"><Link2 size={12} aria-hidden="true" />Conciliada</small>}</td><td className="payable-actions-col"><DeleteRowButton id={row.id} onClick={() => setDeleting(row.id)} /></td></tr>)}{!visible.length && <tr><td colSpan={11} className="payable-empty">Nenhuma conta encontrada.</td></tr>}</tbody></table></div>
       <div className="payable-pagination"><span>{filtered.length} contas · {money(sumOf(filtered))}</span><label>Por página<select aria-label="Por página" value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}>{[20, 50, 100].map((n) => <option key={n}>{n}</option>)}</select></label><button className="payable-icon" title="Página anterior" aria-label="Página anterior" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}><ChevronLeft size={18} /></button><span>{currentPage} / {pages}</span><button className="payable-icon" title="Próxima página" aria-label="Próxima página" disabled={currentPage === pages} onClick={() => setPage(currentPage + 1)}><ChevronRight size={18} /></button></div>
       <ReceivableForecast rows={data.items} />
     </>}
     {detailId && <ReceivableDetails id={detailId} key={detailId} refreshVersion={version} onClose={() => setDetailId('')} onEdit={(detail) => { setDetailId(''); setForm({ source: detail.item, siblings: detail.siblings, structureLocked: detail.structureLocked }) }} onReceive={(row) => { setDetailId(''); setReceiving({ rows: [row], bulk: false }) }} onChanged={refresh} onOpen={setDetailId} />}
     {form && <ReceivableForm {...form} clients={data.clients} classifications={data.classifications || []} onClose={() => setForm(null)} onSaved={async (item) => { await refresh(); setForm(null); setDetailId(item.id) }} onClientCreated={() => refresh().catch(() => {})} />}
+    {importing && <ReceivableInvoiceImport initialRows={importing.rows} problems={importing.problems} clients={data.clients} classifications={data.classifications || []} onClientCreated={() => refresh().catch(() => {})} onClose={async (saved) => { setImporting(null); if (saved) { setNotice(`${saved} ${saved === 1 ? 'nota lançada' : 'notas lançadas'} em Contas a Receber.`); await refresh().catch(() => {}) } }} onDone={async (saved) => { setImporting(null); setNotice(`${saved} ${saved === 1 ? 'nota lançada' : 'notas lançadas'} em Contas a Receber, com o PDF anexado.`); await refresh().catch(() => {}) }} />}
     {deleting && <DeleteAccountModal type="receivable" id={deleting} key={deleting} onClose={() => setDeleting(null)} onDeleted={async () => { setDeleting(null); setDetailId(''); await refresh() }} />}
     {receiving && <ReceiptForm {...receiving} onClose={() => setReceiving(null)} onSaved={async () => { const single = !receiving.bulk && receiving.rows[0].id; await refresh(); setReceiving(null); setSelected([]); if (single) setDetailId(single) }} />}
     {history && <PayableModal title="Histórico geral · Contas a Receber" wide onClose={() => setHistory(null)}><History rows={history} /></PayableModal>}

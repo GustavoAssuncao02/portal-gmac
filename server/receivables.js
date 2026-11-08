@@ -1,6 +1,8 @@
 import express from 'express'
 import { randomUUID } from 'node:crypto'
-import { receiveFile, sendStoredFile } from './uploads.js'
+import { receiveFile, sendStoredFile, uploadLimits } from './uploads.js'
+import * as fs from 'node:fs/promises'
+import { readInvoices, invoicePdf } from './invoiceImport.js'
 import path from 'node:path'
 import { dataDirectory } from './dataDirectory.js'
 import { readStore, mutateStore } from './offers.js'
@@ -206,10 +208,30 @@ export function activeReceivableNotices(store, userId) {
 export function receivableNotificationItems(store, userId) {
   return activeReceivableNotices(store, userId).map(({ readBy, ...notice }) => ({ ...notice, readAt: readBy?.find((entry) => String(entry.userId) === String(userId))?.at || null, account: view(store.receivables.find((row) => row.id === notice.accountId), store) })).reverse()
 }
+// The ISS of an open account is the one expected; of a received one, the one actually withheld. Net = value − ISS.
+const issOf = (row) => row.receipt ? row.receipt.issCents || 0 : row.issCents || 0
+const netOf = (row) => row.valueCents - issOf(row)
 function report(rows, filters = {}, individual = false, store = {}) {
-  const columns = ['ID', 'Cliente', 'CPF/CNPJ', 'Descrição', 'Classificação', 'Origem', 'Documento', 'Parcela', 'Emissão', 'Valor (R$)', 'Vencimento', 'Status', 'Recebimento', 'Forma', 'Banco', 'Juros (R$)', 'Desconto (R$)', 'ISS (R$)', 'Recebido (R$)', 'Observação']
-  return { title: individual ? `Conta ${rows[0]?.id || ''}` : 'Contas a receber', eyebrow: 'Financeiro', generatedAt: new Date().toISOString(), start: filters.start, end: filters.end, summary: [['Contas', rows.length], ['Valor original', money(rows.reduce((sum, row) => sum + row.valueCents, 0))]], notes: [`Situação: ${{ all: 'Todas', ...statusLabel }[filters.status] || (filters.bankId ? 'Recebidas' : 'Pendentes e vencidas')}`, ...bankFilterNote(store, filters.bankId), ...(filters.search ? [`Busca: ${filters.search}`] : [])], sections: [{ name: 'Contas a receber', columns, rows: rows.map((row) => { const r = row.receipt; return [row.id, row.customerName, row.customerDocument, row.description, row.classificationName || '', row.orderCode || 'Manual', row.documentNumber, row.groupId ? `${row.installmentNumber} de ${row.installmentCount}` : '', row.issueDate, row.valueCents / 100, row.dueDate, statusLabel[receivableStatus(row)], r?.date, receiptMethods[r?.method] || '', r?.bankName || '', (r?.interestCents || 0) / 100, (r?.discountCents || 0) / 100, (r?.issCents || 0) / 100, r ? r.finalCents / 100 : '', r?.note] }) }] }
+  const columns = ['ID', 'Cliente', 'CPF/CNPJ', 'Descrição', 'Classificação', 'Origem', 'Documento', 'Parcela', 'Emissão', 'Valor bruto (R$)', 'ISS retido (R$)', 'Valor líquido (R$)', 'Vencimento', 'Status', 'Recebimento', 'Forma', 'Banco', 'Juros (R$)', 'Desconto (R$)', 'Recebido (R$)', 'Observação']
+  return { title: individual ? `Conta ${rows[0]?.id || ''}` : 'Contas a receber', eyebrow: 'Financeiro', generatedAt: new Date().toISOString(), start: filters.start, end: filters.end, summary: [['Contas', rows.length], ['Valor bruto', money(rows.reduce((sum, row) => sum + row.valueCents, 0))], ['Valor líquido', money(rows.reduce((sum, row) => sum + netOf(row), 0))]], notes: [`Situação: ${{ all: 'Todas', ...statusLabel }[filters.status] || (filters.bankId ? 'Recebidas' : 'Pendentes e vencidas')}`, ...bankFilterNote(store, filters.bankId), ...(filters.search ? [`Busca: ${filters.search}`] : [])], sections: [{ name: 'Contas a receber', columns, rows: rows.map((row) => { const r = row.receipt; return [row.id, row.customerName, row.customerDocument, row.description, row.classificationName || '', row.orderCode || 'Manual', row.documentNumber, row.groupId ? `${row.installmentNumber} de ${row.installmentCount}` : '', row.issueDate, row.valueCents / 100, issOf(row) / 100, netOf(row) / 100, row.dueDate, statusLabel[receivableStatus(row)], r?.date, receiptMethods[r?.method] || '', r?.bankName || '', (r?.interestCents || 0) / 100, (r?.discountCents || 0) / 100, r ? r.finalCents / 100 : '', r?.note] }) }] }
 }
+
+// The number of an invoice as it may have been typed: without dots and leading zeros; an NFS-e number (2026000000451)
+// also as the year followed by its sequence (2026451), the way the company names the files.
+const plainNumber = (value) => String(value || '').replace(/\D/g, '').replace(/^0+/, '')
+function invoiceKeys(number) {
+  const plain = plainNumber(number)
+  const nfse = /^(20\d{2})0*(\d+)$/.exec(plain)
+  return plain ? [plain, ...(nfse && plain.length === 13 ? [nfse[1] + nfse[2]] : [])] : []
+}
+// An account already posted for the same invoice of the same client (an OS keeps its code as the document).
+function postedInvoice(store, note) {
+  const keys = invoiceKeys(note.documentNumber), name = normalizeText(note.customerName)
+  if (!keys.length) return null
+  return store.receivables.find((row) => !row.inactive && row.origin !== 'order' && keys.includes(plainNumber(row.documentNumber)) && (note.customerDocument && row.customerDocument ? row.customerDocument === note.customerDocument : normalizeText(row.customerName) === name)) || null
+}
+const IMPORT_LIMIT = 50 * 1024 * 1024
+const invoiceLabel = { nfse: 'NFS-e', nfe: 'NF-e' }
 
 export default function createReceivablesRouter(accounts, requireAdmin, pool = null) {
   const router = express.Router()
@@ -389,6 +411,49 @@ export default function createReceivablesRouter(accounts, requireAdmin, pool = n
     res.json({ items })
   }))
   // Files up to the attachment limit (uploads.js): written to the disk first, then recorded; a record that is not saved removes its file.
+  // Reads the invoices of a PDF (NFS-e or DANFE, one or more per file). Nothing is posted here: the user checks what was
+  // read and saves each account with POST /receivables; the PDF of each invoice waits as an upload to be attached.
+  router.post('/receivables/invoice-import', handle(async (req, res) => {
+    const name = path.basename(clean(req.query.name, 200)) || 'notas.pdf', sourceId = randomUUID()
+    const received = await receiveFile(req, directory, sourceId, { ...uploadLimits(), maxBytes: Math.min(uploadLimits().maxBytes, IMPORT_LIMIT) })
+    if (!received) fail('Selecione um arquivo PDF.')
+    const files = []
+    try {
+      const bytes = await fs.readFile(path.join(directory, sourceId))
+      if (bytes.subarray(0, 1024).indexOf('%PDF') < 0) fail('O arquivo não é um PDF.')
+      const { notes, problems } = await readInvoices(bytes)
+      const pageCount = notes.reduce((sum, note) => sum + note.pages.length, 0) + problems.length
+      for (const note of notes) {
+        const whole = note.pages.length === pageCount
+        const file = { id: whole ? sourceId : randomUUID(), name: whole ? name : `${invoiceLabel[note.kind]} ${note.number || `pág. ${note.pages.join('-')}`}.pdf`.replace(/[\\/:*?"<>|]/g, '-'), contentType: 'application/pdf', userId: req.actor.id }
+        if (!whole) await fs.writeFile(path.join(directory, file.id), await invoicePdf(bytes, note.pages, pageCount))
+        file.size = whole ? received.size : (await fs.stat(path.join(directory, file.id))).size
+        files.push(file); note.file = { id: file.id, name: file.name }
+      }
+      if (!files.some((file) => file.id === sourceId)) await received.discard()
+      const items = await mutateStore((store) => {
+        init(store); store.receivableUploads.push(...files)
+        return notes.map((note) => ({ ...note, label: invoiceLabel[note.kind], source: name, duplicateOf: postedInvoice(store, note)?.id || null }))
+      })
+      res.json({ source: name, items, problems })
+    } catch (error) {
+      await received.discard()
+      for (const file of files) if (file.id !== sourceId) await fs.rm(path.join(directory, file.id), { force: true }).catch(() => {})
+      throw error
+    }
+  }))
+  // Files read for an import and not posted: only the user's own uploads still waiting are removed.
+  router.post('/receivables/uploads/discard', handle(async (req, res) => {
+    const ids = Array.isArray(req.body.ids) ? req.body.ids.map(String) : []
+    const removed = await mutateStore((store) => {
+      init(store)
+      const mine = store.receivableUploads.filter((file) => ids.includes(file.id) && String(file.userId) === String(req.actor.id))
+      store.receivableUploads = store.receivableUploads.filter((file) => !mine.includes(file))
+      return mine.map((file) => file.id)
+    })
+    for (const id of removed) await fs.rm(path.join(directory, id), { force: true }).catch(() => {})
+    res.json({ removed: removed.length })
+  }))
   router.post('/receivables/uploads', handle(async (req, res) => {
     const file = { id: randomUUID(), name: path.basename(clean(req.query.name, 200)), contentType: clean(req.query.type, 160) || 'application/octet-stream', userId: req.actor.id }
     if (!file.name) fail('Nome de arquivo inválido.')

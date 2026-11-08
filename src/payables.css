@@ -200,6 +200,12 @@
 .bank-closings .bank-closing-badge--closed { background:#e9f6f1; color:#1d6a53; }.bank-closings .bank-closing-badge--reopened { background:#fff3d9; color:#8a5a07; }
 .bank-closing-pending { display:grid; gap:4px; max-height:180px; margin:0; padding:0; overflow:auto; list-style:none; font-size:12px; }
 .bank-closing-pending li { display:flex; justify-content:space-between; gap:12px; padding:6px 0; border-bottom:1px solid #edf2f6; }.bank-closing-pending strong { white-space:nowrap; font-variant-numeric:tabular-nums; }
+/* Closing of the reconciliation: accounts that will be settled with the bank movement. */
+.bank-settlements { display:grid; gap:8px; }.bank-settlements h3 { margin:0; font-size:14px; }
+.bank-settlement-list { display:grid; gap:0; max-height:240px; margin:0; padding:0; overflow:auto; list-style:none; font-size:12px; }
+.bank-settlement-list li { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px 0; border-bottom:1px solid #edf2f6; }.bank-settlement-list li > div { display:flex; flex-direction:column; gap:3px; min-width:0; }.bank-settlement-list li span { color:#5c7288; }
+.bank-settlement-method { flex:none; padding:3px 8px; border-radius:4px; background:#eaf3fc; color:#0c4c91; font-weight:700; white-space:nowrap; }label.bank-settlement-method { display:flex; align-items:center; gap:6px; padding:0; background:none; color:inherit; font-weight:600; }label.bank-settlement-method select { min-height:30px; padding:4px 8px; font-size:12px; }
+.bank-settle-hint { color:#8a5a06; font-size:11px; }
 .bank-closing-history { display:grid; gap:8px; margin:0; padding-left:18px; font-size:13px; }.bank-closing-history li { display:flex; flex-direction:column; gap:2px; }.bank-closing-history span, .bank-closing-history small { color:#5c7288; }
 .bank-closing-items td { vertical-align:top; }.bank-closing-items small { display:block; color:#71859a; font-size:11px; }
 :root[data-theme="dark"] .bank-closing { border-color:#36516f; border-left-color:#7f97ad; background:#162b43; }
@@ -287,3 +293,20 @@
 .delete-account-scope legend { padding:0 4px; font-weight:600; }
 .delete-account-scope label { display:flex; gap:8px; align-items:center; cursor:pointer; }
 @media(max-width:760px) { .payable-table td.payable-actions-col { text-align:left; } }
+/* Contas a Receber from the PDF of the invoices: one card per invoice to check before posting. */
+.invoice-import { display:grid; gap:14px; }
+.invoice-import-card { display:grid; gap:10px; padding:14px 16px; border:1px solid #d7e3ef; border-left:3px solid #1f5fa8; border-radius:8px; background:#fff; }
+.invoice-import-card--off { border-left-color:#b6c4d2; background:#f7f9fb; }.invoice-import-card--off .invoice-import-fields { opacity:.6; }
+.invoice-import-card--saved { border-left-color:#2e9577; background:#e9f6f1; }
+.invoice-import-card > header { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:6px 12px; }
+.invoice-import-card > header small { display:flex; align-items:center; gap:4px; color:#5c7288; font-size:12px; overflow-wrap:anywhere; }
+.payable-modal label.invoice-import-check { flex-direction:row; align-items:center; gap:8px; cursor:pointer; font-size:15px; }.payable-modal .invoice-import-check input { flex:none; width:18px; height:18px; min-height:0; margin:0; }
+.invoice-import-saved { display:flex; align-items:center; gap:4px; color:#1d6a53; font-weight:600; font-size:13px; }
+.invoice-import-warning { display:flex; align-items:flex-start; gap:6px; margin:0; padding:8px 10px; border-left:3px solid #e0a440; background:#fff3d9; color:#7a4f05; font-size:12.5px; line-height:1.4; }.invoice-import-warning svg { flex:none; margin-top:1px; }
+.invoice-import-client { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 10px; margin:0; font-size:13px; }.invoice-import-client > span { color:#5c7288; }.invoice-import-client small { color:#5c7288; font-variant-numeric:tabular-nums; }
+.invoice-import-client--missing { align-items:center; padding:8px 10px; border-left:3px solid #c2483f; background:#fdeeed; }.invoice-import-client--missing > span { color:#9b2c24; font-weight:600; }.invoice-import-client--missing button { margin-left:auto; }
+.invoice-import-fields { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px 16px; max-width:none; margin:0; padding:0; border:0; min-width:0; }.invoice-import-fields label { gap:4px; font-size:12px; }.invoice-import-fields :is(input,select) { height:32px; min-height:32px; padding:5px 9px; }.invoice-import-fields textarea { min-height:44px; padding:6px 9px; }
+.invoice-import-net { display:flex; flex-direction:column; justify-content:flex-end; gap:4px; margin:0; font-size:12px; color:#5c7288; }.invoice-import-net strong { color:#1d6341; font-size:18px; font-variant-numeric:tabular-nums; }
+.invoice-import-installments { display:grid; gap:8px; font-size:13px; }.invoice-import-installments > div { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.invoice-import-problems { display:grid; gap:6px; margin:0; padding:0; list-style:none; }.invoice-import-problems li { display:flex; align-items:flex-start; gap:6px; padding:8px 10px; border-left:3px solid #c2483f; background:#fdeeed; color:#8a2a22; font-size:12.5px; overflow-wrap:anywhere; }
+@media(max-width:760px) { .payable-heading-actions { flex-wrap:wrap; }.invoice-import-card { padding:12px; }.invoice-import-fields { grid-template-columns:minmax(0,1fr); }.invoice-import-installments > div { grid-template-columns:minmax(0,1fr); }.invoice-import-client--missing button { margin-left:0; } }

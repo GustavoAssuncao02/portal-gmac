@@ -410,6 +410,10 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .bank-closings li span { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .bank-closing-badge { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .bank-closing-pending { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .bank-settlements h3 { font-size: calc(14px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .bank-settlement-list { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) label.bank-settlement-method select { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .bank-settle-hint { font-size: calc(11px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .bank-closing-history { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .bank-closing-items small { font-size: calc(11px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .registry-count { font-size: calc(13px * var(--account-font-scale)); }
@@ -426,6 +430,16 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .classification-split-footer { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .classification-split :is(select, input) { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .payable-modal--form .classification-split legend { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .invoice-import-card > header small { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .payable-modal label.invoice-import-check { font-size: calc(15px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .invoice-import-saved { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .invoice-import-warning { font-size: calc(12.5px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .invoice-import-client { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .invoice-import-fields label { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .invoice-import-net { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .invoice-import-net strong { font-size: calc(18px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .invoice-import-installments { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .invoice-import-problems li { font-size: calc(12.5px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .proposal-model-step > p { font-size: calc(14px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .proposal-model-card { font-size: inherit; }
 :root:is([data-font-size="small"], [data-font-size="large"]) .proposal-model-card strong { font-size: calc(16px * var(--account-font-scale)); }

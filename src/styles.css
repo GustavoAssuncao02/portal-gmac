@@ -7492,7 +7492,7 @@ button {
 
 /* Títulos que ordenam a tabela: o botão fica igual ao texto do título. */
 .sort-header-button { display: inline-flex; gap: 6px; align-items: center; padding: 0; border: 0; background: none; font: inherit; font-weight: inherit; color: inherit; text-align: inherit; cursor: pointer; }
-.sort-header-button svg { flex: none; }
+.sort-header-button svg { flex: none; width: 12px !important; height: 12px !important; margin: 0 !important; }
 
 /* Forma de lançamento (por peça ou total do pedido), na oferta e na edição da OS. */
 .offer-entry-mode { margin: 0 0 18px; padding: 12px 14px; border: 1px solid #d8e4ef; border-radius: 6px; background: #f6f9fc; }

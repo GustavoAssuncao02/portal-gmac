@@ -5,7 +5,8 @@ import path from 'node:path'
 import { dataDirectory } from './dataDirectory.js'
 import { readStore, mutateStore } from './offers.js'
 import { parseOfx, normalizeText, operationLabels, INTERNAL_OPERATIONS } from './ofx.js'
-import { DAY } from './payableRules.js'
+import { DAY, settlementMethods, settlementMethodFor, payableStatus, todayBahia } from './payableRules.js'
+import { settlementBank } from './banks.js'
 
 const directory = path.join(dataDirectory, 'bank-statements')
 // The portal serves a single company; the scope keeps FITID keys from colliding if more companies are added.
@@ -37,8 +38,42 @@ export function nameSimilarity(a, b) {
 function financialRecords(store, kind) {
   // Both the settlement date (when there is one) and the due date are compared with the bank date.
   const dates = (settledOn, settledKind, dueDate) => [...(settledOn ? [{ date: settledOn, kind: settledKind }] : []), { date: dueDate, kind: 'vencimento' }]
-  if (kind === 'payable') return store.payables.filter((row) => !row.inactive).map((row) => ({ kind, id: row.id, name: row.supplierName, document: (store.suppliers || []).find((item) => String(item.id) === String(row.supplierId))?.document || null, valueCents: row.payment ? row.payment.finalCents : row.valueCents, date: row.payment?.date || row.dueDate, dateKind: row.payment ? 'pagamento' : 'vencimento', dates: dates(row.payment?.date, 'pagamento', row.dueDate), description: row.description, settled: Boolean(row.payment), bankId: row.payment?.bankId || null }))
-  return store.receivables.filter((row) => !row.inactive).map((row) => ({ kind, id: row.id, name: row.customerName, document: row.customerDocument || null, valueCents: row.receipt ? row.receipt.finalCents : row.valueCents, date: row.receipt?.date || row.dueDate, dateKind: row.receipt ? 'recebimento' : 'vencimento', dates: dates(row.receipt?.date, 'recebimento', row.dueDate), description: row.description, settled: Boolean(row.receipt), bankId: row.receipt?.bankId || null }))
+  // `settledBy`: the bank movement whose reconciliation closing made the settlement, if it was made that way.
+  if (kind === 'payable') return store.payables.filter((row) => !row.inactive).map((row) => ({ kind, id: row.id, name: row.supplierName, document: (store.suppliers || []).find((item) => String(item.id) === String(row.supplierId))?.document || null, valueCents: row.payment ? row.payment.finalCents : row.valueCents, date: row.payment?.date || row.dueDate, dateKind: row.payment ? 'pagamento' : 'vencimento', dates: dates(row.payment?.date, 'pagamento', row.dueDate), description: row.description, settled: Boolean(row.payment), settledBy: row.payment?.reconciliation?.transactionId || null, bankId: row.payment?.bankId || null }))
+  // An open receivable arrives in the bank net of the ISS the customer withholds, so that is the value compared.
+  return store.receivables.filter((row) => !row.inactive).map((row) => ({ kind, id: row.id, name: row.customerName, document: row.customerDocument || null, valueCents: row.receipt ? row.receipt.finalCents : row.valueCents - (row.issCents || 0), date: row.receipt?.date || row.dueDate, dateKind: row.receipt ? 'recebimento' : 'vencimento', dates: dates(row.receipt?.date, 'recebimento', row.dueDate), description: row.description, settled: Boolean(row.receipt), settledBy: row.receipt?.reconciliation?.transactionId || null, bankId: row.receipt?.bankId || null }))
+}
+
+// Closing a reconciliation settles the accounts it linked that were still open: date and value of the bank movement, the
+// bank of the statement account and the way the money moved (from the bank's operation or chosen by the user). Undoing
+// the link later reverses only a settlement made this way.
+const accountRow = (store, kind, id) => (kind === 'payable' ? store.payables : store.receivables).find((row) => row.id === id) || null
+const settlementOf = (row, kind) => kind === 'payable' ? row.payment : row.receipt
+function pushAccountEvent(store, actor, kind, type, accountId, details) {
+  const list = kind === 'payable' ? (store.payableEvents ||= []) : (store.receivableEvents ||= [])
+  list.push({ id: randomUUID(), at: new Date().toISOString(), type, accountId, userId: actor?.id ?? null, userName: actor?.name || 'Sistema', ...details })
+}
+export function pendingSettlements(store, bankAccountId, month) {
+  return store.bankTransactions.filter((row) => row.bankAccountId === bankAccountId && monthOf(row.bankDate) === month && row.reconciliation)
+    .map((transaction) => ({ transaction, kind: transaction.reconciliation.kind, row: accountRow(store, transaction.reconciliation.kind, transaction.reconciliation.recordId) }))
+    .filter((item) => item.row && !item.row.inactive && !settlementOf(item.row, item.kind))
+}
+function settleFromReconciliation(store, actor, closingId, { transaction, kind, row }, method, bank) {
+  const amount = Math.abs(transaction.amountCents), issCents = kind === 'receivable' ? row.issCents || 0 : 0
+  if (row.valueCents - issCents !== amount) fail(`${row.id}: o valor da conta não é mais igual ao da movimentação de ${dateLabel(transaction.bankDate)}. Desfaça a conciliação e confira.`, 409)
+  const data = { date: transaction.bankDate, method, interestCents: 0, discountCents: 0, ...(kind === 'receivable' ? { issCents } : {}), finalCents: amount, note: `Baixa automática pelo encerramento da conciliação bancária ${closingId}.`, receipts: [], ...bank, reconciliation: { transactionId: transaction.id, closingId } }
+  if (kind === 'payable') { row.payment = data; row.lastStatus = 'paid' } else { row.receipt = data; row.lastStatus = 'received' }
+  pushAccountEvent(store, actor, kind, kind === 'payable' ? 'paid' : 'received', row.id, { details: { ...data, reconciliation: true } })
+  return { kind, recordId: row.id, transactionId: transaction.id, method, finalCents: amount }
+}
+function reverseReconciliationSettlement(store, actor, transaction) {
+  const { kind, recordId } = transaction.reconciliation
+  const row = accountRow(store, kind, recordId), settlement = row && settlementOf(row, kind)
+  if (!settlement || settlement.reconciliation?.transactionId !== transaction.id) return null
+  const reason = `Estorno automático: a conciliação com a movimentação bancária de ${dateLabel(transaction.bankDate)} (${money(Math.abs(transaction.amountCents))}) foi desfeita.`
+  pushAccountEvent(store, actor, kind, 'reversed', row.id, { reason, details: { [kind === 'payable' ? 'payment' : 'receipt']: settlement } })
+  if (kind === 'payable') { row.payment = null; row.lastStatus = payableStatus(row) } else { row.receipt = null; row.lastStatus = row.dueDate < todayBahia() ? 'overdue' : 'pending' }
+  return { kind, recordId: row.id, finalCents: settlement.finalCents, date: settlement.date }
 }
 
 // The bank of Cadastros > Bancos behind an account of the statements: the one chosen on the screen or, without a
@@ -305,11 +340,12 @@ export default function createBankStatementsRouter(accounts, requireAdmin) {
       if (!row) fail('Movimentação não encontrada.', 404)
       if (!row.reconciliation) fail('Esta movimentação não está conciliada.', 409)
       assertMonthOpen(store, row)
-      event(store, req.actor, 'unreconciled', { transactionId: row.id, fitId: row.fitId, details: { ...row.reconciliation } })
+      const reversed = reverseReconciliationSettlement(store, req.actor, row)
+      event(store, req.actor, 'unreconciled', { transactionId: row.id, fitId: row.fitId, details: { ...row.reconciliation, reversed } })
       row.reconciliation = null
-      return transactionView(store, row)
+      return { item: transactionView(store, row), reversed }
     })
-    res.json({ item })
+    res.json(item)
   }))
   // Closes (or closes again, after a reopening) the reconciliation of an account in a month, keeping a picture of every movement.
   router.post('/bank-statements/closings', handle(async (req, res) => {
@@ -319,19 +355,31 @@ export default function createBankStatementsRouter(accounts, requireAdmin) {
       if (!account) fail('Conta bancária não encontrada.', 404)
       const month = String(req.body.month || '')
       if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) fail('Informe o mês da conciliação.')
-      const { items, summary } = closingSnapshot(store, account.id, month)
-      if (!items.length) fail(`Não há movimentações desta conta em ${monthLabel(month)}.`)
+      if (!closingSnapshot(store, account.id, month).items.length) fail(`Não há movimentações desta conta em ${monthLabel(month)}.`)
       const note = String(req.body.note ?? '').trim().slice(0, 2000)
-      if (summary.pending && note.length < 10) fail(`Há ${summary.pending} movimentaç${summary.pending === 1 ? 'ão' : 'ões'} sem conciliação. Explique as pendências (mínimo de 10 caracteres) para encerrar.`)
       const at = new Date().toISOString(), by = { userId: req.actor.id, userName: req.actor.name }
       let closing = closingFor(store, account.id, month)
       if (closing?.status === 'closed') fail(`A conciliação de ${monthLabel(month)} já está encerrada (${closing.id}).`, 409)
+      // The linked accounts still open are settled now, before the picture of the month is taken.
+      const toSettle = pendingSettlements(store, account.id, month)
+      const chosen = req.body.methods && typeof req.body.methods === 'object' ? req.body.methods : {}
+      const methods = toSettle.map(({ transaction }) => settlementMethodFor(transaction.operationType) || chosen[transaction.id])
+      const missing = methods.filter((method) => !Object.hasOwn(settlementMethods, method || '')).length
+      if (missing) fail(`Escolha a forma de pagamento ou recebimento de ${missing} baixa${missing === 1 ? '' : 's'} que o extrato não informa.`)
+      const bank = registeredBankFor(store, account)
+      if (toSettle.length && !bank && (store.banks || []).length) fail('Esta conta do extrato não está ligada a um banco de Cadastros > Bancos. Escolha o banco da conta antes de encerrar, para que as baixas fiquem registradas nele.')
       if (!closing) {
         store.bankClosingSequence = (store.bankClosingSequence || 0) + 1
         closing = { id: `CON-${String(store.bankClosingSequence).padStart(6, '0')}`, bankAccountId: account.id, month, version: 0, history: [] }
         store.bankClosings.push(closing)
       }
-      Object.assign(closing, { status: 'closed', version: closing.version + 1, note, summary, items, closedAt: at, ...by })
+      const settlements = toSettle.map((item, index) => settleFromReconciliation(store, req.actor, closing.id, item, methods[index], settlementBank(store, bank?.id ?? '')))
+      // The way chosen for an operation the statement does not explain (débito automático, tarifa...) comes filled in next time.
+      toSettle.forEach(({ transaction }, index) => { if (!settlementMethodFor(transaction.operationType)) (store.bankSettings.operationMethods ||= {})[transaction.operationType] = methods[index] })
+      const { items, summary } = closingSnapshot(store, account.id, month)
+      if (summary.pending && note.length < 10) fail(`Há ${summary.pending} movimentaç${summary.pending === 1 ? 'ão' : 'ões'} sem conciliação. Explique as pendências (mínimo de 10 caracteres) para encerrar.`)
+      summary.settled = settlements.length
+      Object.assign(closing, { status: 'closed', version: closing.version + 1, note, summary, items, settlements: [...(closing.settlements || []), ...settlements.map((row) => ({ ...row, at }))], closedAt: at, ...by })
       closing.history.push({ type: closing.version === 1 ? 'closed' : 'reclosed', at, ...by, note, summary })
       event(store, req.actor, 'closing_closed', { closingId: closing.id, details: { month, version: closing.version, ...summary } })
       return closingView(store, closing)

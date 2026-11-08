@@ -68,6 +68,10 @@ export function matchesSearch(row, search) {
 export const payableStatus = (account, today = todayBahia()) => account.payment ? 'paid' : account.dueDate < today ? 'overdue' : 'pending'
 // Ways the money actually moved. Tesouraria accepts all of them for money in and out.
 export const settlementMethods = { pix: 'Pix', boleto: 'Boleto', transfer: 'Transferência', card: 'Cartão', cash: 'Dinheiro' }
+// The way the money moved, read from the operation the bank wrote in the statement (Conciliação bancária); null when the
+// statement does not say, and then the user chooses it when closing the reconciliation.
+const OPERATION_METHODS = { 'pix-sent': 'pix', 'pix-received': 'pix', 'ted-sent': 'transfer', 'ted-received': 'transfer', 'bill-paid': 'boleto', 'collection-received': 'boleto' }
+export const settlementMethodFor = (operationType) => OPERATION_METHODS[operationType] || null
 // Posted in Tesouraria: an account that is born settled, without going through "dar baixa".
 export const treasuryEntry = (row) => row?.treasury === true && Boolean(row.payment || row.receipt) && !row.inactive
 export function filterPayables(rows, filters = {}, today = todayBahia(), useStatus = true) {
