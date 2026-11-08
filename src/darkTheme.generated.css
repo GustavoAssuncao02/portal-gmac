@@ -2156,6 +2156,9 @@
 :root[data-theme="dark"] .bank-imports span, :root[data-theme="dark"] .bank-conflicts span {
     color: #b6c2ce
 }
+:root[data-theme="dark"] .bank-imports .bank-import-remove {
+    color: #e29993
+}
 :root[data-theme="dark"] .bank-conflicts {
     border: 1px solid #36516f;
     background: #3c3220

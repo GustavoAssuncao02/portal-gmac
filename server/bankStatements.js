@@ -1,6 +1,6 @@
 import express from 'express'
 import { createHash, randomUUID } from 'node:crypto'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, writeFile, rm } from 'node:fs/promises'
 import path from 'node:path'
 import { dataDirectory } from './dataDirectory.js'
 import { readStore, mutateStore } from './offers.js'
@@ -76,6 +76,13 @@ function reverseReconciliationSettlement(store, actor, transaction) {
   return { kind, recordId: row.id, finalCents: settlement.finalCents, date: settlement.date }
 }
 
+// Undoes the link of a movement (reversing the settlement its closing made, if any) and records it; returns the reversal.
+function unlinkTransaction(store, actor, row, details = {}) {
+  const reversed = reverseReconciliationSettlement(store, actor, row)
+  event(store, actor, 'unreconciled', { transactionId: row.id, fitId: row.fitId, details: { ...row.reconciliation, reversed, ...details } })
+  row.reconciliation = null
+  return reversed
+}
 // The bank of Cadastros > Bancos behind an account of the statements: the one chosen on the screen or, without a
 // choice, the registered bank whose branch and account are the digits of the OFX account (leading zeros ignored).
 const digitsOf = (value) => String(value ?? '').replace(/\D/g, '').replace(/^0+/, '')
@@ -340,12 +347,59 @@ export default function createBankStatementsRouter(accounts, requireAdmin) {
       if (!row) fail('Movimentação não encontrada.', 404)
       if (!row.reconciliation) fail('Esta movimentação não está conciliada.', 409)
       assertMonthOpen(store, row)
-      const reversed = reverseReconciliationSettlement(store, req.actor, row)
-      event(store, req.actor, 'unreconciled', { transactionId: row.id, fitId: row.fitId, details: { ...row.reconciliation, reversed } })
-      row.reconciliation = null
+      const reversed = unlinkTransaction(store, req.actor, row)
       return { item: transactionView(store, row), reversed }
     })
     res.json(item)
+  }))
+  // "Desconciliar tudo": undoes every link of the account in the month shown (or in all its months), except the months
+  // whose reconciliation is closed. Settlements made by a closing are reversed, as when undoing one link.
+  router.post('/bank-statements/unreconcile-all', handle(async (req, res) => {
+    const month = req.body.month ? String(req.body.month) : null
+    if (month && !/^\d{4}-\d{2}$/.test(month)) fail('Mês inválido.')
+    const result = await mutateStore((store) => {
+      init(store)
+      if (!store.bankAccounts.some((row) => row.id === req.body.bankAccountId)) fail('Conta do extrato não encontrada.', 404)
+      const locked = (row) => closingFor(store, row.bankAccountId, monthOf(row.bankDate))?.status === 'closed'
+      const rows = store.bankTransactions.filter((row) => row.bankAccountId === req.body.bankAccountId && row.reconciliation && (!month || monthOf(row.bankDate) === month))
+      const open = rows.filter((row) => !locked(row))
+      const reversed = open.map((row) => unlinkTransaction(store, req.actor, row, { bulk: true })).filter(Boolean)
+      return { undone: open.length, reversed, skipped: rows.length - open.length }
+    })
+    res.json(result)
+  }))
+  // Removes a batch imported by mistake: its movements leave the reconciliation (links undone, settlements made by a
+  // closing reversed). A movement that also came in another batch stays, tied to that batch. A month whose
+  // reconciliation is closed has to be reopened first. The audit keeps what was removed.
+  router.delete('/bank-statements/imports/:id', handle(async (req, res) => {
+    const result = await mutateStore((store) => {
+      init(store)
+      const batch = store.bankImports.find((row) => row.id === req.params.id)
+      if (!batch) fail('Lote não encontrado.', 404)
+      const only = (row) => { const ids = row.importIds || [row.importId]; return ids.length === 1 && ids[0] === batch.id }
+      const removed = store.bankTransactions.filter(only), removedBalances = store.bankBalances.filter(only)
+      const closed = [...new Set(removed.filter((row) => closingFor(store, row.bankAccountId, monthOf(row.bankDate))?.status === 'closed').map((row) => monthOf(row.bankDate)))]
+      if (closed.length) fail(`A conciliação de ${closed.map(monthLabel).join(', ')} está encerrada com movimentações deste lote. Reabra antes de excluir o lote.`, 409)
+      const linked = removed.filter((row) => row.reconciliation), unlinked = linked.length
+      const reversed = linked.map((row) => unlinkTransaction(store, req.actor, row, { importRemoved: batch.id })).filter(Boolean)
+      const gone = new Set([...removed, ...removedBalances].map((row) => row.id))
+      for (const row of [...store.bankTransactions, ...store.bankBalances]) {
+        if (gone.has(row.id) || !(row.importIds || []).includes(batch.id)) continue
+        row.importIds = row.importIds.filter((id) => id !== batch.id)
+        if (row.importId === batch.id) row.importId = row.importIds[0]
+      }
+      store.bankTransactions = store.bankTransactions.filter((row) => !gone.has(row.id))
+      store.bankBalances = store.bankBalances.filter((row) => !gone.has(row.id))
+      store.bankConflicts = store.bankConflicts.filter((row) => row.importId !== batch.id && !gone.has(row.existingId))
+      store.bankImports = store.bankImports.filter((row) => row.id !== batch.id)
+      // The account goes too when nothing of it is left (no batch and no closing).
+      const account = store.bankAccounts.find((row) => row.id === batch.bankAccountId)
+      if (account && !store.bankImports.some((row) => row.bankAccountId === account.id) && !store.bankClosings.some((row) => row.bankAccountId === account.id)) store.bankAccounts = store.bankAccounts.filter((row) => row !== account)
+      event(store, req.actor, 'import_removed', { importId: batch.id, details: { fileName: batch.fileName, removed: removed.length, unlinked, reversed } })
+      return { id: batch.id, fileName: batch.fileName, removed: removed.length, unlinked, reversed }
+    })
+    await rm(path.join(directory, `${result.id}.ofx`), { force: true }).catch(() => {})
+    res.json(result)
   }))
   // Closes (or closes again, after a reopening) the reconciliation of an account in a month, keeping a picture of every movement.
   router.post('/bank-statements/closings', handle(async (req, res) => {

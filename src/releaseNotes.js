@@ -5,7 +5,7 @@ export const releaseNotes = [
     date: '2026-11-08',
     notes: [
       'Contas a Receber: importação de notas fiscais em PDF, valores líquidos do ISS',
-      'Conciliação bancária: baixa automática das contas ao encerrar a conciliação',
+      'Conciliação bancária: baixa automática das contas ao encerrar a conciliação, botão desconciliar tudo, exclusão de extrato importado por engano',
       'Melhorias gerais: correções de problemas e maior estabilidade do sistema',
     ],
   },
