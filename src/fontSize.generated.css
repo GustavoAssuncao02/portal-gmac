@@ -1137,6 +1137,12 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .offer-information-heading small { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .offer-information-edit { font-size: inherit; font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .offer-info-edit-notes { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .offer-creating-badge strong { font-size: calc(15px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .offer-creating-badge span { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .offer-creating-badge small { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .offer-details-creating { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .offer-discard-button { font-size: inherit; font-size: calc(16px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .offer-creating-note { font-size: calc(13px * var(--account-font-scale)); }
 @media (min-width: 1101px) {:root:is([data-font-size="small"], [data-font-size="large"]) .sidebar .nav-item { font-size: calc(14px * var(--account-font-scale)); } }
 @media (min-width: 1101px) {:root:is([data-font-size="small"], [data-font-size="large"]) .sidebar .sidebar-submenu .nav-item { font-size: calc(13px * var(--account-font-scale)); } }
 @media (min-width: 1101px) {:root:is([data-font-size="small"], [data-font-size="large"]) .offers-board .offers-search input { font-size: calc(14px * var(--account-font-scale)); } }

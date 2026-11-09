@@ -34,7 +34,16 @@ try {
     await form.getByLabel('Descri\u00e7\u00e3o do servi\u00e7o *', { exact: true }).fill('Teste de recusa')
     await form.getByRole('button', { name: 'Adicionar solicita\u00e7\u00e3o', exact: true }).click()
     await form.waitFor({ state: 'detached' })
+    // The new offer opens in its details while it is being created; on the list it only shows who is creating it.
+    await page.locator('.offer-details-creating').getByText(/Criando oferta · Gustavo/).waitFor()
+    await page.getByRole('button', { name: 'Voltar para ofertas', exact: true }).click()
     const row = page.locator('.offers-table-row').filter({ hasText: service })
+    await row.locator('.offer-creating-badge').getByText('Gustavo', { exact: true }).waitFor()
+    assert.equal(await row.locator('.offer-table-status').innerText(), 'Criando oferta')
+    assert.equal(await row.getByRole('button', { name: 'Recusar', exact: true }).count(), 0, 'no refusal while it is being created')
+    // "Fazer proposta" finishes it (offer-creating.test.js); here it is finished on the server and the list is read again.
+    await fixture.mutateStore((store) => { const item = store.offers.find((entry) => entry.service === service); item.status = 'review'; delete item.editingBy })
+    await page.reload()
     const reject = row.getByRole('button', { name: 'Recusar', exact: true })
     await reject.waitFor()
     const colors = await reject.evaluate((button) => getComputedStyle(button).color.match(/\d+/g).map(Number))

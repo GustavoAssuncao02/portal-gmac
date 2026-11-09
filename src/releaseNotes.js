@@ -7,7 +7,7 @@ export const releaseNotes = [
       'Cadastros: novo histórico de alterações em cada cadastro',
       'Estoque: nova unidade de medida Conjunto, nomes em caixa alta',
       'Máquinas, Serviços e Etapas: nomes em caixa alta',
-      'Ofertas e serviços: edição das informações do serviço, título no padrão das outras telas, dados em caixa alta',
+      'Ofertas e serviços: edição das informações do serviço, título no padrão das outras telas, dados em caixa alta, oferta manual fica em criação até fazer a proposta',
       'Contas a Pagar e Contas a Receber: lista de anexos mais simples, aviso quando o documento não está mais disponível',
       'Melhorias gerais: correções de problemas e maior estabilidade do sistema',
     ],

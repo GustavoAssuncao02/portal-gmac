@@ -1,6 +1,6 @@
 import express from 'express'
 import { randomUUID } from 'node:crypto'
-import { readStore, mutateStore } from './offers.js'
+import { readStore, mutateStore, stillCreating } from './offers.js'
 import { adminIdentity } from './accounts.js'
 import { readFiscalCatalog, plain } from './fiscalCatalog.js'
 import { defaultIssuers, nestleLabor, nestleMaterials, etiquetaLabor, etiquetaMaterials } from './proposalDefaults.js'
@@ -377,6 +377,7 @@ export default function createProposalDocumentsRouter(requireAdmin) {
     const before = await readStore()
     const offer = before.offers.find((item) => item.id === request.params.id)
     if (!offer || offer.orderCode || offer.status === 'rejected') fail('Oferta não encontrada, já aceita ou recusada.', 404)
+    if (offer.status === 'creating') fail(stillCreating, 409)
     const stages = offer.resources?.stages ?? offer.proposal?.stages ?? []
     if (!stages.length) fail('Defina as etapas nos detalhes da oferta antes de gerar a proposta.')
     const problem = stagePlanProblem(stages, offer.resources)
@@ -386,6 +387,7 @@ export default function createProposalDocumentsRouter(requireAdmin) {
     const updated = await mutateStore((store) => {
       const item = store.offers.find((entry) => entry.id === request.params.id)
       if (!item || item.orderCode || item.status === 'rejected') fail('Oferta não encontrada, já aceita ou recusada.', 404)
+      if (item.status === 'creating') fail(stillCreating, 409)
       claimQuoteNumber(store, document)
       item.proposal = documentProposal({ item, option, document, model, stages, generatedBy: request.adminName || null })
       item.status = 'proposed'

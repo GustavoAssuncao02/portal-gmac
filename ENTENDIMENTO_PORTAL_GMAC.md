@@ -265,8 +265,11 @@ São valores iniciais editáveis, não uma tabela comercial definitiva da empres
 
 - Lista solicitações inseridas manualmente, com busca e filtro de data.
 - Exibe serviço, cliente, etiqueta, quantidade, solicitação, prazo, status, origem e ações.
-- Estados do fluxo incluem Em análise, Propostas, Aceitas e Recusadas.
-- Oferta manual começa **Em análise**.
+- Estados do fluxo incluem Criando oferta, Em análise, Propostas, Aceitas e Recusadas.
+- Oferta manual começa **Criando oferta** (status `creating`) e só passa a **Em análise** quando alguém clica em **Fazer proposta** nos detalhes, com as etapas planejadas (`POST /api/offers/:id/finish`).
+- Enquanto está em criação, a linha da lista mostra só uma caixa azul com "Criando oferta", o nome de quem está criando (`editingBy`) e o tempo desde a criação (`createdAt`). Ela fica fora do contador "Em análise" e do indicador da tela inicial, e não pode ser recusada nem ter proposta gerada.
+- Quem está criando abre a oferta direto pela caixa azul. Outra pessoa vê o aviso "FULANO está criando esta oferta. Deseja editar mesmo assim?" e, se confirmar, passa a ser quem está criando (`POST /api/offers/:id/take-over`). O tempo continua contando desde a criação.
+- **Descartar oferta** (só em criação, `DELETE /api/offers/:id`) apaga a oferta e os anexos dela. O número fica registrado em `discardedOffers` e não é usado de novo. Solicitante e comprador cadastrados com ela continuam cadastrados.
 - A ação **Recusar** está disponível para oferta manual em análise, com confirmação, sem apagar o registro.
 - Oferta recusada não pode gerar uma OS.
 - Oferta aceita permite acessar a OS vinculada.
@@ -274,7 +277,7 @@ São valores iniciais editáveis, não uma tabela comercial definitiva da empres
 
 ### Inserir oferta manualmente
 
-O modal cadastra dados como CNPJ, empresa, prazo solicitado, peça/serviço, quantidade, descrição, etiqueta e anexo. Depois de salvar, permite seguir para o detalhamento/proposta ou permanecer na listagem.
+O modal cadastra dados como CNPJ, empresa, prazo solicitado, peça/serviço, quantidade, descrição, etiqueta e anexo. Ao clicar em "Adicionar solicitação", a oferta é criada como **Criando oferta** e a tela **Detalhes da oferta** abre na hora.
 
 ### Detalhes da oferta
 

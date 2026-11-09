@@ -208,10 +208,20 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
     // A server module of this fixture (same database), for start-up tasks the HTTP routes do not run.
     serverModule: (name) => import(pathToFileURL(path.join(directory, name))),
     saveRequestedMaterial,
+    // A manual offer starts as "Criando oferta" and goes to analysis with "Fazer proposta" (POST /offers/:id/finish, which
+    // needs the stages planned). The tests of the later steps start from an offer already in analysis, as before; the
+    // test of the creation itself (offer-creating.test.js) turns this off.
+    finishCreatedOffers: true,
     async request(route, method = 'GET', body, headers = {}) {
       const response = await fetch(`${url}/api${route}`, { method, headers: { 'Content-Type': 'application/json', ...headers }, body: body === undefined ? undefined : JSON.stringify(body) })
       const text = await response.text()
-      return { status: response.status, data: text ? JSON.parse(text) : null }
+      const data = text ? JSON.parse(text) : null
+      if (this.finishCreatedOffers && route === '/offers' && method === 'POST' && response.status === 201 && data?.item?.status === 'creating') {
+        await mutateStore((store) => { const item = store.offers.find((entry) => entry.id === data.item.id); item.status = 'review'; delete item.editingBy })
+        data.item.status = 'review'
+        delete data.item.editingBy
+      }
+      return { status: response.status, data }
     },
     // The same request with the administrator session (the routes of offers, OS and registrations require it).
     // Uses `admin`, so a test that renews the session (after a password change) updates every later call.

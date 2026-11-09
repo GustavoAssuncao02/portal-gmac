@@ -48,6 +48,7 @@ const handleError = (response, error) => {
 }
 
 const clean = (value, limit = 500) => String(value ?? '').trim().slice(0, limit)
+export const stillCreating = 'Esta oferta ainda está sendo criada: conclua os detalhes e clique em "Fazer proposta".'
 const money = (value) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const date = (value) => new Date(value).toLocaleDateString('pt-BR', { timeZone: 'UTC' })
 
@@ -117,7 +118,10 @@ router.post('/offers', async (request, response) => {
       const buyerLink = registerOfferContact(store, 'buyers', request.offerClient, buyer, actorOf(request))
       requesterCreated = link.created
       buyerCreated = buyerLink.created
-      const item = { id: randomUUID(), code: nextCode('OF', store.offers), cnpj: clean(cnpj, 18), company: clean(company, 160), requester: link.name, requesterId: link.id, buyer: buyerLink.name, buyerId: buyerLink.id, deadline, service: clean(service, 160), quantity: Number(quantity), description: clean(description, 5000), labelNumber: clean(labelNumber, 80), requestedAt: new Date().toISOString(), origin: 'Inserida Manualmente', status: 'review', attachments: [], resources: { materials: [], laborEntries: [] }, proposal: null, orderCode: null }
+      // A manual offer starts as "Criando oferta": only "Fazer proposta" in its details (POST /offers/:id/finish) puts it
+      // in analysis. The person who is creating it (editingBy) and since when are shown on the list.
+      const at = new Date().toISOString(), author = { id: request.adminId ?? null, name: request.adminName || 'Administrador' }
+      const item = { id: randomUUID(), code: nextCode('OF', [...store.offers, ...(store.discardedOffers || [])]), createdAt: at, createdBy: author.id, createdByName: author.name, editingBy: { ...author, at }, cnpj: clean(cnpj, 18), company: clean(company, 160), requester: link.name, requesterId: link.id, buyer: buyerLink.name, buyerId: buyerLink.id, deadline, service: clean(service, 160), quantity: Number(quantity), description: clean(description, 5000), labelNumber: clean(labelNumber, 80), requestedAt: at, origin: 'Inserida Manualmente', status: 'creating', attachments: [], resources: { materials: [], laborEntries: [] }, proposal: null, orderCode: null }
       store.offers.unshift(item)
       return item
     })
@@ -178,7 +182,8 @@ router.put('/offers/:id/resources', async (request, response) => {
       // The description goes in the proposal: only a different text discards it, not the older details joining it.
       // How it was typed (per piece or total) does not change the cost either: only the totals count.
       const comparable = (value) => JSON.stringify({ ...value, urgency: undefined, serviceLocation: undefined, stageTimes: undefined, stageResources: undefined, serviceDescription: undefined, entryMode: undefined, stageTimesPerPiece: undefined, materials: value?.materials?.map(({ quantityPerPiece, ...material }) => material) })
-      if (description !== currentDescription || comparable(item.resources) !== comparable(nextResources)) {
+      // An offer still being created stays so: only "Fazer proposta" finishes it.
+      if (item.status !== 'creating' && (description !== currentDescription || comparable(item.resources) !== comparable(nextResources))) {
         item.proposal = null
         item.status = 'review'
       }
@@ -241,6 +246,7 @@ router.post('/offers/:id/proposal', async (request, response) => {
   try {
     const offer = (await readStore()).offers.find((item) => item.id === request.params.id)
     if (!offer || offer.orderCode || offer.status === 'rejected') return response.status(404).json({ message: 'Oferta não encontrada, já aceita ou recusada.' })
+    if (offer.status === 'creating') return response.status(409).json({ message: stillCreating })
     const settings = serviceSettings(offer)
     if (!settings.stages.length) return response.status(400).json({ message: 'Defina as etapas nos detalhes da oferta antes de gerar a proposta.' })
     const problem = stagePlanProblem(settings.stages, offer.resources)
@@ -250,7 +256,7 @@ router.post('/offers/:id/proposal', async (request, response) => {
     await createPdf(offer, selectedProposal, offer.resources, layout)
     const updated = await mutateStore((store) => {
       const item = store.offers.find((entry) => entry.id === request.params.id)
-      if (!item || item.orderCode || item.status === 'rejected' || item.description !== offer.description || JSON.stringify(item.resources) !== JSON.stringify(offer.resources)) return null
+      if (!item || item.orderCode || ['rejected', 'creating'].includes(item.status) || item.description !== offer.description || JSON.stringify(item.resources) !== JSON.stringify(offer.resources)) return null
       item.proposal = { ...selectedProposal, layout, generatedAt: new Date().toISOString() }
       item.status = 'proposed'
       return item
@@ -269,7 +275,8 @@ router.put('/offers/:id/proposal-draft', async (request, response) => {
     const offer = await mutateStore((store) => {
       const item = store.offers.find((entry) => entry.id === request.params.id)
       if (!item || item.orderCode || item.status === 'rejected') return null
-      item.proposalDraft = { ...draft, savedAt: new Date().toISOString(), savedBy: request.adminId ?? null, savedByName: request.adminName || 'Administrador' }
+      if (item.status === 'creating') throw Object.assign(new Error(stillCreating), { status: 409 })
+      item.proposalDraft ={ ...draft, savedAt: new Date().toISOString(), savedBy: request.adminId ?? null, savedByName: request.adminName || 'Administrador' }
       addNotification(store, { type: 'proposal-saved', at: item.proposalDraft.savedAt, authorId: item.proposalDraft.savedBy, offerId: item.id, title: 'Proposta salva', description: `${item.code} · ${item.service} · Proposta ${draft.selectedKey}`, employeeName: item.proposalDraft.savedByName })
       return item
     })
@@ -374,6 +381,60 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
         return item
       })
       response.json({ item: offer, proposalDiscarded })
+    } catch (error) { handleError(response, error) }
+  })
+  // "Criando oferta": another administrator who confirms "editar mesmo assim" becomes the one creating it (the list shows
+  // their name); the time keeps counting from the creation.
+  const creatingOffer = (store, id) => {
+    const item = store.offers.find((entry) => entry.id === id)
+    if (!item) throw Object.assign(new Error('Oferta não encontrada.'), { status: 404 })
+    if (item.status !== 'creating') throw Object.assign(new Error('Esta oferta já foi concluída e está na lista de ofertas.'), { status: 409 })
+    return item
+  }
+  configured.post('/offers/:id/take-over', requireAdmin, async (request, response) => {
+    try {
+      const offer = await mutateStore((store) => {
+        const item = creatingOffer(store, request.params.id)
+        if (String(item.editingBy?.id ?? '') !== String(request.adminId ?? '')) item.editingBy = { id: request.adminId ?? null, name: request.adminName || 'Administrador', at: new Date().toISOString() }
+        return item
+      })
+      response.json({ item: offer })
+    } catch (error) { handleError(response, error) }
+  })
+  // "Fazer proposta" of an offer being created: with the stages planned (the same rule of the proposal), it goes to analysis
+  // and the actions of the list are open to everybody.
+  configured.post('/offers/:id/finish', requireAdmin, async (request, response) => {
+    try {
+      const offer = await mutateStore((store) => {
+        const item = store.offers.find((entry) => entry.id === request.params.id)
+        if (!item) throw Object.assign(new Error('Oferta não encontrada.'), { status: 404 })
+        if (item.status !== 'creating') return item
+        const { stages } = serviceSettings(item)
+        if (!stages.length) throw Object.assign(new Error('Selecione pelo menos uma etapa do serviço antes de fazer a proposta.'), { status: 400 })
+        const problem = stagePlanProblem(stages, item.resources)
+        if (problem) throw Object.assign(new Error(`${problem} ${stagePlanPlace}`), { status: 400 })
+        item.status = 'review'
+        item.creationFinishedAt = new Date().toISOString()
+        item.creationFinishedBy = request.adminId ?? null
+        item.creationFinishedByName = request.adminName || 'Administrador'
+        delete item.editingBy
+        return item
+      })
+      response.json({ item: offer })
+    } catch (error) { handleError(response, error) }
+  })
+  // "Descartar oferta": an offer given up while being created is erased with its files. Its number is not reused (a short
+  // record stays in discardedOffers); the requester and buyer registered with it stay registered.
+  configured.delete('/offers/:id', requireAdmin, async (request, response) => {
+    try {
+      const removed = await mutateStore((store) => {
+        const item = creatingOffer(store, request.params.id)
+        store.offers = store.offers.filter((entry) => entry !== item)
+        store.discardedOffers = [...(store.discardedOffers || []), { id: item.id, code: item.code, service: item.service, company: item.company, createdAt: item.createdAt, createdByName: item.createdByName, discardedAt: new Date().toISOString(), discardedBy: request.adminId ?? null, discardedByName: request.adminName || 'Administrador' }]
+        return item
+      })
+      await Promise.all((removed.attachments || []).map((file) => rm(path.join(filesDirectory, file.id), { force: true }).catch(() => {})))
+      response.status(204).end()
     } catch (error) { handleError(response, error) }
   })
   configured.get('/offers/:id/attachments/:attachmentId', requireAdminOrOperator)

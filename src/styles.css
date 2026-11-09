@@ -7530,3 +7530,22 @@ input.upper-input::placeholder { text-transform: none; }
 .offer-info-edit-fields { min-width: 0; margin: 0; padding: 0; border: 0; }
 .offer-info-edit-notes { display: grid; gap: 8px; margin: 14px 0 0; padding: 12px 14px; border: 1px solid #f1d39a; border-radius: 8px; background: #fff8ea; color: #6b4a12; font-size: 13px; line-height: 1.45; }
 .offer-info-edit-notes p { margin: 0; }
+
+/* "Criando oferta": a manual offer not finished yet (CreatingOffer.jsx). On the list, one blue box takes the place of the
+   actions and tells who is creating it and for how long; in the details, a chip by the title and "Descartar oferta". */
+.offer-table-status--creating { color: #1a5ea0; background: #e8f3ff; }
+.offer-table-actions--creating { grid-template-columns: minmax(0, 1fr); }
+.offer-table-actions .offer-creating-badge { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; min-height: 58px; padding: 6px 12px; border: 2px solid #2f7fd0; background: #e8f3ff; color: #1a5ea0; text-align: left; cursor: pointer; }
+.offer-table-actions .offer-creating-badge:hover { background: #d9ebff; }
+.offer-creating-badge strong { display: inline-flex; align-items: center; gap: 6px; font-size: 15px; }
+.offer-creating-badge span { max-width: 100%; overflow: hidden; color: #1d385a; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.offer-creating-badge small { color: #47698f; font-size: 12px; font-weight: 600; }
+.offer-details-creating { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid #9cc5ee; border-radius: 999px; background: #e8f3ff; color: #1a5ea0; font-size: 13px; font-weight: 700; }
+.offer-details-creating .icon { width: 15px; height: 15px; }
+.offer-discard-button { display: inline-flex; height: 52px; align-items: center; justify-content: center; gap: 8px; padding: 0 20px; border: 1px solid #ed515a; border-radius: 8px; background: #ffffff; color: #e63540; font: inherit; font-size: 16px; font-weight: 700; cursor: pointer; }
+.offer-discard-button:hover { background: #fff0f1; }
+.offer-discard-button:disabled { opacity: .6; cursor: not-allowed; }
+.offer-creating-modal .os-edit-actions .offer-creating-confirm { display: inline-flex; align-items: center; gap: 6px; border-color: #0c4c91; color: #ffffff; background: #0c4c91; }
+.offer-creating-modal--discard .os-edit-actions .offer-creating-confirm { border-color: #ed515a; color: #e63540; background: #fff0f1; }
+.offer-creating-note { color: #5b6f86; font-size: 13px; }
+.offer-details-header { flex-wrap: wrap; }

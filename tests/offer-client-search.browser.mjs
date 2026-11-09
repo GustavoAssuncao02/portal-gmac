@@ -64,8 +64,7 @@ try {
     await form.getByLabel('Descrição do serviço *', { exact: true }).fill('Oferta de cliente com CPF')
     await form.getByRole('button', { name: 'Adicionar solicitação', exact: true }).click()
     await form.waitFor({ state: 'detached' })
-    const row = page.locator('.offers-table-row').filter({ hasText: service })
-    await row.getByRole('button', { name: 'Em análise', exact: true }).click()
+    // The new offer opens in its details right away.
     await page.locator('.offer-information-card').getByText('CPF: 529.982.247-25').waitFor()
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false)
     assert.deepEqual(errors, [])

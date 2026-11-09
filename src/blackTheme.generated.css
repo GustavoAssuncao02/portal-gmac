@@ -5742,6 +5742,46 @@
     border: 1px solid #303133;
     background: #30281a
 }
+:root[data-theme="dark"][data-tone="black"] .offer-table-status--creating {
+    color: #bec2c5;
+    background: #232425
+}
+:root[data-theme="dark"][data-tone="black"] .offer-table-actions .offer-creating-badge {
+    border: 2px solid #47494c;
+    background: #232425;
+    color: #bec2c5
+}
+:root[data-theme="dark"][data-tone="black"] .offer-table-actions .offer-creating-badge:hover {
+    background: #232425
+}
+:root[data-theme="dark"][data-tone="black"] .offer-creating-badge span {
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .offer-creating-badge small {
+    color: #bec1c5
+}
+:root[data-theme="dark"][data-tone="black"] .offer-details-creating {
+    border: 1px solid #303133;
+    background: #232425;
+    color: #bec2c5
+}
+:root[data-theme="dark"][data-tone="black"] .offer-discard-button {
+    border: 1px solid #303133;
+    background: #1a1b1c
+}
+:root[data-theme="dark"][data-tone="black"] .offer-discard-button:hover {
+    background: #301a1b
+}
+:root[data-theme="dark"][data-tone="black"] .offer-creating-modal .os-edit-actions .offer-creating-confirm {
+    border-color: #47494c
+}
+:root[data-theme="dark"][data-tone="black"] .offer-creating-modal--discard .os-edit-actions .offer-creating-confirm {
+    border-color: #303133;
+    background: #301a1b
+}
+:root[data-theme="dark"][data-tone="black"] .offer-creating-note {
+    color: #bec1c5
+}
 @media (min-width: 2200px) {
     :root[data-theme="dark"][data-tone="black"] .proposal-card-column + .proposal-card-column {
         border-top: 1px solid #303133
