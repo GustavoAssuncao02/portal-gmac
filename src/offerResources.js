@@ -1,44 +1,7 @@
 import { materialRequestSources } from '../server/materialRequestSources.js'
 import { materialUnit } from '../server/materialUnits.js'
-export const normalizeSearch = (value) => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLocaleLowerCase('pt-BR')
-
-// By the link to the stock or, without it, by the name among the materials counted in the same unit (when known).
-export function findInventoryMaterial(material, inventory) {
-  return inventory.find((item) => material.inventoryId != null && String(item.id) === String(material.inventoryId))
-    || inventory.find((item) => normalizeSearch(item.name) === normalizeSearch(material.name) && (material.unit == null || materialUnit(item.unit) === materialUnit(material.unit)))
-}
-
-export function materialStock(material, inventory) {
-  const item = findInventoryMaterial(material, inventory)
-  const stockAvailable = Math.max(0, Number(item?.quantity) || 0)
-  const quantity = Number(material.quantity) || 0
-  return {
-    inventoryId: item?.id ?? null,
-    unit: materialUnit(item ? item.unit : material.unit),
-    stockAvailable,
-    stockStatus: !item ? 'unknown' : stockAvailable <= 0 ? 'missing' : stockAvailable < quantity ? 'partial' : 'available',
-    purchaseQuantity: Math.max(0, Number((quantity - stockAvailable).toFixed(3))),
-  }
-}
-
-export function materialsStock(materials, inventory) {
-  const groups = new Map()
-  const entries = materials.map((material) => {
-    const item = findInventoryMaterial(material, inventory)
-    const key = item || `${materialUnit(material.unit)}|${normalizeSearch(material.name)}`
-    if (!groups.has(key)) groups.set(key, { item, quantity: 0, remaining: Math.max(0, Number(item?.quantity) || 0) })
-    const group = groups.get(key)
-    group.quantity += Math.max(0, Number(material.quantity) || 0)
-    return { material, group }
-  })
-  return entries.map(({ material, group }) => {
-    // Allocate stock within this offer only; no inventory balance is changed.
-    const stock = materialStock(material, group.item ? [{ ...group.item, quantity: group.remaining }] : [])
-    group.remaining = Math.max(0, Number((group.remaining - Number(material.quantity || 0)).toFixed(3)))
-    const total = materialStock({ ...material, quantity: Number(group.quantity.toFixed(3)) }, group.item ? [group.item] : [])
-    return { ...material, ...stock, groupStockStatus: total.stockStatus, groupPurchaseQuantity: total.purchaseQuantity }
-  })
-}
+export { normalizeSearch, findInventoryMaterial, materialStock, materialsStock } from '../server/materialStock.js'
+import { normalizeSearch, findInventoryMaterial } from '../server/materialStock.js'
 
 export function materialRequests(offers, orders) {
   return materialRequestSources(offers, orders).flatMap((offer) => (offer.resources?.materials || []).flatMap((material) => {

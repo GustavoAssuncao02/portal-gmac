@@ -5727,6 +5727,21 @@
 :root[data-theme="dark"][data-tone="black"][data-theme="dark"] .offer-entry-mode {
     border-color: #3031332e
 }
+:root[data-theme="dark"][data-tone="black"] .offer-information-heading small {
+    color: #bec1c5
+}
+:root[data-theme="dark"][data-tone="black"] .offer-information-edit {
+    border: 1px solid #303133;
+    background: #1a1b1c;
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .offer-information-edit:hover {
+    background: #232425
+}
+:root[data-theme="dark"][data-tone="black"] .offer-info-edit-notes {
+    border: 1px solid #303133;
+    background: #30281a
+}
 @media (min-width: 2200px) {
     :root[data-theme="dark"][data-tone="black"] .proposal-card-column + .proposal-card-column {
         border-top: 1px solid #303133

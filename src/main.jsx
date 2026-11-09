@@ -50,6 +50,7 @@ import MaterialAppearance, { MaterialVisual } from './MaterialAppearance.jsx'
 import MachineHistoryModal from './MachineHistoryModal.jsx'
 import RegistryHistoryModal, { RegistryInfoButton } from './RegistryHistoryModal.jsx'
 import { upper } from './displayCase.js'
+import OfferInfoEditModal from './OfferInfoEditModal.jsx'
 import MachineUsageBI from './MachineUsageBI.jsx'
 import NewVersionPrompt from './NewVersionPrompt.jsx'
 import { useMobileModal } from './useMobileModal.js'
@@ -1506,6 +1507,12 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
   const [stageTimes, setStageTimes] = useState(offer?.resources?.stageTimes || {})
   const [entryMode, setEntryMode] = useState(() => currentEntryMode(offer?.resources))
   const [stageTimesPerPiece, setStageTimesPerPiece] = useState(offer?.resources?.stageTimesPerPiece || {})
+  const [editingInfo, setEditingInfo] = useState(false), [infoNotice, setInfoNotice] = useState(''), [resourcesVersion, setResourcesVersion] = useState(0)
+  useEffect(() => {
+    if (!infoNotice) return undefined
+    const timer = setTimeout(() => setInfoNotice(''), 6000)
+    return () => clearTimeout(timer)
+  }, [infoNotice])
   const perPiece = entryMode === 'piece'
   const [stageResources, setStageResources] = useState(offer?.resources?.stageResources || {})
   const [pieceHistory, setPieceHistory] = useState(null)
@@ -1551,7 +1558,7 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
     // A row being edited belongs to the offer that was open.
     setEditingMaterialId(null)
     setMaterialFormOpen(false)
-  }, [offer?.id])
+  }, [offer?.id, resourcesVersion])
 
   // An offer that arrives empty (for example, from the website) of a piece made before can be filled with its history.
   const emptyResources = !offer?.orderCode && !(offer?.resources?.materials?.length) && !(offer?.resources?.stages?.length)
@@ -1805,11 +1812,11 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
         <WorkspaceTabs tabs={tabs} activeNav={activeNav} onNavigate={onNavigate} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} />
         <div className="offer-details-header"><button className="offer-back-button" type="button" onClick={() => onNavigate('Ofertas e serviços')} aria-label="Voltar para ofertas"><ArrowLeft size={24} aria-hidden="true" /></button><h1>Detalhes da oferta {offer.code}</h1></div>
         <div className="offer-details-grid">
-          <section className="offer-information-card"><span className="offer-details-section-title">Informações do serviço</span><h2>{offer.service}</h2><p className="offer-details-description">{offer.description}</p><div className="offer-detail-facts"><div><span>▥</span><small>Cliente solicitante</small><strong>{offer.company}</strong><em>{documentKind(offer.cnpj)}: {offer.cnpj}</em>{offer.requester && <em>Solicitante: {offer.requester}</em>}{offer.buyer && <em>Comprador: {offer.buyer}</em>}</div><div><span>▣</span><small>Data da solicitação</small><strong>{displayDate(offer.requestedAt)}</strong></div><div><span>◇</span><small>Quantidade solicitada</small><strong>{offer.quantity} unidades</strong></div><div><span>◷</span><small>Prazo solicitado pelo cliente</small><strong>{displayDate(offer.deadline)}</strong></div></div><PieceLeadTime offer={offer} /><div className="offer-detail-text"><h3>Número da etiqueta</h3><p>{offer.labelNumber || 'Não informado'}</p></div><div className="offer-detail-text"><h3>Anexos da solicitação</h3>{offer.attachments?.length ? <ul>{offer.attachments.map((attachment) => <li key={attachment.id}><DownloadLink url={attachmentUrl(offer.id, attachment.id)} name={attachment.name}>{attachment.name}</DownloadLink></li>)}</ul> : <p>Nenhum anexo adicionado.</p>}</div>{offer.proposal && <div className="offer-detail-text"><h3>Proposta gerada</h3><p><DownloadLink url={`/api/offers/${offer.id}/proposal.pdf`} name={`proposta-${offer.code}.pdf`}>Baixar PDF da proposta</DownloadLink></p></div>}{(offer.proposal || offer.proposalEmails?.length > 0) && <ProposalEmailHistory offer={offer} />}</section>
+          <section className="offer-information-card"><div className="offer-information-heading"><span className="offer-details-section-title">Informações do serviço</span>{offer.orderCode ? <small>Oferta aceita: corrija pela {offer.orderCode}</small> : offer.status !== 'rejected' && <button className="offer-information-edit" type="button" onClick={() => setEditingInfo(true)}><Pencil size={14} aria-hidden="true" />Editar</button>}</div><h2>{offer.service}</h2><p className="offer-details-description">{offer.description}</p><div className="offer-detail-facts"><div><span>▥</span><small>Cliente solicitante</small><strong>{offer.company}</strong><em>{documentKind(offer.cnpj)}: {offer.cnpj}</em>{offer.requester && <em>Solicitante: {offer.requester}</em>}{offer.buyer && <em>Comprador: {offer.buyer}</em>}</div><div><span>▣</span><small>Data da solicitação</small><strong>{displayDate(offer.requestedAt)}</strong></div><div><span>◇</span><small>Quantidade solicitada</small><strong>{offer.quantity} unidades</strong></div><div><span>◷</span><small>Prazo solicitado pelo cliente</small><strong>{displayDate(offer.deadline)}</strong></div></div><PieceLeadTime offer={offer} /><div className="offer-detail-text"><h3>Número da etiqueta</h3><p>{offer.labelNumber || 'Não informado'}</p></div><div className="offer-detail-text"><h3>Anexos da solicitação</h3>{offer.attachments?.length ? <ul>{offer.attachments.map((attachment) => <li key={attachment.id}><DownloadLink url={attachmentUrl(offer.id, attachment.id)} name={attachment.name}>{attachment.name}</DownloadLink></li>)}</ul> : <p>Nenhum anexo adicionado.</p>}</div>{offer.proposal && <div className="offer-detail-text"><h3>Proposta gerada</h3><p><DownloadLink url={`/api/offers/${offer.id}/proposal.pdf`} name={`proposta-${offer.code}.pdf`}>Baixar PDF da proposta</DownloadLink></p></div>}{(offer.proposal || offer.proposalEmails?.length > 0) && <ProposalEmailHistory offer={offer} />}</section>
           <section className="offer-materials-card offer-resources-card">
             <fieldset className="offer-resource-fields" disabled={Boolean(offer.orderCode)}>
             <EntryModeChoice value={entryMode} onChange={changeEntryMode} />
-            <div className="offer-resource-heading"><div><span className="offer-details-section-title">Materiais necessários</span><p>{perPiece ? `Informe a quantidade de uma peça, em quilos (kg), em metros (m) ou em unidades (un). O total é calculado para as ${offer.quantity} ${Number(offer.quantity) === 1 ? 'peça' : 'peças'} do pedido.` : 'Adicione os materiais e informe a quantidade, em quilos (kg), em metros (m) ou em unidades (un).'}</p></div><button className="offer-add-resource-button" type="button" onClick={() => { if (editingMaterialId == null && materialFormOpen) return closeMaterialForm(); closeMaterialForm(); setMaterialFormOpen(true) }}><Icon name="plus" />Adicionar material</button></div>
+            <div className="offer-resource-heading"><div><span className="offer-details-section-title">Materiais necessários</span><p>{perPiece ? `Informe a quantidade de uma peça, em quilos (kg), em metros (m), em unidades (un) ou em conjuntos (cj). O total é calculado para as ${offer.quantity} ${Number(offer.quantity) === 1 ? 'peça' : 'peças'} do pedido.` : 'Adicione os materiais e informe a quantidade, em quilos (kg), em metros (m), em unidades (un) ou em conjuntos (cj).'}</p></div><button className="offer-add-resource-button" type="button" onClick={() => { if (editingMaterialId == null && materialFormOpen) return closeMaterialForm(); closeMaterialForm(); setMaterialFormOpen(true) }}><Icon name="plus" />Adicionar material</button></div>
             {materialFormOpen && <form className="offer-inline-form" onSubmit={addMaterial} aria-label={editingMaterialId != null ? 'Editar material' : 'Adicionar material'}>
               <label>Material *<div className="material-autocomplete"><div className="material-autocomplete-input">
                 <input className="upper-input" value={materialForm.name} autoComplete="off" role="combobox" aria-expanded={materialSuggestionsOpen} aria-controls="offer-material-suggestions" onFocus={() => setMaterialSuggestionsOpen(true)} onBlur={(event) => { if (!event.currentTarget.closest('.material-autocomplete')?.contains(event.relatedTarget)) setMaterialSuggestionsOpen(false) }} onChange={(event) => { selectInventoryMaterial(event.target.value); setMaterialSuggestionsOpen(true) }} onKeyDown={(event) => { if (event.key === 'Escape') setMaterialSuggestionsOpen(false); if (event.key === 'ArrowDown' && matchingInventory.length) { event.preventDefault(); document.getElementById('offer-material-suggestions')?.querySelector('button')?.focus() } }} placeholder="Digite para buscar no estoque" required /><span>⌄</span>
@@ -1844,6 +1851,8 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
         </div>
         <div className="offer-details-footer"><div className="offer-details-tip"><span>♡</span><p>Os anexos ficam vinculados à solicitação e à OS gerada.</p></div><div className="offer-details-actions"><label className="offer-attachment-button">📎 <strong>Anexo</strong><input className="visually-hidden-file" type="file" onChange={addAttachment} /></label>{offer.orderCode ? <button className="offer-proposal-button" type="button" onClick={() => onSelectOrder(offer.orderCode)}>Ver OS {offer.orderCode}</button> : <button className="offer-proposal-button" type="button" onClick={goToProposal} disabled={saving}><Icon name="edit" /><strong>{saving ? 'Salvando...' : 'Fazer proposta'}</strong></button>}</div></div>{attachmentError && <p className="workflow-error" role="alert">{attachmentError}</p>}
       </main>
+      {editingInfo && <OfferInfoEditModal offer={offer} onClose={() => setEditingInfo(false)} onSaved={async (result, { resized }) => { await onRefresh(); if (resized) setResourcesVersion((value) => value + 1); setEditingInfo(false); setInfoNotice(result.proposalDiscarded ? 'Informações atualizadas. A proposta foi descartada: gere de novo com os dados corrigidos.' : 'Informações atualizadas.') }} />}
+      {infoNotice && <p className="app-toast" role="status"><CircleCheck size={16} aria-hidden="true" />{infoNotice}</p>}
     </div>
   )
 }

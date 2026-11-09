@@ -6661,6 +6661,22 @@
     background: #98791b1f;
     border-color: #ae944766
 }
+:root[data-theme="dark"] .offer-information-heading small {
+    color: #b4c1cf
+}
+:root[data-theme="dark"] .offer-information-edit {
+    border: 1px solid #36516f;
+    background: #162b43;
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .offer-information-edit:hover {
+    background: #203c59
+}
+:root[data-theme="dark"] .offer-info-edit-notes {
+    border: 1px solid #36516f;
+    background: #3c3220;
+    color: #ebc789
+}
 @media (min-width: 2200px) {
     :root[data-theme="dark"] .proposal-card-column + .proposal-card-column {
         border-top: 1px solid #36516f

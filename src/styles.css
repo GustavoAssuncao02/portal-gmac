@@ -7521,3 +7521,12 @@ button {
 /* Names of machines, services, stages and stock materials: typed and kept as written, shown in capital letters (displayCase.js). */
 input.upper-input { text-transform: uppercase; }
 input.upper-input::placeholder { text-transform: none; }
+/* Detalhes da oferta: editar as informações do serviço (OfferInfoEditModal.jsx). */
+.offer-information-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 25px; }
+.offer-information-heading .offer-details-section-title { margin-bottom: 0; }
+.offer-information-heading small { color: #6b84a0; font-size: 12px; }
+.offer-information-edit { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 5px 10px; border: 1px solid #b9d0e4; border-radius: 6px; background: #ffffff; color: #0c4c91; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.offer-information-edit:hover { background: #eaf2fb; }
+.offer-info-edit-fields { min-width: 0; margin: 0; padding: 0; border: 0; }
+.offer-info-edit-notes { display: grid; gap: 8px; margin: 14px 0 0; padding: 12px 14px; border: 1px solid #f1d39a; border-radius: 8px; background: #fff8ea; color: #6b4a12; font-size: 13px; line-height: 1.45; }
+.offer-info-edit-notes p { margin: 0; }

@@ -19,6 +19,7 @@ import { migrateStageLabor, stageLaborEntries } from './stageLabor.js'
 import { proposalMargins, PROPOSAL_MARGIN_GAP, declineReasons } from './proposalMath.js'
 import { requireAdminOrOperator } from './access.js'
 import { documentDigits, documentKind, isClientDocument } from './clientDocument.js'
+import { materialsStock } from './materialStock.js'
 import { registerOfferContact } from './requesters.js'
 import { actorOf } from './registryHistory.js'
 import { currentServiceLocation, serviceLocationLabel, validServiceLocation } from './serviceLocation.js'
@@ -318,6 +319,63 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
     } catch (error) { next(error) }
   })
   configured.put(['/offers/:id/resources', '/offers/:id/proposal-draft'], requireAdmin)
+  // Informações do serviço of an offer not yet accepted: client (CPF/CNPJ and name), requester, buyer, piece, request date,
+  // requested deadline, quantity and label. Everything but the request date goes printed on the proposal, so changing it
+  // discards a generated proposal, as a change of resources does; the saved options (proposalDraft) stay and the proposal
+  // is generated again with the right data. Launched per piece, materials and stage times follow the new quantity. An
+  // accepted offer is corrected in its OS (Editar OS), which keeps the history of the order.
+  configured.put('/offers/:id', requireAdmin, async (request, response) => {
+    const body = request.body ?? {}
+    const fields = { cnpj: clean(body.cnpj, 18), company: clean(body.company, 160), service: clean(body.service, 160), labelNumber: clean(body.labelNumber, 80), deadline: String(body.deadline || ''), quantity: Number(body.quantity) }
+    const requestedDay = String(body.requestedAt || '')
+    // A day that exists (2026-02-30 does not: Date would roll it into March).
+    const isDay = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value) && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value
+    if (!isClientDocument(fields.cnpj) || !fields.company || !fields.service || !isDay(fields.deadline) || !isDay(requestedDay) || !Number.isInteger(fields.quantity) || fields.quantity < 1 || fields.quantity > 1000000000) {
+      return response.status(400).json({ message: 'Preencha CNPJ (14 dígitos) ou CPF (11), empresa, peça/serviço, data da solicitação, prazo e quantidade.' })
+    }
+    try {
+      const document = documentDigits(fields.cnpj)
+      const client = accounts && document ? (await accounts.clients()).find((item) => documentDigits(item.document) === document) || null : null
+      // Per piece, the totals of the materials change with the quantity and so does what is left to buy.
+      const current = (await readStore()).offers.find((entry) => entry.id === request.params.id)
+      const resize = current && Number(current.quantity) !== fields.quantity && current.resources?.entryMode === 'piece'
+      let inventory = null
+      if (resize && pool && current.resources?.materials?.length) [inventory] = await pool.query('SELECT id, name, unit, quantity_kg AS quantity FROM inventory_materials')
+      let proposalDiscarded = false
+      const offer = await mutateStore((store) => {
+        const item = store.offers.find((entry) => entry.id === request.params.id)
+        if (!item) throw Object.assign(new Error('Oferta não encontrada.'), { status: 404 })
+        if (item.orderCode) throw Object.assign(new Error(`Esta oferta já virou a ${item.orderCode}: corrija os dados pela OS, em Editar OS.`), { status: 409 })
+        if (item.status === 'rejected') throw Object.assign(new Error('Oferta recusada não pode ser editada: desfaça a recusa antes.'), { status: 409 })
+        const requester = registerOfferContact(store, 'requesters', client, body.requester, actorOf(request))
+        const buyer = registerOfferContact(store, 'buyers', client, body.buyer, actorOf(request))
+        const next = { ...fields, requester: requester.name, requesterId: requester.id, buyer: buyer.name, buyerId: buyer.id }
+        // The same document typed with another mask keeps the one already saved.
+        if (documentDigits(item.cnpj) === document) next.cnpj = item.cnpj
+        const printed = ['cnpj', 'company', 'requester', 'buyer', 'service', 'labelNumber', 'deadline', 'quantity']
+        const changed = printed.some((key) => String(item[key] ?? '') !== String(next[key] ?? ''))
+        const quantityChanged = Number(item.quantity) !== fields.quantity
+        Object.assign(item, next)
+        // The list and the details show the day of the request (UTC): a new day keeps it at noon of that day.
+        if (requestedDay !== String(item.requestedAt || '').slice(0, 10)) item.requestedAt = `${requestedDay}T12:00:00.000Z`
+        if (quantityChanged && item.resources?.entryMode === 'piece') {
+          const sized = withEntryMode(item.resources, fields.quantity)
+          const stages = item.resources.stages || []
+          const resources = { ...item.resources, materials: inventory ? materialsStock(sized.materials || [], inventory) : sized.materials || [], stageTimes: cleanStageTimes(sized.stageTimes, stages), stageTimesPerPiece: sized.stageTimesPerPiece }
+          resources.laborEntries = stageLaborEntries(resources, store, (item.resources.laborEntries || []).filter((entry) => !entry.stageCode))
+          item.resources = resources
+        }
+        if (changed && item.proposal) {
+          item.proposal = null
+          item.status = 'review'
+          proposalDiscarded = true
+        }
+        item.updatedAt = new Date().toISOString()
+        return item
+      })
+      response.json({ item: offer, proposalDiscarded })
+    } catch (error) { handleError(response, error) }
+  })
   configured.get('/offers/:id/attachments/:attachmentId', requireAdminOrOperator)
   configured.use(router)
   // Purchase orders back the billing of a service. They belong to the OS only (not the offer) and never reach operators.
