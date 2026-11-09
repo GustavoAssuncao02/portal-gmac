@@ -7,6 +7,7 @@ import { notificationDefaults, notificationOptions, notificationSoundDefault, va
 import { employeeRecords, isStaff, staffAccountId } from './employeeAccess.js'
 import { clientContactKinds, clientRequesters } from './requesters.js'
 import { recordPasswordChange } from './passwordReset.js'
+import { actorOf, recordRegistryChange } from './registryHistory.js'
 import { blockedMessage, createLoginThrottle } from './loginThrottle.js'
 
 const sessions = new Map()
@@ -211,7 +212,14 @@ export function createAccountService(pool, env = process.env) {
     }
     return (await readStore()).clients || []
   }
-  async function save(kind, id, body) {
+  // What the history of Cadastros shows of a client or an administrator (never the password).
+  // The client or administrator is already saved in its own table: a failure to record the history is logged, not raised.
+  const recordHistory = (change) => mutateStore((store) => recordRegistryChange(store, change)).catch((error) => console.error('Falha ao registrar o histórico do cadastro:', error.message))
+  const registryView = (kind, row) => row && (kind === 'clients'
+    ? { name: row.name, documentType: row.documentType, document: row.document, email: row.email || '', notes: row.notes || '' }
+    : { name: row.name, cpf: row.cpf, email: row.email || '', birthDate: row.birthDate || '' })
+  // `audit`: who saved ({ actor }) and, when the change came from elsewhere, why ({ note }).
+  async function save(kind, id, body, audit = {}) {
     const name = String(body.name || '').trim().slice(0, 120)
     const isClient = kind === 'clients'
     // A client may have no e-mail (stored as NULL, so several blanks do not collide in the unique index); administrators need one.
@@ -228,6 +236,9 @@ export function createAccountService(pool, env = process.env) {
       fields.passwordHash = await bcrypt.hash(body.password, 12)
     }
     if (rows.some((item) => String(item.id) !== String(id) && (email && item.email === email || (isClient ? item.document === fields.document : digits(item.cpf) === fields.cpf)))) fail(409, 'Documento ou e-mail já cadastrado.')
+    // History of Cadastros: in MySQL it is recorded after the save; without MySQL the registration lives in the store and
+    // its history goes in the same change.
+    const historyOf = (saved) => ({ registry: kind, recordId: saved.id, type: current ? 'edited' : 'created', actor: audit.actor, before: registryView(kind, current), after: registryView(kind, saved), note: audit.note || '', extra: !isClient && current && body.password ? [{ field: 'password', before: '', after: '' }] : [] })
     let item
     if (pool) {
       const table = isClient ? 'clients' : 'users'
@@ -246,18 +257,22 @@ export function createAccountService(pool, env = process.env) {
       if (id != null) {
         const row = store[kind].find((entry) => String(entry.id) === String(id))
         Object.assign(row, fields)
+        recordRegistryChange(store, historyOf(row))
         return row
       }
       const row = { id: isClient ? randomUUID() : Math.max(0, ...store.admins.map((entry) => Number(entry.id) || 0)) + 1, ...fields, createdAt: new Date().toISOString() }
       if (store[kind].some((entry) => email && entry.email === email || (isClient ? entry.document === fields.document : entry.cpf === fields.cpf))) fail(409, 'Cadastro duplicado.')
       store[kind].push(row)
+      recordRegistryChange(store, historyOf(row))
       return row
     })
     if (!isClient && body.password && id != null) await revokeAccountSessions(id)
+    if (pool) await recordHistory(historyOf(item))
     return isClient ? item : safe(item)
   }
-  async function remove(kind, id) {
+  async function remove(kind, id, audit = {}) {
     if (kind === 'admins' && String(id) === '0') fail(409, 'A conta local principal não pode ser excluída.')
+    const current = (kind === 'clients' ? await clients() : await admins()).find((item) => String(item.id) === String(id))
     if (kind === 'clients') {
       const store = await readStore()
       for (const [contacts, { singular, plural, screen }] of Object.entries(clientContactKinds)) {
@@ -272,12 +287,14 @@ export function createAccountService(pool, env = process.env) {
       const index = (store[kind] || []).findIndex((item) => String(item.id) === String(id))
       if (index < 0) fail(404, 'Cadastro não encontrado.')
       store[kind].splice(index, 1)
+      if (current) recordRegistryChange(store, { registry: kind, recordId: id, type: 'deleted', actor: audit.actor, before: registryView(kind, current) })
       if (kind === 'admins' && store.adminNotificationPreferences) store.adminNotificationPreferences = store.adminNotificationPreferences.filter((item) => String(item.userId) !== String(id))
     })
     if (pool && kind === 'admins') await mutateStore((store) => {
       if (store.adminNotificationPreferences) store.adminNotificationPreferences = store.adminNotificationPreferences.filter((item) => String(item.userId) !== String(id))
     })
     if (kind === 'admins') await revokeAccountSessions(id)
+    if (pool && current) await recordHistory({ registry: kind, recordId: id, type: 'deleted', actor: audit.actor, before: registryView(kind, current) })
   }
   async function getNotificationSettings(id) {
     if (!await account(id)) fail(404, 'Conta não encontrada.')
@@ -378,7 +395,7 @@ export function createAccountsRouter(service) {
     router.get(`/${kind}`, async (request, response, next) => { try { response.json({ items: visible(request, kind, await service[kind]()) }) } catch (error) { next(error) } })
     for (const method of ['post', 'put']) router[method](method === 'post' ? `/${kind}` : `/${kind}/:id`, ...changes, async (request, response, next) => {
       try {
-        const item = await service.save(kind, request.params.id, request.body)
+        const item = await service.save(kind, request.params.id, request.body, { actor: actorOf(request) })
         if (kind === 'admins' && method === 'put' && request.body?.password) await recordPasswordChange('admin', item, { id: request.adminId, name: request.adminName })
         response.json({ item })
       } catch (error) { next(error) }
@@ -386,7 +403,7 @@ export function createAccountsRouter(service) {
     router.delete(`/${kind}/:id`, ...changes, async (request, response, next) => {
       try {
         if (kind === 'admins' && String(request.adminId) === request.params.id) fail(409, 'Você não pode excluir sua própria conta.')
-        await service.remove(kind, request.params.id)
+        await service.remove(kind, request.params.id, { actor: actorOf(request) })
         response.json({ ok: true })
       } catch (error) { next(error) }
     })

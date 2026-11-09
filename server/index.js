@@ -16,6 +16,7 @@ import createMachinesRouter from './machines.js'
 import createLaborServicesRouter, { ensureLaborServices } from './laborServices.js'
 import createRegistriesRouter, { ensurePauseReasons, ensureSectors } from './registries.js'
 import createRequestersRouter from './requesters.js'
+import createRegistryHistoryRouter from './registryHistory.js'
 import createProposalEmailsRouter from './proposalEmails.js'
 import createStageCatalogRouter, { ensureStageCatalog } from './stageCatalog.js'
 import { announceRelease } from './notificationEvents.js'
@@ -39,6 +40,7 @@ import { createApiRateLimiter } from './rateLimit.js'
 import { ensureInventoryAppearance } from './inventoryAppearance.js'
 import { configureWeb, serveInterface, trustProxySetting } from './webServer.js'
 import { startDataBackups } from './dataBackup.js'
+import { missingFilesReport, missingStoredFiles, storedFileInventory } from './storedFiles.js'
 import { configureStore, importJsonStore, onStoreChange, readStore } from './store.js'
 import { createLiveUpdates } from './liveUpdates.js'
 import { requireAdminOrOperator } from './access.js'
@@ -115,6 +117,7 @@ app.use('/api', createMachinesRouter(requireAdmin, pool))
 app.use('/api', createLaborServicesRouter(requireAdmin, pool))
 app.use('/api', createRegistriesRouter(requireAdmin, pool))
 app.use('/api', createRequestersRouter(accounts, requireAdmin))
+app.use('/api', createRegistryHistoryRouter(requireAdmin))
 app.use('/api', createProposalEmailsRouter(accounts, requireAdmin))
 app.use('/api', createStageCatalogRouter(requireAdmin, pool))
 app.use('/api', createPlanningRouter(requireAdmin, pool))
@@ -141,6 +144,11 @@ await refreshInventoryNotifications()
 setInterval(refreshInventoryNotifications, 10000).unref()
 setInterval(() => payablesRouter.sweep().catch((error) => console.error('Falha ao verificar vencimentos:', error.message)), 60000).unref()
 startDataBackups(dataDirectory, readStore)
+// Attachments live in the data folder. Without DATA_DIR on a volume a redeploy erases the files and keeps their records,
+// and the attachment then fails to open: the log says where the files are and how many are missing.
+console.log(`Pasta de dados e anexos: ${dataDirectory}`)
+if (!process.env.DATA_DIR && (production || host !== '127.0.0.1')) console.warn('ATENCAO: DATA_DIR não definido. Os anexos ficam dentro da pasta do código e são apagados a cada deploy; aponte DATA_DIR para uma pasta declarada como volume.')
+readStore().then((store) => missingStoredFiles(storedFileInventory(store, dataDirectory))).then((areas) => { for (const line of missingFilesReport(areas)) console.log(line) }).catch((error) => console.error('Falha ao conferir os anexos:', error.message))
 setInterval(() => receivablesRouter.sweep().catch((error) => console.error('Falha ao verificar recebimentos:', error.message)), 60000).unref()
 // CNAE, NCM, NBS and the companies' registered activities are refreshed every Sunday at midnight.
 if (flag(process.env.FISCAL_CATALOG_SYNC) !== 'off') startFiscalCatalogSchedule()

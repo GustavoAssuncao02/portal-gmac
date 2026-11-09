@@ -35,9 +35,9 @@ try {
   const stages = page.getByRole('form', { name: 'Etapas da OS' })
   await stages.waitFor()
   const rows = stages.locator('fieldset > div')
-  assert.match(await rows.nth(0).innerText(), /Tornearia[\s\S]*0\/10 peças[\s\S]*30h previstas · Torno Convencional 1/)
-  assert.match(await rows.nth(1).innerText(), new RegExp(`Pintura[\\s\\S]*10h previstas · ${service.name}`))
-  assert.match(await rows.nth(2).innerText(), /Corte a plasma[\s\S]*15h previstas · Plasma 01/)
+  assert.match(await rows.nth(0).innerText(), /TORNEARIA[\s\S]*0\/10 peças[\s\S]*30h previstas · TORNO CONVENCIONAL 1/)
+  assert.match(await rows.nth(1).innerText(), new RegExp(`Pintura[\\s\\S]*10h previstas · ${service.name}`, 'i'))
+  assert.match(await rows.nth(2).innerText(), /Corte a plasma[\s\S]*15h previstas · Plasma 01/i)
   await page.screenshot({ path: 'test-results/order-stage-plans-view.png', fullPage: true })
 
   // Editing: the fields come filled in; a stage without time is refused; the change is saved for the OS.

@@ -29,7 +29,7 @@ try {
   const select = page.getByLabel('Máquina ou serviço de Tornearia', { exact: true })
   await select.waitFor()
   const groups = await select.locator('optgroup').evaluateAll((items) => items.map((group) => [group.label, [...group.querySelectorAll('option')].map((option) => `${option.textContent}=${option.value}`)]))
-  assert.deepEqual(groups.slice(0, 2), [['Máquinas · Usinagem', ['Torno CNC=machine:u1', 'Bancada=machine:u2', 'Têmpera=machine:t1']], ['Máquinas · Caldeiraria', ['Têmpera=machine:t1', 'Policorte=machine:c1', 'Bancada=machine:c2']]])
+  assert.deepEqual(groups.slice(0, 2), [['Máquinas · Usinagem', ['TORNO CNC=machine:u1', 'BANCADA=machine:u2', 'TÊMPERA=machine:t1']], ['Máquinas · Caldeiraria', ['TÊMPERA=machine:t1', 'POLICORTE=machine:c1', 'BANCADA=machine:c2']]])
   const saved = page.waitForResponse((response) => response.url().endsWith(`/offers/${offer.id}/resources`) && response.request().method() === 'PUT')
   await select.selectOption('machine:c2')
   assert.equal((await saved).status(), 200)

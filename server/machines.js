@@ -6,6 +6,7 @@ import { activityDateRange } from './employeeActivity.js'
 import { activeSessions } from './operationSessions.js'
 import { requireAdminOrOperator } from './access.js'
 import { registerSectorNames } from './registries.js'
+import { actorOf } from './registryHistory.js'
 import { machineDay, machineUsageReport } from './machineUsage.js'
 
 export async function machineRows() { return (await readStore()).machines || [] }
@@ -127,7 +128,7 @@ export default function createMachinesRouter(requireAdmin, pool) {
       const found = await mutateStore((store) => {
         store.machines ||= []
         // The sectors come from Cadastros > Setores, with its spelling.
-        item.sectors = registerSectorNames(store, item.sectors)
+        item.sectors = registerSectorNames(store, item.sectors, { actor: actorOf(request), note: `Cadastrado ao salvar a máquina ${item.name}.` })
         item.sector = sectorLabel(item.sectors)
         if (method === 'post') { store.machines.push(item); return item }
         const current = store.machines.find((row) => String(row.id) === request.params.id)

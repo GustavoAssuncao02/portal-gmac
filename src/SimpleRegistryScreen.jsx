@@ -5,12 +5,15 @@ import { PayableModal } from './PayableModal.jsx'
 import { payableRequest } from './payablesApi.js'
 import PauseReasonsChart from './PauseReasonsChart.jsx'
 import { SortableRows, SortHeader, cellValue } from './RegistryList.jsx'
+import RegistryHistoryModal, { RegistryInfoButton } from './RegistryHistoryModal.jsx'
+
+const historyKeys = { '/sectors': 'sectors', '/banks': 'banks', '/pause-reasons': 'pauseReasons' }
 
 // A registration made only of names (Setores, Razões de pausas): list, add, rename and delete in a modal, like Classificações.
 // `countLabel`/`count` show how many records use each item, when the screen has that information; `fields` adds text
 // fields after the name ([key, label, maxLength]), shown as columns too.
 export default function SimpleRegistryScreen({ title, singular, article = 'o', endpoint, nameLabel, countLabel, count, fields = [], chart = false, Sidebar, WorkspaceTabs, navigationProps }) {
-  const [items, setItems] = useState(null), [error, setError] = useState(''), [editing, setEditing] = useState(null), [removing, setRemoving] = useState(null), [version, setVersion] = useState(0)
+  const [items, setItems] = useState(null), [error, setError] = useState(''), [editing, setEditing] = useState(null), [removing, setRemoving] = useState(null), [version, setVersion] = useState(0), [history, setHistory] = useState(null)
   useEffect(() => {
     let active = true
     payableRequest(endpoint).then((result) => { if (active) { setItems(result.items); setError('') } }).catch((caught) => { if (active) setError(caught.message) })
@@ -25,10 +28,12 @@ export default function SimpleRegistryScreen({ title, singular, article = 'o', e
       {sorted.rows.map((item) => <tr key={item.id}><td>{item.name}</td>{fields.map(([key, label]) => <td key={key} data-label={label}>{item[key] || '—'}</td>)}{countLabel && <td className="simple-registry-count" data-label={countLabel}>{count(item)}</td>}<td><div className="payable-registry-actions">
         <button className="payable-icon" type="button" title="Editar" aria-label={`Editar ${item.name}`} onClick={() => setEditing(item)}><Pencil size={16} /></button>
         <button className="payable-icon payable-danger" type="button" title="Excluir" aria-label={`Excluir ${item.name}`} onClick={() => setRemoving(item)}><Trash2 size={16} /></button>
+        {historyKeys[endpoint] && <RegistryInfoButton name={item.name} onClick={() => setHistory(item)} />}
       </div></td></tr>)}
       {items && !items.length && <tr><td colSpan={fields.length + (countLabel ? 3 : 2)} className="payable-empty">Nenhum cadastro.</td></tr>}
       {!items && !error && <tr><td colSpan={fields.length + (countLabel ? 3 : 2)} className="payable-empty">Carregando...</td></tr>}
     </tbody></table>}</SortableRows></div>
+    {history && <RegistryHistoryModal registry={historyKeys[endpoint]} record={history} onClose={() => setHistory(null)} />}
     {chart && <PauseReasonsChart reasons={items || []} version={version} />}
     {editing && <NameForm title={`${editing.id ? 'Editar' : New} ${singular}`} label={nameLabel} fields={fields} source={editing} onClose={() => setEditing(null)} onSave={async (values) => { await payableRequest(editing.id ? `${endpoint}/${editing.id}` : endpoint, editing.id ? 'PUT' : 'POST', values); setEditing(null); refresh() }} />}
     {removing && <RemoveConfirm title={`Excluir ${singular}`} name={removing.name} onClose={() => setRemoving(null)} onConfirm={async () => { await payableRequest(`${endpoint}/${removing.id}`, 'DELETE'); setRemoving(null); refresh() }} />}

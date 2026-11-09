@@ -42,8 +42,15 @@ export async function receiveFile(request, directory, id, limits = uploadLimits(
   return { size: output.bytesWritten, discard }
 }
 
-// Sends a stored file as it is read, also without loading it whole. A missing file fails before anything is sent.
+export const missingFileMessage = 'O documento deste anexo não está mais no servidor. Exclua o anexo e envie o arquivo novamente.'
+// Sends a stored file as it is read, also without loading it whole. A missing file fails before anything is sent: the
+// record exists but its file is gone from the data folder (DATA_DIR outside a volume loses the files on a redeploy).
 export async function sendStoredFile(response, file) {
-  await fs.stat(file)
+  try { await fs.stat(file) } catch (error) {
+    if (error.code !== 'ENOENT') throw error
+    console.error(`Anexo sem arquivo no disco: ${file}`)
+    response.removeHeader('Content-Disposition')
+    throw failure(404, missingFileMessage)
+  }
   await pipeline(createReadStream(file), response)
 }

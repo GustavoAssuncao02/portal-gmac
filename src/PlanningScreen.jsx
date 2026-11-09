@@ -8,6 +8,7 @@ import { SortableRows, SortHeader } from './RegistryList.jsx'
 import './adminTools.css'
 import './planning.css'
 import FactoryMap from './FactoryMap.jsx'
+import { upper } from './displayCase.js'
 
 const HOUR_WIDTH = 88
 const PX_PER_MINUTE = HOUR_WIDTH / 60
@@ -113,7 +114,7 @@ export default function PlanningScreen({ Sidebar, WorkspaceTabs, navigationProps
       <strong className="planning-period">{view === 'day' ? longDate(date) : view === 'week' ? `Semana de ${shortDate(from)} a ${shortDate(to)}` : monthLabel(date)}</strong>
       <div className="planning-filters">
         <select aria-label="Setor" value={sector} onChange={(event) => { setSector(event.target.value); setMachine('') }}><option value="">Todos os setores</option>{allSectors.map((name) => <option key={name} value={name}>{name}</option>)}</select>
-        <select aria-label="Máquina" value={machine} onChange={(event) => setMachine(event.target.value)}><option value="">Todas as máquinas</option>{(data?.resources || []).filter((item) => item.type === 'machine' && (!sector || item.sectors.includes(sector))).map((item) => <option key={item.id} value={resourceKey(item.type, item.id)}>{item.name}</option>)}</select>
+        <select aria-label="Máquina" value={machine} onChange={(event) => setMachine(event.target.value)}><option value="">Todas as máquinas</option>{(data?.resources || []).filter((item) => item.type === 'machine' && (!sector || item.sectors.includes(sector))).map((item) => <option key={item.id} value={resourceKey(item.type, item.id)}>{upper(item.name)}</option>)}</select>
       </div>
     </div>
     {error && <p className="admin-tool-error" role="alert">{error}</p>}
@@ -199,7 +200,7 @@ function DayAgenda({ date, today, now, resources, blocks, actual, selectedAt, on
           const planned = own.reduce((sum, block) => sum + overlap(blockStart(block), blockEnd(block), from), 0)
           const real = actual.filter((item) => item.resourceType === resource.type && item.resourceId === resource.id)
           return [<div key={`label-${resource.type}-${resource.id}`} className={`planning-label${resource.maintenance ? ' planning-label--maintenance' : ''}`}>
-              <strong>{resource.name}</strong><span>{resource.sectors.map((name) => <em key={name}>{name}</em>)}</span>
+              <strong>{upper(resource.name)}</strong><span>{resource.sectors.map((name) => <em key={name}>{name}</em>)}</span>
               <small>{resource.maintenance ? <><Wrench size={12} aria-hidden="true" /> Em manutenção</> : `${duration(planned)} planejadas · ${percent(planned / 1440)}`}</small></div>,
             <div key={`track-${resource.type}-${resource.id}`} className={`planning-track${resource.maintenance ? ' planning-track--maintenance' : ''}`} aria-label={`Agenda de ${resource.name}`}
               onClick={(event) => onPlan({ resourceKey: resourceKey(resource.type, resource.id), start: from + minuteAt(event, event.currentTarget) * 60000 })}
@@ -216,7 +217,7 @@ function DayAgenda({ date, today, now, resources, blocks, actual, selectedAt, on
                 return [<button key={block.id} type="button" className={`planning-block planning-block--${block.status}${drag?.id === block.id ? ' planning-block--dragging' : ''}`} style={{ left: (start - from) / 60000 * PX_PER_MINUTE + shift * PX_PER_MINUTE, width: Math.max(18, overlap(blockStart(block), blockEnd(block), from) * PX_PER_MINUTE - 2) }}
                   title={`${block.orderCode} · ${block.service} · ${block.stageName}\n${clockTime(blockStart(block))}–${clockTime(blockEnd(block))} (${duration(block.minutes)}) · ${statusLabels[block.status]}${block.delayMinutes ? ` · ${duration(block.delayMinutes)} de atraso` : ''}${block.earlyMinutes ? ` · ${duration(block.earlyMinutes)} antes do previsto` : ''}`}
                   onPointerDown={(event) => pointerDown(event, block)} onPointerMove={drag?.id === block.id ? pointerMove : undefined} onPointerUp={(event) => pointerUp(event, block)} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onEdit(block) } }}>
-                  <strong>{block.orderCode} · {block.stageName}</strong><span>{shift ? `→ ${clockTime(blockStart(block) + shift * 60000)}` : `${clockTime(blockStart(block))}–${clockTime(blockEnd(block))}`}{block.urgency === 'emergency' ? ' · Emergência' : ''}{block.status === 'late' && block.delayMinutes > 0 && <b> · {duration(block.delayMinutes)} de atraso</b>}{block.status === 'running' && ` · ${block.progress}%`}</span>
+                  <strong>{block.orderCode} · {upper(block.stageName)}</strong><span>{shift ? `→ ${clockTime(blockStart(block) + shift * 60000)}` : `${clockTime(blockStart(block))}–${clockTime(blockEnd(block))}`}{block.urgency === 'emergency' ? ' · Emergência' : ''}{block.status === 'late' && block.delayMinutes > 0 && <b> · {duration(block.delayMinutes)} de atraso</b>}{block.status === 'running' && ` · ${block.progress}%`}</span>
                   {block.status === 'running' && <i className="planning-progress" style={{ width: `${block.progress}%` }} aria-hidden="true" />}
                 </button>,
                 overrun && overrun[1] > overrun[0] && <span key={`${block.id}-overrun`} className="planning-overrun" style={{ left: (overrun[0] - from) / 60000 * PX_PER_MINUTE - 2, width: (overrun[1] - overrun[0]) / 60000 * PX_PER_MINUTE + 2 }}
@@ -240,7 +241,7 @@ function WeekTable({ from, machines, blocks, today, onOpen }) {
   return <section className="planning-agenda planning-week" aria-labelledby="planning-week-title">
     <header><h2 id="planning-week-title">Semana por máquina</h2><p>Horas planejadas e ocupação de cada máquina (24 h por dia). Clique num dia para ver o cronograma.</p></header>
     <div className="planning-table-scroll"><table><thead><tr><th>Máquina</th>{days.map((day, index) => <th key={day} className={day === today ? 'planning-today-column' : ''}><button type="button" onClick={() => onOpen(day)}>{weekDays[index]} {shortDate(day)}</button></th>)}</tr></thead>
-      <tbody>{machines.map((item) => <tr key={item.id}><th scope="row">{item.name}{item.maintenance && <small> · em manutenção</small>}</th>{days.map((day) => {
+      <tbody>{machines.map((item) => <tr key={item.id}><th scope="row">{upper(item.name)}{item.maintenance && <small> · em manutenção</small>}</th>{days.map((day) => {
         const own = blocks.filter((block) => block.resourceType === 'machine' && String(block.resourceId) === item.id)
         const minutes = own.reduce((sum, block) => sum + overlap(blockStart(block), blockEnd(block), dayStart(day)), 0)
         const late = own.some((block) => block.status === 'late' && overlap(blockStart(block), blockEnd(block), dayStart(day)) > 0)
@@ -275,7 +276,7 @@ function MonthCalendar({ from, month, sectors, resources, blocks, today, onOpen 
 // The OS waiting for a plan, each one with its stages in order: the machine or service defined for the stage and the time
 // still to plan. "Planejar" opens all of them together.
 function Backlog({ rows, resources, fit, onClearFit, onPlan }) {
-  const nameOf = (stage) => stage.suggested ? resources.find((item) => item.type === stage.suggested.type && item.id === String(stage.suggested.id))?.name || stage.suggested.name : 'Sem máquina definida'
+  const nameOf = (stage) => stage.suggested ? upper(resources.find((item) => item.type === stage.suggested.type && item.id === String(stage.suggested.id))?.name || stage.suggested.name) : 'Sem máquina definida'
   const fits = (order) => !fit || order.stages.some((stage) => stageKeyOf(stage) === fit.resourceKey && stage.toPlanMinutes != null && stage.toPlanMinutes <= fit.minutes)
   const orders = groupBacklog(rows).filter(fits)
   return <section className="planning-backlog" aria-labelledby="planning-backlog-title">
@@ -283,7 +284,7 @@ function Backlog({ rows, resources, fit, onClearFit, onPlan }) {
     <div className="planning-table-scroll"><SortableRows rows={orders} columns={[{ key: "OS", label: "OS", value: (order) => order.orderCode }, { key: "Etapas a planejar", label: "Etapas a planejar", value: (order) => order.stages.length, numeric: true }, { key: "Prazo", label: "Prazo", value: (order) => order.deadline, numeric: true }, { key: "Ação", label: "Ação" }]}>{(sorted) => <table><thead><tr><SortHeader column={sorted.columns[0]} list={sorted} /><SortHeader column={sorted.columns[1]} list={sorted} /><SortHeader column={sorted.columns[2]} list={sorted} /><th><span className="sr-only">Ação</span></th></tr></thead>
       <tbody>{sorted.rows.map((order) => <tr key={order.orderCode} draggable onDragStart={(event) => { event.dataTransfer.setData('text/plain', JSON.stringify({ orderCode: order.orderCode })); event.dataTransfer.effectAllowed = 'copy' }}>
         <td><strong>{order.orderCode}</strong><small>{order.service} · {order.company}</small></td>
-        <td><ol className="planning-backlog-stages">{order.stages.map((stage) => <li key={stage.stageCode}><b>{stage.position}</b><span><strong>{stage.stageName}</strong> · {nameOf(stage)}<small>{stage.toPlanMinutes == null ? <span className="planning-warning">Sem tempo previsto</span> : `${duration(stage.toPlanMinutes)} a planejar`} · {stage.done} de {stage.quantity} peças</small></span></li>)}</ol></td>
+        <td><ol className="planning-backlog-stages">{order.stages.map((stage) => <li key={stage.stageCode}><b>{stage.position}</b><span><strong>{upper(stage.stageName)}</strong> · {nameOf(stage)}<small>{stage.toPlanMinutes == null ? <span className="planning-warning">Sem tempo previsto</span> : `${duration(stage.toPlanMinutes)} a planejar`} · {stage.done} de {stage.quantity} peças</small></span></li>)}</ol></td>
         <td>{order.deadline ? fullDate(order.deadline) : '—'}{order.urgency === 'emergency' && <span className="planning-emergency">Emergência</span>}</td>
         <td><button className="admin-tool-button" type="button" onClick={() => onPlan({ orderCode: order.orderCode })}>Planejar</button></td>
       </tr>)}
@@ -318,7 +319,7 @@ function Snapshot({ date, today, now, selectedAt, onSelect, resources, blocks, a
       <select id="planning-snapshot-time" value={selectedAt == null ? '' : clockTime(Math.floor(selectedAt / SLOT_MS) * SLOT_MS)} onChange={(event) => onSelect(event.target.value ? Date.parse(`${date}T${event.target.value}:00-03:00`) : null)}><option value="">{date === today ? 'Agora' : 'Horário'}</option>{slots.map((slot) => <option key={slot} value={slot}>{slot}</option>)}</select></header>
     {at == null ? <p className="planning-muted">Clique na régua de horas da agenda, ou escolha o horário acima, para ver quais máquinas estarão ocupadas e quais estarão livres.</p>
       : groups.map(([state, title]) => { const list = rows.filter((row) => row.state === state); return list.length > 0 && <div key={state} className={`planning-snapshot-group planning-snapshot-group--${state}`}><h3>{title} ({list.length} de {rows.length})</h3><SnapshotList>{list.map((row) => <li key={row.resource.id}>
-        <strong>{row.resource.name}</strong>
+        <strong>{upper(row.resource.name)}</strong>
         {state === 'busy' && <span>{row.block.orderCode} · {row.block.stageName} · até {clockTime(blockEnd(row.block))}</span>}
         {state === 'idle' && <span>Livre {row.freeFrom ? `das ${clockTime(Math.max(row.freeFrom, from))}` : 'desde 00:00'} {row.freeUntil && row.freeUntil < from + DAY_MS ? `às ${clockTime(row.freeUntil)}` : 'até o fim do dia'}{' '}<button type="button" className="planning-link" onClick={() => { const start = Math.max(Math.ceil(Math.max(at, now) / SLOT_MS) * SLOT_MS, row.freeFrom || 0), end = Math.min(row.freeUntil || from + DAY_MS, from + DAY_MS); onFit({ resourceKey: resourceKey(row.resource.type, row.resource.id), name: row.resource.name, start, minutes: Math.max(0, (end - start) / 60000) }) }}>ver o que cabe</button></span>}
         {state === 'unavailable' && <span>{row.resource.maintenance.reason}</span>}
@@ -331,7 +332,7 @@ function OperatorPreview({ sectors, sector, onSector, resources, blocks, now }) 
   const queue = sector ? operatorQueue(blocks, resources, [sector], now, 4) : []
   return <section className="planning-operator" aria-labelledby="planning-operator-title">
     <header><h2 id="planning-operator-title">Visão do operador <span>Prévia</span></h2><select aria-label="Setor da prévia" value={sector} onChange={(event) => onSector(event.target.value)}>{sectors.map((name) => <option key={name} value={name}>{name}</option>)}</select></header>
-    {queue.length ? <ol>{queue.map((block, index) => <li key={block.id} className={block.now ? 'planning-operator-now' : ''}><b>{block.now ? 'Agora' : block.status === 'late' ? 'Atrasado' : index === 0 || queue[index - 1].now ? 'A seguir' : 'Depois'}</b><div><strong>{block.orderCode} · {block.stageName}</strong><small>{block.resourceName} · {clockTime(blockStart(block))}–{clockTime(blockEnd(block))}</small></div></li>)}</ol>
+    {queue.length ? <ol>{queue.map((block, index) => <li key={block.id} className={block.now ? 'planning-operator-now' : ''}><b>{block.now ? 'Agora' : block.status === 'late' ? 'Atrasado' : index === 0 || queue[index - 1].now ? 'A seguir' : 'Depois'}</b><div><strong>{block.orderCode} · {upper(block.stageName)}</strong><small>{upper(block.resourceName)} · {clockTime(blockStart(block))}–{clockTime(blockEnd(block))}</small></div></li>)}</ol>
       : <p className="planning-muted">Nada planejado para {sector || 'este setor'} no período aberto.</p>}
     <p className="planning-muted">É a fila que o operador do setor vê no tablet, na ordem do plano.</p>
   </section>
@@ -476,7 +477,7 @@ function OrderPlanModal({ data, initial, date, onClose, onSaved }) {
             const resource = data.resources.find((entry) => resourceKey(entry.type, entry.id) === key)
             const clash = item ? clashOf(item) : ''
             return <li key={stage.stageCode} className={`planning-stage-row${row.checked ? '' : ' planning-stage-row--off'}`}>
-              <label className="planning-stage-check"><input type="checkbox" checked={row.checked} onChange={(event) => change(stage.stageCode, { checked: event.target.checked })} aria-label={`Planejar a etapa ${stage.stageName}`} /><b>{stage.position}</b><span><strong>{stage.stageName}</strong><small>{stageKeyOf(stage) ? name : 'Sem máquina definida na OS'} · {stage.toPlanMinutes == null ? 'sem tempo previsto na OS' : `falta planejar ${duration(stage.toPlanMinutes)}`} · {stage.done} de {stage.quantity} peças</small></span></label>
+              <label className="planning-stage-check"><input type="checkbox" checked={row.checked} onChange={(event) => change(stage.stageCode, { checked: event.target.checked })} aria-label={`Planejar a etapa ${stage.stageName}`} /><b>{stage.position}</b><span><strong>{upper(stage.stageName)}</strong><small>{stageKeyOf(stage) ? name : 'Sem máquina definida na OS'} · {stage.toPlanMinutes == null ? 'sem tempo previsto na OS' : `falta planejar ${duration(stage.toPlanMinutes)}`} · {stage.done} de {stage.quantity} peças</small></span></label>
               {row.checked && <>
                 <div className="planning-stage-fields">
                   {!stageKeyOf(stage) && <label>Máquina ou serviço<select aria-label={`Máquina ou serviço da etapa ${stage.stageName}`} value={row.resource} onChange={(event) => change(stage.stageCode, { resource: event.target.value })}><option value="">Escolher</option><optgroup label="Máquinas">{machines.map((entry) => <option key={entry.id} value={resourceKey(entry.type, entry.id)}>{entry.name}</option>)}</optgroup>{services.length > 0 && <optgroup label="Serviços (hora homem)">{services.map((entry) => <option key={entry.id} value={resourceKey(entry.type, entry.id)}>{entry.name}</option>)}</optgroup>}</select></label>}
@@ -536,10 +537,10 @@ function BlockModal({ data, block, onClose, onSaved }) {
     <button className="admin-tool-button" type="button" disabled={busy} onClick={onClose}>Cancelar</button>
     <button className="admin-tool-button admin-tool-button--primary" type="submit" form="planning-form" disabled={busy}><CalendarClock size={16} aria-hidden="true" />{busy ? 'Salvando...' : 'Salvar bloco'}</button></>}>
     <form id="planning-form" className="planning-form" onSubmit={submit}><fieldset disabled={busy}>
-      <p className="planning-order-facts"><strong>{block.orderCode} · {block.stageName}</strong> · {block.service}</p>
+      <p className="planning-order-facts"><strong>{block.orderCode} · {upper(block.stageName)}</strong> · {block.service}</p>
       {fixed ? <p className="planning-order-facts">Máquina ou serviço: <strong>{fixed.name}</strong> (definido na OS)</p> : <label>Máquina ou serviço<select value={resource} onChange={(event) => setResource(event.target.value)}>
-        <optgroup label="Máquinas">{machines.map((item) => <option key={item.id} value={resourceKey(item.type, item.id)}>{item.name}{item.maintenance ? ' (em manutenção)' : ''}</option>)}</optgroup>
-        {services.length > 0 && <optgroup label="Serviços (hora homem)">{services.map((item) => <option key={item.id} value={resourceKey(item.type, item.id)}>{item.name}</option>)}</optgroup>}
+        <optgroup label="Máquinas">{machines.map((item) => <option key={item.id} value={resourceKey(item.type, item.id)}>{upper(item.name)}{item.maintenance ? ' (em manutenção)' : ''}</option>)}</optgroup>
+        {services.length > 0 && <optgroup label="Serviços (hora homem)">{services.map((item) => <option key={item.id} value={resourceKey(item.type, item.id)}>{upper(item.name)}</option>)}</optgroup>}
       </select></label>}
       <div className="planning-form-row"><label>Dia<input type="date" value={day} onChange={(event) => event.target.value && setDay(event.target.value)} required /></label><label>Início<select value={time} onChange={(event) => setTime(event.target.value)}>{slots.map((slot) => <option key={slot} value={slot}>{slot}</option>)}</select></label></div>
       <div className="planning-form-row"><label>Duração (horas)<input type="number" min="0" step="1" inputMode="numeric" value={hours} onChange={(event) => setHours(event.target.value)} /></label><label>Minutos<input type="number" min="0" max="59" step="1" inputMode="numeric" value={minutes} onChange={(event) => setMinutes(event.target.value)} /></label><label>Peças (opcional)<input type="number" min="1" step="1" inputMode="numeric" value={quantity} onChange={(event) => setQuantity(event.target.value)} /></label></div>

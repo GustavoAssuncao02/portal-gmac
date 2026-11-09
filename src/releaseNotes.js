@@ -1,6 +1,18 @@
 // Each commit to main is a new version: add an entry at the top, with what changed in plain words for whoever uses the portal.
 export const releaseNotes = [
   {
+    version: '1.0.12',
+    date: '2026-11-09',
+    notes: [
+      'Cadastros: novo histórico de alterações em cada cadastro',
+      'Estoque: nova unidade de medida Conjunto, nomes em caixa alta',
+      'Máquinas, Serviços e Etapas: nomes em caixa alta',
+      'Ofertas e serviços: título no padrão das outras telas, dados em caixa alta',
+      'Contas a Pagar e Contas a Receber: lista de anexos mais simples, aviso quando o documento não está mais disponível',
+      'Melhorias gerais: correções de problemas e maior estabilidade do sistema',
+    ],
+  },
+  {
     version: '1.0.11',
     date: '2026-11-08',
     notes: [

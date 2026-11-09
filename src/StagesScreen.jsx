@@ -9,6 +9,7 @@ import { cachedResource, payableRequest } from './payablesApi.js'
 import { bySector } from './machineSectors.js'
 import { setStageCatalog } from '../server/serviceStages.js'
 import './stages.css'
+import { upper } from './displayCase.js'
 
 // "Etapas" (server/stageCatalog.js): the stages of the services by sector, in the order the offers show them. Dragging
 // reorders the sectors and the stages; each stage lists the machines and services it is made on (the first is the
@@ -24,7 +25,7 @@ function StageHistory({ stage, onClose }) {
   return <PayableModal title={stage ? `Histórico · ${stage.name}` : 'Histórico geral · Etapas'} wide onClose={onClose}>
     {error && <p className="admin-tool-error" role="alert">{error}</p>}
     {!rows && !error && <p className="payable-muted">Carregando...</p>}
-    {rows && <ol className="payable-history">{rows.map((row) => <li key={row.id}><div><strong>{historyLabels[row.type] || row.type}</strong>{!stage && row.stageName && <span>{row.stageName}</span>}</div><small>{new Date(row.at).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })} · {row.userName}</small>{row.changes.map((text) => <p key={text}>{text}</p>)}</li>)}{!rows.length && <li>Nenhuma alteração registrada.</li>}</ol>}
+    {rows && <ol className="payable-history">{rows.map((row) => <li key={row.id}><div><strong>{historyLabels[row.type] || row.type}</strong>{!stage && row.stageName && <span>{upper(row.stageName)}</span>}</div><small>{new Date(row.at).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })} · {row.userName}</small>{row.changes.map((text) => <p key={text}>{text}</p>)}</li>)}{!rows.length && <li>Nenhuma alteração registrada.</li>}</ol>}
   </PayableModal>
 }
 
@@ -87,8 +88,8 @@ export default function StagesScreen({ Sidebar, WorkspaceTabs, navigationProps }
             <h2>{group.name}<small>{group.stages.filter((row) => row.active).length} {group.stages.filter((row) => row.active).length === 1 ? 'etapa ativa' : 'etapas ativas'}</small></h2>
             <Sortable ids={group.stages.map((row) => row.code)} onMove={(codes) => saveOrder(groups.map((item) => item === group ? { ...item, stages: codes.map((code) => group.stages.find((row) => row.code === code)) } : item))}>
               <div className="stages-list">{group.stages.map((row) => <SortableRow key={row.code} id={row.code} label={`etapa ${row.name}`} disabled={busy} className={`stages-row${row.active ? '' : ' stages-row--inactive'}`}>
-                <div className="stages-row-name"><strong>{row.name}</strong>{!row.active && <span className="stages-badge">Desativada</span>}</div>
-                <div className="stages-row-resources">{row.resources.length ? row.resources.map((choice, index) => <span key={choiceKey(choice)} className={`stages-chip${index === 0 ? ' stages-chip--default' : ''}`}>{resourceName(choice)}{index === 0 && <small>padrão</small>}</span>) : <span className="stages-any">Qualquer máquina ou serviço</span>}</div>
+                <div className="stages-row-name"><strong>{upper(row.name)}</strong>{!row.active && <span className="stages-badge">Desativada</span>}</div>
+                <div className="stages-row-resources">{row.resources.length ? row.resources.map((choice, index) => <span key={choiceKey(choice)} className={`stages-chip${index === 0 ? ' stages-chip--default' : ''}`}>{upper(resourceName(choice))}{index === 0 && <small>padrão</small>}</span>) : <span className="stages-any">Qualquer máquina ou serviço</span>}</div>
                 <div className="payable-registry-actions">
                   <button className="payable-icon" type="button" title="Histórico" aria-label={`Ver histórico de ${row.name}`} onClick={() => setHistory({ stage: row })}><Info size={16} /></button>
                   <button className="payable-icon" type="button" title="Editar" aria-label={`Editar ${row.name}`} disabled={busy} onClick={() => { setMessage(''); setEditing(row) }}><Pencil size={16} /></button>
@@ -124,7 +125,7 @@ function StageForm({ source, sectors, machines, laborServices, onClose, onSave }
   }
   return <PayableModal title={source.code ? `Editar etapa ${source.name}` : 'Nova etapa'} busy={busy} onClose={onClose} footer={<><button className="admin-tool-button" type="button" disabled={busy} onClick={onClose}>Cancelar</button><button className="admin-tool-button admin-tool-button--primary" type="submit" form={id} disabled={busy}>Salvar</button></>}>
     <form id={id} className="payable-form registration-modal-form stages-form" onSubmit={submit}><fieldset disabled={busy}>
-      <label>Nome da etapa *<input value={name} maxLength={80} onChange={(event) => setName(event.target.value)} required autoFocus />{source.aliases?.length > 0 && <small className="payable-hint">Já se chamou {source.aliases.join(', ')}.</small>}</label>
+      <label>Nome da etapa *<input className="upper-input" value={name} maxLength={80} onChange={(event) => setName(event.target.value)} required autoFocus />{source.aliases?.length > 0 && <small className="payable-hint">Já se chamou {source.aliases.join(', ')}.</small>}</label>
       <label>Setor *<select value={sectorId} onChange={(event) => setSectorId(event.target.value)} required><option value="">Escolha o setor</option>{sectors.map((sector) => <option key={sector.id} value={sector.id}>{sector.name}</option>)}</select><small className="payable-hint">O setor é o grupo da etapa na oferta. Para um setor novo, use Cadastros › Setores.</small></label>
       <div className="stages-form-resources">
         <span className="stages-form-label">Máquinas e serviços da etapa</span>
@@ -142,8 +143,8 @@ function StageForm({ source, sectors, machines, laborServices, onClose, onSave }
         })}</ol>}
         <select aria-label="Adicionar máquina ou serviço" value="" onChange={(event) => { const [type, ...rest] = event.target.value.split(':'); if (type) setResources((current) => [...current, { type, id: rest.join(':') }]) }}>
           <option value="">+ Adicionar máquina ou serviço</option>
-          {bySector(machines.filter((item) => !chosen.has(`machine:${item.id}`))).map(([sector, items]) => <optgroup key={sector} label={`Máquinas · ${sector}`}>{items.map((item) => <option key={item.id} value={`machine:${item.id}`}>{item.name}</option>)}</optgroup>)}
-          {laborServices.some((item) => !chosen.has(`labor-service:${item.id}`)) && <optgroup label="Serviços (hora homem)">{laborServices.filter((item) => !chosen.has(`labor-service:${item.id}`)).map((item) => <option key={item.id} value={`labor-service:${item.id}`}>{item.name}</option>)}</optgroup>}
+          {bySector(machines.filter((item) => !chosen.has(`machine:${item.id}`))).map(([sector, items]) => <optgroup key={sector} label={`Máquinas · ${sector}`}>{items.map((item) => <option key={item.id} value={`machine:${item.id}`}>{upper(item.name)}</option>)}</optgroup>)}
+          {laborServices.some((item) => !chosen.has(`labor-service:${item.id}`)) && <optgroup label="Serviços (hora homem)">{laborServices.filter((item) => !chosen.has(`labor-service:${item.id}`)).map((item) => <option key={item.id} value={`labor-service:${item.id}`}>{upper(item.name)}</option>)}</optgroup>}
         </select>
       </div>
       {error && <p className="admin-tool-error" role="alert">{error}</p>}

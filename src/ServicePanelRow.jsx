@@ -6,6 +6,7 @@ import { currentPieceProgress, isEmergency } from './serviceProgress.js'
 import { pendingOrderMaterials } from '../server/pendingMaterials.js'
 import { activeEmployeeNames, operationElapsed } from '../server/operationSessions.js'
 import { formatQuantity } from '../server/materialUnits.js'
+import { upper } from './displayCase.js'
 
 export const panelDuration = (milliseconds) => {
   const seconds = Math.floor(Math.max(0, milliseconds) / 1000)
@@ -33,7 +34,7 @@ export default function ServicePanelRow({ order, now, completedView = false, hig
   return <tr className={[hasPendingMaterial ? 'admin-os-row--material-pending' : '', highlighted ? 'admin-os-row--reopened' : '', isEmergency(order) ? 'admin-os-row--emergency' : ''].filter(Boolean).join(' ') || undefined}><td><strong>{order.service}</strong><small>{order.code}{order.labelNumber ? ` · Etiqueta ${order.labelNumber}` : ''}{isEmergency(order) && <> · <span className="os-emergency-label">Emergencial</span></>}</small>{hasPendingMaterial && (onMaterialAlert ? <button type="button" className="admin-os-material-alert" title={materialTitle} onClick={() => onMaterialAlert(order.code)}><TriangleAlert size={16} aria-hidden="true" />Material pendente</button> : <span className="admin-os-material-alert" title={materialTitle}><TriangleAlert size={16} aria-hidden="true" />Material pendente</span>)}</td><td data-label="Cliente">{order.company}</td><td data-label={completedView ? 'Colaboradores' : 'Operador'}>{(completedView ? collaboratorNames(order) : activeEmployeeNames(operation)) || '—'}</td><td data-label="Etapa atual">{current ? stageGroupLabel(current) || 'Não definida' : operation.stages.length ? 'Etapas concluídas' : 'Não definida'}</td><td data-label="Peças concluídas">{completedPieces}/{order.quantity}</td>
     {!completedView && <td data-label="Progresso">{operation.stages.length ? <div className={`admin-os-stage-track admin-os-stage-track--${due.key}${operation.stages.length > 8 ? ' admin-os-stage-track--many' : ''}`} style={{ '--stage-count': operation.stages.length, '--stage-columns': pieceProgress.stages.map((stage, index) => `${String(index + 1).length + stage.name.length + 3}fr`).join(' ') }} role="group" aria-label={`Progresso da peça ${pieceProgress.pieceNumber} de ${order.quantity}. Progresso total: ${operation.progress}%. ${due.label}`}>
       {pieceProgress.stages.map((stage, index) => <span className="admin-os-stage admin-os-stage--pieces" key={stage.key}>
-        <span className="admin-os-stage-label">{index + 1}. {stage.name}</span>
+        <span className="admin-os-stage-label">{index + 1}. {upper(stage.name)}</span>
         <span className="admin-os-stage-block"><PieceTrack count={stage.count} quantity={order.quantity} working={workingStageKeys(operation, order.quantity).has(stage.key)} label={stage.name} /></span>
       </span>)}
     </div> : <span className="admin-os-stage-empty">Etapas não definidas</span>}</td>}

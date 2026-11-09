@@ -80,3 +80,28 @@ test('a material in metres links only to the stock counted in metres', () => {
   const pending = pendingOrderMaterials({ resources: { materials: [{ name: 'Cabo', unit: 'm', quantity: 2.5, purchaseQuantity: 2.5 }, { name: 'Cabo', quantity: 1, purchaseQuantity: 1 }] } })
   assert.deepEqual(pending.map((row) => formatQuantity(row.quantity, row.unit)), ['2,5 m', '1 kg'], 'metres are not added to kilos')
 })
+
+test('sets (Conjunto): whole quantities in stock, offers and requests, with their own label and price', async () => {
+  const { materialUnits, materialUnit, unitPriceLabel, wholeUnit } = await import('../server/materialUnits.js')
+  assert.deepEqual(materialUnits.at(-1), ['cj', 'Conjunto (cj)'])
+  assert.equal(materialUnit('cj'), 'cj')
+  assert.equal(unitPriceLabel('cj'), 'Valor por conjunto')
+  assert.equal(wholeUnit('cj'), true)
+  assert.equal(formatQuantity(3, 'cj'), '3 cj')
+  const fixture = await createWorkflowFixture()
+  try {
+    const create = (body) => fixture.adminRequest('/inventory', 'POST', { detail: '', minimum: 0, unitPrice: 50, ...body })
+    assert.equal((await create({ name: 'Kit de vedação', unit: 'cj', quantity: 1.5 })).status, 400, 'sets are whole')
+    const kit = (await create({ name: 'Kit de vedação', unit: 'cj', quantity: 4, minimum: 1 })).data
+    assert.equal((await fixture.adminRequest('/inventory')).data.items.find((item) => item.id === kit.id).unit, 'cj')
+    assert.equal((await fixture.adminRequest(`/inventory/${kit.id}/movements`, 'POST', { type: 'entry', quantityKg: 0.5, unitPrice: 50 })).status, 400)
+    assert.equal((await fixture.adminRequest(`/inventory/${kit.id}/movements`, 'POST', { type: 'entry', quantityKg: 2, unitPrice: 50 })).status, 201)
+    const offer = (await fixture.adminRequest('/offers', 'POST', offerDraft)).data.item
+    const route = `/offers/${offer.id}/resources`, base = { laborEntries: [], kind: 'service', stages: ['turning'] }
+    assert.equal((await fixture.adminRequest(route, 'PUT', { ...base, materials: [{ id: 'a', name: 'Kit de vedação', unit: 'cj', quantity: 1.5, unitPrice: 50 }] })).status, 400)
+    const saved = (await fixture.adminRequest(route, 'PUT', { ...base, materials: [{ id: 'a', name: 'Kit de vedação', unit: 'cj', quantity: 2, unitPrice: 50 }] })).data.item
+    assert.deepEqual(saved.resources.materials.map((row) => [row.unit, row.quantity]), [['cj', 2]])
+    const manual = (await fixture.adminRequest('/material-requests', 'POST', { name: 'Conjunto de polias', unit: 'cj', quantity: 3 })).data.item
+    assert.deepEqual([manual.unit, manual.quantity], ['cj', 3])
+  } finally { await fixture.close() }
+})

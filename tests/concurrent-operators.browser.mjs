@@ -77,7 +77,7 @@ try {
   assert.equal(progress.employeeName, 'Carla Teste')
   assert.equal(progress.quantity, 2)
   await page.locator('.operator-history summary').click()
-  assert.match(await page.locator('.operator-history').innerText(), /Carla Teste · .*Tornearia: \+2 \(2 no total\) · Registrado por Ana Teste/)
+  assert.match(await page.locator('.operator-history').innerText(), /Carla Teste · .*TORNEARIA: \+2 \(2 no total\) · Registrado por Ana Teste/)
 
   // Pausing one employee keeps the others working.
   await identify(bruno)

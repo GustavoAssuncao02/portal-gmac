@@ -2179,6 +2179,9 @@
     border-left: 3px solid #303133;
     background: #301b1a
 }
+:root[data-theme="dark"][data-tone="black"] .registry-history-note {
+    color: #bfc2c5
+}
 :root[data-theme="dark"][data-tone="black"] .proposal-model-step > p {
     color: #bfc2c5
 }
@@ -5307,6 +5310,9 @@
     background: #232425
 }
 :root[data-theme="dark"][data-tone="black"] .admin-os-main .dashboard-header h1 {
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .offers-main .offers-header h1 {
     color: #ebebec
 }
 :root[data-theme="dark"][data-tone="black"] .admin-os-filters button {

@@ -8,6 +8,7 @@ import { mutateStore, proposalPdfFile, readStore } from './offers.js'
 import { proposalSettings } from './proposalDocuments.js'
 import { createMailer } from './passwordReset.js'
 import { documentDigits } from './clientDocument.js'
+import { actorOf, recordRegistryChange } from './registryHistory.js'
 
 // "Enviar E-mail" on the proposal screen: once the proposal PDF is generated, it goes from the commercial account of the
 // portal (MAIL_FROM, the same SMTP of the site quotes) to the client and the buyer registered for the offer. Everything is
@@ -98,13 +99,14 @@ export default function createProposalEmailsRouter(accounts, requireAdmin, { mai
 
   // A client or buyer without e-mail gets the address typed for it, once the e-mail went out, so the next one comes filled.
   // Only when it still has none and the address is among the recipients; a failure here does not undo the e-mail.
-  async function registerContacts(offer, register, recipients) {
+  async function registerContacts(offer, register, recipients, actor) {
+    const note = `E-mail incluído ao enviar a proposta da oferta ${offer.code}.`
     const typed = (value) => { const email = String(value || '').trim().toLowerCase(); return emailPattern.test(email) && recipients.includes(email) ? email : '' }
     const registered = [], warnings = []
     const clientEmail = typed(register?.client)
     const client = clientEmail && await clientOf(offer)
     if (client && !client.email) {
-      try { await accounts.save('clients', client.id, { ...client, email: clientEmail }); registered.push({ kind: 'client', name: client.name, email: clientEmail }) }
+      try { await accounts.save('clients', client.id, { ...client, email: clientEmail }, { actor, note }); registered.push({ kind: 'client', name: client.name, email: clientEmail }) }
       catch (error) { warnings.push(`O e-mail ${clientEmail} não foi cadastrado para o cliente ${client.name}: ${error.status ? error.message : 'erro ao salvar.'}`) }
     }
     const buyerEmail = typed(register?.buyer)
@@ -113,6 +115,7 @@ export default function createProposalEmailsRouter(accounts, requireAdmin, { mai
         const row = (store.buyers || []).find((entry) => entry.id === offer.buyerId)
         if (!row || row.email) return null
         Object.assign(row, { email: buyerEmail, updatedAt: new Date().toISOString() })
+        recordRegistryChange(store, { registry: 'buyers', recordId: row.id, type: 'edited', actor, before: { email: '' }, after: { email: buyerEmail }, note })
         return row
       })
       if (buyer) registered.push({ kind: 'buyer', name: buyer.name, email: buyerEmail })
@@ -160,7 +163,7 @@ export default function createProposalEmailsRouter(accounts, requireAdmin, { mai
       console.error('Falha no envio do e-mail da proposta:', error)
       fail(502, `O e-mail não foi enviado. ${sendProblem(error)}`)
     }
-    const { registered, warnings } = await registerContacts(offer, input.register, [...to, ...cc])
+    const { registered, warnings } = await registerContacts(offer, input.register, [...to, ...cc], actorOf(request))
     const record = { id: randomUUID(), sentAt: new Date().toISOString(), sentBy: request.adminId ?? null, sentByName: request.adminName || 'Administrador', from, to, cc, subject, message, signature, registered, attachments:stored.map(({ id, name, contentType, content, proposal }) => ({ id, name, contentType, size: content.length, proposal: Boolean(proposal) })) }
     const item = await mutateStore((store) => {
       const current = store.offers.find((entry) => entry.id === offer.id)

@@ -1,6 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import ExcelJS from 'exceljs'
+import { rm } from 'node:fs/promises'
+import path from 'node:path'
 import { createWorkflowFixture } from './workflowFixture.js'
 import { cents, makeInstallments, shiftMonth, filterPayables, todayBahia, payableStatus } from '../server/payableRules.js'
 import { payableAnalytics } from '../src/payableAnalytics.js'
@@ -47,6 +49,12 @@ test('payables enforce payment locks, duplicates, installments, recurrence, audi
     assert.equal((await fetch(`${f.url}/api/payables/${row.id}/files/${attachment.data.item.id}`, { headers })).status, 200)
     const removable = await upload(`/payables/${row.id}/files`)
     assert.equal((await request(`/payables/${row.id}/files/${removable.data.item.id}`, 'DELETE')).status, 200)
+    // A record whose file is gone from the data folder (lost on a redeploy) says so, instead of a generic failure.
+    const lost = await upload(`/payables/${row.id}/files`)
+    await rm(path.join(f.directory, 'data', 'payable-files', lost.data.item.id))
+    const missing = await fetch(`${f.url}/api/payables/${row.id}/files/${lost.data.item.id}`, { headers })
+    assert.equal(missing.status, 404); assert.equal(missing.headers.get('content-disposition'), null); assert.match((await missing.json()).message, /não está mais no servidor/)
+    assert.equal((await request(`/payables/${row.id}/files/${lost.data.item.id}`, 'DELETE')).status, 200)
     const pay = { date: todayBahia(), method: 'pix', interest: '10', note: 'Observacao testada' }
     assert.equal((await request(`/payables/${row.id}/pay`, 'POST', { ...pay, date: '2099-12-01' })).status, 400)
     assert.equal((await request(`/payables/${row.id}/pay`, 'POST', { ...pay, discount: '1' })).status, 400)

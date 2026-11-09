@@ -15,7 +15,7 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   const directory = await mkdtemp(path.join(results, 'workflow-'))
   // The copied modules keep their data next to them; a DATA_DIR from the shell would point them at real data.
   delete process.env.DATA_DIR
-  for (const name of ['entryMode.js', 'invoiceImport.js', 'loginThrottle.js', 'liveUpdates.js','planning.js','planningRules.js', 'offers.js', 'stageLabor.js', 'proposalEmails.js', 'stageCatalog.js', 'orderHistory.js', 'pieces.js', 'access.js', 'orderMaterials.js', 'pendingMaterials.js', 'operations.js', 'orderEditing.js', 'operatorAuth.js', 'employeeAccess.js', 'employeeActivity.js', 'serviceStages.js', 'machines.js', 'laborServices.js', 'accounts.js', 'reports.js', 'reportData.js', 'documentExports.js', 'payables.js', 'payableRules.js', 'receivables.js', 'bankStatements.js', 'ofx.js', 'materialRequests.js', 'notificationRules.js', 'notificationEvents.js', 'operationSessions.js', 'operationEventTime.js', 'operationManualEvents.js', 'materialRequestCodes.js', 'notifications.js', 'fiscalCatalog.js', 'dataDirectory.js', 'proposalDocuments.js', 'clientDocument.js', 'proposalDefaults.js', 'proposalPdf.js', 'proposalBrand.js', 'proposalMath.js', 'moneyWords.js', 'store.js', 'materialUnits.js', 'banks.js', 'operatorAccount.js', 'registries.js', 'requesters.js','serviceLocation.js', 'materialRequestSources.js', 'inventory.js', 'inventoryAppearance.js', 'materialIcons.js', 'uploads.js', 'machineUsage.js', 'accountPlan.js', 'accountPlanRules.js', 'dre.js', 'dreRules.js', 'dreExport.js', 'passwordReset.js']) {
+  for (const name of ['entryMode.js', 'registryHistory.js', 'invoiceImport.js', 'loginThrottle.js', 'liveUpdates.js','planning.js','planningRules.js', 'offers.js', 'stageLabor.js', 'proposalEmails.js', 'stageCatalog.js', 'orderHistory.js', 'pieces.js', 'access.js', 'orderMaterials.js', 'pendingMaterials.js', 'operations.js', 'orderEditing.js', 'operatorAuth.js', 'employeeAccess.js', 'employeeActivity.js', 'serviceStages.js', 'machines.js', 'laborServices.js', 'accounts.js', 'reports.js', 'reportData.js', 'documentExports.js', 'payables.js', 'payableRules.js', 'receivables.js', 'bankStatements.js', 'ofx.js', 'materialRequests.js', 'notificationRules.js', 'notificationEvents.js', 'operationSessions.js', 'operationEventTime.js', 'operationManualEvents.js', 'materialRequestCodes.js', 'notifications.js', 'fiscalCatalog.js', 'dataDirectory.js', 'proposalDocuments.js', 'clientDocument.js', 'proposalDefaults.js', 'proposalPdf.js', 'proposalBrand.js', 'proposalMath.js', 'moneyWords.js', 'store.js', 'materialUnits.js', 'banks.js', 'operatorAccount.js', 'registries.js', 'requesters.js','serviceLocation.js', 'materialRequestSources.js', 'inventory.js', 'inventoryAppearance.js', 'materialIcons.js', 'uploads.js', 'machineUsage.js', 'accountPlan.js', 'accountPlanRules.js', 'dre.js', 'dreRules.js', 'dreExport.js', 'passwordReset.js']) {
     await copyFile(path.join(root, 'server', name), path.join(directory, name))
   }
   // PDFs use the bundled logo and fonts.
@@ -43,6 +43,7 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   const { default: registriesRouter } = await import(pathToFileURL(path.join(directory, 'registries.js')))
   const { default: stageCatalogRouter } = await import(pathToFileURL(path.join(directory, 'stageCatalog.js')))
   const { default: requestersRouter } = await import(pathToFileURL(path.join(directory, 'requesters.js')))
+  const { default: registryHistoryRouter } = await import(pathToFileURL(path.join(directory, 'registryHistory.js')))
   const { default: proposalEmailsRouter } = await import(pathToFileURL(path.join(directory, 'proposalEmails.js')))
   const { default: planningRouter } = await import(pathToFileURL(path.join(directory, 'planning.js')))
   const { default: inventoryRouter } = await import(pathToFileURL(path.join(directory, 'inventory.js')))
@@ -156,6 +157,7 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   app.use('/api', registriesRouter(requireAdmin, pool))
   app.use('/api', stageCatalogRouter(requireAdmin, pool))
   app.use('/api', requestersRouter(accounts, requireAdmin))
+  app.use('/api', registryHistoryRouter(requireAdmin))
   app.use('/api', planningRouter(requireAdmin, pool))
   app.use('/api', operatorAccountRouter(requireAdmin))
   app.use('/api', reportsRouter(pool, accounts, requireAdmin))

@@ -17,7 +17,8 @@ const HEARTBEAT_MS = 25000
 // (appearance preferences, internal sequences of the migrations) changes nothing on the screens.
 const notificationNames = /^(operationalNotifications|payableNotifications|receivableNotifications|adminNotificationPreferences|notificationInventory\w*)$/
 const financeNames = /^(payable|receivable|bank|dre|account(Groups|PlanVersion)|classification|supplier)/
-const quietNames = /^(adminAppearancePreferences|migrations)$/
+// The history of Cadastros is read only when its "i" is opened: recording it does not refresh the open screens.
+const quietNames = /^(adminAppearancePreferences|migrations|registryEvents)$/
 export function topicOfName(name) {
   if (quietNames.test(name)) return null
   if (notificationNames.test(name)) return 'notifications'

@@ -38,12 +38,12 @@ try {
   await page.locator('.machine-row:not(.machine-row--header)').first().waitFor()
   assert.match(await page.locator('.machine-row', { hasText: 'Fresa B' }).innerText(), /R\$\s*300,00/)
   await rate.click()
-  assert.deepEqual(await machineNames(), ['Fresa B', 'Torno A', 'Plaina C'])
+  assert.deepEqual(await machineNames(), ['FRESA B', 'TORNO A', 'PLAINA C'])
   assert.equal(await page.locator('.machine-row--header [aria-sort="descending"]').count(), 1)
   await rate.click()
-  assert.deepEqual(await machineNames(), ['Plaina C', 'Torno A', 'Fresa B'])
+  assert.deepEqual(await machineNames(), ['PLAINA C', 'TORNO A', 'FRESA B'])
   await page.locator('.machine-row--header').getByRole('button', { name: 'Máquina', exact: true }).click()
-  assert.deepEqual(await machineNames(), ['Fresa B', 'Plaina C', 'Torno A'], 'text starts from A')
+  assert.deepEqual(await machineNames(), ['FRESA B', 'PLAINA C', 'TORNO A'], 'text starts from A')
   await page.screenshot({ path: 'test-results/maquinas-valor-hora.png' })
 
   // A registration that had no sorting.

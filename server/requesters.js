@@ -1,6 +1,7 @@
 import express from 'express'
 import { randomUUID } from 'node:crypto'
 import { readStore, mutateStore } from './offers.js'
+import { actorOf, recordRegistryChange } from './registryHistory.js'
 
 // Cadastros > Solicitantes: the people who ask for the services on behalf of a client (Nestlé asks, but who at Nestlé?).
 // Cadastros > Compradores: the people who buy them (the client's purchasing department), kept the same way.
@@ -16,6 +17,8 @@ const digits = (value) => String(value ?? '').replace(/\D/g, '')
 const fail = (status, message) => { throw Object.assign(new Error(message), { status }) }
 const sameText = (left, right) => left.localeCompare(right, 'pt-BR', { sensitivity: 'base' }) === 0
 const capitalized = (text) => text[0].toUpperCase() + text.slice(1)
+// What the history shows of a requester or buyer: the client by its name, not its id.
+const contactView = (row, clients) => row && { name: row.name, client: clients.find((client) => String(client.id) === String(row.clientId))?.name || '', cpf: row.cpf || '', email: row.email || '', phone: row.phone || '' }
 
 export function requesterFields(body = {}, clients = [], singular = clientContactKinds.requesters.singular) {
   const name = clean(body.name)
@@ -35,7 +38,7 @@ export function requesterFields(body = {}, clients = [], singular = clientContac
 // An offer names who asked for it and who buys it. When the offer's client is registered, the name is looked up among
 // that client's requesters (or buyers) and registered there when it is new (inside the offer's own change); `created`
 // tells the screen to show it. Without a registered client the name stays only on the offer.
-export function registerOfferContact(store, kind, client, value) {
+export function registerOfferContact(store, kind, client, value, actor = null) {
   const name = clean(value)
   if (!name || !client) return { name, id: null, created: false }
   store[kind] ||= []
@@ -44,6 +47,7 @@ export function registerOfferContact(store, kind, client, value) {
   const now = new Date().toISOString()
   const row = { id: randomUUID(), createdAt: now, name, clientId: String(client.id), cpf: '', email: '', phone: '', updatedAt: now, source: 'offer' }
   store[kind].push(row)
+  recordRegistryChange(store, { registry: kind, recordId: row.id, type: 'created', actor, after: contactView(row, [client]), note: 'Cadastrado automaticamente ao registrar uma oferta.' })
   return { name, id: row.id, created: true }
 }
 
@@ -72,17 +76,22 @@ export default function createRequestersRouter(accounts, requireAdmin) {
         if (fields.cpf && others.some((row) => row.cpf === fields.cpf)) fail(409, `Este cliente já tem um ${singular} com esse CPF.`)
         let row = store[kind].find((entry) => entry.id === request.params.id)
         if (method === 'put' && !row) fail(404, notFound)
+        const before = contactView(row, clients)
         if (!row) { row = { id: randomUUID(), createdAt: new Date().toISOString() }; store[kind].push(row) }
         Object.assign(row, fields, { updatedAt: new Date().toISOString() })
+        recordRegistryChange(store, { registry: kind, recordId: row.id, type: before ? 'edited' : 'created', actor: actorOf(request), before, after: contactView(row, clients) })
         return row
       })
       const client = clients.find((entry) => String(entry.id) === item.clientId)
       response.status(method === 'post' ? 201 : 200).json({ item: { ...item, clientName: client?.name || '' } })
     }))
     router.delete(`/${kind}/:id`, requireAdmin, handle(async (request, response) => {
+      const clients = await accounts.clients()
       await mutateStore((store) => {
-        if (!(store[kind] || []).some((row) => row.id === request.params.id)) fail(404, notFound)
+        const current = (store[kind] || []).find((row) => row.id === request.params.id)
+        if (!current) fail(404, notFound)
         store[kind] = store[kind].filter((row) => row.id !== request.params.id)
+        recordRegistryChange(store, { registry: kind, recordId: current.id, type: 'deleted', actor: actorOf(request), before: contactView(current, clients) })
       })
       response.status(204).end()
     }))

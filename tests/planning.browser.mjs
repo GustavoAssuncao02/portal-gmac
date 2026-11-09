@@ -46,7 +46,7 @@ try {
   const torno = agenda.getByLabel('Agenda de Torno 01')
   const block = torno.locator('.planning-block').first()
   await block.waitFor()
-  assert.match(await block.innerText(), new RegExp(`${order.code} · Tornearia`))
+  assert.match(await block.innerText(), new RegExp(`${order.code} · Tornearia`, 'i'))
   assert.match(await block.getAttribute('class'), /planning-block--late/)
   assert.match(await agenda.locator('.planning-label').filter({ hasText: 'Fresa 02' }).innerText(), /Em manutenção/)
   assert.match(await page.locator('.planning-indicators').innerText(), /1 atrasado/)
@@ -54,7 +54,7 @@ try {
 
   // The moment now, then one chosen on the clock: busy, idle (with the free time) and in maintenance.
   const snapshot = page.getByRole('region', { name: /Agora|às/ })
-  assert.match(await snapshot.innerText(), /Ocupadas \(1 de 3\)[\s\S]*Torno 01[\s\S]*Ociosas \(1 de 3\)[\s\S]*Plasma 01[\s\S]*Em manutenção \(1 de 3\)[\s\S]*Troca de correia/)
+  assert.match(await snapshot.innerText(), /Ocupadas \(1 de 3\)[\s\S]*Torno 01[\s\S]*Ociosas \(1 de 3\)[\s\S]*Plasma 01[\s\S]*Em manutenção \(1 de 3\)[\s\S]*Troca de correia/i)
   assert.match(await snapshot.innerText(), /Real: parada/, 'up to now it tells what really happened')
   const later = clockTime(slot + 3 * 3600000)
   if (localDay(slot + 3 * 3600000) === today) {
@@ -67,13 +67,13 @@ try {
   // Planning from the list: one row per OS with its stages; Planejar OS brings all of them, each with its machine.
   const backlog = page.getByRole('region', { name: 'Serviços para planejar' })
   const row = backlog.locator('tr').filter({ hasText: order.code })
-  assert.match(await row.innerText(), /Tornearia · Torno 01[\s\S]*2h a planejar[\s\S]*Corte a plasma · Sem máquina definida[\s\S]*1h30 a planejar/, 'two of the four hours of turning are still to plan')
+  assert.match(await row.innerText(), /Tornearia · Torno 01[\s\S]*2h a planejar[\s\S]*Corte a plasma · Sem máquina definida[\s\S]*1h30 a planejar/i, 'two of the four hours of turning are still to plan')
   await row.getByRole('button', { name: 'Planejar' }).click()
   const modal = page.getByRole('dialog', { name: 'Planejar OS' })
   const stages = modal.locator('.planning-stage-row')
   await modal.getByLabel('Início da etapa Tornearia').waitFor()
   // The Tornearia stays on the Torno (no choice) and starts right after the block already planned on it.
-  assert.match(await stages.nth(0).innerText(), /Tornearia[\s\S]*Torno 01[\s\S]*falta planejar 2h/)
+  assert.match(await stages.nth(0).innerText(), /Tornearia[\s\S]*Torno 01[\s\S]*falta planejar 2h/i)
   assert.equal(await modal.getByLabel('Máquina ou serviço da etapa Tornearia').count(), 0, 'the machine of a planned stage is not chosen again')
   assert.equal(await modal.getByLabel('Início da etapa Tornearia').inputValue(), clockTime(slot + 2 * 3600000))
   assert.match(await stages.nth(0).locator('.planning-strip-wrap').innerText(), new RegExp(`Torno 01 em .*: ocupada ${clockTime(slot)}`))
@@ -95,7 +95,7 @@ try {
   await modal.getByRole('button', { name: 'Planejar etapa', exact: true }).click()
   await modal.waitFor({ state: 'detached' })
   await agenda.getByLabel('Agenda de Plasma 01').locator('.planning-block').filter({ hasText: 'Corte a plasma' }).waitFor()
-  assert.doesNotMatch(await backlog.locator('tr').filter({ hasText: order.code }).innerText(), /Corte a plasma/, 'only the Tornearia is left to plan')
+  assert.doesNotMatch(await backlog.locator('tr').filter({ hasText: order.code }).innerText(), /Corte a plasma/i, 'only the Tornearia is left to plan')
 
   // Dragging the Torno block one hour later: it stays there at once, while the server has not answered yet, and the
   // server keeps it.
@@ -179,11 +179,11 @@ try {
   const plan = tablet.getByRole('region', { name: /Planejado para você/ })
   await plan.getByText(`${order.code} · Tornearia`).waitFor()
   assert.match(await plan.innerText(), /Usinagem/)
-  assert.doesNotMatch(await plan.innerText(), /Corte a plasma/, 'the Plasma is Caldeiraria')
+  assert.doesNotMatch(await plan.innerText(), /Corte a plasma/i, 'the Plasma is Caldeiraria')
   await tablet.screenshot({ path: 'test-results/planning/tablet.png' })
-  await plan.getByRole('button', { name: new RegExp(`${order.code} · Tornearia`) }).click()
+  await plan.getByRole('button', { name: new RegExp(`${order.code} · Tornearia`, 'i') }).click()
   await tablet.locator('.operator-steps').getByText('Máquina: Torno 01').waitFor()
-  assert.match(await tablet.locator('.operator-step--resource').innerText(), /Tornearia/)
+  assert.match(await tablet.locator('.operator-step--resource').innerText(), /Tornearia/i)
   assert.deepEqual(errors, [])
   console.log('Planning passed: day agenda with live status and maintenance, snapshot of a moment, planning from the list with the machine clash, drag to move, week, month, dark modes, phone, and the sector queue on the tablet.')
 } catch (error) {

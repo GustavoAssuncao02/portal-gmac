@@ -20,7 +20,7 @@ const money = (value) => Number(value || 0).toLocaleString('pt-BR', { style: 'cu
 const decimal = (value) => value === '' || value == null ? '' : String(value).replace('.', ',')
 const parseDecimal = (value) => { const text = String(value ?? '').trim().replace(/\./g, '').replace(',', '.'); return text === '' ? null : Number(text) }
 const apiMoney = (value) => Number(value) ? Number(value).toFixed(2) : ''
-const proposalUnit = (unit) => /^kg$/i.test(unit || '') ? 'kg' : /^m$/i.test(unit || '') ? 'm' : 'Un'
+const proposalUnit = (unit) => /^kg$/i.test(unit || '') ? 'kg' : /^m$/i.test(unit || '') ? 'm' : /^(cj|conjunto)$/i.test(unit || '') ? 'Cj' : 'Un'
 
 function QuantityInput({ value, onChange, label }) {
   const [text, setText] = useState(decimal(value))
@@ -92,7 +92,7 @@ function LetterForm({ model, draft, setDraft, settings, catalog }) {
         {model === 'model-b' && <label>Grupo<input maxLength={60} value={item.group || ''} placeholder="Opcional" onChange={(event) => setItem(index, 'group', event.target.value)} /></label>}
         <label>Descrição<input required maxLength={300} value={item.description} onChange={(event) => setItem(index, 'description', event.target.value)} /></label>
         <label>Quantidade<QuantityInput label={`Quantidade do item ${index + 1}`} value={item.quantity} onChange={(value) => setItem(index, 'quantity', value)} /></label>
-        <label>Unidade<select aria-label={`Unidade do item ${index + 1}`} value={proposalUnit(item.unit)} onChange={(event) => setItem(index, 'unit', event.target.value)}><option value="Un">Unidade</option><option value="kg">Kg</option><option value="m">Metro</option></select></label>
+        <label>Unidade<select aria-label={`Unidade do item ${index + 1}`} value={proposalUnit(item.unit)} onChange={(event) => setItem(index, 'unit', event.target.value)}><option value="Un">Unidade</option><option value="kg">Kg</option><option value="m">Metro</option><option value="Cj">Conjunto</option></select></label>
         <label>Valor unitário<MoneyInput aria-label={`Valor unitário do item ${index + 1}`} value={item.unitPrice} onChange={(value) => setItem(index, 'unitPrice', value)} /></label>
         <span className="proposal-item-total">{money(itemTotal({ ...item, unitPrice: Number(item.unitPrice) || 0 }))}</span>
         {model === 'model-b' && <button type="button" className="payable-icon" aria-label={`Remover item ${index + 1}`} disabled={draft.items.length < 2} onClick={() => set('items', draft.items.filter((_, position) => position !== index))}><Trash2 size={16} /></button>}

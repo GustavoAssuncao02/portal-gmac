@@ -5,6 +5,7 @@ import SectorPicker from './SectorPicker.jsx'
 import MachineHistoryModal from './MachineHistoryModal.jsx'
 import { pollWhileVisible } from './polling.js'
 import { SortableRows, SortHeader } from './RegistryList.jsx'
+import { upper } from './displayCase.js'
 
 const money = (value) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 async function request(path, options = {}) {
@@ -38,8 +39,8 @@ function ServiceDialog({ item, removing, onClose, onSave }) {
   return <dialog ref={dialog} className="labor-service-dialog" aria-labelledby="labor-service-dialog-title" onCancel={(event) => { event.preventDefault(); if (!busy) onClose() }}>
     <header><h2 id="labor-service-dialog-title">{removing ? 'Remover serviço?' : item ? 'Editar serviço' : 'Adicionar serviço'}</h2><button type="button" aria-label="Fechar janela" title="Fechar janela" disabled={busy} onClick={onClose}><X size={19} /></button></header>
     <form onSubmit={submit}><fieldset disabled={busy}>
-      {removing ? <p>Remover <strong>{item.name}</strong> do cadastro? O histórico das utilizações anteriores será preservado.</p> : <div className="labor-service-fields">
-        <label>Nome do serviço<input value={draft.name} onChange={(event) => field('name', event.target.value)} maxLength={160} required autoFocus /></label>
+      {removing ? <p>Remover <strong>{upper(item.name)}</strong> do cadastro? O histórico das utilizações anteriores será preservado.</p> : <div className="labor-service-fields">
+        <label>Nome do serviço<input className="upper-input" value={draft.name} onChange={(event) => field('name', event.target.value)} maxLength={160} required autoFocus /></label>
         <label>Tipo<input value={draft.type} onChange={(event) => field('type', event.target.value)} maxLength={100} /></label>
         <SectorPicker value={draft.sectors} onChange={(sectors) => { setSectorError(''); field('sectors', sectors) }} error={sectorError} />
         <label>Valor da hora (R$)<input type="number" min="0" step="0.01" value={draft.hourlyRate} onChange={(event) => field('hourlyRate', event.target.value)} required /></label>
@@ -91,7 +92,7 @@ export default function LaborServicesScreen(props) {
     {error && <div className="admin-tool-error" role="alert">{error}<button className="admin-tool-button" type="button" onClick={() => setRetry((value) => value + 1)}>Tentar novamente</button></div>}
     <section className="labor-services-list" aria-labelledby="labor-services-list-title"><header><h2 id="labor-services-list-title">Lista de serviços</h2><span>{items.length} cadastrados</span></header><SortableRows rows={visible} columns={[{ key: "Serviço", label: "Serviço", value: (item) => item.name }, { key: "Tipo", label: "Tipo", value: (item) => item.type }, { key: "Setor", label: "Setor", value: (item) => item.sector }, { key: "Valor/hora", label: "Valor/hora", value: (item) => Number(item.hourlyRate), numeric: true }, { key: "Tempo utilizado", label: "Tempo utilizado", value: (item) => item.usage || '00:00:00', numeric: true }, { key: "Ações", label: "Ações" }]}>{(sorted) => <table><thead><tr><SortHeader column={sorted.columns[0]} list={sorted} /><SortHeader column={sorted.columns[1]} list={sorted} /><SortHeader column={sorted.columns[2]} list={sorted} /><SortHeader column={sorted.columns[3]} list={sorted} /><SortHeader column={sorted.columns[4]} list={sorted} /><th>Ações</th></tr></thead><tbody>
       {loading ? <tr><td colSpan={6} className="reports-empty">Carregando serviços...</td></tr> : sorted.rows.map((item) => <tr key={item.id} className={selectedId === item.id ? 'selected' : ''} onClick={() => setSelectedId(item.id)}>
-        <td data-label="Serviço"><span className="labor-service-name"><Wrench size={18} aria-hidden="true" /><strong>{item.name}</strong></span></td><td data-label="Tipo">{item.type || '—'}</td><td data-label="Setor">{item.sector || '—'}</td><td data-label="Valor/hora">{money(item.hourlyRate)}</td><td data-label="Tempo utilizado">{item.usage || '00:00:00'}</td><td data-label="Ações"><div className="labor-service-actions">
+        <td data-label="Serviço"><span className="labor-service-name"><Wrench size={18} aria-hidden="true" /><strong>{upper(item.name)}</strong></span></td><td data-label="Tipo">{item.type || '—'}</td><td data-label="Setor">{item.sector || '—'}</td><td data-label="Valor/hora">{money(item.hourlyRate)}</td><td data-label="Tempo utilizado">{item.usage || '00:00:00'}</td><td data-label="Ações"><div className="labor-service-actions">
           <button type="button" aria-label={`Ver histórico de ${item.name}`} title="Histórico de uso" onClick={(event) => { event.stopPropagation(); setHistory(item) }}><Info size={17} /></button>
           <button type="button" aria-label={`Editar ${item.name}`} title="Editar serviço" onClick={(event) => { event.stopPropagation(); setEditing(item) }}><Pencil size={17} /></button>
           <button className="labor-service-danger" type="button" aria-label={`Remover ${item.name}`} title="Remover serviço" onClick={(event) => { event.stopPropagation(); setRemoving(item) }}><Trash2 size={17} /></button>

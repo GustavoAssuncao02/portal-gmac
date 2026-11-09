@@ -65,7 +65,7 @@ for (const device of ['desktop', 'iPhone 15', 'iPhone 15 Pro Max']) {
     // The service description is the one of the OS data; the second text only shows on older OS that have it.
     assert.equal(await dialog.getByLabel('Descrição do serviço', { exact: true }).count(), 0)
     await dialog.getByRole('checkbox', { name: 'Processo Injessado', exact: true }).uncheck()
-    const count = dialog.locator('label').filter({ hasText: /^Tornearia$/ }).locator('input[type=number]')
+    const count = dialog.locator('label').filter({ hasText: /^TORNEARIA$/ }).locator('input[type=number]')
     await count.fill('8')
     for (const name of ['Dados da OS', 'Recursos', 'Processo', 'Proposta e anexos']) {
       await dialog.getByRole('tab', { name, exact: true }).click()

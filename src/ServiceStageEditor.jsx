@@ -6,6 +6,7 @@ import { GripVertical } from 'lucide-react'
 import { stageActive, stageLabel, stageResourceChoices, orderedStageSelection } from '../server/serviceStages.js'
 import { bySector } from './machineSectors.js'
 import { minutesLabel, stageTotal } from '../server/entryMode.js'
+import { upper } from './displayCase.js'
 
 function SortableStageItem({ id, label, disabled, group = false, selected = false, children }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, isDragging } = useSortable({ id, disabled, transition: null })
@@ -50,8 +51,8 @@ function StageResourceSelect({ code, label, value, options: all, disabled, onCha
     <option value="">Máquina / serviço</option>
     {!known && <option value={selected}>{value.name} ({[...all.machines.map((item) => `machine:${item.id}`), ...all.laborServices.map((item) => `labor-service:${item.id}`)].includes(selected) ? 'fora das opções da etapa' : 'fora do cadastro'})</option>}
     {/* Machines come by sector: the same name (Bancada) can exist in more than one, and the group tells them apart. */}
-    {bySector(options.machines).map(([sector, group]) => <optgroup key={sector} label={`Máquinas · ${sector}`}>{group.map((item) => <option key={item.id} value={`machine:${item.id}`}>{item.name}{item.maintenance ? ' (em manutenção)' : ''}</option>)}</optgroup>)}
-    {options.laborServices.length > 0 && <optgroup label="Serviços (hora homem)">{options.laborServices.map((item) => <option key={item.id} value={`labor-service:${item.id}`}>{item.name}</option>)}</optgroup>}
+    {bySector(options.machines).map(([sector, group]) => <optgroup key={sector} label={`Máquinas · ${sector}`}>{group.map((item) => <option key={item.id} value={`machine:${item.id}`}>{upper(item.name)}{item.maintenance ? ' (em manutenção)' : ''}</option>)}</optgroup>)}
+    {options.laborServices.length > 0 && <optgroup label="Serviços (hora homem)">{options.laborServices.map((item) => <option key={item.id} value={`labor-service:${item.id}`}>{upper(item.name)}</option>)}</optgroup>}
   </select>
 }
 
@@ -96,7 +97,7 @@ export default function ServiceStageEditor({ layout, stages, onLayoutChange, onT
           <div className="offer-stage-options offer-stage-stack">{options.map((key) => <SortableStageItem key={key} id={key} label={stageLabel(key)} disabled={disabled} selected={stages.includes(key)}>
             <span className="offer-stage-number" aria-hidden="true">{stages.includes(key) ? position(key) : ''}</span>
             {stages.includes(key) && <span className="sr-only" id={`stage-order-${key}`}>Etapa {position(key)} da execução</span>}
-            <label><input type="checkbox" checked={stages.includes(key)} disabled={disabled} aria-describedby={stages.includes(key) ? `stage-order-${key}` : undefined} onChange={() => onToggle(key)} />{stageLabel(key)}{!stageActive(key) && <span className="offer-stage-inactive" title="Desativada em Etapas: some das ofertas novas. Pode ser desmarcada, mas não marcada de novo.">desativada</span>}</label>
+            <label><input type="checkbox" checked={stages.includes(key)} disabled={disabled} aria-describedby={stages.includes(key) ? `stage-order-${key}` : undefined} onChange={() => onToggle(key)} />{upper(stageLabel(key))}{!stageActive(key) && <span className="offer-stage-inactive" title="Desativada em Etapas: some das ofertas novas. Pode ser desmarcada, mas não marcada de novo.">desativada</span>}</label>
             {onStageTime && stages.includes(key) && <StageTimeInput label={stageLabel(key)} minutes={stageTimes?.[key]} disabled={disabled} pieces={pieces} onChange={(minutes) => onStageTime(key, minutes)} />}
             {onStageResource && stages.includes(key) && <StageResourceSelect code={key} label={stageLabel(key)} value={stageResources?.[key]} options={resourceOptions} disabled={disabled} onChange={(choice) => onStageResource(key, choice)} />}
           </SortableStageItem>)}</div>

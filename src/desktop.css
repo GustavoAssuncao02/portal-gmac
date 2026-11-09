@@ -56,7 +56,8 @@
   .offers-board .manual-offer-button { height: 44px; padding: 0 12px; font-size: 12px; }
   .offers-table-wrap { padding: 0 8px 12px; }
   .offers-table { width: 100%; min-width: 0; border-radius: 6px; }
-  .offers-table-row { grid-template-columns: minmax(0, 2fr) minmax(0, 1.7fr) minmax(125px, .65fr) minmax(120px, .6fr) minmax(112px, .8fr) minmax(112px, .8fr) minmax(125px, .9fr) minmax(135px, .8fr) minmax(210px, 1.1fr); min-height: 72px; font-size: 13px; }
+  /* Etiqueta, Quantidade and Origem give room to Peça/Serviço and Cliente, shown in capital letters (wider). */
+  .offers-table-row { grid-template-columns: minmax(0, 2fr) minmax(0, 1.7fr) minmax(105px, .65fr) minmax(112px, .6fr) minmax(112px, .8fr) minmax(112px, .8fr) minmax(125px, .9fr) minmax(125px, .8fr) minmax(210px, 1.1fr); min-height: 72px; font-size: 13px; }
   .offers-table-row > *, .offers-table-header > * { padding: 12px 8px; overflow-wrap: anywhere; }
   .offers-table-header { min-height: 52px; font-size: 13px; }
   .offers-table-header > * { overflow-wrap: normal; }

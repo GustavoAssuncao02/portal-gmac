@@ -25,15 +25,15 @@ try {
   await enterOperatorCode(page, ana.accessCode)
   await openOrder(page, order.service)
   const step = page.getByRole('button', { name: /Selecionar etapa/ })
-  await step.getByText('Máquina: Torno 01', { exact: true }).waitFor()
+  await step.getByText('Máquina: TORNO 01', { exact: true }).waitFor()
   assert.equal(await page.getByRole('button', { name: /Iniciar trabalho/ }).isEnabled(), true, 'the planned machine is enough to start')
 
   await step.click()
   const stages = page.getByRole('region', { name: 'Etapas', exact: true })
-  await stages.getByText('Máquina: Torno 01', { exact: true }).waitFor()
-  await stages.getByRole('button', { name: /Pintura/ }).click()
-  await step.getByText('Serviço: Pintura industrial', { exact: true }).waitFor()
-  assert.match(await step.innerText(), /Pintura · Serviço: Pintura industrial/)
+  await stages.getByText('Máquina: TORNO 01', { exact: true }).waitFor()
+  await stages.getByRole('button', { name: /Pintura/i }).click()
+  await step.getByText('Serviço: PINTURA INDUSTRIAL', { exact: true }).waitFor()
+  assert.match(await step.innerText(), /PINTURA · Serviço: PINTURA INDUSTRIAL/)
   await page.getByRole('button', { name: /Iniciar trabalho/ }).click()
   await page.getByRole('button', { name: /^Pausar trabalho/ }).waitFor()
   let session = (await fixture.request('/operations/orders', 'GET', undefined, fixture.admin)).data.items[0].operation.activeSessions[0]
@@ -48,7 +48,7 @@ try {
   // Moving to the turning stage brings its machine along.
   await step.click()
   await stages.locator('.operator-picker-option').first().click()
-  await step.getByText('Máquina: Torno 01', { exact: true }).waitFor()
+  await step.getByText('Máquina: TORNO 01', { exact: true }).waitFor()
   session = (await fixture.request('/operations/orders', 'GET', undefined, fixture.admin)).data.items[0].operation.activeSessions[0]
   assert.equal(session.machineName, 'Torno 01')
 

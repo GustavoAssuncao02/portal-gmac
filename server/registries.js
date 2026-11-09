@@ -5,6 +5,7 @@ import { requireAdminOrOperator } from './access.js'
 import { employeeRecords } from './employeeAccess.js'
 import { bankInUse } from './banks.js'
 import { refreshStageCatalog } from './stageCatalog.js'
+import { actorOf, recordRegistryChange } from './registryHistory.js'
 
 // Simple registrations kept by the users themselves: the sectors of the employees and the reasons an operator can choose
 // when pausing a work session. Each item is only a name.
@@ -34,12 +35,15 @@ export async function sectorRows() { return ((await readStore()).sectors || []).
 // Cadastros > Setores is the only source of sectors: machines and labor services keep the names chosen from it, and the
 // employees keep the ids. A name used by a machine or a service is always registered (inside the same change).
 export const defaultSectors = ['Usinagem', 'Caldeiraria', 'Pintura']
-export function registerSectorNames(store, names = []) {
+// `origin` tells the history who registered a new sector and from where ({ actor, note }); without it, the system did.
+export function registerSectorNames(store, names = [], origin = {}) {
   store.sectors ||= []
   return [...new Set(names.map((name) => clean(name)).filter(Boolean))].map((name) => {
     const found = store.sectors.find((row) => sameName(row.name, name))
     if (found) return found.name
-    store.sectors.push({ id: randomUUID(), name, createdAt: new Date().toISOString() })
+    const row = { id: randomUUID(), name, createdAt: new Date().toISOString() }
+    store.sectors.push(row)
+    recordRegistryChange(store, { registry: 'sectors', recordId: row.id, type: 'created', actor: origin.actor || null, after: row, note: origin.note || 'Cadastrado automaticamente pelo sistema.' })
     return name
   })
 }
@@ -95,10 +99,12 @@ function registryRoutes(router, { path, key, label, requireAdmin, readAccess = r
       if (store[key].some((row) => row.id !== request.params.id && sameName(String(sameKey(row)), String(sameKey({ name, ...extra }))))) fail(409, `${label} já cadastrado.`)
       let row = store[key].find((entry) => entry.id === request.params.id)
       if (method === 'put' && !row) fail(404, `${label} não encontrado.`)
+      const before = row ? { ...row } : null
       if (!row) { row = { id: randomUUID(), createdAt: new Date().toISOString() }; store[key].push(row) }
       const previous = row.name
       Object.assign(row, { name, ...extra })
       onSave(store, row, previous)
+      recordRegistryChange(store, { registry: key, recordId: row.id, type: before ? 'edited' : 'created', actor: actorOf(request), before, after: row })
       return row
     })
     await afterChange()
@@ -109,7 +115,10 @@ function registryRoutes(router, { path, key, label, requireAdmin, readAccess = r
     if (!current) fail(404, `${label} não encontrado.`)
     const used = await inUse(current)
     if (used) fail(409, used)
-    await mutateStore((store) => { store[key] = (store[key] || []).filter((row) => row.id !== current.id) })
+    await mutateStore((store) => {
+      store[key] = (store[key] || []).filter((row) => row.id !== current.id)
+      recordRegistryChange(store, { registry: key, recordId: current.id, type: 'deleted', actor: actorOf(request), before: current })
+    })
     await afterChange()
     response.status(204).end()
   }))

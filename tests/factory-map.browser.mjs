@@ -107,7 +107,7 @@ try {
   await page.locator('[data-station="torno-cnc"] .factory-hit').hover()
   const details = page.locator('.factory-details')
   await details.waitFor()
-  assert.match(await details.innerText(), /Ana Lima[\s\S]*Torno CNC[\s\S]*Trabalhando há \d+ min \d+ s/)
+  assert.match(await details.innerText(), /Ana Lima[\s\S]*TORNO CNC[\s\S]*Trabalhando há \d+ min \d+ s/)
   const first = await details.innerText()
   await page.waitForTimeout(1300)
   assert.notEqual(await details.innerText(), first, 'the time keeps running')

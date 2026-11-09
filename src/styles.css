@@ -7187,6 +7187,14 @@ button {
 .admin-os-main:fullscreen .admin-os-table { min-width: 0; }
 .admin-os-main:fullscreen .admin-os-table-wrap { flex-shrink: 0; }
 .admin-os-main .dashboard-header h1 { color: #0c4c91; font-size: 30px; }
+/* Ofertas e serviços follows the other Operação screens (Serviços em andamento e concluídos): same title and position. */
+.offers-main { padding: 70px 16px 28px; }
+.offers-main .offers-header h1 { color: #0c4c91; font-size: 30px; font-weight: 700; line-height: 1.16; letter-spacing: -1.2px; }
+@media (min-width: 761px) and (max-height: 850px) { .offers-main .offers-header h1 { letter-spacing: -0.8px; } }
+@media (min-width: 761px) and (max-width: 1600px) { .offers-main .offers-header h1 { letter-spacing: -0.6px; } }
+/* The offers' data shows in capital letters, as typed in the Painel; the database keeps it as it was typed. */
+.offers-table-row:not(.offers-table-header) :is(.offer-piece, [data-label="Cliente"], [data-label="Etiqueta"], [data-label="Quantidade"], [data-label="Origem"]) { text-transform: uppercase; }
+.offers-table-row > span::before { text-transform: none; }
 .admin-os-filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0; }
 .admin-os-filters:not(.deadline-filters) { display: none; }
 .admin-os-filters button { display: flex; align-items: center; gap: 9px; padding: 9px 13px; border: 1px solid #dce5ef; border-radius: 7px; background: #fff; color: #304e6b; cursor: pointer; }
@@ -7313,6 +7321,8 @@ button {
   .admin-os-main .dashboard-header { flex-direction: column; align-items: stretch; gap: 14px; }
   .admin-os-main .dashboard-header h1 { font-size: 22px; letter-spacing: 0; }
   .admin-os-main .dashboard-header p { font-size: 13px; }
+  .offers-main { padding: 60px 12px 24px; }
+  .offers-main .offers-header h1 { font-size: 22px; letter-spacing: 0; }
   .admin-os-main .global-search { width: 100%; min-width: 0; }
   .admin-os-filters { gap: 6px; }
   .deadline-filters button { padding: 8px; font-size: 12px; }
@@ -7508,3 +7518,6 @@ button {
 :root[data-theme="dark"] .offer-entry-mode { background: transparent; border-color: rgba(255, 255, 255, .18); }
 :root[data-theme="dark"] .offer-entry-mode legend, :root[data-theme="dark"] .offer-entry-mode p { color: inherit; }
 :root[data-theme="dark"] .os-quantity-notice { background: rgba(242, 183, 5, .12); border-color: rgba(242, 183, 5, .4); color: inherit; }
+/* Names of machines, services, stages and stock materials: typed and kept as written, shown in capital letters (displayCase.js). */
+input.upper-input { text-transform: uppercase; }
+input.upper-input::placeholder { text-transform: none; }

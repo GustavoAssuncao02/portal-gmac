@@ -413,7 +413,7 @@ export default function createPayablesRouter(accounts, requireAdmin) {
     let row = store.suppliers.find((s) => s.id === req.params.id); if (method === 'put' && !row) fail('Fornecedor não encontrado.', 404)
     const before = row ? { ...row } : null
     if (!row) { row = { id: randomUUID(), createdAt: new Date().toISOString() }; store.suppliers.push(row) }
-    Object.assign(row, fields); event(store, req.actor, before ? 'supplier_edited' : 'supplier_created', null, { details: { before, after: row } }); return row
+    Object.assign(row, fields); event(store, req.actor, before ? 'supplier_edited' : 'supplier_created', null, { details: { before, after: { ...row } } }); return row
   }); res.json({ item }) }))
   router.delete('/suppliers/:id', handle(async (req, res) => { await mutateStore((store) => { init(store); const row = (store.suppliers || []).find((s) => s.id === req.params.id); if (!row) fail('Fornecedor não encontrado.', 404); if (store.payables.some((r) => String(r.supplierId) === row.id)) fail('Existem contas vinculadas a este fornecedor.', 409); store.suppliers = store.suppliers.filter((s) => s.id !== row.id); event(store, req.actor, 'supplier_deleted', null, { details: row }) }); res.json({ ok: true }) }))
   router.sweep = sweep

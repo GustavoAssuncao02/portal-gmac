@@ -48,9 +48,15 @@ export function downloadBlob(blob, name) {
   const url = URL.createObjectURL(blob), link = document.createElement('a')
   link.href = url; link.download = name; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
+// Why a file did not open: the server's reason (a document no longer on the server, for example) instead of a generic text.
+export async function fileError(response, action = 'baixar') {
+  if (response.status === 401) return new Error(`Sua sessão expirou. Entre novamente para ${action} o arquivo.`)
+  const result = await response.json().catch(() => ({}))
+  return new Error(response.status === 404 && result.message ? result.message : `Não foi possível ${action} o arquivo.`)
+}
 export async function downloadPayableFile(accountId, file) {
   const response = await fetch(`/api/payables/${accountId}/files/${file.id}`, { headers: { Authorization: `Bearer ${sessionStorage.getItem('gmac-admin-token') || ''}` } })
-  if (!response.ok) throw new Error('Não foi possível baixar o arquivo.')
+  if (!response.ok) throw await fileError(response)
   downloadBlob(await response.blob(), file.name)
 }
 const authHeader = () => ({ Authorization: `Bearer ${sessionStorage.getItem('gmac-admin-token') || ''}` })
@@ -68,6 +74,6 @@ export async function uploadFiles(base, files, accountId) {
 // `token` is the operator session; without it, the administrator session is used.
 export async function downloadFile(url, name, token) {
   const response = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : authHeader() })
-  if (!response.ok) throw new Error(response.status === 401 ? 'Sua sessão expirou. Entre novamente para baixar o arquivo.' : 'Não foi possível baixar o arquivo.')
+  if (!response.ok) throw await fileError(response)
   downloadBlob(await response.blob(), fileNameOf(response) || name)
 }

@@ -6,6 +6,7 @@ import { elapsedLabel, factoryStations, sessionStart } from './factoryMapData.js
 import { MachineArt, MachinePart, Worker, paletteFor, workScripts } from './FactoryMapArt.jsx'
 import FactoryScene, { HEIGHT, WIDTH, floorMark } from './FactoryMapScene.jsx'
 import './factoryMap.css'
+import { upper } from './displayCase.js'
 
 // Mapa da fábrica no Planejamento: mostra a situação de agora, seja qual for a data da agenda. Só lê as OS e as máquinas;
 // não grava nada. Posto parado em preto e branco; posto com alguém trabalhando em cores, com o funcionário em movimento.
@@ -53,10 +54,10 @@ function Details({ station, now }) {
   return <div className={`factory-details${below ? '' : ' factory-details--above'}`} style={{ left: `${left}%`, top: `${top}%` }} role="status">
     {status === 'working' ? station.work.map((session) => <div key={session.id || session.employeeName}>
       <strong>{session.employeeName || 'Operador não identificado'}</strong>
-      <span>{station.machineName}</span>
+      <span>{upper(station.machineName)}</span>
       <em>Trabalhando há {elapsedLabel(now - sessionStart(session))}</em>
       {session.orderCode && <small>{session.orderCode}{session.workStageName || session.stageName ? ` · ${session.workStageName || session.stageName}` : ''}{session.orderService ? ` · ${session.orderService}` : ''}</small>}
-    </div>) : <div><strong>{station.machineName}</strong><span>{station.service ? 'Bancada de serviços livre' : statusText[status]}</span>{status === 'maintenance' && station.maintenance.reason && <small>{station.maintenance.reason}</small>}{station.art === 'booth' && <small>Os postos são preenchidos pela ordem de quem está no serviço de pintura.</small>}</div>}
+    </div>) : <div><strong>{upper(station.machineName)}</strong><span>{station.service ? 'Bancada de serviços livre' : statusText[status]}</span>{status === 'maintenance' && station.maintenance.reason && <small>{station.maintenance.reason}</small>}{station.art === 'booth' && <small>Os postos são preenchidos pela ordem de quem está no serviço de pintura.</small>}</div>}
   </div>
 }
 
@@ -113,7 +114,7 @@ export default function FactoryMap() {
         <svg className="factory-map-stations" viewBox={`0 0 ${WIDTH} ${HEIGHT}`} role="group" aria-label="Postos de trabalho da fábrica">
           {ordered.map((station) => <Station key={station.key} station={station} active={key === station.key} onFocus={setHovered} onLeave={() => setHovered(null)} onToggle={(value) => setPinned((current) => current === value ? null : value)} />)}
           {/* Os nomes por cima de tudo: um equipamento alto não cobre o nome do posto de trás. */}
-          <g className="factory-labels">{ordered.map((station) => <text key={station.key} className={`factory-station-label factory-station-label--${statusOf(station)}${key === station.key ? ' factory-station-label--active' : ''}`} {...labelAt(station)}>{station.label}</text>)}</g>
+          <g className="factory-labels">{ordered.map((station) => <text key={station.key} className={`factory-station-label factory-station-label--${statusOf(station)}${key === station.key ? ' factory-station-label--active' : ''}`} {...labelAt(station)}>{upper(station.label)}</text>)}</g>
         </svg>
         <div className="factory-map-vignette" />
         {shown && <Details station={shown} now={now} />}

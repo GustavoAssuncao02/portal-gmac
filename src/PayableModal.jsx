@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { X, Upload, Trash2, Download } from 'lucide-react'
-import { downloadFile } from './payablesApi.js'
+import { downloadFile, fileError } from './payablesApi.js'
 
 export function PayableModal({ title, children, footer, onClose, wide = false, busy = false, className = '' }) {
   const ref = useRef(null), id = useId()
@@ -17,7 +17,7 @@ export function FilePreview({ url, file, onClose }) {
   useEffect(() => {
     let created = ''
     fetch(url, { headers: { Authorization: `Bearer ${sessionStorage.getItem('gmac-admin-token') || ''}` } }).then(async (response) => {
-      if (!response.ok) throw new Error('Não foi possível abrir o arquivo.')
+      if (!response.ok) throw await fileError(response, 'abrir')
       created = URL.createObjectURL(new Blob([await response.arrayBuffer()], { type: file.contentType }))
       setObjectUrl(created)
     }).catch((caught) => setError(caught.message))
@@ -30,5 +30,5 @@ export function FilePreview({ url, file, onClose }) {
 export function FilePicker({ files, setFiles, title = 'Anexos', disabled = false }) {
   const input = useRef(null)
   const add = (incoming) => setFiles([...files, ...Array.from(incoming)])
-  return <section className="payable-files"><h3>{title}</h3><div className="payable-drop" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); if (!disabled) add(event.dataTransfer.files) }}><Upload size={23} /><button type="button" className="admin-tool-button" disabled={disabled} onClick={() => input.current.click()}>Selecionar arquivos</button><input ref={input} type="file" aria-label={title} multiple hidden disabled={disabled} onChange={(event) => { add(event.target.files); event.target.value = '' }} /></div><ul>{files.map((file, index) => <li key={`${file.name}-${index}`}><span><strong>{file.name}</strong><small>{file.type || 'Arquivo'} · {(file.size / 1024).toFixed(1)} KB</small></span><button type="button" className="payable-icon" aria-label={`Remover ${file.name}`} title="Remover arquivo" disabled={disabled} onClick={() => setFiles(files.filter((_, i) => i !== index))}><Trash2 size={17} /></button></li>)}</ul></section>
+  return <section className="payable-files"><h3>{title}</h3><div className="payable-drop" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); if (!disabled) add(event.dataTransfer.files) }}><Upload size={23} /><button type="button" className="admin-tool-button" disabled={disabled} onClick={() => input.current.click()}>Selecionar arquivos</button><input ref={input} type="file" aria-label={title} multiple hidden disabled={disabled} onChange={(event) => { add(event.target.files); event.target.value = '' }} /></div><ul>{files.map((file, index) => <li key={`${file.name}-${index}`}><span><strong>{file.name}</strong></span><button type="button" className="payable-icon" aria-label={`Remover ${file.name}`} title="Remover arquivo" disabled={disabled} onClick={() => setFiles(files.filter((_, i) => i !== index))}><Trash2 size={17} /></button></li>)}</ul></section>
 }

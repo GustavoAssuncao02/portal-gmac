@@ -310,3 +310,5 @@
 .invoice-import-installments { display:grid; gap:8px; font-size:13px; }.invoice-import-installments > div { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
 .invoice-import-problems { display:grid; gap:6px; margin:0; padding:0; list-style:none; }.invoice-import-problems li { display:flex; align-items:flex-start; gap:6px; padding:8px 10px; border-left:3px solid #c2483f; background:#fdeeed; color:#8a2a22; font-size:12.5px; overflow-wrap:anywhere; }
 @media(max-width:760px) { .payable-heading-actions { flex-wrap:wrap; }.invoice-import-card { padding:12px; }.invoice-import-fields { grid-template-columns:minmax(0,1fr); }.invoice-import-installments > div { grid-template-columns:minmax(0,1fr); }.invoice-import-client--missing button { margin-left:0; } }
+/* Cadastros: histórico de alterações (RegistryHistoryModal). */
+.registry-history-note { color:#5f7891; font-style:italic; }.registry-history-before { margin-top:12px; }

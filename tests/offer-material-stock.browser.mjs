@@ -35,7 +35,7 @@ try {
   await page.getByRole('button', { name: 'Adicionar material', exact: true }).click()
   const form = page.locator('.offer-inline-form').first()
   await form.getByRole('combobox', { name: /^Material/ }).fill('Inox')
-  await page.getByRole('option', { name: /Inox 304/ }).click()
+  await page.getByRole('option', { name: /INOX 304/ }).click()
   await form.getByLabel('Quantidade (kg)').fill('5')
   await form.getByRole('button', { name: 'Adicionar material', exact: true }).click()
   await page.waitForFunction(() => document.querySelectorAll('.offer-materials-list .material-stock-status').length === 2 && !document.querySelector('.offer-proposal-button').disabled)

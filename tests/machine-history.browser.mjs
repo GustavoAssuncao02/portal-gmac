@@ -36,7 +36,7 @@ try {
     await icon.waitFor()
     assert.ok(await icon.evaluate((element) => element.getBoundingClientRect().left >= element.previousElementSibling.getBoundingClientRect().right))
     await icon.click()
-    const modal = page.getByRole('dialog', { name: 'Torno histórico', exact: true })
+    const modal = page.getByRole('dialog', { name: 'TORNO HISTÓRICO', exact: true })
     await modal.getByText('Bruno Teste', { exact: true }).waitFor()
     assert.equal(await modal.getByLabel('Período').inputValue(), 'all')
     assert.equal(await modal.getByText('Ana Teste', { exact: true }).count(), 1)
@@ -56,7 +56,7 @@ try {
     await modal.waitFor({ state: 'hidden' })
     assert.equal(await icon.evaluate((element) => document.activeElement === element), true)
     await page.getByRole('button', { name: 'Ver histórico de uso de Fresa sem uso', exact: true }).click()
-    const empty = page.getByRole('dialog', { name: 'Fresa sem uso', exact: true })
+    const empty = page.getByRole('dialog', { name: 'FRESA SEM USO', exact: true })
     await empty.getByText('Nenhuma utilização registrada neste período.', { exact: true }).waitFor()
     await empty.getByRole('button', { name: 'Fechar histórico', exact: true }).click()
     let failOnce = true

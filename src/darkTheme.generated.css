@@ -2547,6 +2547,9 @@
     background: #3c2220;
     color: #e49791
 }
+:root[data-theme="dark"] .registry-history-note {
+    color: #b5c2cf
+}
 :root[data-theme="dark"] .proposal-model-step > p {
     color: #b2c2d2
 }
@@ -6164,6 +6167,9 @@
     background: #203c59
 }
 :root[data-theme="dark"] .admin-os-main .dashboard-header h1 {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .offers-main .offers-header h1 {
     color: #e1ebf6
 }
 :root[data-theme="dark"] .admin-os-filters button {

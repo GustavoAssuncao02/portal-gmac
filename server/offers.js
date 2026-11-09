@@ -20,6 +20,7 @@ import { proposalMargins, PROPOSAL_MARGIN_GAP, declineReasons } from './proposal
 import { requireAdminOrOperator } from './access.js'
 import { documentDigits, documentKind, isClientDocument } from './clientDocument.js'
 import { registerOfferContact } from './requesters.js'
+import { actorOf } from './registryHistory.js'
 import { currentServiceLocation, serviceLocationLabel, validServiceLocation } from './serviceLocation.js'
 import { formatQuantity, materialUnit, validMaterialUnit, validQuantityFor } from './materialUnits.js'
 
@@ -111,8 +112,8 @@ router.post('/offers', async (request, response) => {
   try {
     let requesterCreated = false, buyerCreated = false
     const offer = await mutateStore((store) => {
-      const link = registerOfferContact(store, 'requesters', request.offerClient, requester)
-      const buyerLink = registerOfferContact(store, 'buyers', request.offerClient, buyer)
+      const link = registerOfferContact(store, 'requesters', request.offerClient, requester, actorOf(request))
+      const buyerLink = registerOfferContact(store, 'buyers', request.offerClient, buyer, actorOf(request))
       requesterCreated = link.created
       buyerCreated = buyerLink.created
       const item = { id: randomUUID(), code: nextCode('OF', store.offers), cnpj: clean(cnpj, 18), company: clean(company, 160), requester: link.name, requesterId: link.id, buyer: buyerLink.name, buyerId: buyerLink.id, deadline, service: clean(service, 160), quantity: Number(quantity), description: clean(description, 5000), labelNumber: clean(labelNumber, 80), requestedAt: new Date().toISOString(), origin: 'Inserida Manualmente', status: 'review', attachments: [], resources: { materials: [], laborEntries: [] }, proposal: null, orderCode: null }
@@ -127,7 +128,7 @@ router.put('/offers/:id/resources', async (request, response) => {
   const resources = request.body ?? {}
   if (!Array.isArray(resources.materials) || (resources.laborEntries !== undefined && !Array.isArray(resources.laborEntries))) return response.status(400).json({ message: 'Recursos inválidos.' })
   // Each material is counted in kilos or in units; units are whole numbers.
-  if (resources.materials.some((material) => material?.unit != null && !validMaterialUnit(material.unit))) return response.status(400).json({ message: 'Escolha a unidade de cada material: quilo, metro ou unidade.' })
+  if (resources.materials.some((material) => material?.unit != null && !validMaterialUnit(material.unit))) return response.status(400).json({ message: 'Escolha a unidade de cada material: quilo, metro, unidade ou conjunto.' })
   if (resources.entryMode !== undefined && !validEntryMode(resources.entryMode)) return response.status(400).json({ message: 'Forma de lançamento inválida.' })
   // Per piece, a unit can be a fraction (a bar that makes 4 pieces): the total is rounded up.
   if (resources.materials.some((material) => material?.quantityPerPiece != null ? !(Number(material.quantityPerPiece) > 0) : !validQuantityFor(material?.quantity, material?.unit))) return response.status(400).json({ message: 'Material contado por unidade aceita só quantidades inteiras.' })

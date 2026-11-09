@@ -6,6 +6,7 @@ import { activeSessions } from './operationSessions.js'
 import { requireAdminOrOperator } from './access.js'
 import { duration, hourReport, ordersWithOperations, workIntervals } from './reportData.js'
 import { registerSectorNames } from './registries.js'
+import { actorOf } from './registryHistory.js'
 import { machineSectors, sectorLabel } from './machines.js'
 
 const defaults = [
@@ -61,7 +62,7 @@ export default function createLaborServicesRouter(requireAdmin, pool) {
         store.laborServices ||= []
         const row = method === 'post' ? { id: randomUUID(), createdAt: new Date().toISOString() } : store.laborServices.find((entry) => String(entry.id) === request.params.id)
         if (!row) return null
-        const names = registerSectorNames(store, sectors)
+        const names = registerSectorNames(store, sectors, { actor: actorOf(request), note: `Cadastrado ao salvar o serviço ${name.trim()}.` })
         Object.assign(row, { name: name.trim(), type: type.trim(), sectors: names, sector: sectorLabel(names), hourlyRate: Number(hourlyRate) })
         if (method === 'post') store.laborServices.push(row)
         return row

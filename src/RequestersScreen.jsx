@@ -5,6 +5,7 @@ import { PayableModal } from './PayableModal.jsx'
 import { payableRequest } from './payablesApi.js'
 import { latestOnly, pollWhileVisible } from './polling.js'
 import { RegistryToolbar, SortHeader, documentLabel, useRegistryList } from './RegistryList.jsx'
+import RegistryHistoryModal, { RegistryInfoButton } from './RegistryHistoryModal.jsx'
 import { normalizeSearch } from './offerResources.js'
 import { documentDigits, documentKind, maskClientDocument } from '../server/clientDocument.js'
 
@@ -25,6 +26,7 @@ const emptyForm = { name: '', clientId: '', clientName: '', cpf: '', email: '', 
 
 export default function RequestersScreen({ Sidebar, WorkspaceTabs, navigationProps, kind = contactKinds.requesters }) {
   const [items, setItems] = useState(null), [clients, setClients] = useState([]), [message, setMessage] = useState(''), [editing, setEditing] = useState(null), [removing, setRemoving] = useState(null)
+  const [history, setHistory] = useState(null)
   const load = () => payableRequest(kind.endpoint).then((result) => setItems(result.items))
   const [readClients] = useState(() => latestOnly(() => payableRequest('/clients')))
   useEffect(() => {
@@ -69,12 +71,14 @@ export default function RequestersScreen({ Sidebar, WorkspaceTabs, navigationPro
         <td className="registry-actions"><div className="payable-registry-actions">
           <button className="payable-icon" type="button" title="Editar" aria-label={`Editar ${row.name}`} onClick={() => { setMessage(''); setEditing(row) }}><Pencil size={16} /></button>
           <button className="payable-icon payable-danger" type="button" title="Excluir" aria-label={`Excluir ${row.name}`} onClick={() => { setMessage(''); setRemoving(row) }}><Trash2 size={16} /></button>
+          <RegistryInfoButton name={row.name} onClick={() => setHistory(row)} />
         </div></td>
       </tr>)}
       {items && !list.rows.length && <tr><td colSpan={columns.length + 1} className="payable-empty">{rows.length ? 'Nenhum cadastro encontrado para a busca.' : `Nenhum ${kind.singular} cadastrado.`}</td></tr>}
       {!items && !message && <tr><td colSpan={columns.length + 1} className="payable-empty">Carregando...</td></tr>}
     </tbody></table></div>
     {editing && <RequesterForm kind={kind} source={editing} clients={clients} onClose={() => setEditing(null)} onSave={save} />}
+    {history && <RegistryHistoryModal registry={kind.endpoint.slice(1)} record={history} onClose={() => setHistory(null)} />}
     {removing && <RemoveRequester kind={kind} requester={removing} onClose={() => setRemoving(null)} onConfirm={remove} />}
   </AdminWorkspace>
 }
