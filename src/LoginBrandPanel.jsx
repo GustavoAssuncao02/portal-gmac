@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { SeasonBadge, SeasonLogoBehind, SeasonLogoFront, SeasonPageEffect, SeasonPanelBack, SeasonPanelFront } from './loginThemes/LoginSeason.jsx'
 
 const PHOTO_MS = 7000, VIDEO_MAX_MS = 12000, CALM_MS = 11000
 const origins = ['50% 50%', '35% 40%', '65% 40%', '40% 65%', '60% 60%']
@@ -10,19 +11,24 @@ const logoLayers = ['simbolo-branco', 'simbolo-laranja', 'nome-gmac', 'nome-meta
 const LOGO_PEN = 'M 603 370 L 915 109'
 // If a layer is slow to arrive, the entrance starts anyway instead of keeping the panel empty.
 const INTRO_WAIT_MS = 2500
+// The last step of the intro (the subtitle) ends 3.6 s after it starts: the effects of the commemorative looks
+// (Christmas snow, New Year fireworks...) come after it.
+const INTRO_LENGTH_MS = 3600
 
 // The logo enters in steps: the white symbol, the orange stroke drawn as a line, then "GMAC" and "METALÚRGICA".
-function BrandLogo() {
+function BrandLogo({ season }) {
   return <svg className="brand-panel__logo brand-logo" viewBox="0 0 1329 1018" role="img" aria-label="GMAC Metalúrgica">
     <defs>
       <mask id="gmac-logo-pen" maskUnits="userSpaceOnUse" x="0" y="0" width="1329" height="1018">
         <path className="brand-logo__pen" d={LOGO_PEN} pathLength="1" fill="none" stroke="#fff" strokeWidth="140" strokeLinecap="round" />
       </mask>
     </defs>
+    <SeasonLogoBehind season={season} />
     <image className="brand-logo__symbol" href={logoLayers[0]} width="1329" height="1018" />
     <image className="brand-logo__stroke" href={logoLayers[1]} width="1329" height="1018" mask="url(#gmac-logo-pen)" />
     <image className="brand-logo__name" href={logoLayers[2]} width="1329" height="1018" />
     <image className="brand-logo__tagline" href={logoLayers[3]} width="1329" height="1018" />
+    <SeasonLogoFront season={season} />
   </svg>
 }
 
@@ -49,10 +55,11 @@ function Slide({ item, leaving, origin, onDone }) {
   </div>
 }
 
-export default function LoginBrandPanel() {
+// season: the commemorative look of today or null (see loginThemes/calendar.js).
+export default function LoginBrandPanel({ season = null }) {
   const [items, setItems] = useState([]), [slides, setSlides] = useState({ current: null, previous: null })
-  const [introReady, setIntroReady] = useState(false)
-  const bag = useRef([]), counter = useRef(0)
+  const [introReady, setIntroReady] = useState(false), [introDone, setIntroDone] = useState(false)
+  const bag = useRef([]), counter = useRef(0), panel = useRef(null)
   useEffect(() => {
     let active = true
     const start = () => { if (active) setIntroReady(true) }
@@ -60,6 +67,11 @@ export default function LoginBrandPanel() {
     Promise.all(logoLayers.map((src) => { const image = new Image(); image.src = src; return image.decode().catch(() => {}) })).then(start)
     return () => { active = false; window.clearTimeout(timer) }
   }, [])
+  useEffect(() => {
+    if (!season || !introReady) return undefined
+    const timer = window.setTimeout(() => setIntroDone(true), INTRO_LENGTH_MS)
+    return () => window.clearTimeout(timer)
+  }, [season, introReady])
   useEffect(() => {
     let active = true
     fetch('/login-media/manifest.json').then((response) => response.ok ? response.json() : { items: [] }).then((data) => { if (active) setItems((Array.isArray(data.items) ? data.items : []).filter((item) => item.type === 'image' || !reducedMotion())) }).catch(() => {})
@@ -90,17 +102,25 @@ export default function LoginBrandPanel() {
     const preload = items.find((item, index) => index === bag.current[0] && item.type === 'image')
     if (preload) new Image().src = preload.src
   }, [current?.key])
-  return <section className={`brand-panel${current ? ' brand-panel--media' : ''}`} aria-label="GMAC Metalúrgica">
-    <div className="brand-media" aria-hidden="true">
-      {slides.previous && <Slide key={slides.previous.key} item={slides.previous.item} origin={slides.previous.origin} leaving onDone={() => {}} />}
-      {current && <Slide key={current.key} item={current.item} origin={current.origin} onDone={() => { if (items.length > 1) advance() }} />}
-    </div>
-    <div className="brand-panel__veil" />
-    <div className={`brand-panel__content brand-intro${introReady ? ' brand-intro--play' : ''}`}>
-      <div className="brand-panel__mark"><BrandLogo /></div>
-      <span className="brand-panel__rule" aria-hidden="true" />
-      <p className="brand-panel__title">Sistema de Gestão</p>
-      <p className="brand-panel__subtitle">Acesse para acompanhar produção, serviços e orçamentos.</p>
-    </div>
-  </section>
+  const seasonOn = Boolean(season) && introDone
+  return <>
+    <section ref={panel} className={`brand-panel${current ? ' brand-panel--media' : ''}${seasonOn ? ' season-on' : ''}`} aria-label="GMAC Metalúrgica">
+      <div className="brand-media" aria-hidden="true">
+        {slides.previous && <Slide key={slides.previous.key} item={slides.previous.item} origin={slides.previous.origin} leaving onDone={() => {}} />}
+        {current && <Slide key={current.key} item={current.item} origin={current.origin} onDone={() => { if (items.length > 1) advance() }} />}
+      </div>
+      <div className="brand-panel__veil" />
+      <SeasonPanelBack season={season} introDone={seasonOn} />
+      <div className={`brand-panel__content brand-intro${introReady ? ' brand-intro--play' : ''}`}>
+        <div className="brand-panel__mark"><BrandLogo season={season} /></div>
+        <span className="brand-panel__rule" aria-hidden="true" />
+        <p className="brand-panel__title">Sistema de Gestão</p>
+        <p className="brand-panel__subtitle">Acesse para acompanhar produção, serviços e orçamentos.</p>
+        <SeasonBadge season={season} />
+      </div>
+      <SeasonPanelFront season={season} />
+    </section>
+    {/* Outside the panel: the panel isolates its layers, and the snow, confetti and particles fall over the whole screen. */}
+    <SeasonPageEffect season={season} visible={seasonOn} panelRef={panel} />
+  </>
 }

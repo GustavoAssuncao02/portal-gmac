@@ -1,0 +1,33 @@
+/* SÃO JOÃO: look of the login generated from its mockup by scripts/build-login-themes.mjs. Every rule hangs on .login-page--sao-joao. */
+.login-page--sao-joao{--fx-grad:linear-gradient(90deg,#ffd166,#f4a261,#e63946,#f4a261,#ffd166);--fx-badge-border:rgba(255,209,102,.55);
+  --fx-accent:#e76f00;--fx-aura:radial-gradient(320px 240px at 100% 0%,rgba(244,162,97,.18),transparent 70%),radial-gradient(340px 260px at 100% 100%,rgba(230,57,70,.08),transparent 70%)}
+/* céu de noite junina */
+.login-page--sao-joao .sj-sky{position:absolute;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
+.login-page--sao-joao .sj-star{fill:#fff;animation:sj-twinkle 2.8s ease-in-out infinite}
+@keyframes sj-twinkle{0%,100%{opacity:.25}50%{opacity:1}}
+/* bandeirinhas */
+.login-page--sao-joao .sj-bunting{position:absolute;top:0;left:0;width:100%;height:150px;z-index:2;pointer-events:none}
+.login-page--sao-joao .sj-flag,.login-page--sao-joao .sj-mini{transform-box:fill-box;transform-origin:50% 0;animation:sj-flag 2.6s ease-in-out infinite alternate}
+@keyframes sj-flag{from{transform:rotate(-7deg)}to{transform:rotate(7deg)}}
+/* fogueira */
+.login-page--sao-joao .sj-warm{position:absolute;left:0;right:0;bottom:0;height:45%;z-index:0;pointer-events:none;
+  background:radial-gradient(55% 60% at 88% 100%,rgba(255,140,40,.35),transparent 70%);animation:sj-warm 1.8s ease-in-out infinite alternate}
+@keyframes sj-warm{to{opacity:.7}}
+.login-page--sao-joao .sj-fire{position:absolute;right:7%;bottom:14px;width:78px;height:96px;z-index:2;pointer-events:none}
+.login-page--sao-joao .sj-fire .flame{position:absolute;left:50%;bottom:22px;border-radius:50% 50% 50% 50% / 60% 60% 40% 40%;transform-origin:50% 100%;
+  animation:sj-flicker .5s ease-in-out infinite alternate;filter:blur(.4px)}
+.login-page--sao-joao .sj-fire .f1{width:46px;height:70px;margin-left:-23px;background:radial-gradient(60% 60% at 50% 75%,#ffd166,#f77f00 60%,rgba(230,57,70,.9))}
+.login-page--sao-joao .sj-fire .f2{width:32px;height:52px;margin-left:-16px;background:radial-gradient(60% 60% at 50% 75%,#fff3c4,#ffd166 55%,#f77f00);animation-duration:.38s;animation-delay:.1s}
+.login-page--sao-joao .sj-fire .f3{width:16px;height:28px;margin-left:-8px;background:#fff7dc;animation-duration:.3s}
+@keyframes sj-flicker{from{transform:scale(1,1) skewX(-3deg)}to{transform:scale(.92,1.1) skewX(4deg)}}
+.login-page--sao-joao .sj-fire svg{position:absolute;left:0;bottom:0;width:100%}
+.login-page--sao-joao .sj-embers{position:absolute;inset:0;width:100%;height:100%;z-index:1;pointer-events:none}
+/* chapéu de palha */
+.login-page--sao-joao .sj-fray{stroke:#c08a2e;stroke-width:4;stroke-linecap:round}
+@media (max-width:760px){.login-page--sao-joao .sj-fire{width:48px;height:60px;bottom:8px;right:5%}.login-page--sao-joao .sj-fire .flame{bottom:14px}
+  .login-page--sao-joao .sj-fire .f1{width:28px;height:44px;margin-left:-14px}.login-page--sao-joao .sj-fire .f2{width:20px;height:32px;margin-left:-10px}.login-page--sao-joao .sj-fire .f3{width:10px;height:18px;margin-left:-5px}
+  .login-page--sao-joao .sj-bunting{height:110px}}
+@media (prefers-reduced-motion:reduce){.login-page--sao-joao .sj-star,.login-page--sao-joao .sj-flag,.login-page--sao-joao .sj-mini,.login-page--sao-joao .sj-fire .flame,.login-page--sao-joao .sj-warm{animation:none}.login-page--sao-joao .sj-embers{display:none}}
+/* bandeirinhas no topo do card */
+.login-page--sao-joao .sj-card-bunting{position:absolute;top:0;left:0;width:100%;height:auto;pointer-events:none}
+.login-page--sao-joao .login-card__heading{padding-top:14px}

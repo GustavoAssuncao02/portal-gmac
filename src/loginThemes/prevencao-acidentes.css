@@ -1,0 +1,17 @@
+/* 27 DE JULHO — PREVENÇÃO DE ACIDENTES DO TRABALHO: look of the login generated from its mockup by scripts/build-login-themes.mjs. Every rule hangs on .login-page--prevencao-acidentes. */
+.login-page--prevencao-acidentes{--fx-grad:linear-gradient(90deg,#a6f0b5,#2fbf71,#ffd23f,#2fbf71,#a6f0b5);--fx-badge-border:rgba(47,191,113,.6);--fx-accent:#1e9e5a;--fx-aura:radial-gradient(320px 240px at 100% 0%,rgba(47,191,113,.15),transparent 70%),radial-gradient(340px 260px at 100% 100%,rgba(255,210,63,.10),transparent 70%)}
+
+.login-page--prevencao-acidentes .fx-rise{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.login-page--prevencao-acidentes .fx-rise>span{position:absolute;bottom:-70px;display:block;animation:fx-rise linear infinite}
+.login-page--prevencao-acidentes .fx-rise>span svg{display:block;width:100%;height:auto}
+.login-page--prevencao-acidentes .fx-rise>span.b{border-radius:50%;background:radial-gradient(circle,var(--c),transparent 70%)}
+@keyframes fx-rise{0%{transform:translateY(0) rotate(var(--r0,0deg));opacity:0}12%{opacity:var(--o,.6)}85%{opacity:var(--o,.6)}100%{transform:translateY(-115vh) rotate(var(--r1,0deg));opacity:0}}
+.login-page--prevencao-acidentes .fx-glow{position:absolute;inset:0;z-index:0;pointer-events:none;mix-blend-mode:screen}
+@media (prefers-reduced-motion:reduce){.login-page--prevencao-acidentes .fx-rise{display:none}}
+
+.login-page--prevencao-acidentes .sg-tape{position:absolute;left:-10%;right:-10%;bottom:26px;height:22px;z-index:2;pointer-events:none;transform:rotate(-4deg);
+  background:repeating-linear-gradient(-45deg,#ffd23f 0 16px,#1d1d1d 16px 32px);box-shadow:0 4px 14px rgba(0,0,0,.35);
+  background-size:45px 45px;animation:sg-tape 2.5s linear infinite}
+@keyframes sg-tape{to{background-position:45px 0}}
+@media (max-width:760px){.login-page--prevencao-acidentes .sg-tape{height:14px;bottom:14px}}
+@media (prefers-reduced-motion:reduce){.login-page--prevencao-acidentes .sg-tape{animation:none}}

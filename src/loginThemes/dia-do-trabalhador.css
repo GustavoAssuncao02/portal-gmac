@@ -1,0 +1,17 @@
+/* 1º DE MAIO — DIA DO TRABALHADOR: look of the login generated from its mockup by scripts/build-login-themes.mjs. Every rule hangs on .login-page--dia-do-trabalhador. */
+.login-page--dia-do-trabalhador{--fx-grad:linear-gradient(90deg,#ffd23f,#f47c20,#ffb000,#ffd23f);--fx-badge-border:rgba(255,190,60,.55);--fx-accent:#e8700f;--fx-aura:radial-gradient(320px 240px at 100% 0%,rgba(244,124,32,.16),transparent 70%),radial-gradient(340px 260px at 100% 100%,rgba(255,210,63,.12),transparent 70%)}
+
+.login-page--dia-do-trabalhador .fx-rise{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.login-page--dia-do-trabalhador .fx-rise>span{position:absolute;bottom:-70px;display:block;animation:fx-rise linear infinite}
+.login-page--dia-do-trabalhador .fx-rise>span svg{display:block;width:100%;height:auto}
+.login-page--dia-do-trabalhador .fx-rise>span.b{border-radius:50%;background:radial-gradient(circle,var(--c),transparent 70%)}
+@keyframes fx-rise{0%{transform:translateY(0) rotate(var(--r0,0deg));opacity:0}12%{opacity:var(--o,.6)}85%{opacity:var(--o,.6)}100%{transform:translateY(-115vh) rotate(var(--r1,0deg));opacity:0}}
+.login-page--dia-do-trabalhador .fx-glow{position:absolute;inset:0;z-index:0;pointer-events:none;mix-blend-mode:screen}
+@media (prefers-reduced-motion:reduce){.login-page--dia-do-trabalhador .fx-rise{display:none}}
+
+.login-page--dia-do-trabalhador .tr-gears{position:absolute;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
+.login-page--dia-do-trabalhador .tr-gear{fill:none;stroke:rgba(255,255,255,.16);stroke-width:2.5;transform-box:fill-box;transform-origin:center;animation:tr-spin 26s linear infinite}
+.login-page--dia-do-trabalhador .tr-gear.rev{animation-direction:reverse;animation-duration:18s}
+@keyframes tr-spin{to{transform:rotate(360deg)}}
+.login-page--dia-do-trabalhador .tr-sparks{position:absolute;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
+@media (prefers-reduced-motion:reduce){.login-page--dia-do-trabalhador .tr-gear{animation:none}.login-page--dia-do-trabalhador .tr-sparks{display:none}}

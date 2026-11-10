@@ -1,0 +1,14 @@
+/* 8 DE MARÇO — DIA DA MULHER: look of the login generated from its mockup by scripts/build-login-themes.mjs. Every rule hangs on .login-page--dia-da-mulher. */
+.login-page--dia-da-mulher{--fx-grad:linear-gradient(90deg,#e0aaff,#c77dff,#ff7ab6,#c77dff,#e0aaff);--fx-badge-border:rgba(199,125,255,.6);--fx-accent:#9d4edd;--fx-aura:radial-gradient(320px 240px at 100% 0%,rgba(199,125,255,.16),transparent 70%),radial-gradient(340px 260px at 100% 100%,rgba(255,122,182,.12),transparent 70%)}
+
+.login-page--dia-da-mulher .fx-rise{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.login-page--dia-da-mulher .fx-rise>span{position:absolute;bottom:-70px;display:block;animation:fx-rise linear infinite}
+.login-page--dia-da-mulher .fx-rise>span svg{display:block;width:100%;height:auto}
+.login-page--dia-da-mulher .fx-rise>span.b{border-radius:50%;background:radial-gradient(circle,var(--c),transparent 70%)}
+@keyframes fx-rise{0%{transform:translateY(0) rotate(var(--r0,0deg));opacity:0}12%{opacity:var(--o,.6)}85%{opacity:var(--o,.6)}100%{transform:translateY(-115vh) rotate(var(--r1,0deg));opacity:0}}
+.login-page--dia-da-mulher .fx-glow{position:absolute;inset:0;z-index:0;pointer-events:none;mix-blend-mode:screen}
+@media (prefers-reduced-motion:reduce){.login-page--dia-da-mulher .fx-rise{display:none}}
+
+.login-page--dia-da-mulher .mu-bloom{transform-box:fill-box;transform-origin:center;animation:mu-bloom 3.5s ease-in-out infinite alternate}
+@keyframes mu-bloom{from{transform:rotate(-6deg) scale(.96)}to{transform:rotate(6deg) scale(1.04)}}
+@media (prefers-reduced-motion:reduce){.login-page--dia-da-mulher .mu-bloom{animation:none}}

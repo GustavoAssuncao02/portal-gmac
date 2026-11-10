@@ -1,0 +1,18 @@
+/* 7 DE SETEMBRO — INDEPENDÊNCIA: look of the login generated from its mockup by scripts/build-login-themes.mjs. Every rule hangs on .login-page--independencia. */
+.login-page--independencia{--fx-grad:linear-gradient(90deg,#00c853,#ffdf00,#4f8cff,#ffdf00,#00c853);--fx-badge-border:rgba(255,223,0,.55);--fx-accent:#009c3b;--fx-aura:radial-gradient(320px 240px at 100% 0%,rgba(0,156,59,.14),transparent 70%),radial-gradient(340px 260px at 100% 100%,rgba(255,223,0,.14),transparent 70%)}
+
+.login-page--independencia .fx-rise{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.login-page--independencia .fx-rise>span{position:absolute;bottom:-70px;display:block;animation:fx-rise linear infinite}
+.login-page--independencia .fx-rise>span svg{display:block;width:100%;height:auto}
+.login-page--independencia .fx-rise>span.b{border-radius:50%;background:radial-gradient(circle,var(--c),transparent 70%)}
+@keyframes fx-rise{0%{transform:translateY(0) rotate(var(--r0,0deg));opacity:0}12%{opacity:var(--o,.6)}85%{opacity:var(--o,.6)}100%{transform:translateY(-115vh) rotate(var(--r1,0deg));opacity:0}}
+.login-page--independencia .fx-glow{position:absolute;inset:0;z-index:0;pointer-events:none;mix-blend-mode:screen}
+@media (prefers-reduced-motion:reduce){.login-page--independencia .fx-rise{display:none}}
+
+.login-page--independencia .in-flag{transform-box:fill-box;transform-origin:0 50%;animation:in-wave 2.2s ease-in-out infinite alternate}
+@keyframes in-wave{from{transform:skewY(-3deg) scaleX(.97)}to{transform:skewY(3deg) scaleX(1.02)}}
+.login-page--independencia .in-ribbon{position:absolute;left:0;right:0;bottom:0;width:100%;height:70px;z-index:2;pointer-events:none}
+.login-page--independencia .in-ribbon path{animation:in-ribbon 6s ease-in-out infinite alternate}
+@keyframes in-ribbon{to{transform:translateX(-40px)}}
+@media (max-width:760px){.login-page--independencia .in-ribbon{height:44px}}
+@media (prefers-reduced-motion:reduce){.login-page--independencia .in-flag,.login-page--independencia .in-ribbon path{animation:none}}

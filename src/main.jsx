@@ -44,6 +44,8 @@ import BankStatementsScreen from './BankStatementsScreen.jsx'
 import ReceivableScheduleModal from './ReceivableScheduleModal.jsx'
 import ProposalDocumentModal, { modelLabel } from './ProposalDocumentModal.jsx'
 import LoginBrandPanel from './LoginBrandPanel.jsx'
+import { SeasonBackdrop, SeasonCardDecor, loginSeason, seasonClassName } from './loginThemes/LoginSeason.jsx'
+import { BirthdayGreeting, birthdayPreview, firstName, isBirthday } from './loginThemes/Birthday.jsx'
 import SectorPicker from './SectorPicker.jsx'
 import PlanningScreen from './PlanningScreen.jsx'
 import ServiceStageEditor from './ServiceStageEditor.jsx'
@@ -2363,6 +2365,8 @@ function App() {
   const [message, setMessage] = useState('')
   const [messageError, setMessageError] = useState(false)
   const [isDashboard, setIsDashboard] = useState(false)
+  // Birthday screen after the login ({ name, user, token }): the portal opens when the person goes on.
+  const [birthday, setBirthday] = useState(null)
   const [adminUser, setAdminUser] = useState(null)
   // The stages come from "Etapas": loaded once signed in (this device's last copy first), and every screen is drawn again
   // when they change.
@@ -2611,7 +2615,8 @@ function App() {
         }
         throw new Error(data.message || 'Não foi possível entrar.')
       }
-      enterAdmin(data.user, data.token)
+      if (data.user && (isBirthday(data.user.birthDate) || birthdayPreview())) setBirthday({ name: firstName(data.user.name), user: data.user, token: data.token })
+      else enterAdmin(data.user, data.token)
     } catch (error) {
       if (loginMode === 'admin' && error.message === 'O banco de dados ainda não está configurado.') {
         enterAdmin(null)
@@ -2626,14 +2631,21 @@ function App() {
 
   if (operatorToken) return <OperatorDashboard token={operatorToken} onLogout={() => { window.sessionStorage.removeItem('gmac-operator-token'); window.sessionStorage.removeItem(operatorEmployeeKey); setOperatorToken(null) }} />
   if (restoringSession) return <main className="session-restore"><img src="/images/gmac-logo-transparent.png" alt="GMAC Metalúrgica" />{restoreError ? <><p role="alert">{restoreError}</p><div><button type="button" className="admin-tool-button admin-tool-button--primary" onClick={() => setRestoreAttempt((value) => value + 1)}>Tentar novamente</button><button type="button" className="admin-tool-button" onClick={logoutAdmin}>Sair</button></div></> : <p role="status">Restaurando sessão...</p>}</main>
-  if (isDashboard) return <ThemeContext.Provider value={appearance}><AdminIdentityContext.Provider value={adminUser}><WorkspaceTabsContext.Provider value={closeAllTabs}><Dashboard user={adminUser} onUpdateUser={setAdminUser} collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((current) => !current)} activeNav={activeNav} onNavigate={navigateTo} onCloseTab={closeTab} onReorderTabs={reorderTabs} tabs={openTabs} onLogout={logoutAdmin} offers={offers} orders={orders} selectedOfferId={selectedOfferId} selectedOrderCode={selectedOrderCode} onRefresh={refreshWorkflow} onSelectOffer={selectOffer} onSelectOrder={selectOrder} onCloseOrder={closeOrder} onOrderReopened={orderReopened} reopenedCode={reopenedCode} onOpenPayables={openPayables} payableFilters={payableFilters} workflowError={workflowError} workflowLoading={workflowLoading} materialRequestTarget={materialRequestTarget} onRequestLocated={setMaterialRequestTarget} /></WorkspaceTabsContext.Provider></AdminIdentityContext.Provider></ThemeContext.Provider>
+  // The birthday screen stays in the same place of both returns, so it keeps fading out over the portal that opens behind it.
+  const birthdayScreen = birthday && <BirthdayGreeting name={birthday.name} onContinue={() => enterAdmin(birthday.user, birthday.token)} onClosed={() => setBirthday(null)} />
+  if (isDashboard) return <><ThemeContext.Provider value={appearance}><AdminIdentityContext.Provider value={adminUser}><WorkspaceTabsContext.Provider value={closeAllTabs}><Dashboard user={adminUser} onUpdateUser={setAdminUser} collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((current) => !current)} activeNav={activeNav} onNavigate={navigateTo} onCloseTab={closeTab} onReorderTabs={reorderTabs} tabs={openTabs} onLogout={logoutAdmin} offers={offers} orders={orders} selectedOfferId={selectedOfferId} selectedOrderCode={selectedOrderCode} onRefresh={refreshWorkflow} onSelectOffer={selectOffer} onSelectOrder={selectOrder} onCloseOrder={closeOrder} onOrderReopened={orderReopened} reopenedCode={reopenedCode} onOpenPayables={openPayables} payableFilters={payableFilters} workflowError={workflowError} workflowLoading={workflowLoading} materialRequestTarget={materialRequestTarget} onRequestLocated={setMaterialRequestTarget} /></WorkspaceTabsContext.Provider></AdminIdentityContext.Provider></ThemeContext.Provider>{birthdayScreen}</>
 
-  return (
-    <main className="login-page">
-      <LoginBrandPanel />
+  // Commemorative looks (Christmas, New Year, Carnival...; dates in loginThemes/calendar.js): decorations on top of
+  // the same screen, the login itself is unchanged.
+  const season = loginSeason()
+  return (<>
+    <main className={`login-page${seasonClassName(season)}`}>
+      <LoginBrandPanel season={season} />
 
       <section className="access-panel">
+        <SeasonBackdrop season={season} />
         <div className="login-card">
+          <SeasonCardDecor season={season} />
           <div className="login-card__heading">
             <h1>Entrar no sistema</h1>
             <p>{testLoginEnabled == null ? 'Verificando configuração de acesso...' : testLoginEnabled ? 'Ambiente de teste: acesso sem senha.' : loginMode === 'admin' ? 'Informe seu CPF e senha para acessar.' : 'Use a conta compartilhada dos operadores.'}</p>
@@ -2696,7 +2708,8 @@ function App() {
         </div>
       </section>
     </main>
-  )
+    {birthdayScreen}
+  </>)
 }
 
 // The new version notice covers every screen: login, administrative portal and the operator's tablet.

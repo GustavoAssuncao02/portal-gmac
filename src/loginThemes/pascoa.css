@@ -1,0 +1,25 @@
+/* PÁSCOA: look of the login generated from its mockup by scripts/build-login-themes.mjs. Every rule hangs on .login-page--pascoa. */
+.login-page--pascoa{--fx-grad:linear-gradient(90deg,#ffb3d1,#fff0a8,#c9b5ff,#a8ecd3,#ffb3d1);--fx-badge-border:rgba(255,214,231,.6);
+  --fx-accent:#c0679a;--fx-aura:radial-gradient(320px 240px at 100% 0%,rgba(255,179,209,.22),transparent 70%),radial-gradient(340px 260px at 100% 100%,rgba(201,181,255,.22),transparent 70%)}
+.login-page--pascoa .ps-glow{position:absolute;inset:0;z-index:0;pointer-events:none;mix-blend-mode:screen;
+  background:radial-gradient(45% 35% at 20% 15%,rgba(255,179,209,.28),transparent 70%),
+             radial-gradient(45% 35% at 85% 30%,rgba(201,181,255,.28),transparent 70%),
+             radial-gradient(60% 30% at 50% 100%,rgba(168,236,211,.25),transparent 70%)}
+/* orelhas de coelho: surgem por trás do símbolo */
+.login-page--pascoa .ps-ears{opacity:0;transform-box:fill-box;transform-origin:50% 100%}
+.login-page--pascoa .brand-intro--play .ps-ears{animation:ps-pop .8s cubic-bezier(.3,1.6,.5,1) .95s both}
+@keyframes ps-pop{0%{opacity:0;transform:translateY(160px) scaleY(.4)}50%{opacity:1}100%{opacity:1;transform:none}}
+.login-page--pascoa .ps-ear-r{transform-box:fill-box;transform-origin:50% 100%;animation:ps-flop 5s ease-in-out 2.5s infinite}
+@keyframes ps-flop{0%,70%,100%{transform:rotate(0)}78%{transform:rotate(14deg)}86%{transform:rotate(-4deg)}92%{transform:rotate(6deg)}}
+.login-page--pascoa .ps-ear-l{transform-box:fill-box;transform-origin:50% 100%;animation:ps-wiggle 5s ease-in-out 2.5s infinite}
+@keyframes ps-wiggle{0%,74%,100%{transform:rotate(0)}82%{transform:rotate(-6deg)}90%{transform:rotate(2deg)}}
+/* grama com ovos */
+.login-page--pascoa .ps-grass{position:absolute;left:0;right:0;bottom:-2px;width:100%;height:70px;z-index:2;pointer-events:none}
+/* coelhinho pulando */
+.login-page--pascoa .ps-bunny{position:absolute;bottom:22px;left:-80px;width:46px;z-index:2;pointer-events:none;animation:ps-run 15s linear 4s infinite}
+.login-page--pascoa .ps-bunny svg{display:block;width:100%;animation:ps-hop .55s ease-in-out infinite}
+@keyframes ps-run{0%{left:-80px}55%,100%{left:calc(100% + 30px)}}
+@keyframes ps-hop{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-22px) rotate(-8deg)}}
+.login-page--pascoa .season-on .ps-bunny{visibility:visible}
+@media (max-width:760px){.login-page--pascoa .ps-grass{height:44px}.login-page--pascoa .ps-bunny{width:32px;bottom:12px}}
+@media (prefers-reduced-motion:reduce){.login-page--pascoa .brand-intro--play .ps-ears{animation:none;opacity:1}.login-page--pascoa .ps-ear-r,.login-page--pascoa .ps-ear-l{animation:none}.login-page--pascoa .ps-bunny{display:none}}

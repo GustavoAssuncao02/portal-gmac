@@ -1,0 +1,73 @@
+/* Christmas look of the login (December 1st to 26th, see calendar.js). Every rule hangs on
+   .login-page--christmas, so outside the season none of it applies. The logo intro keeps its own timings:
+   the hat falls right after the symbol turns (it ends at 0.9 s) and the lights, wind, snowbank and falling
+   snow fade in when the intro ends (3.6 s), through the .season-on class of the brand panel. */
+
+.login-page--christmas .xmas-hat { opacity: 0; transform-box: fill-box; transform-origin: 50% 100%; }
+.login-page--christmas .brand-intro--play .xmas-hat {
+  animation:
+    xmas-hat-drop 0.75s cubic-bezier(0.3, 1.5, 0.5, 1) 0.95s both,
+    xmas-hat-sway 4.5s ease-in-out 1.8s infinite;
+}
+@keyframes xmas-hat-drop { from { opacity: 0; transform: translateY(-140px) rotate(-30deg); } 60% { opacity: 1; } to { opacity: 1; transform: none; } }
+@keyframes xmas-hat-sway { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(4deg); } }
+
+.login-page--christmas .xmas-late { opacity: 0; transition: opacity 1.4s ease; }
+.login-page--christmas .season-on .xmas-late { opacity: 1; }
+
+.login-page--christmas .xmas-lights { position: absolute; top: 0; left: 0; width: 100%; height: 64px; z-index: 2; pointer-events: none; }
+.login-page--christmas .xmas-bulb { animation: xmas-twinkle 2.4s ease-in-out infinite; }
+.login-page--christmas .xmas-bulb:nth-of-type(3n) { animation-delay: 0.8s; }
+.login-page--christmas .xmas-bulb:nth-of-type(3n + 1) { animation-delay: 1.6s; }
+@keyframes xmas-twinkle { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+.login-page--christmas .xmas-wind { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
+.login-page--christmas .xmas-wind svg { position: absolute; overflow: visible; }
+.login-page--christmas .xmas-wind path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: var(--len) var(--len);
+  stroke-dashoffset: var(--len);
+  animation: xmas-blow var(--dur, 7s) ease-in-out var(--delay, 0s) infinite;
+}
+@keyframes xmas-blow {
+  0% { stroke-dashoffset: var(--len); opacity: 0; }
+  10% { opacity: 1; }
+  55% { stroke-dashoffset: 0; opacity: 1; }
+  100% { stroke-dashoffset: calc(var(--len) * -1); opacity: 0; }
+}
+
+.login-page--christmas .xmas-snowbank { position: absolute; left: 0; right: 0; bottom: -2px; width: 100%; height: 46px; z-index: 2; pointer-events: none; }
+
+/* Light frost in the right corners of the white side and snow piled on top of the card. */
+.login-page--christmas .access-panel { position: relative; }
+.login-page--christmas .xmas-frost {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(260px 200px at 100% 0%, rgba(178, 210, 240, 0.35), transparent 70%),
+    radial-gradient(300px 220px at 100% 100%, rgba(178, 210, 240, 0.3), transparent 70%);
+}
+.login-page--christmas .login-card { position: relative; z-index: 1; }
+.login-page--christmas .xmas-snowcap {
+  position: absolute;
+  left: -5px;
+  right: -5px;
+  top: -15px;
+  width: calc(100% + 10px);
+  height: 28px;
+  pointer-events: none;
+  filter: drop-shadow(0 3px 3px rgba(60, 100, 150, 0.14));
+}
+
+.login-page--christmas .xmas-snow { position: fixed; inset: 0; z-index: 20; pointer-events: none; opacity: 0; transition: opacity 2s ease; }
+.login-page--christmas .xmas-snow--on { opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .login-page--christmas .brand-intro--play .xmas-hat { animation: none; opacity: 1; }
+  .login-page--christmas :is(.xmas-wind, .xmas-snow) { display: none; }
+  .login-page--christmas .xmas-bulb { animation: none; }
+}

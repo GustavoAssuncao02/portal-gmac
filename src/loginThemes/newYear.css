@@ -1,0 +1,123 @@
+/* New Year look of the login (December 27th to January 5th, see calendar.js). Every rule hangs on
+   .login-page--new-year, so outside the season none of it applies. The logo intro keeps its own timings:
+   the party hat falls right after the symbol turns (it ends at 0.9 s) and the fireworks, lights, sparkles,
+   "Feliz" badge and confetti come in when the intro ends (3.6 s), through the .season-on class of the brand panel. */
+
+.login-page--new-year { --ny-gold: #e8b44c; --ny-gold-2: #f7d98b; --ny-gold-3: #b9822a; }
+
+.login-page--new-year .ny-hat { opacity: 0; transform-box: fill-box; transform-origin: 50% 100%; }
+.login-page--new-year .brand-intro--play .ny-hat {
+  animation:
+    ny-hat-drop 0.75s cubic-bezier(0.3, 1.5, 0.5, 1) 0.95s both,
+    ny-hat-sway 4.5s ease-in-out 1.8s infinite;
+}
+@keyframes ny-hat-drop { from { opacity: 0; transform: translateY(-140px) rotate(-30deg); } 60% { opacity: 1; } to { opacity: 1; transform: none; } }
+@keyframes ny-hat-sway { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(4deg); } }
+.login-page--new-year .ny-tassel { transform-box: fill-box; transform-origin: 50% 100%; animation: ny-tassel 1.6s ease-in-out infinite; }
+@keyframes ny-tassel { 0%, 100% { transform: rotate(-6deg) scale(1); } 50% { transform: rotate(6deg) scale(1.08); } }
+
+/* Sparkles blinking around the logo. */
+.login-page--new-year .ny-spark { opacity: 0; transform-box: fill-box; transform-origin: center; }
+.login-page--new-year .season-on .ny-spark { animation: ny-spark 2.6s ease-in-out infinite; }
+.login-page--new-year .season-on .ny-spark:nth-of-type(2) { animation-delay: 0.7s; }
+.login-page--new-year .season-on .ny-spark:nth-of-type(3) { animation-delay: 1.4s; }
+.login-page--new-year .season-on .ny-spark:nth-of-type(4) { animation-delay: 2s; }
+@keyframes ny-spark { 0%, 100% { opacity: 0; transform: scale(0.3) rotate(0); } 45% { opacity: 1; transform: scale(1) rotate(45deg); } 70% { opacity: 0; transform: scale(0.4) rotate(90deg); } }
+
+.login-page--new-year .ny-late { opacity: 0; transition: opacity 1.4s ease; }
+.login-page--new-year .season-on .ny-late { opacity: 1; }
+
+/* Fireworks, rising lights and the gold glow stay behind the logo and the texts. */
+.login-page--new-year .brand-panel__content { z-index: 1; }
+.login-page--new-year .ny-fireworks { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; mix-blend-mode: screen; }
+.login-page--new-year .ny-bokeh { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+.login-page--new-year .ny-bokeh i {
+  position: absolute;
+  bottom: -40px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(247, 217, 139, 0.55), rgba(232, 180, 76, 0.15) 60%, transparent 70%);
+  animation: ny-rise linear infinite;
+}
+@keyframes ny-rise { 0% { transform: translateY(0) scale(0.8); opacity: 0; } 15% { opacity: 1; } 100% { transform: translateY(-75vh) scale(1.1); opacity: 0; } }
+.login-page--new-year .ny-glow {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 120px;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(70% 100% at 50% 100%, rgba(232, 180, 76, 0.28), transparent 70%);
+}
+
+/* "Feliz <year>" badge under the subtitle. */
+.login-page--new-year .ny-badge {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 24px;
+  padding: 8px 18px;
+  border: 1px solid rgba(247, 217, 139, 0.45);
+  border-radius: 999px;
+  color: #ffffff;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
+  backdrop-filter: blur(6px);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 1s ease 0.2s, transform 1s ease 0.2s;
+}
+.login-page--new-year .season-on .ny-badge { opacity: 1; transform: none; }
+.login-page--new-year .ny-badge b {
+  background: linear-gradient(90deg, var(--ny-gold-3), var(--ny-gold-2), var(--ny-gold), var(--ny-gold-2), var(--ny-gold-3));
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-size: 16px;
+  animation: ny-shimmer 3s linear infinite;
+}
+@keyframes ny-shimmer { to { background-position: -200% 0; } }
+.login-page--new-year .ny-badge .ny-star { width: 12px; height: 12px; fill: var(--ny-gold-2); }
+
+/* Gold glow in the corners of the white side and a shining stripe on top of the card. */
+.login-page--new-year .access-panel { position: relative; }
+.login-page--new-year .ny-aura {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(320px 240px at 100% 0%, rgba(232, 180, 76, 0.16), transparent 70%),
+    radial-gradient(340px 260px at 100% 100%, rgba(13, 67, 128, 0.08), transparent 70%);
+}
+.login-page--new-year .login-card { position: relative; z-index: 1; }
+.login-page--new-year .ny-card-frame { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; pointer-events: none; }
+.login-page--new-year .ny-card-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--ny-gold-3), var(--ny-gold-2), #f47c20, var(--ny-gold-2), var(--ny-gold-3));
+  background-size: 200% 100%;
+  animation: ny-shimmer 4s linear infinite;
+}
+
+.login-page--new-year .ny-confetti { position: fixed; inset: 0; z-index: 20; pointer-events: none; opacity: 0; transition: opacity 2s ease; }
+.login-page--new-year .ny-confetti--on { opacity: 1; }
+
+@media (max-width: 760px) {
+  .login-page--new-year .ny-badge { margin-top: 12px; padding: 5px 14px; font-size: 12px; }
+  .login-page--new-year .ny-badge b { font-size: 13px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-page--new-year .brand-intro--play .ny-hat { animation: none; opacity: 1; }
+  .login-page--new-year :is(.ny-fireworks, .ny-bokeh, .ny-confetti) { display: none; }
+  .login-page--new-year :is(.ny-tassel, .ny-badge b, .ny-card-bar) { animation: none; }
+}

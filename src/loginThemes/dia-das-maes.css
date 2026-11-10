@@ -1,0 +1,14 @@
+/* DIA DAS MÃES: look of the login generated from its mockup by scripts/build-login-themes.mjs. Every rule hangs on .login-page--dia-das-maes. */
+.login-page--dia-das-maes{--fx-grad:linear-gradient(90deg,#ffc2d1,#ff8fab,#ff4d6d,#ff8fab,#ffc2d1);--fx-badge-border:rgba(255,143,171,.6);--fx-accent:#e5386d;--fx-aura:radial-gradient(320px 240px at 100% 0%,rgba(255,143,171,.18),transparent 70%),radial-gradient(340px 260px at 100% 100%,rgba(255,77,109,.10),transparent 70%)}
+
+.login-page--dia-das-maes .fx-rise{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.login-page--dia-das-maes .fx-rise>span{position:absolute;bottom:-70px;display:block;animation:fx-rise linear infinite}
+.login-page--dia-das-maes .fx-rise>span svg{display:block;width:100%;height:auto}
+.login-page--dia-das-maes .fx-rise>span.b{border-radius:50%;background:radial-gradient(circle,var(--c),transparent 70%)}
+@keyframes fx-rise{0%{transform:translateY(0) rotate(var(--r0,0deg));opacity:0}12%{opacity:var(--o,.6)}85%{opacity:var(--o,.6)}100%{transform:translateY(-115vh) rotate(var(--r1,0deg));opacity:0}}
+.login-page--dia-das-maes .fx-glow{position:absolute;inset:0;z-index:0;pointer-events:none;mix-blend-mode:screen}
+@media (prefers-reduced-motion:reduce){.login-page--dia-das-maes .fx-rise{display:none}}
+
+.login-page--dia-das-maes .ma-beat{transform-box:fill-box;transform-origin:50% 60%;animation:ma-beat 1.6s ease-in-out infinite}
+@keyframes ma-beat{0%,40%,100%{transform:scale(1)}15%{transform:scale(1.08)}28%{transform:scale(.98)}}
+@media (prefers-reduced-motion:reduce){.login-page--dia-das-maes .ma-beat{animation:none}}

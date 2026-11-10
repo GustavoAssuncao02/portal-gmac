@@ -1,0 +1,10 @@
+/* DIA DOS PAIS: look of the login generated from its mockup by scripts/build-login-themes.mjs. Every rule hangs on .login-page--dia-dos-pais. */
+.login-page--dia-dos-pais{--fx-grad:linear-gradient(90deg,#f7d98b,#e8b44c,#9cc8ff,#e8b44c,#f7d98b);--fx-badge-border:rgba(232,180,76,.55);--fx-accent:#b9822a;--fx-aura:radial-gradient(320px 240px at 100% 0%,rgba(232,180,76,.14),transparent 70%),radial-gradient(340px 260px at 100% 100%,rgba(13,67,128,.10),transparent 70%)}
+
+.login-page--dia-dos-pais .fx-rise{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.login-page--dia-dos-pais .fx-rise>span{position:absolute;bottom:-70px;display:block;animation:fx-rise linear infinite}
+.login-page--dia-dos-pais .fx-rise>span svg{display:block;width:100%;height:auto}
+.login-page--dia-dos-pais .fx-rise>span.b{border-radius:50%;background:radial-gradient(circle,var(--c),transparent 70%)}
+@keyframes fx-rise{0%{transform:translateY(0) rotate(var(--r0,0deg));opacity:0}12%{opacity:var(--o,.6)}85%{opacity:var(--o,.6)}100%{transform:translateY(-115vh) rotate(var(--r1,0deg));opacity:0}}
+.login-page--dia-dos-pais .fx-glow{position:absolute;inset:0;z-index:0;pointer-events:none;mix-blend-mode:screen}
+@media (prefers-reduced-motion:reduce){.login-page--dia-dos-pais .fx-rise{display:none}}

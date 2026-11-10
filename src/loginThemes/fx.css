@@ -1,0 +1,44 @@
+/* Base shared by the commemorative looks of the login (generated from the mockups' "base dos temas" by scripts/build-login-themes.mjs).
+   Every rule hangs on .login-page--fx, present only while one of those looks is on. */
+.login-page--fx .brand-panel__content{z-index:1}
+.login-page--fx .fx-late{opacity:0;transition:opacity 1.4s ease}
+.login-page--fx .season-on .fx-late{opacity:1}
+
+/* Acessório na logo: cai logo após o símbolo girar (símbolo termina em 0,9s) */
+.login-page--fx .fx-acc{opacity:0;transform-box:fill-box;transform-origin:50% 100%}
+.login-page--fx .brand-intro--play .fx-acc{animation:fx-acc-drop .75s cubic-bezier(.3,1.5,.5,1) .95s both,fx-acc-sway 4.5s ease-in-out 1.8s infinite}
+@keyframes fx-acc-drop{0%{opacity:0;transform:translateY(-140px) rotate(-30deg)}60%{opacity:1}100%{opacity:1;transform:none}}
+@keyframes fx-acc-sway{0%,100%{transform:rotate(0)}50%{transform:rotate(4deg)}}
+
+/* Selo abaixo do subtítulo */
+.login-page--fx .fx-badge{position:relative;z-index:1;display:inline-flex;align-items:center;gap:10px;margin-top:24px;
+  padding:8px 18px;border-radius:999px;font-size:14px;font-weight:600;letter-spacing:.4px;color:#fff;
+  background:linear-gradient(135deg,rgba(255,255,255,.12),rgba(255,255,255,.04));
+  border:1px solid var(--fx-badge-border);backdrop-filter:blur(6px);
+  opacity:0;transform:translateY(10px);transition:opacity 1s ease .2s,transform 1s ease .2s}
+.login-page--fx .season-on .fx-badge{opacity:1;transform:none}
+.login-page--fx .fx-badge b{background:var(--fx-grad);background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;
+  animation:fx-shimmer 3s linear infinite;font-size:16px}
+.login-page--fx .fx-badge .fx-ico{width:16px;height:16px}
+@keyframes fx-shimmer{to{background-position:-200% 0}}
+
+/* Card de login */
+.login-page--fx .access-panel{position:relative}
+.login-page--fx .access-panel .login-card{position:relative;z-index:1}
+.login-page--fx .fx-card-bar{position:absolute;top:0;left:0;right:0;height:4px;background:var(--fx-grad);background-size:200% 100%;animation:fx-shimmer 4s linear infinite}
+.login-page--fx .fx-aura{position:fixed;inset:0;pointer-events:none;z-index:0;background:var(--fx-aura)}
+
+.login-page--fx .fx-page{position:fixed;inset:0;z-index:20;pointer-events:none;opacity:0;transition:opacity 2s ease}
+.login-page--fx .fx-page--on{opacity:1}
+
+@media (max-width:760px){
+  .login-page--fx .fx-badge{margin-top:12px;padding:5px 14px;font-size:12px}
+  .login-page--fx .fx-badge b{font-size:13px}
+}
+@media (prefers-reduced-motion:reduce){
+  .login-page--fx .brand-intro--play .fx-acc{animation:none;opacity:1}
+  .login-page--fx .fx-page{display:none}
+  .login-page--fx .fx-badge b,.login-page--fx .fx-card-bar{animation:none}
+}
+.login-page--fx .fx-layers { display: contents; }
+.login-page--fx .fx-card-frame { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; pointer-events: none; }

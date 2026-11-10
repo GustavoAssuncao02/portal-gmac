@@ -1,0 +1,24 @@
+/* CARNAVAL: look of the login generated from its mockup by scripts/build-login-themes.mjs. Every rule hangs on .login-page--carnaval. */
+.login-page--carnaval{--fx-grad:linear-gradient(90deg,#ff4fa3,#ffd23f,#3ee6b0,#5ec8ff,#b07bff,#ff4fa3);--fx-badge-border:rgba(255,79,163,.55);
+  --fx-accent:#e5317f;--fx-aura:radial-gradient(320px 240px at 100% 0%,rgba(229,49,127,.13),transparent 70%),radial-gradient(340px 260px at 100% 100%,rgba(123,63,228,.12),transparent 70%)}
+/* luzes coloridas de festa */
+.login-page--carnaval .cv-glow{position:absolute;inset:0;z-index:0;pointer-events:none;mix-blend-mode:screen;
+  background:radial-gradient(40% 30% at 15% 85%,rgba(255,79,163,.35),transparent 70%),
+             radial-gradient(40% 30% at 85% 80%,rgba(176,123,255,.35),transparent 70%),
+             radial-gradient(35% 25% at 80% 20%,rgba(255,210,63,.22),transparent 70%);
+  animation:cv-glow 6s ease-in-out infinite alternate}
+@keyframes cv-glow{to{filter:hue-rotate(60deg)}}
+/* serpentinas penduradas */
+.login-page--carnaval .cv-streamers{position:absolute;top:0;left:0;width:100%;height:230px;z-index:0;pointer-events:none}
+.login-page--carnaval .cv-streamer{transform-box:fill-box;transform-origin:50% 0;animation:cv-sway 4.5s ease-in-out infinite alternate}
+@keyframes cv-sway{from{transform:rotate(-5deg)}to{transform:rotate(5deg)}}
+/* serpentinas jogadas (desenhadas no ar) */
+.login-page--carnaval .cv-throw{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.login-page--carnaval .cv-throw svg{position:absolute;overflow:visible}
+.login-page--carnaval .cv-throw path{fill:none;stroke-linecap:round;stroke-dasharray:var(--len) var(--len);stroke-dashoffset:var(--len);
+  animation:cv-throw var(--dur,6s) ease-in-out var(--delay,0s) infinite}
+@keyframes cv-throw{0%{stroke-dashoffset:var(--len);opacity:0}10%{opacity:1}55%{stroke-dashoffset:0;opacity:1}100%{stroke-dashoffset:calc(var(--len)*-1);opacity:0}}
+/* penas do cocar */
+.login-page--carnaval .cv-feather{transform-box:fill-box;transform-origin:50% 100%;animation:cv-feather 2.2s ease-in-out infinite alternate}
+@keyframes cv-feather{from{transform:rotate(-4deg)}to{transform:rotate(4deg)}}
+@media (prefers-reduced-motion:reduce){.login-page--carnaval .cv-streamer,.login-page--carnaval .cv-feather,.login-page--carnaval .cv-glow{animation:none}.login-page--carnaval .cv-throw{display:none}}
