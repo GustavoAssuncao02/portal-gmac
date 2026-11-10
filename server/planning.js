@@ -6,6 +6,7 @@ import { requireAdminOrOperator } from './access.js'
 import { employeeRecords } from './employeeAccess.js'
 import { sectorRows } from './registries.js'
 import { machineSectors } from './machines.js'
+import { sortedByName } from './byName.js'
 import { DAY_MS, SLOT_MS, addDays, blockEnd, blockStart, blockState, clockTime, dayStart, localDay, operatorQueue, orderStages, planningBacklog } from './planningRules.js'
 
 const fail = (status, message) => { throw Object.assign(new Error(message), { status }) }
@@ -14,8 +15,8 @@ const isDate = (value) => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.tes
 // Machines and labor services as the plan sees them: what can receive a block, with its sectors.
 function planningResources(store) {
   return [
-    ...(store.machines || []).map((item) => ({ type: 'machine', id: String(item.id), name: item.name, sectors: machineSectors(item), maintenance: item.maintenance || null })),
-    ...(store.laborServices || []).map((item) => ({ type: 'labor-service', id: String(item.id), name: item.name, sectors: machineSectors(item), maintenance: null })),
+    ...sortedByName(store.machines).map((item) => ({ type: 'machine', id: String(item.id), name: item.name, sectors: machineSectors(item), maintenance: item.maintenance || null })),
+    ...sortedByName(store.laborServices).map((item) => ({ type: 'labor-service', id: String(item.id), name: item.name, sectors: machineSectors(item), maintenance: null })),
   ]
 }
 

@@ -6,6 +6,7 @@ import { copyFile, cp, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { configureWeb, serveInterface } from '../server/webServer.js'
+import { sortedByName } from '../server/byName.js'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -15,7 +16,7 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   const directory = await mkdtemp(path.join(results, 'workflow-'))
   // The copied modules keep their data next to them; a DATA_DIR from the shell would point them at real data.
   delete process.env.DATA_DIR
-  for (const name of ['entryMode.js', 'registryHistory.js', 'materialStock.js', 'invoiceImport.js', 'loginThrottle.js', 'liveUpdates.js','planning.js','planningRules.js', 'offers.js', 'stageLabor.js', 'proposalEmails.js', 'stageCatalog.js', 'orderHistory.js', 'pieces.js', 'access.js', 'orderMaterials.js', 'pendingMaterials.js', 'operations.js', 'orderEditing.js', 'operatorAuth.js', 'employeeAccess.js', 'employeeActivity.js', 'serviceStages.js', 'machines.js', 'laborServices.js', 'accounts.js', 'reports.js', 'reportData.js', 'documentExports.js', 'payables.js', 'payableRules.js', 'receivables.js', 'bankStatements.js', 'ofx.js', 'materialRequests.js', 'notificationRules.js', 'notificationEvents.js', 'operationSessions.js', 'operationEventTime.js', 'operationManualEvents.js', 'materialRequestCodes.js', 'notifications.js', 'fiscalCatalog.js', 'dataDirectory.js', 'proposalDocuments.js', 'clientDocument.js', 'proposalDefaults.js', 'proposalPdf.js', 'proposalBrand.js', 'proposalMath.js', 'moneyWords.js', 'store.js', 'materialUnits.js', 'banks.js', 'operatorAccount.js', 'registries.js', 'requesters.js','serviceLocation.js', 'materialRequestSources.js', 'inventory.js', 'inventoryAppearance.js', 'materialIcons.js', 'uploads.js', 'machineUsage.js', 'accountPlan.js', 'accountPlanRules.js', 'dre.js', 'dreRules.js', 'dreExport.js', 'passwordReset.js']) {
+  for (const name of ['entryMode.js', 'registryHistory.js', 'materialStock.js', 'invoiceImport.js', 'loginThrottle.js', 'liveUpdates.js','planning.js','planningRules.js', 'byName.js', 'offers.js', 'stageLabor.js', 'proposalEmails.js', 'stageCatalog.js', 'orderHistory.js', 'pieces.js', 'access.js', 'orderMaterials.js', 'pendingMaterials.js', 'operations.js', 'orderEditing.js', 'operatorAuth.js', 'employeeAccess.js', 'employeeActivity.js', 'serviceStages.js', 'machines.js', 'laborServices.js', 'accounts.js', 'reports.js', 'reportData.js', 'documentExports.js', 'payables.js', 'payableRules.js', 'receivables.js', 'bankStatements.js', 'ofx.js', 'materialRequests.js', 'notificationRules.js', 'notificationEvents.js', 'operationSessions.js', 'operationEventTime.js', 'operationManualEvents.js', 'materialRequestCodes.js', 'notifications.js', 'fiscalCatalog.js', 'dataDirectory.js', 'proposalDocuments.js', 'clientDocument.js', 'proposalDefaults.js', 'proposalPdf.js', 'proposalBrand.js', 'proposalMath.js', 'moneyWords.js', 'store.js', 'materialUnits.js', 'banks.js', 'operatorAccount.js', 'registries.js', 'requesters.js','serviceLocation.js', 'materialRequestSources.js', 'inventory.js', 'inventoryAppearance.js', 'materialIcons.js', 'uploads.js', 'machineUsage.js', 'accountPlan.js', 'accountPlanRules.js', 'dre.js', 'dreRules.js', 'dreExport.js', 'passwordReset.js']) {
     await copyFile(path.join(root, 'server', name), path.join(directory, name))
   }
   // PDFs use the bundled logo and fonts.
@@ -96,7 +97,7 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   })
   // The planned time and the machine or service of every stage are mandatory. Most tests are not about it: stages they
   // send without a time get 60 minutes, as a detailed offer has, and stages without a machine or service get the first
-  // labor service. Once the offer is accepted, the OS loses those filled resources again, like an OS from before the
+  // labor service of the list (by name, as GET /labor-services sends it, so a test's `items[0]` is that one). Once the offer is accepted, the OS loses those filled resources again, like an OS from before the
   // rule: the operator tests keep choosing their machine or service through the API. `fillStageTimes: false` keeps the
   // requests as sent (tests of the rule itself).
   const filledPlans = new Map()
@@ -107,7 +108,7 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
       if (!Array.isArray(resources?.stages)) return next()
       resources.stageTimes = { ...Object.fromEntries(resources.stages.map((code) => [code, 60])), ...Object.fromEntries(Object.entries(resources.stageTimes || {}).filter(([, minutes]) => minutes)) }
       const store = await readStore()
-      const service = store.laborServices?.[0]
+      const service = sortedByName(store.laborServices)[0]
       if (!service) return next()
       const plans = { ...(resources.stageResources ?? (offer ? store.offers.find((item) => item.id === offer[1])?.resources?.stageResources : null) ?? {}) }
       const filled = resources.stages.filter((code) => !plans[code])
@@ -123,7 +124,7 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
     // An offer accepted again (after an undone acceptance) gets its filled resources back for the acceptance.
     try {
       await mutateStore((store) => {
-        const item = store.offers.find((entry) => entry.id === accept[1]), service = store.laborServices?.[0]
+        const item = store.offers.find((entry) => entry.id === accept[1]), service = sortedByName(store.laborServices)[0]
         const stages = item?.resources?.stages || []
         if (!item || item.orderCode || !service) return
         const missing = stages.filter((code) => !item.resources.stageResources?.[code])
@@ -139,7 +140,7 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
     response.json = (body) => {
       if (response.statusCode >= 400) return send(body)
       mutateStore((store) => {
-        const service = store.laborServices?.[0]
+        const service = sortedByName(store.laborServices)[0]
         for (const item of [store.offers.find((entry) => entry.id === accept[1]), store.orders.find((entry) => entry.offerId === accept[1])]) {
           for (const [code, plan] of Object.entries(item?.resources?.stageResources || {})) if (filledHere(plan, code, service)) delete item.resources.stageResources[code]
         }

@@ -11,6 +11,7 @@ import { assertNotReconciled, reconciledTransaction } from './bankStatements.js'
 import { orderValue } from './receivables.js'
 import { settlementBank, bankFilterNote } from './banks.js'
 import { classificationList, entryClassification } from './accountPlan.js'
+import { sortedByName } from './byName.js'
 
 const directory = path.join(dataDirectory, 'payable-files')
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), { status }) }
@@ -222,7 +223,7 @@ export default function createPayablesRouter(accounts, requireAdmin) {
       return store
     })
   }
-  router.get('/payables', handle(async (req, res) => { const store = await sweep(); res.json({ items: req.actor.role === 'staff' ? [] : store.payables.map((r) => view(r, store)), classifications: classificationList(store), suppliers: store.suppliers || [], orders: (store.orders || []).map((order) => ({ code: order.code, service: order.service, company: order.company, status: order.operation?.status || 'waiting' })) }) }))
+  router.get('/payables', handle(async (req, res) => { const store = await sweep(); res.json({ items: req.actor.role === 'staff' ? [] : store.payables.map((r) => view(r, store)), classifications: classificationList(store), suppliers: sortedByName(store.suppliers), orders: (store.orders || []).map((order) => ({ code: order.code, service: order.service, company: order.company, status: order.operation?.status || 'waiting' })) }) }))
   router.get('/payables/history', handle(async (_req, res) => { const store = await sweep(); res.json({ items: [...store.payableEvents].reverse() }) }))
   router.get('/payables/order-costs', handle(async (_req, res) => { const store = await sweep(); res.json({ items: (store.orders || []).map((order) => { const { payables, ...summary } = orderCosts(store, order); return { ...summary, payableCount: payables.length } }) }) }))
   router.get('/payables/order-costs/:code', handle(async (req, res) => { const store = await sweep(); const order = (store.orders || []).find((item) => item.code === req.params.code); if (!order) fail('OS não encontrada.', 404); res.json({ item: orderCosts(store, order) }) }))
@@ -403,7 +404,7 @@ export default function createPayablesRouter(accounts, requireAdmin) {
   router.get('/payables/:id/files/:fileId', handle(async (req, res) => { const store = await readStore(); init(store); const row = find(store, req.params.id); const file = [...row.attachments, ...(row.payment?.receipts || [])].find((f) => f.id === req.params.fileId); if (!file) fail('Arquivo não encontrado.', 404); res.setHeader('Content-Type', 'application/octet-stream'); res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(file.name)}`); await sendStoredFile(res, path.join(directory, file.id)) }))
   router.delete('/payables/:id/files/:fileId', handle(async (req, res) => { await mutateStore((store) => { init(store); const row = find(store, req.params.id); attachable(row); const file = row.attachments.find((f) => f.id === req.params.fileId); if (!file) fail('Arquivo não encontrado.', 404); row.attachments = row.attachments.filter((f) => f.id !== file.id); event(store, req.actor, 'attachment_removed', row.id, { details: { name: file.name } }) }); res.json({ ok: true }) }))
   router.post('/payables/export', handle(async (req, res) => { const store = await sweep(); if (req.body.ids !== undefined && !Array.isArray(req.body.ids)) fail('Seleção inválida.'); const rows = req.body.id ? [find(store, req.body.id)] : filterPayables(store.payables.map((r) => view(r, store)), req.body.filters).filter((r) => !req.body.ids || req.body.ids.includes(r.id)); if (!['pdf', 'xlsx'].includes(req.body.format)) fail('Formato inválido.'); const data = report(rows, store, Boolean(req.body.id), req.body.filters); const output = req.body.format === 'pdf' ? await exportPdf(data) : await exportWorkbook(data); res.setHeader('Content-Type', req.body.format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); res.setHeader('Content-Disposition', `attachment; filename="gmac-contas-a-pagar.${req.body.format}"`); res.send(Buffer.from(output)) }))
-  router.get('/suppliers', handle(async (_req, res) => { res.json({ items: (await readStore()).suppliers || [] }) }))
+  router.get('/suppliers', handle(async (_req, res) => { res.json({ items: sortedByName((await readStore()).suppliers) }) }))
   for (const method of ['post', 'put']) router[method](method === 'post' ? '/suppliers' : '/suppliers/:id', handle(async (req, res) => { const item = await mutateStore((store) => {
     init(store); store.suppliers ||= []
     const fields = { name: clean(req.body.name, 120), document: String(req.body.document || '').replace(/\D/g, ''), email: clean(req.body.email, 160), phone: clean(req.body.phone, 30), notes: clean(req.body.notes, 1000) }

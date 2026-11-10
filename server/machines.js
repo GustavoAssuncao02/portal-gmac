@@ -8,6 +8,7 @@ import { requireAdminOrOperator } from './access.js'
 import { registerSectorNames } from './registries.js'
 import { actorOf } from './registryHistory.js'
 import { machineDay, machineUsageReport } from './machineUsage.js'
+import { sortedByName } from './byName.js'
 
 export async function machineRows() { return (await readStore()).machines || [] }
 // A machine may serve more than one sector (the same T\u00eampera for Usinagem and Caldeiraria): `sectors` lists them and
@@ -72,7 +73,7 @@ export default function createMachinesRouter(requireAdmin, pool) {
     try {
       const store = await readStore()
       const orders = await ordersWithOperations(store.orders, pool)
-      response.set('Cache-Control', 'no-store').json({ items: machineAvailability(store.machines || [], orders) })
+      response.set('Cache-Control', 'no-store').json({ items: machineAvailability(sortedByName(store.machines), orders) })
     } catch (error) { next(error) }
   })
   // Machine use over a period (the current month by default on the screen), up to one year at a time.

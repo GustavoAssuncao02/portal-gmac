@@ -13,7 +13,8 @@ test('planning: blocks per machine on the 15-minute grid, what is left to plan, 
   const usinagem = (await fixture.adminRequest('/sectors', 'POST', { name: 'Usinagem' })).data.item
   const ana = (await fixture.adminRequest('/employees', 'POST', { name: 'Ana Teste', cpf: '00000000001', sectorIds: [usinagem.id] })).data.item
   const bruno = (await fixture.adminRequest('/employees', 'POST', { name: 'Bruno Teste', cpf: '00000000002' })).data.item
-  const [service] = (await fixture.adminRequest('/labor-services')).data.items
+  // The labor service of Usinagem (the default Tornearia): Ana's sector queue shows it. The list comes by name, so it is picked by name.
+  const service = (await fixture.adminRequest('/labor-services')).data.items.find((item) => item.name === 'Tornearia')
   const offer = (await fixture.adminRequest('/offers', 'POST', { ...offerDraft, quantity: 10 })).data.item
   await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], kind: 'service', stages: ['turning', 'painting'], stageTimes: { turning: 120, painting: 60 }, stageResources: { turning: { type: 'machine', id: 'torno' } } })
   await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', serviceValue: 100, deadline: offerDraft.deadline } })

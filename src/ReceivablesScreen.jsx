@@ -11,6 +11,7 @@ import { latestOnly, pollWhileVisible } from './polling.js'
 import ReceivableForecast from './ReceivableForecast.jsx'
 import BankSelect, { useBanks, bankOptionLabel } from './BankSelect.jsx'
 import ClassificationSelect, { RevenueTermHint } from './ClassificationSelect.jsx'
+import { byName } from './byName.js'
 import './payables.css'
 import { useListState, useResetOnChange } from './savedListState.js'
 import DeleteAccountModal, { DeleteRowButton } from './DeleteAccountModal.jsx'
@@ -51,7 +52,8 @@ export function ReceivableForm({ source, siblings = [], structureLocked: receive
   const [draft, setDraft] = useState(() => source ? { clientId: source.clientId || '', customerName: source.customerName, customerDocument: source.customerDocument || '', description: source.description, documentNumber: source.documentNumber, issueDate: source.issueDate, value: decimal(grouped ? source.originalTotalCents : source.valueCents), dueDate: grouped ? siblings[0]?.dueDate || source.dueDate : source.dueDate, kind: grouped ? 'installment' : source.kind === 'recurring' ? 'recurring' : 'single', recurrence: source.recurrence || 'monthly', ahead: 0, count: grouped ? source.installmentCount : 2, installments: grouped ? siblings.map((row) => ({ value: decimal(row.valueCents), dueDate: row.dueDate })) : [], iss: decimal(grouped ? siblings.reduce((sum, row) => sum + (row.issCents || 0), 0) : source.issCents || 0), date: source.receipt?.date || todayBahia(), method: source.receipt?.method || 'pix', bankId: source.receipt?.bankId || '', received: source.receipt ? decimal(source.receipt.finalCents) : '', classificationId: source.classificationId || '' } : { classificationId: '', clientId: '', customerName: '', customerDocument: '', description: '', documentNumber: '', issueDate: todayBahia(), value: '', dueDate: '', kind: 'single', recurrence: 'monthly', ahead: 11, count: 2, installments: [], iss: '', date: todayBahia(), method: 'pix', bankId: '' })
   const [files, setFiles] = useState([]), [busy, setBusy] = useState(false), [error, setError] = useState(''), [creatingClient, setCreatingClient] = useState(false), [newClients, setNewClients] = useState([])
   const dueInput = useRef(null)
-  const clientOptions = [...clients, ...newClients.filter((row) => !clients.some((item) => item.id === row.id))]
+  // A client registered here joins the list in its alphabetical place right away.
+  const clientOptions = [...clients, ...newClients.filter((row) => !clients.some((item) => item.id === row.id))].sort(byName)
   const change = (key, value) => { const next = { ...draft, [key]: value }; setDraft(['value', 'dueDate', 'kind'].includes(key) ? withInstallments(next) : next) }
   const installment = !treasury && draft.kind === 'installment', recurring = !treasury && draft.kind === 'recurring'
   const valueLabel = installment ? 'Valor total' : adjusted ? fromOrder ? 'Valor da OS' : 'Valor da conta' : 'Valor'

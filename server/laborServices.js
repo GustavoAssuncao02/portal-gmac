@@ -8,6 +8,7 @@ import { duration, hourReport, ordersWithOperations, workIntervals } from './rep
 import { registerSectorNames } from './registries.js'
 import { actorOf } from './registryHistory.js'
 import { machineSectors, sectorLabel } from './machines.js'
+import { sortedByName } from './byName.js'
 
 const defaults = [
   ['Tornearia', 'Usinagem', 85], ['Fresagem', 'Usinagem', 90],
@@ -41,7 +42,7 @@ export default function createLaborServicesRouter(requireAdmin, pool) {
       const store = await readStore()
       const intervals = workIntervals(await ordersWithOperations(store.orders, pool))
       const totals = hourReport(intervals, store.laborServices || [], 'laborServiceId', { start: 0, end: Date.now() }, [], { parallelField: 'employeeId' }).totals
-      response.set('Cache-Control', 'no-store').json({ items: (store.laborServices || []).map((row) => ({ ...row, usage: duration(totals.find((item) => item.id === String(row.id))?.ms || 0) })) })
+      response.set('Cache-Control', 'no-store').json({ items: sortedByName(store.laborServices).map((row) => ({ ...row, usage: duration(totals.find((item) => item.id === String(row.id))?.ms || 0) })) })
     } catch (error) { next(error) }
   })
   router.get('/labor-services/:id/history', requireAdmin, async (request, response, next) => {

@@ -6,6 +6,7 @@ import { payableRequest, uploadPayableFiles, decimal, money, dateLabel } from '.
 import { todayBahia, makeInstallments, cents, shiftMonth, settlementMethods, treasuryEntry, scaleSplit } from '../server/payableRules.js'
 import BankSelect from './BankSelect.jsx'
 import ClassificationSelect from './ClassificationSelect.jsx'
+import { byName } from './byName.js'
 
 const empty = () => ({ supplierId: '', description: '', classificationId: '', split: [], documentNumber: '', issueDate: todayBahia(), value: '', dueDate: '', kind: 'normal', recurrence: 'monthly', ahead: 11, orderCode: '', count: 1, installments: [], date: todayBahia(), method: 'pix' })
 const safeCents = (value) => { try { return cents(value) } catch { return null } }
@@ -43,7 +44,8 @@ export default function PayableForm({ suppliers, classifications, orders = [], i
   const initial = source ? { ...empty(), ...source, orderCode: source.orderCode || '', ahead: 0, previousId: source.nextRecurrence ? source.id : edit ? source.previousId : undefined, value: decimal(source.groupId ? source.originalTotalCents : source.valueCents), count: source.kind === 'installment' ? source.installmentCount || 1 : 1, kind: source.kind, installments: edit ? siblings.map((r) => ({ value: decimal(r.valueCents), dueDate: r.dueDate })) : [], date: edit && source.payment ? source.payment.date : todayBahia(), method: edit && source.payment ? source.payment.method : 'pix', bankId: edit && source.payment ? source.payment.bankId || '' : '', split: splitDraft(source) } : { ...empty(), ...prefill }
   const [draft, setDraft] = useState(initial), [files, setFiles] = useState([]), [busy, setBusy] = useState(false), [error, setError] = useState('')
   const [creatingSupplier, setCreatingSupplier] = useState(false), [newSuppliers, setNewSuppliers] = useState([]), [suggested, setSuggested] = useState(false)
-  const supplierOptions = [...suppliers, ...newSuppliers.filter((row) => !suppliers.some((item) => item.id === row.id))]
+  // A supplier registered here joins the list in its alphabetical place right away.
+  const supplierOptions = [...suppliers, ...newSuppliers.filter((row) => !suppliers.some((item) => item.id === row.id))].sort(byName)
   useEffect(() => { if (!edit && !treasury && draft.kind === 'installment') recalculate(draft) }, [])
   function recalculate(next) {
     try { if (next.value && next.dueDate) next = { ...next, installments: makeInstallments(cents(next.value), next.dueDate, Number(next.count)).map((r) => ({ value: decimal(r.valueCents), dueDate: r.dueDate })) } } catch { next = { ...next, installments: [] } }
