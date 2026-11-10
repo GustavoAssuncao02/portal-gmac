@@ -7549,3 +7549,107 @@ input.upper-input::placeholder { text-transform: none; }
 .offer-creating-modal--discard .os-edit-actions .offer-creating-confirm { border-color: #ed515a; color: #e63540; background: #fff0f1; }
 .offer-creating-note { color: #5b6f86; font-size: 13px; }
 .offer-details-header { flex-wrap: wrap; }
+
+/* "Linha em dois andares" — only where the list does not fit (measured on 2026-11-10 with long piece names).
+   With too little room the piece name was squeezed letter by letter (iPad 11 lying down with the menu open, 1366/1440
+   notebooks with the menu open, iPad standing for the offers). There each row gets two floors: the name alone on the
+   first line, the data below with labels, and the column titles become an "Ordenar por" bar (same sort buttons).
+   Wider lists (Full HD, 2K, Quad HD, 4K) keep the tables exactly as before. The thresholds are the list width, so the
+   menu open or closed counts, and in rem, so a larger account font switches a little earlier:
+   - offers: words broke below ~1200 px of list → 77.5rem (1240 px);
+   - Serviços em andamento / concluídos: words broke below ~1000 px of table → 65rem (1040 px), only above 1150 px of
+     screen, because below it these panels already have their tablet layout (unchanged). */
+.offers-board { container: offers-board / inline-size; }
+.admin-os-shell .admin-os-table-wrap { container: services-panel / inline-size; }
+.offer-piece-label { display: none; }
+/* The offers screen kept the 960 px minimum of the 761–1600 px density rule, so on an iPad standing (820 px) it ran
+   off the right edge. Like the services panels, it follows the screen; from 960 px up nothing changes. */
+.dashboard-shell.offers-shell { min-width: 0; }
+
+@media (min-width: 761px) {
+  @container offers-board (max-width: 77.5rem) {
+    .offers-board .offers-board-toolbar { grid-template-columns: minmax(0, 1fr) 190px; gap: 14px 16px; }
+    .offers-board .offers-board-toolbar .offers-search { width: 100%; }
+    .offers-board .offers-board-toolbar .offers-date input { width: 100%; }
+    .offers-board .offers-board-toolbar .offer-filters { grid-column: 1 / -1; flex-wrap: wrap; justify-content: flex-start; }
+    .offers-board .offers-board-toolbar .manual-offer-button { margin-left: auto; }
+    .offers-board .offers-table { width: 100%; min-width: 0; }
+    .offers-board .offers-table-header { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 0; padding: 10px 12px; }
+    .offers-board .offers-table-header::before { content: 'Ordenar por'; margin-right: 4px; color: #53677a; font-size: 12px; font-weight: 600; }
+    .offers-board .offers-table-header > * { padding: 0; }
+    .offers-board .offers-table-header > :nth-child(3), .offers-board .offers-table-header > :last-child { display: none; }
+    .offers-board .offers-table-header .sort-header-button { height: 30px; padding: 0 11px; border: 1px solid #d3deea; border-radius: 999px; background: #ffffff; color: #0c4c91; font-size: 12px; font-weight: 600; white-space: nowrap; }
+    .offers-board .offers-table-row:not(.offers-table-header) { grid-template-columns: minmax(0, 1.3fr) 84px 104px 104px minmax(0, 1fr) 200px; grid-template-areas: "piece piece piece piece piece status" "client quantity requested deadline origin actions"; gap: 10px 0; min-height: 0; padding: 14px 0; align-items: start; font-size: 13px; }
+    .offers-board .offers-table-row:not(.offers-table-header) > * { padding: 0 10px; overflow-wrap: break-word; }
+    .offers-board .offers-table-row:not(.offers-table-header) > :nth-child(1) { grid-area: piece; }
+    .offers-board .offers-table-row:not(.offers-table-header) > :nth-child(2) { grid-area: client; }
+    .offers-board .offers-table-row:not(.offers-table-header) > :nth-child(3) { display: none; }
+    .offers-board .offers-table-row:not(.offers-table-header) > :nth-child(4) { grid-area: quantity; }
+    .offers-board .offers-table-row:not(.offers-table-header) > :nth-child(5) { grid-area: requested; }
+    .offers-board .offers-table-row:not(.offers-table-header) > :nth-child(6) { grid-area: deadline; }
+    .offers-board .offers-table-row:not(.offers-table-header) > :nth-child(7) { grid-area: status; }
+    .offers-board .offers-table-row:not(.offers-table-header) > :nth-child(8) { grid-area: origin; }
+    .offers-board .offers-table-row:not(.offers-table-header) > :nth-child(9) { grid-area: actions; padding-right: 10px !important; }
+    .offers-board .offers-table-row:not(.offers-table-header) > [data-label]::before { content: attr(data-label); display: block; margin-bottom: 3px; color: #66809b; font-size: 11px; font-weight: 500; }
+    .offers-board .offer-piece { flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; }
+    .offers-board .offer-piece strong { flex-basis: 100%; font-size: 15px; line-height: 1.35; }
+    .offers-board .offer-piece span { font-size: 12px; }
+    .offers-board .offer-piece .offer-piece-label { display: inline; }
+    .offers-board .offer-piece .offer-piece-label::before { content: '· '; }
+    .offers-board .offer-status-cell { justify-items: stretch; }
+    .offers-board .offer-table-status { min-height: 0; margin: 0; padding: 6px 8px; }
+    .offers-board .offer-table-status strong { font-size: 13px; }
+    .offers-board .offer-table-status span { font-size: 11px; }
+    .offers-board .offer-table-actions { gap: 6px; }
+    .offers-board .offer-table-actions button { min-height: 40px; padding: 4px 6px; font-size: 12px; }
+  }
+  /* Even narrower (iPad standing): the data go to two lines. */
+  @container offers-board (max-width: 52rem) {
+    .offers-board .offers-table-row:not(.offers-table-header) { grid-template-columns: repeat(6, minmax(0, 1fr)) 200px; grid-template-areas: "piece piece piece piece piece piece status" "client client client origin origin origin actions" "quantity quantity requested requested deadline deadline actions"; }
+  }
+}
+
+@media (min-width: 1151px) {
+  @container services-panel (max-width: 65rem) {
+    .admin-os-shell .admin-os-table, .admin-os-shell .admin-os-table thead, .admin-os-shell .admin-os-table tbody { display: block; }
+    .admin-os-shell .admin-os-table thead tr { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px 12px; border-bottom: 1px solid #dce5ef; background: #f1f6fb; }
+    .admin-os-shell .admin-os-table thead tr::before { content: 'Ordenar por'; margin-right: 4px; color: #53677a; font-size: 12px; font-weight: 600; }
+    .admin-os-shell .admin-os-table thead th:nth-child(n) { display: block; width: auto; padding: 0; border: 0 !important; background: transparent; }
+    .admin-os-shell .admin-os-table thead th:nth-child(n):empty, .admin-os-shell--completed .admin-os-table thead th:nth-child(4) { display: none; }
+    .admin-os-shell .admin-os-table thead .admin-os-sort { height: 30px; padding: 0 11px; border: 1px solid #d3deea; border-radius: 999px; background: #ffffff; color: #0c4c91; font-size: 12px; font-weight: 600; white-space: nowrap; }
+    .admin-os-shell .admin-os-table tbody tr { display: grid; gap: 12px 14px; padding: 14px 16px; border-bottom: 1px solid #e8eef4; align-items: start; }
+    .admin-os-shell .admin-os-table tbody tr:last-child { border-bottom: 0; }
+    .admin-os-shell:not(.admin-os-shell--completed) .admin-os-table tbody tr { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr) 84px 80px 84px 132px 76px; grid-template-areas: "name name name name name name status action" "client people stage pieces active time status action" "track track track track track track track track"; }
+    .admin-os-shell--completed .admin-os-table tbody tr { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.3fr) 70px 80px 130px 112px 112px 70px; grid-template-areas: "name name name name name status order action" "client people pieces active time status order action"; }
+    .admin-os-shell .admin-os-table tbody td:nth-child(n) { display: block; min-width: 0; padding: 0; border: 0 !important; font-size: 13px; }
+    .admin-os-shell .admin-os-table tbody td:nth-child(n)[data-label]::before { content: attr(data-label); display: block; margin-bottom: 3px; color: #66809b; font-size: 11px; font-weight: 500; }
+    .admin-os-shell .admin-os-table tbody td:nth-child(n):is([data-label="Progresso"], [data-label="Status"], [data-label="Pedido de compra"])::before { display: none; }
+    .admin-os-shell .admin-os-table tbody td:first-child { grid-area: name; }
+    .admin-os-shell .admin-os-table tbody td[data-label="Cliente"] { grid-area: client; }
+    .admin-os-shell .admin-os-table tbody td:is([data-label="Operador"], [data-label="Colaboradores"]) { grid-area: people; }
+    .admin-os-shell .admin-os-table tbody td[data-label="Etapa atual"] { grid-area: stage; }
+    .admin-os-shell--completed .admin-os-table tbody td[data-label="Etapa atual"] { display: none; }
+    .admin-os-shell .admin-os-table tbody td[data-label="Peças concluídas"] { grid-area: pieces; }
+    .admin-os-shell .admin-os-table tbody td[data-label="Tempo ativo"] { grid-area: active; }
+    .admin-os-shell .admin-os-table tbody td:is([data-label="Tempo restante"], [data-label="Conclusão"]) { grid-area: time; }
+    .admin-os-shell .admin-os-table tbody td[data-label="Status"] { grid-area: status; align-self: center; }
+    .admin-os-shell .admin-os-table tbody td[data-label="Pedido de compra"] { grid-area: order; align-self: center; }
+    .admin-os-shell .admin-os-table tbody td[data-label="Progresso"] { grid-area: track; }
+    .admin-os-shell .admin-os-table tbody td:last-child { grid-area: action; align-self: center; }
+    .admin-os-shell .admin-os-table td:first-child strong { font-size: 15px; line-height: 1.35; }
+    .admin-os-shell .admin-os-table td:first-child small { font-size: 12px; }
+    .admin-os-shell .admin-os-table .admin-os-status { white-space: nowrap; font-size: 13px; }
+    .admin-os-shell .admin-os-table td button { width: 100%; min-height: 36px; font-size: 12px; }
+    .admin-os-shell .admin-os-stage-label { font-size: 10px; }
+    /* Emergency and just-reopened rows: the stripe and the highlight go on the whole row. */
+    .admin-os-shell .admin-os-table .admin-os-row--emergency > td:first-child, .admin-os-shell .admin-os-table .admin-os-row--reopened > td:first-child { box-shadow: none; }
+    .admin-os-shell .admin-os-table tbody tr.admin-os-row--emergency { box-shadow: inset 3px 0 0 #ef8a2e; }
+    .admin-os-shell .admin-os-table tbody tr.admin-os-row--reopened { box-shadow: inset 3px 0 0 #0c4c91; animation: admin-os-reopened 8s ease-out forwards; }
+    .admin-os-shell .admin-os-table .admin-os-row--reopened > td { animation: none; background-color: transparent; }
+  }
+}
+@media (min-width: 1151px) and (prefers-reduced-motion: reduce) {
+  @container services-panel (max-width: 65rem) {
+    .admin-os-shell .admin-os-table tbody tr.admin-os-row--reopened { animation: none; background-color: rgba(30, 120, 210, .18); }
+  }
+}
