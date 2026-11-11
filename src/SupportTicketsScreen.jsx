@@ -56,7 +56,7 @@ function NewTicketForm({ onCreated }) {
   }
   return <section className="ticket-form" aria-labelledby={`${id}-heading`}>
     <h2 id={`${id}-heading`}>Abrir novo ticket</h2>
-    <p className="ticket-guidance" role="note"><Info size={18} aria-hidden="true" /><span><strong>Como relatar o problema:</strong> conte o que você estava fazendo, o que esperava que acontecesse e o que aconteceu de fato (a mensagem de erro, a tela e o número da OS, oferta ou conta envolvida). Anexe prints ou vídeos da tela como evidência: eles ajudam os desenvolvedores a reproduzir e resolver o problema mais rápido.</span></p>
+    <p className="ticket-guidance" role="note"><Info size={18} aria-hidden="true" /><span><strong>Como relatar o problema:</strong> conte o que você estava fazendo, o que esperava que acontecesse e o que aconteceu de fato (a mensagem de erro, a tela e o número da OS, oferta ou conta envolvida). Anexe prints ou vídeos da tela como evidência.</span></p>
     <form onSubmit={submit}><fieldset className="ticket-form-fields" disabled={busy}>
       <fieldset className="ticket-choice"><legend>Grau de urgência</legend>
         <div className="ticket-urgency-options">{ticketUrgencies.map(([key, label]) => <label key={key} className={`ticket-option ticket-urgency-option ticket-urgency--${key}`}><input type="radio" name={`${id}-urgency`} value={key} required checked={draft.urgency === key} onChange={() => setDraft({ ...draft, urgency: key })} /><i className="ticket-urgency-dot" aria-hidden="true" /><span>{label}</span></label>)}</div>
@@ -300,7 +300,7 @@ export default function SupportTicketsScreen(props) {
   const detail = openId && items.find((ticket) => ticket.id === openId)
   return <AdminWorkspace {...props} title="Tickets de suporte">
     <div className="ticket-screen">
-      <p className="payable-muted ticket-intro">Encontrou um problema no portal? Abra um ticket para os desenvolvedores do sistema. Todos os tickets ficam listados abaixo, com quem abriu, a data e a hora.</p>
+      <p className="payable-muted ticket-intro"></p>
       <NewTicketForm onCreated={async (item) => { await load().catch(() => {}); setFilters(noFilters); return item }} />
       <section className="ticket-list" aria-labelledby="ticket-list-heading">
         <div className="ticket-list-heading"><h2 id="ticket-list-heading">Tickets</h2>{data && <span className="payable-muted">{visible.length === items.length ? ticketCount(items.length) : `${visible.length} de ${ticketCount(items.length)}`}</span>}</div>
