@@ -300,7 +300,6 @@ export default function SupportTicketsScreen(props) {
   const detail = openId && items.find((ticket) => ticket.id === openId)
   return <AdminWorkspace {...props} title="Tickets de suporte">
     <div className="ticket-screen">
-      <p className="payable-muted ticket-intro"></p>
       <NewTicketForm onCreated={async (item) => { await load().catch(() => {}); setFilters(noFilters); return item }} />
       <section className="ticket-list" aria-labelledby="ticket-list-heading">
         <div className="ticket-list-heading"><h2 id="ticket-list-heading">Tickets</h2>{data && <span className="payable-muted">{visible.length === items.length ? ticketCount(items.length) : `${visible.length} de ${ticketCount(items.length)}`}</span>}</div>
