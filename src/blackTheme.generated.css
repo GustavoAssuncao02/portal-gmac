@@ -3323,11 +3323,61 @@
     border: 1px solid #303133;
     background: #1a3022
 }
-:root[data-theme="dark"][data-tone="black"] .ticket-history {
+:root[data-theme="dark"][data-tone="black"] .ticket-thread-item:not(:last-child)::before {
+    background: #232425
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-thread-item:is(.ticket-thread-item--opened, .ticket-thread-item--reopened) .ticket-thread-avatar {
+    background: #232425;
     color: #ebebec
 }
-:root[data-theme="dark"][data-tone="black"] .ticket-history li span {
+:root[data-theme="dark"][data-tone="black"] .ticket-thread-item--closed .ticket-thread-avatar {
+    background: #1a3022
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-thread-body header {
+    color: #bfc2c5
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-thread-body header strong {
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-thread-body time {
     color: #cdcfd2
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-dev-badge {
+    border: 1px solid #303133;
+    background: #232425;
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-thread-item--comment .ticket-detail-text {
+    border: 1px solid #303133;
+    background: #1a1b1c
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-thread-item--closed .ticket-detail-text, :root[data-theme="dark"][data-tone="black"] .ticket-thread-item--reopened .ticket-detail-text {
+    border: 1px solid #303133;
+    background: #1a3022
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-thread-item--reopened .ticket-detail-text {
+    border-color: #303133;
+    background: #232425
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-thread-email {
+    color: #cdcfd2
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-age {
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-age svg {
+    color: #cdcfd2
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-age--closed {
+    color: #bec2c5
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-age small {
+    color: #cdcfd2
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-comment-count {
+    border: 1px solid #303133;
+    background: #232425;
+    color: #ebebec
 }
 @media (max-width: 760px) {
     :root[data-theme="dark"][data-tone="black"] .ticket-table tbody tr {

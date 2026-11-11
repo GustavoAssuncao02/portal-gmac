@@ -111,9 +111,28 @@
 .ticket-locked { display: flex; align-items: center; gap: 8px; margin: 0; color: #5d7792; font-size: 13px; }
 .ticket-resolution { padding: 14px; border: 1px solid #bfe3cc; border-radius: 6px; background: #effaf3; }
 .ticket-resolution small { display: block; margin-top: 8px; color: #4f7a62; font-size: 12px; }
-.ticket-history { display: grid; gap: 10px; margin: 0; padding: 0 0 0 18px; color: #24405d; font-size: 13px; }
-.ticket-history li span { display: block; color: #6b7f92; font-size: 12px; }
-.ticket-history li p { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+/* Conversation: a thread going down, like the replies of a post. A line joins the avatars. */
+.ticket-thread { margin: 0; padding: 0; list-style: none; }
+.ticket-thread-item { position: relative; display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 12px; padding-bottom: 16px; }
+.ticket-thread-item:not(:last-child)::before { content: ""; position: absolute; left: 17px; top: 38px; bottom: 2px; width: 2px; background: #d6e2ee; }
+.ticket-thread-avatar { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: #0c4c91; color: #ffffff; font-size: 12px; font-weight: 700; }
+.ticket-thread-item:is(.ticket-thread-item--opened, .ticket-thread-item--reopened) .ticket-thread-avatar { background: #e6f0fb; color: #0c4c91; }
+.ticket-thread-item--closed .ticket-thread-avatar { background: #e9f7ee; color: #137b44; }
+.ticket-thread-body { min-width: 0; padding-top: 2px; }
+.ticket-thread-body header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 6px; color: #4b6784; font-size: 13px; }
+.ticket-thread-body header strong { color: #0b2f55; }
+.ticket-thread-body time { color: #6b7f92; }
+.ticket-dev-badge { padding: 1px 7px; border: 1px solid #c4d9f1; border-radius: 999px; background: #e6f0fb; color: #0c4c91; font-size: 11px; font-weight: 600; }
+.ticket-thread-item--comment .ticket-detail-text { margin-top: 6px; padding: 10px 12px; border: 1px solid #dce6ef; border-radius: 10px; background: #ffffff; }
+.ticket-thread-item--closed .ticket-detail-text, .ticket-thread-item--reopened .ticket-detail-text { margin-top: 6px; padding: 10px 12px; border: 1px solid #bfe3cc; border-radius: 10px; background: #effaf3; }
+.ticket-thread-item--reopened .ticket-detail-text { border-color: #c4d9f1; background: #eef5fc; }
+.ticket-thread-label { display: block; margin-top: 6px; color: #137b44; font-size: 12px; font-weight: 600; }
+.ticket-thread-email { display: flex; align-items: center; gap: 5px; margin-top: 6px; color: #6b7f92; font-size: 12px; }
+.ticket-age { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; color: #24405d; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ticket-age svg { color: #6b7f92; }
+.ticket-age--closed { color: #5d7792; font-weight: 400; }
+.ticket-age small { margin-left: 2px; color: #6b7f92; font-size: 11px; font-weight: 400; }
+.ticket-comment-count { display: inline-flex; align-items: center; gap: 3px; margin-left: 8px; padding: 1px 6px; border: 1px solid #c4d9f1; border-radius: 999px; background: #eef5fc; color: #0c4c91; font-size: 11px; font-weight: 600; vertical-align: 1px; }
 .ticket-developer { display: grid; gap: 12px; }
 .ticket-developer .ticket-field { max-width: none; }
 .ticket-email-status { display: flex; align-items: center; gap: 6px; margin: 0; }

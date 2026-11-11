@@ -7,7 +7,7 @@ import { receiveFile, sendStoredFile } from './uploads.js'
 import { dataDirectory } from './dataDirectory.js'
 import { addNotification } from './notificationEvents.js'
 import { createMailer } from './passwordReset.js'
-import { DESCRIPTION_MAX, RESOLUTION_MAX, TITLE_MAX, moduleLabel, moduleTitle, submodulesOf, ticketModules, ticketUrgencies, urgencyLabel } from './ticketRules.js'
+import { COMMENT_MAX, DESCRIPTION_MAX, RESOLUTION_MAX, TITLE_MAX, moduleLabel, moduleTitle, submodulesOf, ticketModules, ticketUrgencies, urgencyLabel } from './ticketRules.js'
 
 // Tickets de suporte: administrators and administrative employees report problems of the portal to its developers.
 // Everybody sees every ticket; the attachments (evidence of the problem) open for administrators and, for an
@@ -30,12 +30,14 @@ const init = (store) => { store.supportTickets ||= []; store.supportTicketUpload
 const sameId = (left, right) => String(left) === String(right)
 export const isDeveloper = (account, cpfs = developerCpfs) => Boolean(account?.cpf) && cpfs.includes(digits(account.cpf))
 
-// What one viewer receives of a ticket: the files only when they may open them; otherwise how many there are.
+// What one viewer receives of a ticket: the files only when they may open them; otherwise how many there are. How the
+// e-mails went (of the ticket and of each comment) is shown to the developers only.
 function ticketView(ticket, viewer) {
   const own = sameId(ticket.createdBy, viewer.id)
   const files = viewer.role !== 'staff' || own
   const { email, ...rest } = ticket
-  return { ...rest, own, attachments: files ? ticket.attachments || [] : [], attachmentCount: (ticket.attachments || []).length, attachmentsLocked: !files && (ticket.attachments || []).length > 0, ...(viewer.developer ? { email: email || null } : {}) }
+  const comments = (ticket.comments || []).map(({ email: delivery, ...comment }) => viewer.developer ? { ...comment, email: delivery || null } : comment)
+  return { ...rest, own, comments, attachments: files ? ticket.attachments || [] : [], attachmentCount: (ticket.attachments || []).length, attachmentsLocked: !files && (ticket.attachments || []).length > 0, ...(viewer.developer ? { email: email || null } : {}) }
 }
 
 function ticketMail(ticket, recipients) {
@@ -47,6 +49,17 @@ function ticketMail(ticket, recipients) {
     subject: `Portal GMAC: novo ticket ${ticket.id} (urgência: ${urgencyLabel(ticket.urgency)}) · ${ticket.title}`,
     text: `Um novo ticket de suporte foi aberto no Portal GMAC.\n\n${rows.map(([label, value]) => `${label}: ${value}`).join('\n')}\n\nDescrição:\n${ticket.description}\n\n${fileLine}. Os anexos abrem no portal, no menu Ticket.`,
     html: `<p>Um novo ticket de suporte foi aberto no Portal GMAC.</p><table cellpadding="4" style="border-collapse:collapse">${rows.map(([label, value]) => `<tr><th align="left" style="padding-right:12px">${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`).join('')}</table><p><strong>Descrição</strong></p><p style="white-space:pre-wrap">${escapeHtml(ticket.description)}</p><p>${escapeHtml(fileLine)}. Os anexos abrem no portal, no menu Ticket.</p>`,
+  }
+}
+
+// A developer's comment, e-mailed to whoever opened the ticket.
+function commentMail(ticket, comment, author) {
+  const intro = `${comment.userName} comentou no seu ticket ${ticket.id} em ${bahiaTime(comment.at)} (horário da Bahia).`
+  return {
+    to: author.email,
+    subject: `Portal GMAC: novo comentário no ticket ${ticket.id} · ${ticket.title}`,
+    text: `Olá, ${author.name}.\n\n${intro}\n\nTicket: ${ticket.id} · ${ticket.title}\n\nComentário:\n${comment.text}\n\nVeja a conversa completa no Portal GMAC, no menu Ticket.`,
+    html: `<p>Olá, ${escapeHtml(author.name)}.</p><p>${escapeHtml(intro)}</p><p><strong>Ticket:</strong> ${escapeHtml(ticket.id)} · ${escapeHtml(ticket.title)}</p><p><strong>Comentário</strong></p><p style="white-space:pre-wrap;padding:10px 14px;border-left:3px solid #0c4c91;background:#f3f7fb">${escapeHtml(comment.text)}</p><p>Veja a conversa completa no Portal GMAC, no menu Ticket.</p>`,
   }
 }
 
@@ -68,24 +81,27 @@ export default function createSupportTicketsRouter(accounts, requireAdmin, { mai
   const find = (store, id) => store.supportTickets.find((item) => item.id === id) || fail('Ticket não encontrado.', 404)
   const developerIds = async () => (await Promise.all(cpfs.map((cpf) => accounts.accountByCpf(cpf)))).filter(Boolean).map((account) => account.id)
 
-  // The e-mail goes after the ticket is saved and does not hold the answer: its outcome is written on the ticket, where
-  // the developers see it.
-  async function emailTicket(ticket) {
+  // The e-mails go after the record is saved and do not hold the answer: their outcome is written on the ticket (or on
+  // the comment), where the developers see it.
+  async function deliver(what, message, save) {
     let email
     try {
-      if (!mailer.configured()) email = { skippedAt: new Date().toISOString(), reason: 'SMTP não configurado no servidor.' }
+      if (!message.to) email = { skippedAt: new Date().toISOString(), reason: 'Quem abriu o ticket não tem e-mail cadastrado.' }
+      else if (!mailer.configured()) email = { skippedAt: new Date().toISOString(), reason: 'SMTP não configurado no servidor.' }
       else {
-        const to = recipients()
-        await mailer.send(ticketMail(ticket, to))
-        email = { sentAt: new Date().toISOString(), to }
+        await mailer.send(message)
+        email = { sentAt: new Date().toISOString(), to: message.to }
       }
     } catch (error) {
-      console.error(`Falha ao enviar o e-mail do ticket ${ticket.id}:`, error.message)
+      console.error(`Falha ao enviar o e-mail ${what}:`, error.message)
       email = { failedAt: new Date().toISOString(), reason: 'O servidor de e-mail recusou ou não respondeu.' }
     }
-    await mutateStore((store) => { init(store); const row = store.supportTickets.find((item) => item.id === ticket.id); if (row) row.email = email })
-      .catch((error) => console.error(`Falha ao registrar o e-mail do ticket ${ticket.id}:`, error.message))
+    await mutateStore((store) => { init(store); save(store, email) }).catch((error) => console.error(`Falha ao registrar o e-mail ${what}:`, error.message))
   }
+  const emailTicket = (ticket) => deliver(`do ticket ${ticket.id}`, ticketMail(ticket, recipients()), (store, email) => {
+    const row = store.supportTickets.find((item) => item.id === ticket.id)
+    if (row) row.email = email
+  })
 
   router.get('/support-tickets', handle(async (req, res) => {
     const store = await readStore(); init(store)
@@ -151,6 +167,30 @@ export default function createSupportTicketsRouter(accounts, requireAdmin, { mai
     const file = (ticket.attachments || []).find((item) => item.id === req.params.fileId) || fail('Arquivo não encontrado.', 404)
     res.setHeader('Content-Type', 'application/octet-stream'); res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(file.name)}`)
     await sendStoredFile(res, path.join(ticketFilesDirectory, file.id))
+  }))
+
+  // A developer's comment (an activity that will be fixed, a question): everybody sees it on the ticket, and whoever
+  // opened the ticket is told in the bell and by e-mail.
+  router.post('/support-tickets/:id/comments', handle(async (req, res) => {
+    if (!req.viewer.developer) fail('Somente os desenvolvedores do sistema comentam nos tickets.', 403)
+    const text = multiline(req.body.text, COMMENT_MAX)
+    if (!text) fail('Escreva o comentário.')
+    const { ticket, comment } = await mutateStore((store) => {
+      init(store)
+      const row = find(store, req.params.id), at = new Date().toISOString(), selfAuthored = sameId(row.createdBy, req.viewer.id)
+      const added = { id: randomUUID(), text, at, userId: req.viewer.id, userName: req.viewer.name, ...(selfAuthored ? { email: { skippedAt: at, reason: 'O comentário é de quem abriu o ticket.' } } : {}) }
+      row.comments = [...(row.comments || []), added]
+      addNotification(store, { type: 'ticket-comment', at, ticketId: row.id, commentId: added.id, authorId: req.viewer.id, recipientIds: [row.createdBy], title: `Novo comentário no ticket ${row.id}`, description: `${row.title} · ${text.length > 120 ? `${text.slice(0, 117)}...` : text}`, employeeName: req.viewer.name })
+      return { ticket: row, comment: added }
+    })
+    if (!comment.email) {
+      const author = await accounts.account(ticket.createdBy).catch(() => null)
+      deliver(`do comentário no ticket ${ticket.id}`, commentMail(ticket, comment, { name: author?.name || ticket.createdByName, email: author?.email || '' }), (store, email) => {
+        const item = store.supportTickets.find((row) => row.id === ticket.id)?.comments?.find((entry) => entry.id === comment.id)
+        if (item) item.email = email
+      })
+    }
+    res.status(201).json({ item: ticketView(ticket, req.viewer) })
   }))
 
   // Closing asks how the problem was solved, and the answer shows on the ticket; a closed ticket can be reopened.

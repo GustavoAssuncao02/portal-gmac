@@ -2,10 +2,11 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createWorkflowFixture } from './workflowFixture.js'
 import { developerCpfs, isDeveloper } from '../server/supportTickets.js'
-import { monthRange, moduleTitle } from '../server/ticketRules.js'
+import { daysBetween, daysLabel, monthRange, moduleTitle, ticketDays } from '../server/ticketRules.js'
 
 const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Administradora' }
 const person = (index, fields = {}) => ({ name: `Funcionário ${index}`, birthDate: '1990-01-01', cpf: `0000000000${index}`, email: `funcionario${index}@example.invalid`, identification: '', type: 'administrative', password: 'senha123', ...fields })
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 const ticket = (fields = {}) => ({ urgency: 'high', module: 'finance', submodule: 'payables', title: 'Erro ao salvar a baixa', description: 'Cliquei em salvar e apareceu uma mensagem de erro.', ...fields })
 
 test('the developers are the accounts of the two CPFs, written with or without punctuation', () => {
@@ -17,6 +18,11 @@ test('the developers are the accounts of the two CPFs, written with or without p
   assert.deepEqual(monthRange('2026-11', '2027-02'), ['2026-11', '2026-12', '2027-01', '2027-02'])
   assert.equal(moduleTitle('finance', 'payables'), 'Gestão Financeira › Contas a Pagar')
   assert.equal(moduleTitle('stock'), 'Estoque')
+  // Days by the calendar in Bahia: 23h of the 10th there is still the 10th.
+  assert.equal(daysBetween('2026-11-09T12:00:00Z', '2026-11-11T02:00:00Z'), 1)
+  assert.deepEqual([daysLabel(0), daysLabel(1), daysLabel(3)], ['Menos de 1 dia', '1 dia', '3 dias'])
+  assert.equal(ticketDays({ createdAt: '2026-11-01T12:00:00Z', status: 'open' }, '2026-11-20T12:00:00Z'), 19)
+  assert.equal(ticketDays({ createdAt: '2026-11-01T12:00:00Z', status: 'closed', closedAt: '2026-11-04T12:00:00Z' }, '2026-11-20T12:00:00Z'), 3, 'a closed ticket keeps how long it stayed open')
 })
 
 test('everybody sees every ticket; attachments open for administrators and the author; only developers close and reopen', async () => {
@@ -108,6 +114,27 @@ test('everybody sees every ticket; attachments open for administrators and the a
     assert.deepEqual(reopened.data.item.history.map((entry) => entry.type), ['opened', 'closed', 'reopened'])
     assert.deepEqual((await notices(mine)).map((item) => item.title).sort(), ['Ticket TCK-0001 fechado', 'Ticket TCK-0001 reaberto'])
     assert.deepEqual((await notices(dev)).map((item) => item.type), ['ticket-opened'], 'the developer is not told of their own change')
+
+    // Comments: only developers write them; whoever opened the ticket is told in the bell and by e-mail.
+    assert.equal((await mine(`/support-tickets/${first.id}/comments`, 'POST', { text: 'Também acontece comigo' })).status, 403)
+    assert.equal((await admin(`/support-tickets/${first.id}/comments`, 'POST', { text: 'Olá' })).status, 403)
+    assert.equal((await dev(`/support-tickets/${first.id}/comments`, 'POST', { text: '   ' })).status, 400)
+    const mailsBefore = fixture.ticketMail.length
+    const commented = await dev(`/support-tickets/${first.id}/comments`, 'POST', { text: 'A correção entra na próxima atualização.' })
+    assert.equal(commented.status, 201)
+    assert.deepEqual(commented.data.item.comments.map((item) => [item.text, item.userName]), [['A correção entra na próxima atualização.', 'Funcionário 4']])
+    for (let tries = 0; tries < 50 && fixture.ticketMail.length === mailsBefore; tries += 1) await wait(40)
+    const commentMail = fixture.ticketMail.at(-1)
+    assert.equal(commentMail.to, 'funcionario5@example.invalid', 'the e-mail goes to whoever opened the ticket')
+    assert.match(commentMail.subject, /novo comentário no ticket TCK-0001/)
+    assert.match(commentMail.text, /Funcionário 4 comentou no seu ticket TCK-0001/)
+    assert.match(commentMail.text, /A correção entra na próxima atualização\./)
+    assert.ok((await notices(mine)).some((item) => item.type === 'ticket-comment' && item.ticketId === 'TCK-0001'), 'the author is told in the bell')
+    assert.ok(!(await notices(dev)).some((item) => item.type === 'ticket-comment'), 'the developer is not told of their own comment')
+    let delivered = null
+    for (let tries = 0; tries < 50 && !delivered?.sentAt; tries += 1) { delivered = (await dev('/support-tickets')).data.items.find((item) => item.id === first.id).comments[0].email; if (!delivered?.sentAt) await wait(40) }
+    assert.equal(delivered?.to, 'funcionario5@example.invalid')
+    assert.equal('email' in (await mine('/support-tickets')).data.items.find((item) => item.id === first.id).comments[0], false, 'only developers see how the e-mail went')
 
     // The next ticket gets the next number and is listed first.
     const second = await admin('/support-tickets', 'POST', ticket({ urgency: 'low', module: 'other', title: 'Sugestão' }))

@@ -3893,11 +3893,69 @@
 :root[data-theme="dark"] .ticket-resolution small {
     color: #abc9b8
 }
-:root[data-theme="dark"] .ticket-history {
+:root[data-theme="dark"] .ticket-thread-item:not(:last-child)::before {
+    background: #203c59
+}
+:root[data-theme="dark"] .ticket-thread-avatar {
+    background: #184c85;
+    color: #f2f6fc
+}
+:root[data-theme="dark"] .ticket-thread-item:is(.ticket-thread-item--opened, .ticket-thread-item--reopened) .ticket-thread-avatar {
+    background: #203c59;
     color: #e1ebf6
 }
-:root[data-theme="dark"] .ticket-history li span {
+:root[data-theme="dark"] .ticket-thread-item--closed .ticket-thread-avatar {
+    background: #203c2a;
+    color: #89ecb7
+}
+:root[data-theme="dark"] .ticket-thread-body header {
+    color: #b1c2d3
+}
+:root[data-theme="dark"] .ticket-thread-body header strong {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .ticket-thread-body time {
     color: #c1cfde
+}
+:root[data-theme="dark"] .ticket-dev-badge {
+    border: 1px solid #36516f;
+    background: #203c59;
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .ticket-thread-item--comment .ticket-detail-text {
+    border: 1px solid #36516f;
+    background: #162b43
+}
+:root[data-theme="dark"] .ticket-thread-item--closed .ticket-detail-text, :root[data-theme="dark"] .ticket-thread-item--reopened .ticket-detail-text {
+    border: 1px solid #36516f;
+    background: #203c2a
+}
+:root[data-theme="dark"] .ticket-thread-item--reopened .ticket-detail-text {
+    border-color: #36516f;
+    background: #203c59
+}
+:root[data-theme="dark"] .ticket-thread-label {
+    color: #89ecb7
+}
+:root[data-theme="dark"] .ticket-thread-email {
+    color: #c1cfde
+}
+:root[data-theme="dark"] .ticket-age {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .ticket-age svg {
+    color: #c1cfde
+}
+:root[data-theme="dark"] .ticket-age--closed {
+    color: #b4c2cf
+}
+:root[data-theme="dark"] .ticket-age small {
+    color: #c1cfde
+}
+:root[data-theme="dark"] .ticket-comment-count {
+    border: 1px solid #36516f;
+    background: #203c59;
+    color: #e1ebf6
 }
 @media (max-width: 760px) {
     :root[data-theme="dark"] .ticket-table tbody tr {

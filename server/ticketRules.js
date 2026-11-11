@@ -35,10 +35,16 @@ export const statusLabel = (key) => labelOf(ticketStatuses, key)
 export const TITLE_MAX = 120
 export const DESCRIPTION_MAX = 4000
 export const RESOLUTION_MAX = 2000
+export const COMMENT_MAX = 2000
 
 // Month (YYYY-MM) of a moment in Bahia time, the time the portal shows.
 export const bahiaMonth = (at) => new Date(Date.parse(at) - 3 * 3600000).toISOString().slice(0, 7)
 export const bahiaDate = (at) => new Date(Date.parse(at) - 3 * 3600000).toISOString().slice(0, 10)
+
+// Whole days between two moments, by the calendar in Bahia time: how long a ticket is (or stayed) open.
+export const daysBetween = (from, to) => Math.max(0, Math.round((Date.parse(bahiaDate(to)) - Date.parse(bahiaDate(from))) / 86400000))
+export const daysLabel = (days) => days < 1 ? 'Menos de 1 dia' : days === 1 ? '1 dia' : `${days} dias`
+export const ticketDays = (ticket, now = new Date().toISOString()) => daysBetween(ticket.createdAt, ticket.status === 'closed' && ticket.closedAt ? ticket.closedAt : now)
 
 // Every month from `first` to `last` (YYYY-MM), both included.
 export function monthRange(first, last) {

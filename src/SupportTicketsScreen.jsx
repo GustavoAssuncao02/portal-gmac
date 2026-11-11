@@ -1,11 +1,11 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { CircleCheck, CircleDot, Download, FilterX, Info, Lock, Paperclip, RotateCcw, Search, Send } from 'lucide-react'
+import { CircleCheck, CircleDot, Clock3, Download, FilterX, Info, Lock, Mail, MessageCircle, Paperclip, RotateCcw, Search, Send } from 'lucide-react'
 import AdminWorkspace from './AdminWorkspace.jsx'
 import { PayableModal, FilePicker } from './PayableModal.jsx'
 import { payableRequest, uploadFiles, downloadFile } from './payablesApi.js'
 import { SortableRows, SortHeader } from './RegistryList.jsx'
 import { latestOnly, pollWhileVisible } from './polling.js'
-import { DESCRIPTION_MAX, RESOLUTION_MAX, TITLE_MAX, bahiaDate, bahiaMonth, monthRange, moduleLabel, moduleTitle, statusLabel, submoduleLabel, submodulesOf, ticketModules, ticketUrgencies, urgencyLabel } from '../server/ticketRules.js'
+import { COMMENT_MAX, DESCRIPTION_MAX, TITLE_MAX, bahiaDate, daysLabel, ticketDays, bahiaMonth, monthRange, moduleLabel, moduleTitle, statusLabel, submoduleLabel, submodulesOf, ticketModules, ticketUrgencies, urgencyLabel } from '../server/ticketRules.js'
 import './payables.css'
 import './supportTickets.css'
 
@@ -21,7 +21,6 @@ const urgencyHints = {
   medium: 'Médio: atrapalha uma tarefa importante, mas não para a empresa.',
   high: 'Alto: impede o trabalho ou afeta dinheiro, produção ou clientes.',
 }
-const historyLabels = { opened: 'Ticket aberto', closed: 'Ticket fechado', reopened: 'Ticket reaberto' }
 const monthShort = (month) => new Date(`${month}-15T12:00:00Z`).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit', timeZone: 'UTC' }).replace('.', '').replace(' de ', '/')
 const monthLong = (month) => new Date(`${month}-15T12:00:00Z`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' })
 const shiftMonth = (month, count) => { const [year, number] = month.split('-').map(Number), total = year * 12 + number - 1 + count; return `${Math.floor(total / 12)}-${String(total % 12 + 1).padStart(2, '0')}` }
@@ -181,21 +180,59 @@ function moduleRows(tickets, slots) {
   return rest.length ? [...own, { key: 'rest', label: 'Demais módulos', detail: rest.map(moduleLabel).join(', '), count: rest.reduce((sum, key) => sum + counts.get(key), 0), color: 'var(--ticket-other)' }] : own
 }
 
+const initialsOf = (name) => { const words = String(name || '').trim().split(/\s+/); return [words[0], words.length > 1 ? words.at(-1) : ''].map((word) => word?.[0] || '').join('').toUpperCase() }
+function relativeTime(at, now) {
+  const minutes = Math.floor((now - Date.parse(at)) / 60000)
+  if (minutes < 1) return 'agora'
+  if (minutes < 60) return `há ${minutes} min`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `há ${hours} h`
+  const days = Math.floor(hours / 24)
+  return days === 1 ? 'há 1 dia' : `há ${days} dias`
+}
+const emailNote = (email, who, label = 'E-mail') => email?.sentAt ? `${label} enviado para ${who} em ${dateTime(email.sentAt)}.` : email?.failedAt || email?.skippedAt ? `${label} não enviado: ${email.reason}` : `Enviando ${label.toLowerCase()} para ${who}...`
+const threadActions = { opened: 'abriu o ticket', closed: 'fechou o ticket', reopened: 'reabriu o ticket' }
+const threadIcons = { opened: CircleDot, closed: CircleCheck, reopened: RotateCcw }
+
+// The conversation of a ticket, oldest first and going down like a thread: its opening, the developers' comments and
+// each time it was closed (with the answer) or reopened.
+function TicketThread({ ticket, viewer }) {
+  const now = Date.now()
+  const entries = [
+    { key: 'opened', kind: 'opened', at: ticket.createdAt, userName: ticket.createdByName },
+    ...(ticket.comments || []).map((comment) => ({ ...comment, key: comment.id, kind: 'comment' })),
+    ...(ticket.history || []).filter((entry) => entry.type !== 'opened').map((entry, index) => ({ key: `history-${index}`, kind: entry.type, at: entry.at, userName: entry.userName, text: entry.note })),
+  ].sort((left, right) => Date.parse(left.at) - Date.parse(right.at))
+  return <ol className="ticket-thread">{entries.map((entry) => { const Icon = threadIcons[entry.kind]; return <li key={entry.key} className={`ticket-thread-item ticket-thread-item--${entry.kind}`}>
+    <span className="ticket-thread-avatar" aria-hidden="true">{Icon ? <Icon size={16} /> : initialsOf(entry.userName)}</span>
+    <div className="ticket-thread-body">
+      <header><strong>{entry.userName}</strong>{entry.kind === 'comment' && <span className="ticket-dev-badge">Desenvolvedor</span>}{threadActions[entry.kind] && <span>{threadActions[entry.kind]}</span>}<time dateTime={entry.at} title={dateTime(entry.at)}>· {relativeTime(entry.at, now)}</time></header>
+      {entry.kind === 'closed' && entry.text && <small className="ticket-thread-label">Resposta do desenvolvedor</small>}
+      {entry.text && <p className="ticket-detail-text">{entry.text}</p>}
+      {viewer.developer && entry.kind === 'comment' && <small className="ticket-thread-email"><Mail size={12} aria-hidden="true" />{emailNote(entry.email, ticket.createdByName)}</small>}
+    </div>
+  </li> })}</ol>
+}
+
 function TicketDetail({ ticket, viewer, onClose, onChanged }) {
-  const [note, setNote] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState('')
+  const [note, setNote] = useState(''), [busy, setBusy] = useState(''), [error, setError] = useState('')
   const closing = ticket.status === 'open'
-  async function change() {
-    setBusy(true); setError('')
-    try { const { item } = await payableRequest(`/support-tickets/${ticket.id}/status`, 'POST', { status: closing ? 'closed' : 'open', note }); setNote(''); await onChanged(item) } catch (caught) { setError(caught.message) } finally { setBusy(false) }
+  async function send(kind) {
+    setBusy(kind); setError('')
+    try {
+      const { item } = kind === 'comment' ? await payableRequest(`/support-tickets/${ticket.id}/comments`, 'POST', { text: note }) : await payableRequest(`/support-tickets/${ticket.id}/status`, 'POST', { status: closing ? 'closed' : 'open', note })
+      setNote(''); await onChanged(item)
+    } catch (caught) { setError(caught.message) } finally { setBusy('') }
   }
-  const email = ticket.email
-  return <PayableModal title={`${ticket.id} · ${ticket.title}`} wide busy={busy} onClose={onClose} className="ticket-detail-modal" footer={<button className="admin-tool-button" type="button" disabled={busy} onClick={onClose}>Fechar janela</button>}>
+  const days = ticketDays(ticket)
+  return <PayableModal title={`${ticket.id} · ${ticket.title}`} wide busy={Boolean(busy)} onClose={onClose} className="ticket-detail-modal" footer={<button className="admin-tool-button" type="button" disabled={Boolean(busy)} onClick={onClose}>Fechar janela</button>}>
     <dl className="ticket-detail-meta">
       <div><dt>Status</dt><dd><StatusBadge value={ticket.status} /></dd></div>
       <div><dt>Urgência</dt><dd><UrgencyBadge value={ticket.urgency} /></dd></div>
       <div><dt>Módulo</dt><dd>{moduleTitle(ticket.module, ticket.submodule)}</dd></div>
       <div><dt>Aberto por</dt><dd>{ticket.createdByName}</dd></div>
       <div><dt>Aberto em</dt><dd>{dateTime(ticket.createdAt)}</dd></div>
+      <div><dt>{closing ? 'Aberto há' : 'Ficou aberto'}</dt><dd><span className={`ticket-age${closing ? '' : ' ticket-age--closed'}`}><Clock3 size={14} aria-hidden="true" />{daysLabel(days)}</span></dd></div>
     </dl>
     <section className="ticket-detail-block"><h3>Descrição do problema</h3><p className="ticket-detail-text">{ticket.description}</p></section>
     <section className="ticket-detail-block"><h3>Anexos</h3>
@@ -203,13 +240,16 @@ function TicketDetail({ ticket, viewer, onClose, onChanged }) {
         : ticket.attachmentsLocked ? <p className="ticket-locked"><Lock size={15} aria-hidden="true" />{ticket.attachmentCount} {ticket.attachmentCount === 1 ? 'anexo' : 'anexos'}. Os anexos abrem só para quem abriu o ticket e para os administradores.</p>
         : <p className="payable-muted">Sem anexos.</p>}
     </section>
-    {ticket.status === 'closed' && <section className="ticket-detail-block ticket-resolution"><h3>Resposta do desenvolvedor</h3><p className="ticket-detail-text">{ticket.resolution}</p><small>{ticket.closedByName} · fechado em {dateTime(ticket.closedAt)}</small></section>}
-    <section className="ticket-detail-block"><h3>Histórico</h3><ol className="ticket-history">{(ticket.history || []).map((entry, index) => <li key={index}><strong>{historyLabels[entry.type] || entry.type}</strong><span>{entry.userName} · {dateTime(entry.at)}</span>{entry.note && <p>{entry.note}</p>}</li>)}</ol></section>
-    {viewer.developer ? <section className="ticket-detail-block ticket-developer"><h3>Ações do desenvolvedor</h3>
-      <p className="payable-muted ticket-email-status"><Send size={13} aria-hidden="true" />{email?.sentAt ? `E-mail do ticket enviado aos desenvolvedores em ${dateTime(email.sentAt)}.` : email?.failedAt ? `O e-mail do ticket não foi enviado: ${email.reason}` : email?.skippedAt ? `E-mail do ticket não enviado: ${email.reason}` : 'Enviando o e-mail do ticket aos desenvolvedores...'}</p>
-      <label className="ticket-field">{closing ? 'Resposta: como o problema foi resolvido' : 'Motivo da reabertura (opcional)'}<textarea aria-label={closing ? 'Resposta do desenvolvedor' : 'Motivo da reabertura'} rows={3} maxLength={RESOLUTION_MAX} disabled={busy} value={note} onChange={(event) => setNote(event.target.value)} /></label>
-      <div className="ticket-form-actions"><button className="admin-tool-button admin-tool-button--primary" type="button" disabled={busy || (closing && !note.trim())} onClick={change}>{closing ? <CircleCheck size={16} aria-hidden="true" /> : <RotateCcw size={16} aria-hidden="true" />}{busy ? 'Salvando...' : closing ? 'Fechar ticket' : 'Reabrir ticket'}</button></div>
-    </section> : <p className="payable-muted">Somente os desenvolvedores do sistema alteram o status do ticket.</p>}
+    <section className="ticket-detail-block"><h3>Acompanhamento</h3><TicketThread ticket={ticket} viewer={viewer} /></section>
+    {viewer.developer ? <section className="ticket-detail-block ticket-developer"><h3>Responder como desenvolvedor</h3>
+      <label className="ticket-field">Mensagem<textarea aria-label="Mensagem do desenvolvedor" rows={3} maxLength={COMMENT_MAX} disabled={Boolean(busy)} placeholder={closing ? 'Ex.: a correção entra na próxima atualização.' : 'Motivo da reabertura (opcional).'} value={note} onChange={(event) => setNote(event.target.value)} /></label>
+      <small className="payable-hint">{ticket.own ? 'O comentário fica no ticket para todos verem.' : `Comentar avisa ${ticket.createdByName} no sistema e por e-mail.`} {closing ? 'Para fechar, escreva como o problema foi resolvido.' : 'Para reabrir, a mensagem é opcional.'}</small>
+      <div className="ticket-form-actions">
+        <button className="admin-tool-button admin-tool-button--primary" type="button" disabled={Boolean(busy) || !note.trim()} onClick={() => send('comment')}><MessageCircle size={16} aria-hidden="true" />{busy === 'comment' ? 'Enviando...' : 'Comentar'}</button>
+        <button className="admin-tool-button" type="button" disabled={Boolean(busy) || (closing && !note.trim())} onClick={() => send('status')}>{closing ? <CircleCheck size={16} aria-hidden="true" /> : <RotateCcw size={16} aria-hidden="true" />}{busy === 'status' ? 'Salvando...' : closing ? 'Fechar ticket' : 'Reabrir ticket'}</button>
+      </div>
+      <p className="payable-muted ticket-email-status"><Send size={13} aria-hidden="true" />{emailNote(ticket.email, 'os desenvolvedores', 'E-mail de abertura')}</p>
+    </section> : <p className="payable-muted">Somente os desenvolvedores do sistema comentam e alteram o status do ticket.</p>}
     {error && <p className="admin-tool-error" role="alert">{error}</p>}
   </PayableModal>
 }
@@ -221,6 +261,7 @@ const columns = [
   { key: 'urgency', label: 'Urgência', value: (row) => urgencyRank[row.urgency], numeric: true },
   { key: 'status', label: 'Status', value: (row) => statusLabel(row.status) },
   { key: 'createdAt', label: 'Aberto em', value: (row) => Date.parse(row.createdAt), numeric: true },
+  { key: 'age', label: 'Tempo aberto', value: (row) => ticketDays(row), numeric: true },
   { key: 'author', label: 'Aberto por', value: (row) => row.createdByName },
   { key: 'files', label: 'Anexos', value: (row) => row.attachmentCount, numeric: true },
 ]
@@ -286,11 +327,12 @@ export default function SupportTicketsScreen(props) {
             <thead><tr>{sorted.columns.map((column) => <SortHeader key={column.key} column={column} list={sorted} />)}</tr></thead>
             <tbody>{sorted.rows.map((ticket) => <tr key={ticket.id} onClick={() => setOpenId(ticket.id)}>
               <td data-label="Ticket"><button className="ticket-open-button" type="button" onClick={(event) => { event.stopPropagation(); setOpenId(ticket.id) }}>{ticket.id}</button></td>
-              <td data-label="Título" className="ticket-title-cell">{ticket.title}</td>
+              <td data-label="Título" className="ticket-title-cell">{ticket.title}{ticket.comments?.length > 0 && <small className="ticket-comment-count" title={`${ticket.comments.length} ${ticket.comments.length === 1 ? 'comentário' : 'comentários'} do desenvolvedor`}><MessageCircle size={12} aria-hidden="true" />{ticket.comments.length}</small>}</td>
               <td data-label="Módulo"><span className="ticket-module-cell">{moduleLabel(ticket.module)}{ticket.submodule && <small>{submoduleLabel(ticket.module, ticket.submodule)}</small>}</span></td>
               <td data-label="Urgência"><UrgencyBadge value={ticket.urgency} /></td>
               <td data-label="Status"><StatusBadge value={ticket.status} /></td>
               <td data-label="Aberto em"><span className="ticket-when">{dateOf(ticket.createdAt)}<small>{timeOf(ticket.createdAt)}</small></span></td>
+              <td data-label="Tempo aberto"><span className={`ticket-age${ticket.status === 'closed' ? ' ticket-age--closed' : ''}`}><Clock3 size={13} aria-hidden="true" />{daysLabel(ticketDays(ticket))}{ticket.status === 'closed' && <small>até fechar</small>}</span></td>
               <td data-label="Aberto por">{ticket.createdByName}</td>
               <td data-label="Anexos">{ticket.attachmentCount ? <span className="ticket-file-count" title={ticket.attachmentsLocked ? 'Os anexos abrem só para quem abriu o ticket e para os administradores' : undefined}>{ticket.attachmentsLocked ? <Lock size={13} aria-label="Restrito" /> : <Paperclip size={13} aria-hidden="true" />}{ticket.attachmentCount}</span> : <span className="payable-muted">—</span>}</td>
             </tr>)}
