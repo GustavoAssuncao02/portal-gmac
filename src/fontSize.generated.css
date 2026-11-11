@@ -659,6 +659,7 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .ticket-table { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .ticket-table th { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .ticket-open-button { font-size: inherit; }
+:root:is([data-font-size="small"], [data-font-size="large"]) .ticket-module-cell small { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .ticket-when small { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .ticket-detail-meta dt { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .ticket-detail-meta dd { font-size: calc(14px * var(--account-font-scale)); }

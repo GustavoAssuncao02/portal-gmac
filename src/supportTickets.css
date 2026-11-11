@@ -90,6 +90,9 @@
 .ticket-table tbody tr:hover { background: #edf5fd; }
 .ticket-title-cell { min-width: 200px; max-width: 380px; overflow-wrap: anywhere; font-weight: 600; color: #0b2f55; }
 .ticket-open-button { padding: 0; border: 0; background: none; color: #0c4c91; font: inherit; font-weight: 600; white-space: nowrap; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.ticket-module-cell { display: grid; }
+.ticket-module-cell small { color: #6b7f92; font-size: 12px; }
+.ticket-submodule-body { padding: 2px 0 2px 14px; border-left: 3px solid #0c4c91; }
 .ticket-when { display: grid; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .ticket-when small { color: #6b7f92; font-size: 12px; }
 .ticket-file-count { display: inline-flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; }

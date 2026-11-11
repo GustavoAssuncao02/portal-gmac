@@ -3289,6 +3289,12 @@
 :root[data-theme="dark"][data-tone="black"] .ticket-open-button {
     color: #ebebec
 }
+:root[data-theme="dark"][data-tone="black"] .ticket-module-cell small {
+    color: #cdcfd2
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-submodule-body {
+    border-left: 3px solid #47494c
+}
 :root[data-theme="dark"][data-tone="black"] .ticket-when small {
     color: #cdcfd2
 }

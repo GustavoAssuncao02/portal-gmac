@@ -5,7 +5,7 @@ import { PayableModal, FilePicker } from './PayableModal.jsx'
 import { payableRequest, uploadFiles, downloadFile } from './payablesApi.js'
 import { SortableRows, SortHeader } from './RegistryList.jsx'
 import { latestOnly, pollWhileVisible } from './polling.js'
-import { DESCRIPTION_MAX, RESOLUTION_MAX, TITLE_MAX, bahiaDate, bahiaMonth, monthRange, moduleLabel, statusLabel, ticketModules, ticketUrgencies, urgencyLabel } from '../server/ticketRules.js'
+import { DESCRIPTION_MAX, RESOLUTION_MAX, TITLE_MAX, bahiaDate, bahiaMonth, monthRange, moduleLabel, moduleTitle, statusLabel, submoduleLabel, submodulesOf, ticketModules, ticketUrgencies, urgencyLabel } from '../server/ticketRules.js'
 import './payables.css'
 import './supportTickets.css'
 
@@ -25,7 +25,7 @@ const historyLabels = { opened: 'Ticket aberto', closed: 'Ticket fechado', reope
 const monthShort = (month) => new Date(`${month}-15T12:00:00Z`).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit', timeZone: 'UTC' }).replace('.', '').replace(' de ', '/')
 const monthLong = (month) => new Date(`${month}-15T12:00:00Z`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' })
 const shiftMonth = (month, count) => { const [year, number] = month.split('-').map(Number), total = year * 12 + number - 1 + count; return `${Math.floor(total / 12)}-${String(total % 12 + 1).padStart(2, '0')}` }
-const noFilters = { search: '', status: 'all', urgency: '', module: '', author: '', from: '', to: '', mine: false }
+const noFilters = { search: '', status: 'all', urgency: '', module: '', submodule: '', author: '', from: '', to: '', mine: false }
 
 // The dot has the color of the urgency in the charts; the word carries the meaning.
 export function UrgencyBadge({ value }) {
@@ -39,12 +39,14 @@ export function StatusBadge({ value }) {
 // The form: urgency, the module of the problem (a strip of options), title, description and the evidence files.
 function NewTicketForm({ onCreated }) {
   const id = useId()
-  const empty = { urgency: '', module: '', title: '', description: '' }
+  const empty = { urgency: '', module: '', submodule: '', title: '', description: '' }
   const [draft, setDraft] = useState(empty), [files, setFiles] = useState([]), [busy, setBusy] = useState(false), [error, setError] = useState(''), [created, setCreated] = useState('')
+  const screens = submodulesOf(draft.module)
   async function submit(event) {
     event.preventDefault()
     if (!draft.urgency) return setError('Escolha o grau de urgência.')
     if (!draft.module) return setError('Escolha o módulo do sistema onde está o problema.')
+    if (screens.length && !draft.submodule) return setError(`Escolha o sub-módulo de ${moduleLabel(draft.module)} onde está o problema.`)
     setBusy(true); setError(''); setCreated('')
     try {
       const fileIds = await uploadFiles('/support-tickets', files)
@@ -62,8 +64,12 @@ function NewTicketForm({ onCreated }) {
         <small className="payable-hint">{urgencyHints[draft.urgency] || 'Escolha o quanto o problema atrapalha o trabalho.'}</small>
       </fieldset>
       <fieldset className="ticket-choice"><legend>Módulo do sistema</legend>
-        <div className="ticket-module-options">{ticketModules.map(([key, label]) => <label key={key} className="ticket-option ticket-module-option"><input type="radio" name={`${id}-module`} value={key} required checked={draft.module === key} onChange={() => setDraft({ ...draft, module: key })} /><span>{label}</span></label>)}</div>
+        <div className="ticket-module-options">{ticketModules.map(([key, label]) => <label key={key} className="ticket-option ticket-module-option"><input type="radio" name={`${id}-module`} value={key} required checked={draft.module === key} onChange={() => setDraft({ ...draft, module: key, submodule: '' })} /><span>{label}</span></label>)}</div>
       </fieldset>
+      {screens.length > 0 && <fieldset className="ticket-choice ticket-submodule"><legend>Sub-módulo de {moduleLabel(draft.module)}</legend><div className="ticket-submodule-body">
+        <div className="ticket-module-options">{screens.map(([key, label]) => <label key={key} className="ticket-option ticket-module-option"><input type="radio" name={`${id}-submodule`} value={key} required checked={draft.submodule === key} onChange={() => setDraft({ ...draft, submodule: key })} /><span>{label}</span></label>)}</div>
+        <small className="payable-hint">Escolha a tela de {moduleLabel(draft.module)} onde o problema aparece.</small>
+      </div></fieldset>}
       <label className="ticket-field">Título<input aria-label="Título" required maxLength={TITLE_MAX} placeholder="Ex.: erro ao salvar a baixa de uma conta a pagar" value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>
       <label className="ticket-field">Descrição do problema<textarea aria-label="Descrição do problema" required rows={5} maxLength={DESCRIPTION_MAX} placeholder="O que você fazia, o que esperava e o que aconteceu." value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} /><small className="ticket-counter">{draft.description.length}/{DESCRIPTION_MAX}</small></label>
       <div className="ticket-files"><FilePicker title="Anexos (evidências do problema)" files={files} setFiles={setFiles} disabled={busy} /><small className="payable-hint"><Lock size={12} aria-hidden="true" /> Os anexos abrem só para você e para os administradores.</small></div>
@@ -187,7 +193,7 @@ function TicketDetail({ ticket, viewer, onClose, onChanged }) {
     <dl className="ticket-detail-meta">
       <div><dt>Status</dt><dd><StatusBadge value={ticket.status} /></dd></div>
       <div><dt>Urgência</dt><dd><UrgencyBadge value={ticket.urgency} /></dd></div>
-      <div><dt>Módulo</dt><dd>{moduleLabel(ticket.module)}</dd></div>
+      <div><dt>Módulo</dt><dd>{moduleTitle(ticket.module, ticket.submodule)}</dd></div>
       <div><dt>Aberto por</dt><dd>{ticket.createdByName}</dd></div>
       <div><dt>Aberto em</dt><dd>{dateTime(ticket.createdAt)}</dd></div>
     </dl>
@@ -211,7 +217,7 @@ function TicketDetail({ ticket, viewer, onClose, onChanged }) {
 const columns = [
   { key: 'id', label: 'Ticket', value: (row) => row.id },
   { key: 'title', label: 'Título', value: (row) => row.title },
-  { key: 'module', label: 'Módulo', value: (row) => moduleLabel(row.module) },
+  { key: 'module', label: 'Módulo', value: (row) => moduleTitle(row.module, row.submodule) },
   { key: 'urgency', label: 'Urgência', value: (row) => urgencyRank[row.urgency], numeric: true },
   { key: 'status', label: 'Status', value: (row) => statusLabel(row.status) },
   { key: 'createdAt', label: 'Aberto em', value: (row) => Date.parse(row.createdAt), numeric: true },
@@ -239,10 +245,10 @@ export default function SupportTicketsScreen(props) {
   const set = (field, value) => setFilters((current) => ({ ...current, [field]: value }))
   const term = plain(filters.search.trim())
   const matches = (ticket, skipStatus = false) => (skipStatus || filters.status === 'all' || ticket.status === filters.status)
-    && (!filters.urgency || ticket.urgency === filters.urgency) && (!filters.module || ticket.module === filters.module)
+    && (!filters.urgency || ticket.urgency === filters.urgency) && (!filters.module || ticket.module === filters.module) && (!filters.submodule || ticket.submodule === filters.submodule)
     && (!filters.author || String(ticket.createdBy) === filters.author) && (!filters.mine || ticket.own)
     && (!filters.from || bahiaDate(ticket.createdAt) >= filters.from) && (!filters.to || bahiaDate(ticket.createdAt) <= filters.to)
-    && (!term || plain(`${ticket.id} ${ticket.title} ${ticket.description} ${ticket.createdByName} ${moduleLabel(ticket.module)}`).includes(term))
+    && (!term || plain(`${ticket.id} ${ticket.title} ${ticket.description} ${ticket.createdByName} ${moduleTitle(ticket.module, ticket.submodule)}`).includes(term))
   const visible = items.filter((ticket) => matches(ticket))
   const statusCounts = { all: 0, open: 0, closed: 0 }
   for (const ticket of items) if (matches(ticket, true)) { statusCounts.all += 1; statusCounts[ticket.status] += 1 }
@@ -263,7 +269,8 @@ export default function SupportTicketsScreen(props) {
           <div className="ticket-filters">
             <label className="payable-search ticket-search"><Search size={18} aria-hidden="true" /><input type="search" aria-label="Buscar tickets" placeholder="Número, título, descrição ou quem abriu" value={filters.search} onChange={(event) => set('search', event.target.value)} /></label>
             <label>Urgência<select aria-label="Filtrar por urgência" value={filters.urgency} onChange={(event) => set('urgency', event.target.value)}><option value="">Todas</option>{ticketUrgencies.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
-            <label>Módulo<select aria-label="Filtrar por módulo" value={filters.module} onChange={(event) => set('module', event.target.value)}><option value="">Todos</option>{ticketModules.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+            <label>Módulo<select aria-label="Filtrar por módulo" value={filters.module} onChange={(event) => setFilters((current) => ({ ...current, module: event.target.value, submodule: '' }))}><option value="">Todos</option>{ticketModules.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+            {submodulesOf(filters.module).length > 0 && <label>Sub-módulo<select aria-label="Filtrar por sub-módulo" value={filters.submodule} onChange={(event) => set('submodule', event.target.value)}><option value="">Todos</option>{submodulesOf(filters.module).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>}
             <label>Aberto por<select aria-label="Filtrar por quem abriu" value={filters.author} onChange={(event) => set('author', event.target.value)}><option value="">Todos</option>{authors.map(([key, name]) => <option key={key} value={key}>{name}</option>)}</select></label>
             <label>De<input type="date" aria-label="Aberto a partir de" max={filters.to || undefined} value={filters.from} onChange={(event) => set('from', event.target.value)} /></label>
             <label>Até<input type="date" aria-label="Aberto até" min={filters.from || undefined} value={filters.to} onChange={(event) => set('to', event.target.value)} /></label>
@@ -280,7 +287,7 @@ export default function SupportTicketsScreen(props) {
             <tbody>{sorted.rows.map((ticket) => <tr key={ticket.id} onClick={() => setOpenId(ticket.id)}>
               <td data-label="Ticket"><button className="ticket-open-button" type="button" onClick={(event) => { event.stopPropagation(); setOpenId(ticket.id) }}>{ticket.id}</button></td>
               <td data-label="Título" className="ticket-title-cell">{ticket.title}</td>
-              <td data-label="Módulo">{moduleLabel(ticket.module)}</td>
+              <td data-label="Módulo"><span className="ticket-module-cell">{moduleLabel(ticket.module)}{ticket.submodule && <small>{submoduleLabel(ticket.module, ticket.submodule)}</small>}</span></td>
               <td data-label="Urgência"><UrgencyBadge value={ticket.urgency} /></td>
               <td data-label="Status"><StatusBadge value={ticket.status} /></td>
               <td data-label="Aberto em"><span className="ticket-when">{dateOf(ticket.createdAt)}<small>{timeOf(ticket.createdAt)}</small></span></td>

@@ -7,7 +7,7 @@ import { receiveFile, sendStoredFile } from './uploads.js'
 import { dataDirectory } from './dataDirectory.js'
 import { addNotification } from './notificationEvents.js'
 import { createMailer } from './passwordReset.js'
-import { DESCRIPTION_MAX, RESOLUTION_MAX, TITLE_MAX, moduleLabel, ticketModules, ticketUrgencies, urgencyLabel } from './ticketRules.js'
+import { DESCRIPTION_MAX, RESOLUTION_MAX, TITLE_MAX, moduleLabel, moduleTitle, submodulesOf, ticketModules, ticketUrgencies, urgencyLabel } from './ticketRules.js'
 
 // Tickets de suporte: administrators and administrative employees report problems of the portal to its developers.
 // Everybody sees every ticket; the attachments (evidence of the problem) open for administrators and, for an
@@ -40,7 +40,7 @@ function ticketView(ticket, viewer) {
 
 function ticketMail(ticket, recipients) {
   const files = ticket.attachments || []
-  const rows = [['Ticket', ticket.id], ['Urgência', urgencyLabel(ticket.urgency)], ['Módulo', moduleLabel(ticket.module)], ['Aberto por', ticket.createdByName], ['Data e hora', `${bahiaTime(ticket.createdAt)} (horário da Bahia)`], ['Título', ticket.title]]
+  const rows = [['Ticket', ticket.id], ['Urgência', urgencyLabel(ticket.urgency)], ['Módulo', moduleTitle(ticket.module, ticket.submodule)], ['Aberto por', ticket.createdByName], ['Data e hora', `${bahiaTime(ticket.createdAt)} (horário da Bahia)`], ['Título', ticket.title]]
   const fileLine = files.length ? `${files.length} ${files.length === 1 ? 'anexo' : 'anexos'}: ${files.map((file) => file.name).join(', ')}` : 'Sem anexos'
   return {
     to: recipients.join(', '),
@@ -114,6 +114,9 @@ export default function createSupportTicketsRouter(accounts, requireAdmin, { mai
     const urgency = clean(req.body.urgency, 20), module = clean(req.body.module, 40)
     if (!ticketUrgencies.some(([key]) => key === urgency)) fail('Escolha o grau de urgência: baixo, médio ou alto.')
     if (!ticketModules.some(([key]) => key === module)) fail('Escolha o módulo do sistema onde está o problema.')
+    // Cadastros, Operação and Gestão Financeira also ask for the screen involved; the other modules have none.
+    const screens = submodulesOf(module), submodule = screens.length ? clean(req.body.submodule, 40) : ''
+    if (screens.length && !screens.some(([key]) => key === submodule)) fail(`Escolha o sub-módulo de ${moduleLabel(module)} onde está o problema.`)
     const title = clean(req.body.title, TITLE_MAX).replace(/\s+/g, ' ')
     if (!title) fail('Dê um título ao ticket.')
     const description = multiline(req.body.description, DESCRIPTION_MAX)
@@ -131,9 +134,9 @@ export default function createSupportTicketsRouter(accounts, requireAdmin, { mai
       store.supportTicketUploads = store.supportTicketUploads.filter((item) => !fileIds.includes(item.id))
       store.supportTicketSequence = Math.max(store.supportTicketSequence || 0, store.supportTickets.length) + 1
       const at = new Date().toISOString()
-      const row = { id: `TCK-${String(store.supportTicketSequence).padStart(4, '0')}`, urgency, module, title, description, attachments, status: 'open', createdAt: at, createdBy: req.viewer.id, createdByName: req.viewer.name, createdByRole: req.viewer.role, history: [{ type: 'opened', at, userId: req.viewer.id, userName: req.viewer.name }] }
+      const row = { id: `TCK-${String(store.supportTicketSequence).padStart(4, '0')}`, urgency, module, ...(submodule ? { submodule } : {}), title, description, attachments, status: 'open', createdAt: at, createdBy: req.viewer.id, createdByName: req.viewer.name, createdByRole: req.viewer.role, history: [{ type: 'opened', at, userId: req.viewer.id, userName: req.viewer.name }] }
       store.supportTickets.push(row)
-      addNotification(store, { id: `ticket-opened:${row.id}`, type: 'ticket-opened', at, ticketId: row.id, authorId: req.viewer.id, recipientIds: notify, title: `Novo ticket ${row.id} · urgência: ${urgencyLabel(urgency)}`, description: `${moduleLabel(module)} · ${title}`, employeeName: req.viewer.name })
+      addNotification(store, { id: `ticket-opened:${row.id}`, type: 'ticket-opened', at, ticketId: row.id, authorId: req.viewer.id, recipientIds: notify, title: `Novo ticket ${row.id} · urgência: ${urgencyLabel(urgency)}`, description: `${moduleTitle(module, submodule)} · ${title}`, employeeName: req.viewer.name })
       return row
     })
     emailTicket(ticket)

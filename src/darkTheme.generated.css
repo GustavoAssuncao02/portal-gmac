@@ -3856,6 +3856,12 @@
 :root[data-theme="dark"] .ticket-open-button {
     color: #e1ebf6
 }
+:root[data-theme="dark"] .ticket-module-cell small {
+    color: #c1cfde
+}
+:root[data-theme="dark"] .ticket-submodule-body {
+    border-left: 3px solid #4778ae
+}
 :root[data-theme="dark"] .ticket-when small {
     color: #c1cfde
 }

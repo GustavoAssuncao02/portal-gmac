@@ -2,11 +2,11 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createWorkflowFixture } from './workflowFixture.js'
 import { developerCpfs, isDeveloper } from '../server/supportTickets.js'
-import { monthRange } from '../server/ticketRules.js'
+import { monthRange, moduleTitle } from '../server/ticketRules.js'
 
 const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Administradora' }
 const person = (index, fields = {}) => ({ name: `Funcionário ${index}`, birthDate: '1990-01-01', cpf: `0000000000${index}`, email: `funcionario${index}@example.invalid`, identification: '', type: 'administrative', password: 'senha123', ...fields })
-const ticket = (fields = {}) => ({ urgency: 'high', module: 'finance', title: 'Erro ao salvar a baixa', description: 'Cliquei em salvar e apareceu uma mensagem de erro.', ...fields })
+const ticket = (fields = {}) => ({ urgency: 'high', module: 'finance', submodule: 'payables', title: 'Erro ao salvar a baixa', description: 'Cliquei em salvar e apareceu uma mensagem de erro.', ...fields })
 
 test('the developers are the accounts of the two CPFs, written with or without punctuation', () => {
   assert.deepEqual(developerCpfs, ['02427847550', '14303355640'])
@@ -15,6 +15,8 @@ test('the developers are the accounts of the two CPFs, written with or without p
   assert.equal(isDeveloper({ cpf: '12345678901' }), false)
   assert.equal(isDeveloper({}), false)
   assert.deepEqual(monthRange('2026-11', '2027-02'), ['2026-11', '2026-12', '2027-01', '2027-02'])
+  assert.equal(moduleTitle('finance', 'payables'), 'Gestão Financeira › Contas a Pagar')
+  assert.equal(moduleTitle('stock'), 'Estoque')
 })
 
 test('everybody sees every ticket; attachments open for administrators and the author; only developers close and reopen', async () => {
@@ -39,6 +41,10 @@ test('everybody sees every ticket; attachments open for administrators and the a
     assert.equal((await mine('/support-tickets', 'POST', ticket({ urgency: '' }))).status, 400)
     assert.equal((await mine('/support-tickets', 'POST', ticket({ module: 'nada' }))).status, 400)
     assert.equal((await mine('/support-tickets', 'POST', ticket({ title: '   ' }))).status, 400)
+    // Cadastros, Operação and Gestão Financeira ask for the screen involved, one of their own.
+    assert.equal((await mine('/support-tickets', 'POST', ticket({ submodule: '' }))).status, 400)
+    assert.equal((await mine('/support-tickets', 'POST', ticket({ submodule: 'planning' }))).status, 400)
+    assert.equal((await mine('/support-tickets', 'POST', ticket({ module: 'operation', submodule: 'nada' }))).status, 400)
     assert.equal((await mine('/support-tickets', 'POST', ticket({ description: '' }))).status, 400)
     const othersFile = (await (await upload(developer, 'outro.png', 'x')).json()).item.id
     assert.equal((await mine('/support-tickets', 'POST', ticket({ fileIds: [othersFile] }))).status, 400, 'a file sent by someone else is not claimed')
@@ -55,6 +61,7 @@ test('everybody sees every ticket; attachments open for administrators and the a
     assert.equal(first.createdByName, 'Funcionário 5')
     assert.ok(first.createdAt)
     assert.equal(first.attachments[0].name, 'print da tela.png')
+    assert.equal(first.submodule, 'payables')
     assert.equal((await mine('/support-tickets', 'POST', ticket({ fileIds: [fileId] }))).status, 400, 'a file is claimed once')
 
     // Everybody lists it; an administrative employee who did not open it sees only how many files it has.
@@ -76,6 +83,7 @@ test('everybody sees every ticket; attachments open for administrators and the a
     assert.equal(fixture.ticketMail[0].to, 'by.cmlla0107@gmail.com, Gustavo_Assuncao02@outlook.com')
     assert.match(fixture.ticketMail[0].subject, /TCK-0001 \(urgência: Alto\)/)
     assert.match(fixture.ticketMail[0].text, /Funcionário 5/)
+    assert.match(fixture.ticketMail[0].text, /Módulo: Gestão Financeira › Contas a Pagar/)
     let email = null
     for (let tries = 0; tries < 50 && !email?.sentAt; tries += 1) { email = (await dev('/support-tickets')).data.items[0].email; if (!email?.sentAt) await new Promise((resolve) => setTimeout(resolve, 40)) }
     assert.ok(email?.sentAt)
@@ -104,6 +112,7 @@ test('everybody sees every ticket; attachments open for administrators and the a
     // The next ticket gets the next number and is listed first.
     const second = await admin('/support-tickets', 'POST', ticket({ urgency: 'low', module: 'other', title: 'Sugestão' }))
     assert.equal(second.data.item.id, 'TCK-0002')
+    assert.equal(second.data.item.submodule, undefined, 'a module without screens keeps no sub-module')
     assert.deepEqual((await mine('/support-tickets')).data.items.map((item) => [item.id, item.own]), [['TCK-0002', false], ['TCK-0001', true]])
     assert.equal((await mine('/support-tickets/TCK-0009/files/x')).status, 404)
   } finally {

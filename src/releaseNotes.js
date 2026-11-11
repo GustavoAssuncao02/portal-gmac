@@ -4,9 +4,8 @@ export const releaseNotes = [
     version: '1.0.14',
     date: '2026-11-11',
     notes: [
-      'Ticket: novo menu para abrir tickets de suporte aos desenvolvedores, com urgência, módulo, descrição e anexos como evidência',
-      'Ticket: lista de todos os tickets com filtros e gráficos por módulo, por urgência e por mês',
-      'Notificações: aviso de novo ticket para os desenvolvedores e de ticket fechado ou reaberto para quem o abriu',
+      'Ticket: nova funcionalidade para abrir e acompanhar tickets de suporte',
+      'Notificações: avisos de tickets de suporte',
     ],
   },
   {

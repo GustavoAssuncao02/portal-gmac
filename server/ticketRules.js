@@ -14,11 +14,21 @@ export const ticketModules = [
   ['operator', 'Painel do operador'],
   ['other', 'Outro'],
 ]
+// The modules that are groups in the menu ask for the screen involved (the sub-module), in the order of the menu.
+export const ticketSubmodules = {
+  registrations: [['suppliers', 'Fornecedores'], ['admins', 'Administradores'], ['employees', 'Funcionários'], ['sectors', 'Setores'], ['clients', 'Clientes'], ['requesters', 'Solicitantes'], ['buyers', 'Compradores'], ['banks', 'Bancos'], ['pause-reasons', 'Razões de pausas']],
+  operation: [['services-in-progress', 'Serviços em andamento'], ['completed-services', 'Serviços concluídos'], ['offers', 'Ofertas e serviços'], ['planning', 'Planejamento']],
+  finance: [['payables', 'Contas a Pagar'], ['receivables', 'Contas a Receber'], ['treasury', 'Tesouraria'], ['cash-flow', 'Fluxo de caixa'], ['batch', 'Baixa em Lote'], ['bank', 'Conciliação bancária'], ['bi', 'Business Intelligence'], ['dre', 'DRE'], ['dre-adjustments', 'Ajustes da DRE'], ['account-groups', 'Grupos de contas'], ['classifications', 'Classificações']],
+}
 export const ticketUrgencies = [['low', 'Baixo'], ['medium', 'Médio'], ['high', 'Alto']]
 export const ticketStatuses = [['open', 'Aberto'], ['closed', 'Fechado']]
 
 const labelOf = (list, key) => list.find(([value]) => value === key)?.[1] || key
 export const moduleLabel = (key) => labelOf(ticketModules, key)
+export const submodulesOf = (module) => ticketSubmodules[module] || []
+export const submoduleLabel = (module, key) => labelOf(submodulesOf(module), key)
+// "Gestão Financeira › Contas a Pagar", or only the module when it has no sub-module.
+export const moduleTitle = (module, submodule) => submodule ? `${moduleLabel(module)} › ${submoduleLabel(module, submodule)}` : moduleLabel(module)
 export const urgencyLabel = (key) => labelOf(ticketUrgencies, key)
 export const statusLabel = (key) => labelOf(ticketStatuses, key)
 
