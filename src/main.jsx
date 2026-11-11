@@ -38,6 +38,7 @@ import TreasuryScreen from './TreasuryScreen.jsx'
 import AccountPlanScreen from './AccountPlanScreen.jsx'
 import DreScreen from './DreScreen.jsx'
 import DreAdjustmentsScreen from './DreAdjustmentsScreen.jsx'
+import SupportTicketsScreen from './SupportTicketsScreen.jsx'
 import CashFlowScreen from './CashFlowScreen.jsx'
 import StockPurchaseFinance, { purchasedQuantity } from './StockPurchaseFinance.jsx'
 import BankStatementsScreen from './BankStatementsScreen.jsx'
@@ -60,7 +61,7 @@ import { useMobileModal } from './useMobileModal.js'
 import { ThemeContext, useAccountTheme } from './accountTheme.js'
 import { latestOnly, pollWhileVisible } from './polling.js'
 import { newId } from './newId.js'
-import { History, Monitor, Minimize2, Plus, Pencil, Trash2, Clock3, CreditCard, HandCoins, Banknote, Landmark, ChartColumn, Tags, FileChartColumn, FilePenLine, FolderTree, ChartNoAxesCombined, Truck, WalletCards, ChevronLeft, ChevronRight, ChevronDown, UsersRound, Menu, X, Info, ArrowLeft, ListChecks, Layers, CircleCheck, CircleX, ArrowUpDown, ArrowUp, ArrowDown, Building2, CirclePause, Power, Factory, Wrench, CalendarClock, Save, Contact, ShoppingCart, Mail, ListOrdered } from 'lucide-react'
+import { Ticket, History, Monitor, Minimize2, Plus, Pencil, Trash2, Clock3, CreditCard, HandCoins, Banknote, Landmark, ChartColumn, Tags, FileChartColumn, FilePenLine, FolderTree, ChartNoAxesCombined, Truck, WalletCards, ChevronLeft, ChevronRight, ChevronDown, UsersRound, Menu, X, Info, ArrowLeft, ListChecks, Layers, CircleCheck, CircleX, ArrowUpDown, ArrowUp, ArrowDown, Building2, CirclePause, Power, Factory, Wrench, CalendarClock, Save, Contact, ShoppingCart, Mail, ListOrdered } from 'lucide-react'
 import { proposalCosts, proposalPricing, hoursText, marginLimits, PROPOSAL_MARGIN_GAP } from '../server/proposalMath.js'
 import { stageLabel, serviceDetails, serviceDescriptionText, readStageLayout, orderedStageSelection, stagePlanProblem, stagePlanPlace, setStageCatalog, onStageCatalogChange, defaultStageResource } from '../server/serviceStages.js'
 import { findInventoryMaterial, materialsStock, normalizeSearch, purchaseMaterialRequests } from './offerResources.js'
@@ -196,6 +197,7 @@ const navigation = [
   ['Classificações', 'classifications'],
   ['Fornecedores', 'suppliers'],
   ['Relatórios', 'reports'],
+  ['Ticket', 'ticket'],
   ['Configurações', 'settings'],
 ]
 
@@ -347,7 +349,7 @@ function Sidebar({ collapsed, onToggle, activeNav, onNavigate, onLogout }) {
   }
   function navigationItem([label, icon]) {
     return <button className={`nav-item ${activeNav === label ? 'nav-item--active' : ''}`} key={label} type="button" title={pageLabel(label)} aria-label={pageLabel(label)} onClick={() => { setMobileOpen(false); onNavigate(label) }}>
-      {['payables', 'receivables', 'treasury', 'cash-flow', 'batch', 'bank', 'bi', 'dre', 'dre-adjustments', 'account-groups', 'classifications', 'suppliers', 'completed-services', 'sectors', 'pause-reasons', 'banks', 'planning', 'requesters', 'buyers', 'stages'].includes(icon) ? (() => { const NavIcon = { planning: CalendarClock, payables: CreditCard, receivables: HandCoins, treasury: Banknote, 'cash-flow': ChartNoAxesCombined, batch: Layers, bank: Landmark, bi: ChartColumn, dre: FileChartColumn, 'dre-adjustments': FilePenLine, 'account-groups': FolderTree, classifications: Tags, suppliers: Truck, 'completed-services': ListChecks, sectors: Building2, 'pause-reasons': CirclePause, banks: Landmark, requesters: Contact, buyers: ShoppingCart, stages: ListOrdered }[icon]; return <NavIcon className="icon nav-icon" size={20} /> })() : <Icon name={icon} className="nav-icon" />}
+      {['payables', 'receivables', 'treasury', 'cash-flow', 'batch', 'bank', 'bi', 'dre', 'dre-adjustments', 'account-groups', 'classifications', 'suppliers', 'completed-services', 'sectors', 'pause-reasons', 'banks', 'planning', 'requesters', 'buyers', 'stages', 'ticket'].includes(icon) ? (() => { const NavIcon = { planning: CalendarClock, payables: CreditCard, receivables: HandCoins, treasury: Banknote, 'cash-flow': ChartNoAxesCombined, batch: Layers, bank: Landmark, bi: ChartColumn, dre: FileChartColumn, 'dre-adjustments': FilePenLine, 'account-groups': FolderTree, classifications: Tags, suppliers: Truck, 'completed-services': ListChecks, sectors: Building2, 'pause-reasons': CirclePause, banks: Landmark, requesters: Contact, buyers: ShoppingCart, stages: ListOrdered, ticket: Ticket }[icon]; return <NavIcon className="icon nav-icon" size={20} /> })() : <Icon name={icon} className="nav-icon" />}
       <span>{pageLabel(label)}</span>
     </button>
   }
@@ -485,7 +487,7 @@ function WorkspaceTabs({ tabs, activeNav, onNavigate, onCloseTab, onReorderTabs 
     </div>
     {scrollState.overflow && <button ref={rightArrowRef} className="workspace-tabs-control" type="button" aria-label="Rolar abas para a direita" title="Rolar abas para a direita" disabled={!scrollState.right} onClick={() => scrollTabs(1)}><ChevronRight size={17} aria-hidden="true" /></button>}
     {tabs.length > 3 && <button className="workspace-tabs-control workspace-tabs-close-all" type="button" aria-label="Fechar todas as abas" title="Fechar todas as abas" onClick={closeAllTabs}><X size={17} aria-hidden="true" /></button>}
-    <NotificationsButton onOpenAccount={(id) => { sessionStorage.setItem('gmac-payable-open', id); onNavigate('Contas a Pagar'); window.dispatchEvent(new CustomEvent('gmac-payable-open', { detail: id })) }} onOpenReceivable={(id) => { sessionStorage.setItem('gmac-receivable-open', id); onNavigate('Contas a Receber'); window.dispatchEvent(new CustomEvent('gmac-receivable-open', { detail: id })) }} onOpenNotice={(notice) => notice.type === 'proposal-saved' ? window.dispatchEvent(new CustomEvent('gmac-proposal-open', { detail: notice.offerId })) : notice.type === 'release' ? (sessionStorage.setItem('gmac-release-notes-open', '1'), onNavigate('Configurações'), window.dispatchEvent(new CustomEvent('gmac-release-notes-open'))) : onNavigate({ 'material-request': 'Pedidos', 'low-stock': 'Estoque', 'service-completed': 'Serviços em andamento', 'service-added': 'Serviços em andamento' }[notice.type] || 'Dashboard')} />
+    <NotificationsButton onOpenAccount={(id) => { sessionStorage.setItem('gmac-payable-open', id); onNavigate('Contas a Pagar'); window.dispatchEvent(new CustomEvent('gmac-payable-open', { detail: id })) }} onOpenReceivable={(id) => { sessionStorage.setItem('gmac-receivable-open', id); onNavigate('Contas a Receber'); window.dispatchEvent(new CustomEvent('gmac-receivable-open', { detail: id })) }} onOpenNotice={(notice) => ['ticket-opened', 'ticket-status'].includes(notice.type) ? (sessionStorage.setItem('gmac-ticket-open', notice.ticketId), onNavigate('Ticket'), window.dispatchEvent(new CustomEvent('gmac-ticket-open', { detail: notice.ticketId }))) : notice.type === 'proposal-saved' ? window.dispatchEvent(new CustomEvent('gmac-proposal-open', { detail: notice.offerId })) : notice.type === 'release' ? (sessionStorage.setItem('gmac-release-notes-open', '1'), onNavigate('Configurações'), window.dispatchEvent(new CustomEvent('gmac-release-notes-open'))) : onNavigate({ 'material-request': 'Pedidos', 'low-stock': 'Estoque', 'service-completed': 'Serviços em andamento', 'service-added': 'Serviços em andamento' }[notice.type] || 'Dashboard')} />
     <div className="workspace-tabs-clock" aria-label="Data e hora atual"><strong>{currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</strong><span>{currentTime.toLocaleDateString('pt-BR')}</span></div>
   </div>
 }
@@ -2329,6 +2331,7 @@ function Dashboard({ user, onUpdateUser, collapsed, onToggle, activeNav, onNavig
   if (activeNav === 'Baixa em Lote') return <BatchSettlementScreen {...toolProps} />
   if (activeNav === 'Conciliação bancária') return <BankStatementsScreen {...toolProps} />
   if (activeNav === 'Relatórios') return <ReportsScreen {...toolProps} />
+  if (activeNav === 'Ticket') return <SupportTicketsScreen {...toolProps} />
   if (activeNav === 'Serviços') return <LaborServicesScreen {...toolProps} />
   if (activeNav === 'Etapas') return <StagesScreen {...toolProps} />
   if (activeNav === 'Planejamento') return <PlanningScreen {...toolProps} />

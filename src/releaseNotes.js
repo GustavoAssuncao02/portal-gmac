@@ -1,6 +1,15 @@
 // Each commit to main is a new version: add an entry at the top, with what changed in plain words for whoever uses the portal.
 export const releaseNotes = [
   {
+    version: '1.0.14',
+    date: '2026-11-11',
+    notes: [
+      'Ticket: novo menu para abrir tickets de suporte aos desenvolvedores, com urgência, módulo, descrição e anexos como evidência',
+      'Ticket: lista de todos os tickets com filtros e gráficos por módulo, por urgência e por mês',
+      'Notificações: aviso de novo ticket para os desenvolvedores e de ticket fechado ou reaberto para quem o abriu',
+    ],
+  },
+  {
     version: '1.0.13',
     date: '2026-11-10',
     notes: [

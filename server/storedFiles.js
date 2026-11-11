@@ -24,6 +24,7 @@ export function storedFileInventory(store, dataDirectory) {
     { label: 'Contas a Receber', files: withPath(folder('receivable-files'), accountFiles(store.receivables, store.receivableEvents, 'receipt')) },
     { label: 'Ajustes da DRE', files: withPath(folder('dre-adjustment-files'), (store.dreAdjustments || []).flatMap((row) => (row.attachments || []).map((file) => ({ id: file.id, name: file.name, where: row.id, at: null })))) },
     { label: 'Ofertas e OS', files: withPath(folder('files'), [...offerFiles.values()]) },
+    { label: 'Tickets de suporte', files: withPath(folder('support-ticket-files'), (store.supportTickets || []).flatMap((row) => (row.attachments || []).map((file) => ({ id: file.id, name: file.name, where: row.id, at: file.uploadedAt || row.createdAt || null })))) },
     // Only a copy of the imported statement: its transactions are in the database and the reconciliation does not read it.
     { label: 'Extratos OFX importados', files: withPath(folder('bank-statements'), (store.bankImports || []).map((row) => ({ id: row.id, name: row.fileName, where: 'Conciliação bancária', at: row.importedAt || null })), (file) => `${file.id}.ofx`) },
   ]

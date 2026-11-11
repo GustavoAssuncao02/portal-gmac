@@ -3147,6 +3147,198 @@
 :root[data-theme="dark"][data-tone="black"] .planning-strip-wrap small {
     color: #bec2c5
 }
+:root[data-theme="dark"][data-tone="black"] .ticket-form {
+    border: 1px solid #303133
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-form h2, :root[data-theme="dark"][data-tone="black"] .ticket-list h2 {
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-guidance {
+    border: 1px solid #303133;
+    border-left: 4px solid #47494c;
+    background: #232425;
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-guidance svg {
+    color: #bec1c5
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-choice legend {
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .admin-tools-main label.ticket-option {
+    border: 1px solid #303133;
+    background: #1a1b1c;
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-option:hover {
+    border-color: #303133;
+    background: #232425
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-option:has(input:focus-visible) {
+    outline: 2px solid #303133
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-option:has(input:checked) {
+    border-color: #47494c;
+    background: #232425;
+    color: #ebebec;
+    box-shadow: inset 0 0 0 1px #0a0a0b
+}
+:root[data-theme="dark"][data-tone="black"] .admin-tools-main .ticket-field {
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-field textarea {
+    border: 1px solid #303133;
+    background: #1a1b1c;
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-field textarea:focus-visible {
+    outline: 2px solid #303133
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-counter {
+    color: #bec2c5
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-files .payable-files h3 {
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-created {
+    border: 1px solid #303133;
+    background: #1a3022
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-urgency, :root[data-theme="dark"][data-tone="black"] .ticket-status {
+    border: 1px solid #303133;
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-urgency {
+    background: #232425
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-status--open {
+    border-color: #303133;
+    background: #232425;
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-status--closed {
+    border-color: #303133;
+    background: #1a3022
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-list {
+    border-top: 1px solid #303133
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-charts {
+    border-top: 1px solid #303133
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-chart h3 {
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-chart-tooltip {
+    border: 1px solid #303133;
+    background: #1a1b1c;
+    color: #ebebec;
+    box-shadow: 0 6px 18px #0a0a0b22
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-chart-tooltip span, :root[data-theme="dark"][data-tone="black"] .ticket-chart-tooltip small {
+    color: #bfc2c5
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-chart-legend {
+    border-top: 1px solid #303133
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-chart-legend li {
+    border-bottom: 1px solid #303133;
+    color: #bec2c5
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-chart-legend li.ticket-chart-legend--active {
+    background: #232425
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-chart-legend span small {
+    color: #cdcfd2
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-chart-legend b {
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-chart-legend li > small {
+    color: #bec2c5
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-month-grid {
+    stroke: #bec2c5
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-month-baseline {
+    stroke: #bfc2c5
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-month-axis {
+    fill: #cdcfd2
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-table-scroll {
+    border: 1px solid #303133
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-table th {
+    background: #232425;
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-table td {
+    border-top: 1px solid #303133;
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-table tbody tr:nth-child(even) {
+    background: #232425
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-table tbody tr:hover {
+    background: #232425
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-title-cell {
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-open-button {
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-when small {
+    color: #cdcfd2
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-detail-meta dt {
+    color: #bfc2c5
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-detail-meta dd {
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-detail-block {
+    border-top: 1px solid #303133
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-detail-modal .ticket-detail-block h3 {
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-detail-text {
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-detail-files li {
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-locked {
+    color: #bec2c5
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-resolution {
+    border: 1px solid #303133;
+    background: #1a3022
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-history {
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-history li span {
+    color: #cdcfd2
+}
+@media (max-width: 760px) {
+    :root[data-theme="dark"][data-tone="black"] .ticket-table tbody tr {
+        border: 1px solid #303133;
+        background: #1a1b1c
+    }
+}
+@media (max-width: 760px) {
+    :root[data-theme="dark"][data-tone="black"] .ticket-table tbody tr:nth-child(even) {
+        background: #1a1b1c
+    }
+}
+@media (max-width: 760px) {
+    :root[data-theme="dark"][data-tone="black"] .ticket-table td::before {
+        color: #bec2c5
+    }
+}
 :root[data-theme="dark"][data-tone="black"] {
     color: #cdcfd2;
     background: #1a1b1c
@@ -6276,6 +6468,17 @@
     --pause-slot-6: #006900;
     --pause-other: #47494c;
     --pause-surface: #111212
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-screen {
+    --ticket-slot-6: #006900;
+    --ticket-other: #47494c;
+    --ticket-surface: #111212
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-month-grid {
+    stroke: #202122
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-month-baseline {
+    stroke: #3d3f41
 }
 :root[data-theme="dark"][data-tone="black"] .planning-agenda {
     --overrun-flag: #3b1113;

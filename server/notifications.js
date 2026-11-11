@@ -31,10 +31,11 @@ export default function createNotificationsRouter({ requireAdmin, payables, rece
     return inventorySweep
   }
   // A notice with an author (a saved proposal, an accepted offer) is not shown to the person who caused it. The notice of
-  // a new version of the portal goes to everybody, whatever the preferences.
+  // a new version of the portal goes to everybody, whatever the preferences. A notice with recipients (a new support
+  // ticket for the developers, a closed ticket for whoever opened it) goes only to them.
   const operational = (store, userId) => {
     const settings = notificationSettings(store, userId)
-    return (store.operationalNotifications || []).filter((item) => (item.type === 'release' || settings[notificationPreference[item.type]]) && (item.authorId == null || String(item.authorId) !== String(userId)))
+    return (store.operationalNotifications || []).filter((item) => (item.type === 'release' || settings[notificationPreference[item.type]]) && (item.authorId == null || String(item.authorId) !== String(userId)) && (!Array.isArray(item.recipientIds) || item.recipientIds.some((id) => String(id) === String(userId))))
   }
   // Administrative employees have no access to the finance screens, so they get no payable or receivable notices.
   const items = (store, userId, finance) => [

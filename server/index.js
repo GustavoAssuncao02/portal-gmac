@@ -35,6 +35,7 @@ import createInventoryImportRouter from './inventoryImport.js'
 import createInventoryRouter from './inventory.js'
 import createMaterialRequestsRouter from './materialRequests.js'
 import createNotificationsRouter from './notifications.js'
+import createSupportTicketsRouter from './supportTickets.js'
 import { inventorySignal } from './notificationEvents.js'
 import { createApiRateLimiter } from './rateLimit.js'
 import { ensureInventoryAppearance } from './inventoryAppearance.js'
@@ -133,6 +134,7 @@ app.use('/api', createDreRouter(accounts, requireAdmin))
 app.use('/api', createBankStatementsRouter(accounts, requireAdmin))
 app.use('/api', createFiscalRouter(requireAdmin))
 app.use('/api', createProposalDocumentsRouter(requireAdmin))
+app.use('/api', createSupportTicketsRouter(accounts, requireAdmin))
 const notificationsRouter = createNotificationsRouter({ requireAdmin, payables: payablesRouter, receivables: receivablesRouter, loadInventory: async () => {
   const [rows] = await pool.execute('SELECT id, name, unit, quantity_kg AS quantity, minimum_kg AS minimum FROM inventory_materials')
   return rows

@@ -72,6 +72,14 @@
 :root[data-theme="dark"][data-tone="black"] .account-theme-option.selected { background: #1f1f22; border-color: #80b7f0; color: #f2f2f2; }
 /* Pause reasons pie: the same eight hues stepped for the dark workspace (validated against #0d1c2e). */
 :root[data-theme="dark"] .pause-reasons-chart { --pause-slot-1: #3987e5; --pause-slot-2: #d95926; --pause-slot-3: #199e70; --pause-slot-4: #c98500; --pause-slot-5: #d55181; --pause-slot-6: #008300; --pause-slot-7: #9085e9; --pause-slot-8: #e66767; --pause-other: #5b7a9a; --pause-surface: #0d1c2e; }
+/* Tickets de suporte: the module slots are the pause chart's eight hues; the urgency trio (blue, amber, red) was
+   validated against #0d1c2e and #0b0b0b with a deeper red, which kept it apart from the amber. */
+:root[data-theme="dark"] .ticket-screen { --ticket-slot-1: #3987e5; --ticket-slot-2: #d95926; --ticket-slot-3: #199e70; --ticket-slot-4: #c98500; --ticket-slot-5: #d55181; --ticket-slot-6: #008300; --ticket-slot-7: #9085e9; --ticket-slot-8: #e66767; --ticket-other: #5b7a9a; --ticket-urgency-low: #3987e5; --ticket-urgency-medium: #c98500; --ticket-urgency-high: #cf3d48; --ticket-bar: #3987e5; --ticket-surface: #0d1c2e; }
+:root[data-theme="dark"] .ticket-month-grid { stroke: #22374d; }
+:root[data-theme="dark"] .ticket-month-baseline { stroke: #4d6884; }
+:root[data-theme="dark"][data-tone="black"] .ticket-screen { --ticket-surface: #0b0b0b; --ticket-other: #6e7175; }
+:root[data-theme="dark"][data-tone="black"] .ticket-month-grid { stroke: #262628; }
+:root[data-theme="dark"][data-tone="black"] .ticket-month-baseline { stroke: #55575b; }
 /* Planning: the late tail and the early mark, stepped for each dark surface (#0d1c2e and #0b0b0b) so the red and the
    blue keep apart from the amber of late blocks and the green of done ones. */
 :root[data-theme="dark"] .planning-agenda { --overrun: #e5484d; --overrun-stripe: #b8343a; --overrun-flag: #4a1518; --overrun-flag-ink: #ffd7d5; --early: #6aa7f0; --early-fill: #6aa7f047; --early-stripe: #6aa7f01a; --early-flag: #13345a; --early-flag-ink: #dcebff; }
