@@ -4,7 +4,9 @@ export const releaseNotes = [
     version: '1.0.15',
     date: '2026-11-12',
     notes: [
-      'Ofertas e serviços: prazo solicitado opcional ao inserir a oferta, pedido ao gerar o PDF da proposta',
+      'Ofertas e serviços: solicitações enviadas pelo site da GMAC viram ofertas com o selo Site, prazo solicitado opcional ao inserir a oferta (pedido ao gerar o PDF da proposta)',
+      'Clientes: pré-cadastro automático de clientes novos vindos do site',
+      'Notificações: aviso de nova oferta pelo site',
       'Baixa em lote: gráfico por ano, mês e semana, novos filtros e páginas na lista de lançamentos',
       'Tablet da produção: modo de exibição para TV com as OS em andamento pelo prazo de entrega',
     ],
