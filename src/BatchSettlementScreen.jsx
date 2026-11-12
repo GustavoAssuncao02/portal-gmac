@@ -1,19 +1,20 @@
-import { useEffect, useState } from 'react'
-import { Search, Plus, X, Check, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Search, Plus, X, Check, Trash2, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import AdminWorkspace from './AdminWorkspace.jsx'
 import { ConfirmAction } from './PayablesScreen.jsx'
 import { money, dateLabel, payableRequest } from './payablesApi.js'
 import { filterPayables, todayBahia, dueLabel } from '../server/payableRules.js'
 import { pollWhileVisible } from './polling.js'
 import './payables.css'
-import { batchByClassification, openBalanceByMonth, palette } from './batchSettlement.js'
+import { balanceYears, batchByClassification, monthNames, openBalanceByPeriod, palette } from './batchSettlement.js'
 import './batchSettlement.css'
 import BankSelect from './BankSelect.jsx'
-import { SortableRows, SortHeader } from './RegistryList.jsx'
+import MoneyInput from './MoneyInput.jsx'
+import { useResetOnChange } from './savedListState.js'
 
+const emptyFilters = { start: '', end: '', min: '', max: '' }
 const pickerColumns = [['id', 'ID'], ['supplierName', 'Fornecedor'], ['description', 'Descrição'], ['classificationName', 'Classificação'], ['dueDate', 'Vencimento'], ['valueCents', 'Valor']]
 
-const monthLabel = (month) => new Date(`${month}-15T12:00:00Z`).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit', timeZone: 'UTC' }).replace('.', '').replace(' de ', '/')
 const compact = (cents) => { const value = cents / 100; return value >= 1e6 ? `${(value / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mi` : value >= 1e3 ? `${(value / 1e3).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil` : value.toLocaleString('pt-BR', { maximumFractionDigits: 0 }) }
 
 function PieChart({ slices, total }) {
@@ -35,23 +36,34 @@ function PieChart({ slices, total }) {
   </section>
 }
 
-function EvolutionChart({ rows }) {
+// One year at a time: month by month, or week by week when one or two months are chosen.
+function EvolutionChart({ open, batchIds, today }) {
+  const years = balanceYears(open, today)
+  const [year, setYear] = useState(() => Number(today.slice(0, 4))), [months, setMonths] = useState([])
+  const toggleMonth = (month) => setMonths((current) => current.includes(month) ? current.filter((item) => item !== month) : [...current, month])
+  const rows = openBalanceByPeriod(open, batchIds, { year, months })
+  const weekly = rows[0]?.weekly
   const width = 720, height = 260, pad = { top: 16, right: 12, bottom: 34, left: 56 }
   const max = Math.max(1, ...rows.map((row) => row.now)), plotWidth = width - pad.left - pad.right, plotHeight = height - pad.top - pad.bottom
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((part) => max * part), slot = plotWidth / Math.max(1, rows.length)
   const y = (cents) => pad.top + plotHeight - cents / max * plotHeight
+  const period = weekly ? 'semana' : 'mês'
   return <section className="batch-card batch-evolution"><h2>Evolução do contas a pagar</h2>
-    <p className="payable-muted">Saldo em aberto por mês de vencimento: como está agora e como ficará após a baixa da lista.</p>
+    <p className="payable-muted">Saldo em aberto por {period} de vencimento: como está agora e como ficará após a baixa da lista.</p>
+    <div className="batch-chart-filters">
+      <label>Ano<select aria-label="Ano do gráfico" value={year} onChange={(event) => setYear(Number(event.target.value))}>{years.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+      <div className="batch-months" role="group" aria-label="Meses do gráfico"><button type="button" aria-pressed={!months.length} onClick={() => setMonths([])}>Todos</button>{monthNames.map((name, index) => <button key={name} type="button" aria-pressed={months.includes(index + 1)} onClick={() => toggleMonth(index + 1)}>{name}</button>)}</div>
+      <small className="payable-muted">Com 1 ou 2 meses escolhidos, o gráfico mostra as semanas.</small>
+    </div>
     <ul className="batch-legend"><li><i className="batch-key batch-key--now" aria-hidden="true" />Agora</li><li><i className="batch-key batch-key--after" aria-hidden="true" />Após a baixa</li></ul>
-    {!rows.length ? <p className="payable-muted">Nenhuma conta em aberto.</p> : <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Saldo em aberto por mês de vencimento, agora e após a baixa">
+    {!open.length ? <p className="payable-muted">Nenhuma conta em aberto.</p> : rows.every((row) => !row.now) ? <p className="payable-muted">Nenhuma conta em aberto vence neste período.</p> : <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Saldo em aberto por ${period} de vencimento em ${year}, agora e após a baixa`}>
       {ticks.map((tick) => <g key={tick}><line className="batch-grid" x1={pad.left} x2={width - pad.right} y1={y(tick)} y2={y(tick)} /><text className="batch-axis" x={pad.left - 6} y={y(tick)} dy="0.32em" textAnchor="end">{compact(tick)}</text></g>)}
       {['now', 'after'].map((key) => <path key={key} className={`batch-line batch-line--${key}`} d={rows.map((row, index) => `${index ? 'L' : 'M'}${(pad.left + slot * (index + 0.5)).toFixed(1)},${y(row[key]).toFixed(1)}`).join(' ')} />)}
-      {rows.map((row, index) => { const cx = pad.left + slot * (index + 0.5); return <g key={row.month}>
-        <circle className="batch-dot batch-dot--now" cx={cx} cy={y(row.now)} r="5"><title>{monthLabel(row.month)} · agora: {money(row.now)}</title></circle>
-        <circle className="batch-dot batch-dot--after" cx={cx} cy={y(row.after)} r="4"><title>{monthLabel(row.month)} · após a baixa: {money(row.after)}</title></circle>
-        <text className="batch-axis" x={cx} y={height - 12} textAnchor="middle">{monthLabel(row.month)}</text></g> })}
+      {rows.map((row, index) => { const cx = pad.left + slot * (index + 0.5), name = weekly ? `Semana ${row.label}` : row.label; return <g key={row.key}>
+        <circle className="batch-dot batch-dot--now" cx={cx} cy={y(row.now)} r="5"><title>{name} · agora: {money(row.now)}</title></circle>
+        <circle className="batch-dot batch-dot--after" cx={cx} cy={y(row.after)} r="4"><title>{name} · após a baixa: {money(row.after)}</title></circle>
+        <text className="batch-axis" x={cx} y={height - 12} textAnchor="middle">{row.label}</text></g> })}
     </svg>}
-    {rows.length > 0 && <div className="payable-table-scroll"><SortableRows rows={rows} columns={[{ key: "Mês", label: "Mês", value: (row) => row.month, numeric: true }, { key: "Agora", label: "Agora", value: (row) => row.now, numeric: true }, { key: "Após a baixa", label: "Após a baixa", value: (row) => row.after, numeric: true }, { key: "Redução", label: "Redução", value: (row) => row.now - row.after, numeric: true }]}>{(sorted) => <table className="payable-table batch-evolution-table"><thead><tr><SortHeader column={sorted.columns[0]} list={sorted} /><SortHeader column={sorted.columns[1]} list={sorted} /><SortHeader column={sorted.columns[2]} list={sorted} /><SortHeader column={sorted.columns[3]} list={sorted} /></tr></thead><tbody>{sorted.rows.map((row) => <tr key={row.month}><td data-label="Mês">{monthLabel(row.month)}</td><td data-label="Agora">{money(row.now)}</td><td data-label="Após a baixa">{money(row.after)}</td><td data-label="Redução">{money(row.now - row.after)}</td></tr>)}</tbody></table>}</SortableRows></div>}
   </section>
 }
 
@@ -68,6 +80,7 @@ function SettleForm({ count, total, onClose, onConfirm }) {
 // A single list shared by every administrator: what one person adds, the others see on their next refresh.
 export default function BatchSettlementScreen(props) {
   const [items, setItems] = useState([]), [batch, setBatch] = useState({ ids: [] }), [loading, setLoading] = useState(true), [error, setError] = useState(''), [search, setSearch] = useState(''), [dueOnly, setDueOnly] = useState(false), [settling, setSettling] = useState(false), [notice, setNotice] = useState(''), [sort, setSort] = useState({ key: 'dueDate', direction: 1 })
+  const [filters, setFilters] = useState(emptyFilters), [page, setPage] = useState(1), pickerScroll = useRef(null)
   const load = async () => { const [payables, current] = await Promise.all([payableRequest('/payables'), payableRequest('/payables/batch')]); setItems(payables.items); setBatch(current); setError('') }
   useEffect(() => {
     let active = true
@@ -79,8 +92,16 @@ export default function BatchSettlementScreen(props) {
   const today = todayBahia(), open = items.filter((row) => !row.payment && !row.inactive)
   const inBatch = batch.ids.map((id) => open.find((row) => row.id === id)).filter(Boolean)
   const total = inBatch.reduce((sum, row) => sum + row.valueCents, 0)
-  const available = filterPayables(open, { search }, today).filter((row) => !batch.ids.includes(row.id) && (!dueOnly || row.dueDate <= today)).sort((a, b) => { const av = a[sort.key] ?? '', bv = b[sort.key] ?? ''; return sort.direction * (typeof av === 'number' ? av - bv : String(av).localeCompare(String(bv), 'pt-BR')) || a.id.localeCompare(b.id) })
-  const shown = available.slice(0, 50)
+  // Due date range and value range (MoneyInput gives "1234.56", or "" when empty).
+  const setFilter = (key, value) => setFilters((current) => ({ ...current, [key]: value }))
+  const filtering = Object.values(filters).some(Boolean)
+  const minCents = filters.min ? Math.round(Number(filters.min) * 100) : null, maxCents = filters.max ? Math.round(Number(filters.max) * 100) : null
+  const available = filterPayables(open, { search, start: filters.start, end: filters.end }, today).filter((row) => !batch.ids.includes(row.id) && (!dueOnly || row.dueDate <= today) && (minCents == null || row.valueCents >= minCents) && (maxCents == null || row.valueCents <= maxCents)).sort((a, b) => { const av = a[sort.key] ?? '', bv = b[sort.key] ?? ''; return sort.direction * (typeof av === 'number' ? av - bv : String(av).localeCompare(String(bv), 'pt-BR')) || a.id.localeCompare(b.id) })
+  // 50 per page; a new search, filter or order goes back to the first page.
+  const pageSize = 50, pages = Math.max(1, Math.ceil(available.length / pageSize)), currentPage = Math.min(page, pages)
+  const shown = available.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+  useResetOnChange([search, dueOnly, filters, sort], () => setPage(1))
+  useEffect(() => { if (pickerScroll.current) pickerScroll.current.scrollTop = 0 }, [currentPage])
   // Numbers and dates start from the largest/latest; text starts from A.
   const sortBy = (key) => setSort({ key, direction: sort.key === key ? -sort.direction : key === 'valueCents' ? -1 : 1 })
   async function settle(body) {
@@ -101,12 +122,19 @@ export default function BatchSettlementScreen(props) {
         </section>
         <PieChart slices={batchByClassification(inBatch)} total={total} />
       </div>
-      <EvolutionChart rows={openBalanceByMonth(open, inBatch.map((row) => row.id))} />
+      <EvolutionChart open={open} batchIds={inBatch.map((row) => row.id)} today={today} />
       <section className="batch-card batch-picker">
         <h2>Adicionar lançamentos</h2>
-        <div className="payable-toolbar"><label className="payable-search"><Search size={18} /><input aria-label="Buscar contas em aberto" placeholder="ID, fornecedor, descrição ou documento" value={search} onChange={(event) => setSearch(event.target.value)} /></label><label className="batch-check"><input type="checkbox" checked={dueOnly} onChange={(event) => setDueOnly(event.target.checked)} />Somente vencidas e que vencem hoje</label>{shown.length > 0 && <button type="button" className="admin-tool-button" onClick={() => change('/payables/batch/items', 'POST', { ids: shown.map((row) => row.id) })}><Plus size={15} />Adicionar listadas ({shown.length})</button>}</div>
-        <div className="payable-table-scroll batch-picker-scroll"><table className="payable-table batch-picker-table"><thead><tr>{pickerColumns.map(([key, label]) => <th key={key} aria-sort={sort.key === key ? sort.direction === 1 ? 'ascending' : 'descending' : 'none'}><button type="button" onClick={() => sortBy(key)}>{label}{sort.key !== key ? <ArrowUpDown size={12} /> : sort.direction === 1 ? <ArrowUp size={12} /> : <ArrowDown size={12} />}</button></th>)}<th><span className="sr-only">Adicionar</span></th></tr></thead><tbody>{shown.map((row) => <tr key={row.id}><td className="payable-id">{row.id}</td><td data-label="Fornecedor">{row.supplierName}</td><td data-label="Descrição">{row.description || '—'}</td><td data-label="Classificação">{row.classificationName}</td><td data-label="Vencimento">{dateLabel(row.dueDate)}<small className="batch-due">{dueLabel(row.daysUntil)}</small></td><td data-label="Valor" className="payable-value">{money(row.valueCents)}</td><td><button type="button" className="payable-icon" title="Adicionar à lista" aria-label={`Adicionar ${row.id}`} onClick={() => change('/payables/batch/items', 'POST', { ids: [row.id] })}><Plus size={16} /></button></td></tr>)}{!shown.length && <tr><td colSpan={7} className="payable-empty">Nenhuma conta em aberto encontrada.</td></tr>}</tbody></table></div>
-        {available.length > shown.length && <p className="payable-muted">Mostrando {shown.length} de {available.length}. Refine a busca para ver as demais.</p>}
+        <div className="payable-toolbar"><label className="payable-search"><Search size={18} /><input aria-label="Buscar contas em aberto" placeholder="ID, fornecedor, descrição ou documento" value={search} onChange={(event) => setSearch(event.target.value)} /></label><label className="batch-check"><input type="checkbox" checked={dueOnly} onChange={(event) => setDueOnly(event.target.checked)} />Somente vencidas e que vencem hoje</label>{shown.length > 0 && <button type="button" className="admin-tool-button" onClick={() => change('/payables/batch/items', 'POST', { ids: shown.map((row) => row.id) })}><Plus size={15} />Adicionar esta página ({shown.length})</button>}</div>
+        <div className="batch-filters">
+          <label>Vencimento de<input type="date" value={filters.start} onChange={(event) => setFilter('start', event.target.value)} /></label>
+          <label>Vencimento até<input type="date" min={filters.start || undefined} value={filters.end} onChange={(event) => setFilter('end', event.target.value)} /></label>
+          <label>Valor mínimo<MoneyInput aria-label="Valor mínimo" placeholder="0,00" value={filters.min} onChange={(value) => setFilter('min', value)} /></label>
+          <label>Valor máximo<MoneyInput aria-label="Valor máximo" placeholder="0,00" value={filters.max} onChange={(value) => setFilter('max', value)} /></label>
+          {filtering && <button type="button" className="admin-tool-button" onClick={() => setFilters(emptyFilters)}><X size={15} />Limpar filtros</button>}
+        </div>
+        <div className="payable-table-scroll batch-picker-scroll" ref={pickerScroll}><table className="payable-table batch-picker-table"><thead><tr>{pickerColumns.map(([key, label]) => <th key={key} aria-sort={sort.key === key ? sort.direction === 1 ? 'ascending' : 'descending' : 'none'}><button type="button" onClick={() => sortBy(key)}>{label}{sort.key !== key ? <ArrowUpDown size={12} /> : sort.direction === 1 ? <ArrowUp size={12} /> : <ArrowDown size={12} />}</button></th>)}<th><span className="sr-only">Adicionar</span></th></tr></thead><tbody>{shown.map((row) => <tr key={row.id}><td className="payable-id">{row.id}</td><td data-label="Fornecedor">{row.supplierName}</td><td data-label="Descrição">{row.description || '—'}</td><td data-label="Classificação">{row.classificationName}</td><td data-label="Vencimento">{dateLabel(row.dueDate)}<small className="batch-due">{dueLabel(row.daysUntil)}</small></td><td data-label="Valor" className="payable-value">{money(row.valueCents)}</td><td><button type="button" className="payable-icon" title="Adicionar à lista" aria-label={`Adicionar ${row.id}`} onClick={() => change('/payables/batch/items', 'POST', { ids: [row.id] })}><Plus size={16} /></button></td></tr>)}{!shown.length && <tr><td colSpan={7} className="payable-empty">Nenhuma conta em aberto encontrada.</td></tr>}</tbody></table></div>
+        {available.length > 0 && <div className="payable-pagination batch-pagination"><span>{available.length} {available.length === 1 ? 'conta' : 'contas'} · {money(available.reduce((sum, row) => sum + row.valueCents, 0))}</span><button type="button" className="payable-icon" title="Página anterior" aria-label="Página anterior" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}><ChevronLeft size={18} /></button><span>Página {currentPage} de {pages}</span><button type="button" className="payable-icon" title="Próxima página" aria-label="Próxima página" disabled={currentPage === pages} onClick={() => setPage(currentPage + 1)}><ChevronRight size={18} /></button></div>}
       </section>
     </>}
     {settling && <SettleForm count={inBatch.length} total={total} onClose={() => setSettling(false)} onConfirm={settle} />}

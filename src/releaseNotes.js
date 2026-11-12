@@ -5,6 +5,7 @@ export const releaseNotes = [
     date: '2026-11-12',
     notes: [
       'Ofertas e serviços: prazo solicitado opcional ao inserir a oferta, pedido ao gerar o PDF da proposta',
+      'Baixa em lote: gráfico por ano, mês e semana, novos filtros e páginas na lista de lançamentos',
     ],
   },
   {

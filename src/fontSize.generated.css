@@ -549,6 +549,9 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .batch-axis { font-size: calc(11px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .batch-check { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .batch-due { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .batch-chart-filters > label { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .batch-months button { font-size: inherit; font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .batch-chart-filters > small { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .account-plan-group-row th { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .account-plan-group-row th small { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .account-plan-toolbar > label { font-size: calc(12px * var(--account-font-scale)); }

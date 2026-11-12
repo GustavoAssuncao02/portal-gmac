@@ -2685,6 +2685,17 @@
 :root[data-theme="dark"][data-tone="black"] .batch-due {
     color: #bfc2c5
 }
+:root[data-theme="dark"][data-tone="black"] .batch-chart-filters > label {
+    color: #bec2c5
+}
+:root[data-theme="dark"][data-tone="black"] .batch-months button {
+    border: 1px solid #303133;
+    background: #1a1b1c;
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .batch-months button[aria-pressed="true"] {
+    border-color: #47494c
+}
 :root[data-theme="dark"][data-tone="black"] .account-plan-table .account-plan-code {
     color: #ebebec
 }

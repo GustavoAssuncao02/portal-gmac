@@ -2,13 +2,27 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createWorkflowFixture } from './workflowFixture.js'
 import { todayBahia } from '../server/payableRules.js'
-import { batchByClassification, openBalanceByMonth } from '../src/batchSettlement.js'
+import { balanceYears, batchByClassification, openBalanceByPeriod } from '../src/batchSettlement.js'
 
 test('chart helpers group the batch by classification and project the open balance after paying it', () => {
   const rows = [{ id: 'A', classificationName: 'Energia', valueCents: 1000 }, { id: 'B', classificationName: 'Energia', valueCents: 500 }, { id: 'C', classificationName: 'Água', valueCents: 700 }]
   assert.deepEqual(batchByClassification(rows), [{ name: 'Energia', value: 1500 }, { name: 'Água', value: 700 }])
-  const open = [{ id: 'A', dueDate: '2026-10-05', valueCents: 1000 }, { id: 'B', dueDate: '2026-10-20', valueCents: 500 }, { id: 'C', dueDate: '2026-11-01', valueCents: 700 }]
-  assert.deepEqual(openBalanceByMonth(open, ['A', 'C']), [{ month: '2026-10', now: 1500, after: 500 }, { month: '2026-11', now: 700, after: 0 }])
+  const open = [{ id: 'A', dueDate: '2026-10-05', valueCents: 1000 }, { id: 'B', dueDate: '2026-10-20', valueCents: 500 }, { id: 'C', dueDate: '2026-11-01', valueCents: 700 }, { id: 'D', dueDate: '2031-03-10', valueCents: 900 }]
+  assert.deepEqual(balanceYears(open, '2026-11-12'), [2026, 2031])
+  const pick = (periods) => periods.map(({ label, now, after }) => [label, now, after])
+
+  // Without months chosen: the twelve months of the year, empty months at zero; later years stay out.
+  const year = openBalanceByPeriod(open, ['A', 'C'], { year: 2026 })
+  assert.equal(year.length, 12)
+  assert.deepEqual(pick(year).slice(8), [['set/26', 0, 0], ['out/26', 1500, 500], ['nov/26', 700, 0], ['dez/26', 0, 0]])
+
+  // One or two months: their weeks, Monday to Sunday, cut at the month's edges (01/10/2026 is a Thursday).
+  assert.deepEqual(pick(openBalanceByPeriod(open, ['A', 'C'], { year: 2026, months: [10] })), [['01–04/10', 0, 0], ['05–11/10', 1000, 0], ['12–18/10', 0, 0], ['19–25/10', 500, 500], ['26–31/10', 0, 0]])
+  const two = openBalanceByPeriod(open, ['A', 'C'], { year: 2026, months: [11, 10] })
+  assert.deepEqual([two.length, two[5].label, two[5].now, two.at(-1).label], [11, '01/11', 700, '30/11'], '01/11/2026 is a Sunday and 30/11 a Monday: weeks of one day')
+
+  // Three months or more: only those months.
+  assert.deepEqual(pick(openBalanceByPeriod(open, [], { year: 2026, months: [12, 10, 11] })), [['out/26', 1500, 1500], ['nov/26', 700, 700], ['dez/26', 0, 0]])
 })
 
 test('the batch list is shared between administrators and settles every account once', async () => {

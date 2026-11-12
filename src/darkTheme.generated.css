@@ -3127,6 +3127,19 @@
 :root[data-theme="dark"] .batch-due {
     color: #b4c2d0
 }
+:root[data-theme="dark"] .batch-chart-filters > label {
+    color: #acc3d7
+}
+:root[data-theme="dark"] .batch-months button {
+    border: 1px solid #36516f;
+    background: #162b43;
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .batch-months button[aria-pressed="true"] {
+    background: #184c85;
+    border-color: #4778ae;
+    color: #f2f6fc
+}
 :root[data-theme="dark"] .account-plan-table .account-plan-code {
     color: #e1ebf6
 }
