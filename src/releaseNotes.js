@@ -6,6 +6,7 @@ export const releaseNotes = [
     notes: [
       'Ofertas e serviços: prazo solicitado opcional ao inserir a oferta, pedido ao gerar o PDF da proposta',
       'Baixa em lote: gráfico por ano, mês e semana, novos filtros e páginas na lista de lançamentos',
+      'Tablet da produção: modo de exibição para TV com as OS em andamento pelo prazo de entrega',
     ],
   },
   {

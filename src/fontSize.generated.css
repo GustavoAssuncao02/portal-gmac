@@ -117,6 +117,9 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .operator-stage-pick { font-size: inherit; font-size: calc(11px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .operator-overview-header h1 { font-size: calc(22px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .operator-overview-header p { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .operator-display-controls time { font-size: calc(14px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .operator-display-button { font-size: inherit; font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .operator-overview--display .operator-overview-header h1 { font-size: calc(26px * var(--account-font-scale)); }
 @media (max-width: 1799px) {:root:is([data-font-size="small"], [data-font-size="large"]) .operator-overview .admin-os-table :is(th, td) { font-size: calc(12px * var(--account-font-scale)); } }
 @media (max-width: 1799px) {:root:is([data-font-size="small"], [data-font-size="large"]) .operator-overview .admin-os-table td:first-child small, :root:is([data-font-size="small"], [data-font-size="large"]) .operator-overview .admin-os-stage-label { font-size: calc(11px * var(--account-font-scale)); } }
 :root:is([data-font-size="small"], [data-font-size="large"]) .operator-plan h2 { font-size: calc(16px * var(--account-font-scale)); }

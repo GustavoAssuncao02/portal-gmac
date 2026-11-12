@@ -350,8 +350,16 @@
    scrolls. */
 .operator-entry--overview { display: flex; flex-direction: column; align-items: stretch; gap: 16px; padding: 18px 16px 16px 6px; place-items: initial; }
 .operator-overview { display: grid; gap: 12px; min-width: 0; }
+.operator-overview-header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px 20px; }
 .operator-overview-header h1 { margin: 0; color: #173e68; font-size: 22px; }
 .operator-overview-header p { margin: 4px 0 0; color: #63778c; font-size: 13px; }
+/* "Modo de exibição", the same button as in the administrators' services panel. */
+.operator-display-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 12px 20px; }
+.operator-display-controls time { color: #5f7891; font-size: 14px; font-variant-numeric: tabular-nums; }
+.operator-display-button { display: inline-flex; align-items: center; gap: 9px; min-height: 42px; padding: 10px 14px; border: 1px solid #b9d0e4; border-radius: 5px; color: #0c4c91; background: #f1f6fb; font: inherit; font-size: 13px; cursor: pointer; }
+/* On the television the list covers the whole page (sidebar and entry hidden under it). */
+.operator-overview--display { position: fixed; inset: 0; z-index: 80; align-content: start; padding: 24px 28px; overflow: auto; background: #f8fbfe; }
+.operator-overview--display .operator-overview-header h1 { font-size: 26px; }
 /* The panel is read from a step away on the shop floor: below 1800px (where the administrators' table grows by itself)
    its table is larger here than in the administrators' screen. */
 @media (max-width: 1799px) {

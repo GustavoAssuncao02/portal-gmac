@@ -1,6 +1,18 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { serviceDeadline } from '../src/serviceDeadline.js'
+import { byDeliveryDeadline } from '../src/servicePanels.js'
+
+test('the television mode of the operator lists the OS by delivery deadline, nearest first', () => {
+  const orders = [
+    { code: 'OS-4', deadline: '2026-12-01' },
+    { code: 'OS-1', deliveryDeadline: '2026-11-20', deadline: '2026-12-30' },
+    { code: 'OS-3', deliveryDeadline: '15 dias', deadline: '2026-11-25' },
+    { code: 'OS-2' },
+    { code: 'OS-0', deadline: '2026-11-20' },
+  ]
+  assert.deepEqual(byDeliveryDeadline(orders).map((order) => order.code), ['OS-0', 'OS-1', 'OS-3', 'OS-4', 'OS-2'], 'the agreed date wins, a written term falls back to the requested date, no date goes last')
+})
 
 const start = Date.parse('2026-10-01T12:00:00-03:00')
 const end = Date.parse('2026-10-11T12:00:00-03:00')

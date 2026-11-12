@@ -29,7 +29,7 @@ try {
     const row = page.locator('.operator-overview .admin-os-table tbody tr').filter({ hasText: order.code })
     await row.waitFor()
     assert.match(await row.innerText(), new RegExp(offerDraft.company))
-    assert.equal(await page.locator('.operator-overview').getByRole('button').count(), 0, 'the panel is read-only: no "Ver OS" nor any other action')
+    assert.equal(await page.locator('.operator-overview .admin-os-table tbody').getByRole('button').count(), 0, 'the panel is read-only: no "Ver OS" nor any other action on the rows')
     assert.equal(await page.locator('.operator-entry input').count(), 0, 'only the on-screen keypad is used')
 
     // Someone starts on another tablet: the row shows the operator at the next refresh, without touching the screen.
@@ -44,6 +44,19 @@ try {
     assert.ok(entryBox.y >= tableBox.y && entryBox.y + entryBox.height <= viewport.height, 'the entry sits under the list, in view')
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false)
     await page.screenshot({ path: `test-results/operator-overview-${viewport.width}.png` })
+
+    // "Modo de exibição" (top right, as in the services panel): the list alone covers the screen, for a television.
+    if (index === 0) {
+      await page.getByRole('button', { name: 'Modo de exibição', exact: true }).click()
+      const display = page.locator('.operator-overview--display')
+      await display.waitFor()
+      const box = await display.boundingBox()
+      assert.ok(box.x <= 0 && box.y <= 0 && box.width >= viewport.width - 1 && box.height >= viewport.height - 1, 'the list covers the whole screen')
+      await display.locator('tbody tr').filter({ hasText: order.code }).waitFor()
+      await page.screenshot({ path: 'test-results/operator-overview-display.png' })
+      await page.getByRole('button', { name: 'Sair do modo de exibição', exact: true }).click()
+      await display.waitFor({ state: 'detached' })
+    }
 
     await enterOperatorCode(page, ana.accessCode)
     await page.locator('.operator-project').filter({ hasText: order.service }).waitFor()

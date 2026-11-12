@@ -578,6 +578,17 @@
 :root[data-theme="dark"][data-tone="black"] .operator-overview-header p {
     color: #bec2c5
 }
+:root[data-theme="dark"][data-tone="black"] .operator-display-controls time {
+    color: #bfc2c5
+}
+:root[data-theme="dark"][data-tone="black"] .operator-display-button {
+    border: 1px solid #303133;
+    color: #ebebec;
+    background: #232425
+}
+:root[data-theme="dark"][data-tone="black"] .operator-overview--display {
+    background: #232425
+}
 :root[data-theme="dark"][data-tone="black"] .operator-entry--overview .operator-entry-card {
     box-shadow: 0 -4px 22px #0a0a0b14, 0 12px 30px #0a0a0b24
 }

@@ -653,6 +653,17 @@
 :root[data-theme="dark"] .operator-overview-header p {
     color: #b7c2cc
 }
+:root[data-theme="dark"] .operator-display-controls time {
+    color: #b5c2cf
+}
+:root[data-theme="dark"] .operator-display-button {
+    border: 1px solid #36516f;
+    color: #e1ebf6;
+    background: #203c59
+}
+:root[data-theme="dark"] .operator-overview--display {
+    background: #203c59
+}
 :root[data-theme="dark"] .operator-entry--overview .operator-entry-card {
     box-shadow: 0 -4px 22px #06111d14, 0 12px 30px #06111d24
 }

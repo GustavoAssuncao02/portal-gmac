@@ -8,10 +8,11 @@ import StageGroupHeading from './OperatorStageGroup.jsx'
 import PieceTrack, { workingStageKeys, stageCode, stageElapsedMs, minutesLabel } from './PieceTrack.jsx'
 import { currentPieceProgress, groupProjectStages, stageGroupTone, isEmergency, emergenciesFirst } from './serviceProgress.js'
 import ServicePanelRow from './ServicePanelRow.jsx'
-import { servicePanelOrders } from './servicePanels.js'
+import { byDeliveryDeadline, servicePanelOrders } from './servicePanels.js'
 import { SortableRows, SortHeader } from './RegistryList.jsx'
 import './operator.css'
 import { upper } from './displayCase.js'
+import { Minimize2, Monitor } from 'lucide-react'
 
 // Every stage comes with its machine or service from the offer; an OS from before that rule may still lack one.
 const UNPLANNED_STAGE = 'Esta etapa não tem máquina ou serviço definido. Peça ao administrador para definir na edição da OS.'
@@ -61,6 +62,42 @@ const panelColumns = [
   { key: 'remaining', label: 'Tempo restante', value: (order) => Date.parse(order.deliveryDeadline || order.deadline) || null, numeric: true },
   { key: 'status', label: 'Status', value: (order) => order.operation?.status },
 ]
+
+// Before the code, the tablet follows every open OS as the administrators' panel does, without opening any. "Modo de
+// exibição" (as in the services panel) leaves only this list on the screen, for a television in the factory, ordered by
+// the delivery deadline. Full screen where the browser allows it; a television browser without it still gets the list
+// alone, covering the page.
+function OperatorOverview({ orders, now }) {
+  const [displayMode, setDisplayMode] = useState(false)
+  useEffect(() => {
+    if (!displayMode) return
+    // Esc or the browser leaving full screen also leaves the display mode.
+    const sync = () => { if (!document.fullscreenElement) setDisplayMode(false) }
+    document.addEventListener('fullscreenchange', sync)
+    return () => document.removeEventListener('fullscreenchange', sync)
+  }, [displayMode])
+  async function toggleDisplayMode() {
+    if (displayMode) {
+      setDisplayMode(false)
+      if (document.fullscreenElement) await document.exitFullscreen().catch(() => {})
+      return
+    }
+    setDisplayMode(true)
+    try { await document.documentElement.requestFullscreen?.() } catch { /* Sem tela cheia: a lista cobre a página. */ }
+  }
+  const panel = servicePanelOrders(orders)
+  const rows = displayMode ? byDeliveryDeadline(panel) : emergenciesFirst(panel)
+  return <section className={`operator-overview${displayMode ? ' operator-overview--display' : ''}`} aria-labelledby="operator-entry-title">
+    <header className="operator-overview-header">
+      <div><h1 id="operator-entry-title">Projetos em andamento</h1><p>{displayMode ? 'OS em andamento pelo prazo de entrega: a mais próxima primeiro.' : 'Acompanhamento em tempo real de todas as OS abertas.'}</p></div>
+      <div className="operator-display-controls">{displayMode && <time>{new Date(now).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })}</time>}<button type="button" className="operator-display-button" onClick={toggleDisplayMode}>{displayMode ? <Minimize2 size={18} aria-hidden="true" /> : <Monitor size={18} aria-hidden="true" />}{displayMode ? 'Sair do modo de exibição' : 'Modo de exibição'}</button></div>
+    </header>
+    {/* Entering the display mode starts again from the deadline order, whatever header was chosen before. */}
+    <div className="admin-os-table-wrap"><SortableRows key={displayMode ? 'display' : 'list'} rows={rows} columns={panelColumns}>{(sorted) => <table className="admin-os-table"><thead><tr>{sorted.columns.map((column) => <SortHeader key={column.key} column={column} list={sorted} />)}</tr></thead>
+      <tbody>{sorted.rows.map((order) => <ServicePanelRow key={order.code} order={order} now={now} />)}</tbody></table>}</SortableRows>
+      {!panel.length && <p className="admin-os-empty">Nenhuma OS em andamento.</p>}</div>
+  </section>
+}
 
 // In a mandatory sequence (Processo Injessado) a stage waits until the one before it has every piece; returns that stage.
 function waitingFor(order, index) {
@@ -520,13 +557,7 @@ export default function OperatorDashboard({ token, onLogout }) {
       <div className="operator-sidebar-bottom"><span className="operator-avatar">OP</span><div><strong>Operador</strong><small>Conta compartilhada</small></div><button type="button" onClick={logout} title="Sair da conta do operador" aria-label="Sair da conta do operador">↪</button></div>
     </aside>
     <main className="operator-main operator-entry operator-entry--overview">
-      {/* Before the code, the tablet follows every open OS as the administrators' panel does, without opening any. */}
-      <section className="operator-overview" aria-labelledby="operator-entry-title">
-        <header className="operator-overview-header"><h1 id="operator-entry-title">Projetos em andamento</h1><p>Acompanhamento em tempo real de todas as OS abertas.</p></header>
-        <div className="admin-os-table-wrap"><SortableRows rows={emergenciesFirst(servicePanelOrders(orders))} columns={panelColumns}>{(sorted) => <table className="admin-os-table"><thead><tr>{sorted.columns.map((column) => <SortHeader key={column.key} column={column} list={sorted} />)}</tr></thead>
-          <tbody>{sorted.rows.map((order) => <ServicePanelRow key={order.code} order={order} now={now} />)}</tbody></table>}</SortableRows>
-          {!servicePanelOrders(orders).length && <p className="admin-os-empty">Nenhuma OS em andamento.</p>}</div>
-      </section>
+      <OperatorOverview orders={orders} now={now} />
       <section className={`operator-entry-card${entering ? ' operator-entry-card--keypad' : ''}`} aria-label="Entrar com o código do funcionário">
         <p>{entering ? 'Digite o seu código de 4 dígitos.' : 'Toque em Entrar e digite o seu código para trabalhar nas OS.'}</p>
         {error && <p className="operator-error" role="alert">{error}</p>}
