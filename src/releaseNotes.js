@@ -9,6 +9,7 @@ export const releaseNotes = [
       'Notificações: aviso de nova oferta pelo site',
       'Baixa em lote: gráfico por ano, mês e semana, novos filtros e páginas na lista de lançamentos',
       'Tablet da produção: modo de exibição para TV com as OS em andamento pelo prazo de entrega',
+      'Melhorias gerais: janelas fecham ao clicar fora',
     ],
   },
   {

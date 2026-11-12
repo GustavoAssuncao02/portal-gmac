@@ -16,6 +16,7 @@ import { currentServiceLocation, serviceLocations, serviceLocationTimes } from '
 import { formatQuantity } from '../server/materialUnits.js'
 import { SortableRows, SortHeader } from './RegistryList.jsx'
 import { upper } from './displayCase.js'
+import { backdropClose } from './dialogBackdrop.js'
 
 const currency = (value) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const date = (value) => value ? new Date(value).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : 'Não informado'
@@ -225,11 +226,7 @@ function OrderHistoryModal({ order, onClose, onEditTime, onAddEvent, Icon }) {
     const stopPolling = pollWhileVisible(load, 10000, ['data', 'finance'])
     return () => { stopPolling(); controller.abort() }
   }, [order.code, retry])
-  return <dialog ref={dialog} className="os-history-modal" aria-labelledby="os-history-title" onCancel={(event) => { event.preventDefault(); if (editing) { if (!saving) setEditing(null) } else if (adding) setAdding(false); else onClose() }} onClick={(event) => {
-    if (event.target !== event.currentTarget) return
-    const box = event.currentTarget.getBoundingClientRect()
-    if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) onClose()
-  }}>
+  return <dialog ref={dialog} className="os-history-modal" aria-labelledby="os-history-title" onCancel={(event) => { event.preventDefault(); if (editing) { if (!saving) setEditing(null) } else if (adding) setAdding(false); else onClose() }} {...backdropClose(onClose)}>
     <header className="os-history-heading"><div><h2 id="os-history-title">Histórico de operações</h2><p>{order.code} · {order.service}</p></div><div className="os-history-heading-actions">{canAdd && <button className="os-button os-history-add-button" type="button" aria-expanded={adding} onClick={() => setAdding((value) => !value)}><Plus size={16} aria-hidden="true" />Adicionar operação</button>}<button className="os-icon-button" type="button" onClick={onClose} aria-label="Fechar histórico" title="Fechar histórico">{'\u00d7'}</button></div></header>
     <div className="os-history-content" aria-busy={loading}>
       {adding && <ManualOperationForm order={order} items={items} onSave={addEvent} onCancel={() => setAdding(false)} />}
@@ -290,11 +287,7 @@ function InterruptSessionModal({ order, onConfirm, onClose, Icon }) {
       setBusy(false)
     }
   }
-  return <dialog ref={dialog} className="os-history-modal os-interrupt-modal" aria-labelledby="os-interrupt-title" onCancel={(event) => { event.preventDefault(); close() }} onClick={(event) => {
-    if (event.target !== event.currentTarget) return
-    const box = event.currentTarget.getBoundingClientRect()
-    if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) close()
-  }}>
+  return <dialog ref={dialog} className="os-history-modal os-interrupt-modal" aria-labelledby="os-interrupt-title" onCancel={(event) => { event.preventDefault(); close() }} {...backdropClose(close)}>
     <header className="os-history-heading"><div><h2 id="os-interrupt-title">Encerrar sessão de trabalho</h2><p>{order.code} · {order.service}</p></div><button className="os-icon-button" type="button" onClick={close} disabled={busy} aria-label="Fechar janela" title="Fechar janela">{'\u00d7'}</button></header>
     <form className="os-interrupt-form" onSubmit={submit} aria-busy={busy}>
       {sessions.length > 1 ? <><label htmlFor="os-interrupt-session">Funcionário <span>(obrigatório)</span></label><select id="os-interrupt-session" className="os-interrupt-session" value={sessionId} disabled={busy} onChange={(event) => { setSessionId(event.target.value); setError('') }}><option value="">Selecione o funcionário</option>{sessions.map((session) => <option key={session.id} value={session.id}>{session.employeeName}{session.machineName || session.laborServiceName ? ` · ${session.machineName || session.laborServiceName}` : ''}</option>)}</select></> : <p className="os-interrupt-operator">Operador: <strong>{sessions[0]?.employeeName || 'Não informado'}</strong></p>}

@@ -5,6 +5,7 @@ import { SortableRows, SortHeader } from './RegistryList.jsx'
 import './employeeActivity.css'
 import './machineHistory.css'
 import { upper } from './displayCase.js'
+import { backdropClose } from './dialogBackdrop.js'
 
 const periods = [['all', 'Desde sempre'], ['today', 'Hoje'], ['yesterday', 'Ontem'], ['7days', 'Últimos 7 dias'], ['30days', 'Últimos 30 dias'], ['date', 'Data específica']]
 export const endings = { paused: 'Trabalho pausado', stage_completed: 'Etapa concluída', completed: 'OS concluída', machine_changed: 'Troca de máquina', labor_service_changed: 'Troca de serviço', resource_changed: 'Troca para serviço de hora homem', session_ended: 'OS concluída', admin_interrupted: 'Interrupção administrativa' }
@@ -50,11 +51,7 @@ export default function MachineHistoryModal({ machine, subject = 'machine', load
     return () => { controller.abort(); stopPolling() }
   }, [machine.id, period, date, retry, loadHistory])
 
-  return <dialog ref={dialog} className="employee-activity-modal machine-history-modal" aria-labelledby="machine-history-title" onCancel={(event) => { event.preventDefault(); onClose() }} onClick={(event) => {
-    if (event.target !== event.currentTarget) return
-    const box = event.currentTarget.getBoundingClientRect()
-    if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) onClose()
-  }}>
+  return <dialog ref={dialog} className="employee-activity-modal machine-history-modal" aria-labelledby="machine-history-title" onCancel={(event) => { event.preventDefault(); onClose() }} {...backdropClose(onClose)}>
     <header className="employee-activity-heading"><div><span>{subject === 'service' ? 'Histórico de uso do serviço' : 'Histórico de uso da máquina'}</span><h2 id="machine-history-title">{upper(machine.name)}</h2><p>{[machine.type, machine.sector].filter(Boolean).join(' · ')}</p></div><button className="employee-activity-close" type="button" onClick={onClose} title="Fechar histórico" aria-label="Fechar histórico"><X size={18} /></button></header>
     <div className="employee-activity-filters"><label>Período<select aria-label="Período" value={period} onChange={(event) => setPeriod(event.target.value)}>{periods.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>{period === 'date' && <label>Data específica<input type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label>}<span role="status">{items === null ? 'Carregando...' : `${items.length} ${items.length === 1 ? 'utilização' : 'utilizações'}`}</span></div>
     {error && <div className="employee-activity-error"><p role="alert">{error}</p><button type="button" onClick={() => setRetry((value) => value + 1)}>Tentar novamente</button></div>}

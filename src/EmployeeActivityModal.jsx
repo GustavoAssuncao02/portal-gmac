@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { SortableRows, SortHeader } from './RegistryList.jsx'
 import './employeeActivity.css'
+import { backdropClose } from './dialogBackdrop.js'
 
 const periods = [['today', 'Hoje'], ['yesterday', 'Ontem'], ['7days', 'Últimos 7 dias'], ['30days', 'Últimos 30 dias'], ['all', 'Desde sempre'], ['date', 'Data específica']]
 const labels = { started: 'Trabalho iniciado', resumed: 'Trabalho retomado', paused: 'Trabalho pausado', stage_completed: 'Etapa concluída', machine_changed: 'Troca de máquina', labor_service_changed: 'Troca de serviço de hora homem', resource_changed: 'Troca entre máquina e serviço', session_ended: 'Sessão encerrada na conclusão da OS', stage_progress: 'Peças registradas', completed: 'OS concluída', admin_interrupted: 'Interrupção administrativa' }
@@ -56,11 +57,7 @@ export default function EmployeeActivityModal({ employee, onClose }) {
     return () => controller.abort()
   }, [employee.id, period, date, retry])
 
-  return <dialog ref={dialog} className="employee-activity-modal" aria-labelledby="employee-activity-title" onCancel={(event) => { event.preventDefault(); onClose() }} onClick={(event) => {
-    if (event.target !== event.currentTarget) return
-    const box = event.currentTarget.getBoundingClientRect()
-    if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) onClose()
-  }}>
+  return <dialog ref={dialog} className="employee-activity-modal" aria-labelledby="employee-activity-title" onCancel={(event) => { event.preventDefault(); onClose() }} {...backdropClose(onClose)}>
     <header className="employee-activity-heading"><div><span>Histórico de atividades</span><h2 id="employee-activity-title">{employee.name}</h2><p>Código {employee.identification}</p></div><button className="employee-activity-close" type="button" onClick={onClose} aria-label="Fechar histórico" title="Fechar histórico">{'×'}</button></header>
     <div className="employee-activity-filters"><label>Período<select aria-label="Período" value={period} onChange={(event) => setPeriod(event.target.value)}>{periods.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>{period === 'date' && <label>Data específica<input type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label>}<span role="status">{loading ? 'Carregando...' : `${items.length} ${items.length === 1 ? 'atividade' : 'atividades'}`}</span></div>
     <div className="employee-activity-content" aria-busy={loading}>

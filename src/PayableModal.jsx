@@ -1,11 +1,12 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { X, Upload, Trash2, Download } from 'lucide-react'
 import { downloadFile, fileError } from './payablesApi.js'
+import { backdropClose } from './dialogBackdrop.js'
 
 export function PayableModal({ title, children, footer, onClose, wide = false, busy = false, className = '' }) {
   const ref = useRef(null), id = useId()
   useEffect(() => { const dialog = ref.current; dialog.showModal(); return () => dialog.close() }, [])
-  return <dialog ref={ref} className={`payable-modal ${wide ? 'payable-modal--wide' : ''} ${className}`} aria-labelledby={id} onCancel={(event) => { event.preventDefault(); if (!busy) onClose() }}>
+  return <dialog ref={ref} className={`payable-modal ${wide ? 'payable-modal--wide' : ''} ${className}`} aria-labelledby={id} onCancel={(event) => { event.preventDefault(); if (!busy) onClose() }} {...backdropClose(() => { if (!busy) onClose() })}>
     <header><h2 id={id}>{title}</h2><button type="button" className="payable-icon" aria-label="Fechar janela" title="Fechar janela" disabled={busy} onClick={onClose}><X size={20} /></button></header>
     <div className="payable-modal-body" aria-busy={busy}>{children}</div>{footer && <footer>{footer}</footer>}
   </dialog>

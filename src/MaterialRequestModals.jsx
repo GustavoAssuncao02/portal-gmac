@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { CircleCheck, CircleX, Plus, X } from 'lucide-react'
 import { formatQuantity, materialUnit, materialUnits, quantityStep, wholeUnit } from '../server/materialUnits.js'
+import { backdropClose } from './dialogBackdrop.js'
 
 function useRequestDialog() {
   const dialog = useRef(null)
@@ -41,7 +42,7 @@ export function MaterialRequestModal({ inventory, onSave, onClose }) {
     } catch (failure) { setError(failure.message) }
     finally { pending.current = false; setBusy(false) }
   }
-  return <dialog ref={dialog} className="os-history-modal os-action-modal material-request-modal" aria-labelledby="manual-material-request-title" onCancel={(event) => { event.preventDefault(); close() }}>
+  return <dialog ref={dialog} className="os-history-modal os-action-modal material-request-modal" aria-labelledby="manual-material-request-title" onCancel={(event) => { event.preventDefault(); close() }} {...backdropClose(close)}>
     <header className="os-history-heading"><h2 id="manual-material-request-title">Solicitar material</h2><button className="os-icon-button" type="button" disabled={busy} onClick={close} aria-label="Fechar" title="Fechar"><X size={18} /></button></header>
     <form className="material-request-form" onSubmit={submit}>
       <fieldset className="material-request-modes" disabled={busy}><legend>Material solicitado</legend><label><input data-autofocus type="radio" name="material-request-mode" checked={mode === 'new'} onChange={() => { setMode('new'); setDetail('') }} />Novo material</label><label><input type="radio" name="material-request-mode" checked={mode === 'stock'} onChange={() => { setMode('stock'); setDetail(selected?.detail || '') }} />Material do estoque</label></fieldset>
@@ -71,7 +72,7 @@ export function MaterialRequestHistoryModal({ request, loadHistory, onClose }) {
     loadHistory(request.id, controller.signal).then((data) => { if (!controller.signal.aborted) setItems(data.items) }).catch((failure) => { if (!controller.signal.aborted) setError(failure.message) })
     return () => controller.abort()
   }, [request.id, loadHistory, retry])
-  return <dialog ref={dialog} className="os-history-modal os-action-modal material-request-modal" aria-labelledby="material-request-history-title" onCancel={(event) => { event.preventDefault(); onClose() }}>
+  return <dialog ref={dialog} className="os-history-modal os-action-modal material-request-modal" aria-labelledby="material-request-history-title" onCancel={(event) => { event.preventDefault(); onClose() }} {...backdropClose(onClose)}>
     <header className="os-history-heading"><div><h2 id="material-request-history-title">Histórico do pedido</h2><p>{request.name} · {request.orderCode || request.offerCode || request.code}</p></div><button data-autofocus className="os-icon-button" type="button" onClick={onClose} aria-label="Fechar histórico" title="Fechar histórico"><X size={18} /></button></header>
     <div className="material-request-history-content">
       {error ? <div className="material-request-history-error"><p className="os-edit-error" role="alert">{error}</p><button className="os-button" type="button" onClick={() => setRetry((value) => value + 1)}>Tentar novamente</button></div> : items === null ? <p role="status">Carregando histórico...</p> : <ol className="material-request-history-list">{items.map((item, index) => {

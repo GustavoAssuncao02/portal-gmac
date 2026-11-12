@@ -6,6 +6,7 @@ import MachineHistoryModal from './MachineHistoryModal.jsx'
 import { pollWhileVisible } from './polling.js'
 import { SortableRows, SortHeader } from './RegistryList.jsx'
 import { upper } from './displayCase.js'
+import { backdropClose } from './dialogBackdrop.js'
 
 const money = (value) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 async function request(path, options = {}) {
@@ -36,7 +37,7 @@ function ServiceDialog({ item, removing, onClose, onSave }) {
     finally { setBusy(false) }
   }
   const field = (key, value) => setDraft((current) => ({ ...current, [key]: value }))
-  return <dialog ref={dialog} className="labor-service-dialog" aria-labelledby="labor-service-dialog-title" onCancel={(event) => { event.preventDefault(); if (!busy) onClose() }}>
+  return <dialog ref={dialog} className="labor-service-dialog" aria-labelledby="labor-service-dialog-title" onCancel={(event) => { event.preventDefault(); if (!busy) onClose() }} {...backdropClose(() => { if (!busy) onClose() })}>
     <header><h2 id="labor-service-dialog-title">{removing ? 'Remover serviço?' : item ? 'Editar serviço' : 'Adicionar serviço'}</h2><button type="button" aria-label="Fechar janela" title="Fechar janela" disabled={busy} onClick={onClose}><X size={19} /></button></header>
     <form onSubmit={submit}><fieldset disabled={busy}>
       {removing ? <p>Remover <strong>{upper(item.name)}</strong> do cadastro? O histórico das utilizações anteriores será preservado.</p> : <div className="labor-service-fields">

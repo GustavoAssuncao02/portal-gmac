@@ -10,6 +10,7 @@ import { formatQuantity, materialUnit, materialUnits, quantityStep } from '../se
 import { minutesLabel, quantityChanges, switchEntryMode, withEntryMode } from '../server/entryMode.js'
 import EntryModeChoice from './EntryModeChoice.jsx'
 import { upper } from './displayCase.js'
+import { backdropClose } from './dialogBackdrop.js'
 
 function useDialog(dialog) {
   useEffect(() => {
@@ -20,12 +21,6 @@ function useDialog(dialog) {
     document.body.style.overflow = 'hidden'
     return () => { element.close(); document.body.style.overflow = overflow; focus?.focus({ preventScroll: true }) }
   }, [dialog])
-}
-
-const backdrop = (event, close) => {
-  if (event.target !== event.currentTarget) return
-  const box = event.currentTarget.getBoundingClientRect()
-  if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) close()
 }
 
 // One line per account receivable posted for the OS: scheduled, in installments or already received in Tesouraria.
@@ -55,7 +50,7 @@ export function OrderActionModal({ order, action, onConfirm, onClose }) {
     setBusy(true)
     try { await onConfirm(reopen ? { receivables: asking ? choice : 'keep' } : undefined); onClose() } catch (caught) { setError(caught.message) } finally { pending.current = false; setBusy(false) }
   }
-  return <dialog ref={dialog} className="os-history-modal os-action-modal" aria-labelledby="os-action-title" onCancel={(event) => { event.preventDefault(); close() }} onClick={(event) => backdrop(event, close)}>
+  return <dialog ref={dialog} className="os-history-modal os-action-modal" aria-labelledby="os-action-title" onCancel={(event) => { event.preventDefault(); close() }} {...backdropClose(close)}>
     <header className="os-history-heading"><div><h2 id="os-action-title">{reopen ? 'Reabrir OS' : 'Editar OS finalizada?'}</h2><p>{order.code} · {order.service}</p></div><button className="os-icon-button" type="button" onClick={close} disabled={busy} aria-label="Fechar confirmação" title="Fechar confirmação"><X size={18} /></button></header>
     <div className="os-action-content"><p>{reopen ? 'Deseja reabrir esta ordem de serviço? As quantidades produzidas e o histórico serão mantidos, e a OS voltará ao painel de serviços em andamento.' : 'Esta ordem de serviço já foi finalizada. Tem certeza de que deseja editar seus dados?'}</p>
       {reopen && items.length > 0 && <div className="os-action-receivables">
@@ -143,7 +138,7 @@ export default function OrderEditModal({ order, confirmCompleted, onSave, onUplo
   }
   const field = (label, key, options = {}) => <label className="os-edit-field" key={key}>{label}<input value={data[key] || ''} onChange={(event) => update(key, event.target.value)} {...options} /></label>
   const numberField = (label, key) => <label className="os-edit-field" key={key}>{label}<input type="number" min="0" max={['margin', 'discount'].includes(key) ? 100 : undefined} step="0.01" value={data.proposal[key] ?? ''} onChange={(event) => proposal(key, event.target.value)} required /></label>
-  return <dialog ref={dialog} className="os-history-modal os-edit-modal" aria-labelledby="os-edit-title" onCancel={(event) => { event.preventDefault(); close() }} onClick={(event) => backdrop(event, close)}>
+  return <dialog ref={dialog} className="os-history-modal os-edit-modal" aria-labelledby="os-edit-title" onCancel={(event) => { event.preventDefault(); close() }} {...backdropClose(close)}>
     <header className="os-history-heading"><div><h2 id="os-edit-title">Editar ordem de serviço</h2><p>{order.code} · {order.service}</p></div><button className="os-icon-button" type="button" onClick={close} disabled={busy} aria-label="Fechar edição" title="Fechar edição"><X size={18} /></button></header>
     <div className="os-edit-tabs" role="tablist" aria-label="Dados da edição">{[['data', 'Dados da OS'], ['resources', 'Recursos'], ['process', 'Processo'], ['proposal', 'Proposta e anexos']].map(([key, label]) => <button key={key} type="button" id={`os-edit-tab-${key}`} role="tab" aria-selected={tab === key} aria-controls={`os-edit-panel-${key}`} tabIndex={tab === key ? 0 : -1} onClick={() => setTab(key)} onKeyDown={(event) => {
       const keys = ['data', 'resources', 'process', 'proposal']

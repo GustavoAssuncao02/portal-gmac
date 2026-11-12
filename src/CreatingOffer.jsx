@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { PencilLine, Trash2, X } from 'lucide-react'
+import { backdropClose } from './dialogBackdrop.js'
 
 // A manual offer starts as "Criando oferta" (status 'creating'): the list shows who is creating it and for how long, and
 // only "Fazer proposta" in its details puts it in analysis (server/offers.js).
@@ -53,11 +54,7 @@ function ConfirmDialog({ title, subtitle, children, confirmLabel, busyLabel, ico
     setError('')
     try { await onConfirm(); onClose() } catch (caught) { setError(caught.message) } finally { pending.current = false; setBusy(false) }
   }
-  return <dialog ref={dialog} className={`os-history-modal os-action-modal offer-creating-modal offer-creating-modal--${tone}`} aria-labelledby="offer-creating-title" onCancel={(event) => { event.preventDefault(); close() }} onClick={(event) => {
-    if (event.target !== event.currentTarget) return
-    const box = event.currentTarget.getBoundingClientRect()
-    if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) close()
-  }}>
+  return <dialog ref={dialog} className={`os-history-modal os-action-modal offer-creating-modal offer-creating-modal--${tone}`} aria-labelledby="offer-creating-title" onCancel={(event) => { event.preventDefault(); close() }} {...backdropClose(close)}>
     <header className="os-history-heading"><div><h2 id="offer-creating-title">{title}</h2><p>{subtitle}</p></div><button className="os-icon-button" type="button" disabled={busy} onClick={close} aria-label="Fechar confirmação" title="Fechar confirmação"><X size={18} /></button></header>
     <div className="os-action-content">{children}{error && <p className="os-edit-error" role="alert">{error}</p>}<footer className="os-edit-actions"><button className="os-button offer-creating-cancel" type="button" disabled={busy} onClick={close}>Cancelar</button><button className="os-button offer-creating-confirm" type="button" disabled={busy} onClick={confirm}>{icon}{busy ? busyLabel : confirmLabel}</button></footer></div>
   </dialog>
