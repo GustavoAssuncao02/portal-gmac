@@ -58,7 +58,7 @@ try {
     assert.equal(await company.inputValue(), 'João Pereira da Silva')
 
     const service = `Oferta para pessoa física ${viewport.width}`
-    await form.getByLabel('Prazo solicitado *', { exact: true }).fill('2026-12-20')
+    await form.getByLabel('Prazo solicitado', { exact: true }).fill('2026-12-20')
     await form.getByLabel('Peça/Serviço *', { exact: true }).fill(service)
     await form.getByLabel('Quantidade *', { exact: true }).fill('2')
     await form.getByLabel('Descrição do serviço *', { exact: true }).fill('Oferta de cliente com CPF')

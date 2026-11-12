@@ -188,7 +188,7 @@ export default function ProposalDocumentModal({ offer, option, onClose, onSaved 
   async function load(key, fresh = false) {
     setLoading(true); setError(''); setAssignments({})
     try {
-      const query = `/offers/${offer.id}/proposal-draft?model=${key}&value=${value.toFixed(2)}&deadline=${encodeURIComponent(option?.deadline || '')}${fresh ? '&fresh=1' : ''}`
+      const query = `/offers/${offer.id}/proposal-draft?model=${key}&value=${value.toFixed(2)}&deadline=${encodeURIComponent(option?.deadline || offer.deadline || '')}${fresh ? '&fresh=1' : ''}`
       const [data, status] = await Promise.all([payableRequest(query), payableRequest('/fiscal/status').catch(() => null)])
       const next = data.draft
       // Units are limited to unit, kg and metre; older proposals with other units reopen as unit.

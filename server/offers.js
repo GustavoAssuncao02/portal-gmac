@@ -50,8 +50,17 @@ const handleError = (response, error) => {
 
 const clean = (value, limit = 500) => String(value ?? '').trim().slice(0, limit)
 export const stillCreating = 'Esta oferta ainda está sendo criada: conclua os detalhes e clique em "Fazer proposta".'
+// The requested deadline is optional while the offer is created and analysed, but the proposal PDF is only generated with
+// it: the OS comes from the accepted proposal, so every OS has a deadline (services panel, tablet, planning, Editar OS).
+export const deadlineRequired = 'Informe o prazo solicitado pelo cliente antes de gerar o PDF da proposta.'
+// A day that exists (2026-02-30 does not: Date would roll it into March).
+export const isDay = (value) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value ?? ''))) return false
+  const day = new Date(`${value}T00:00:00Z`)
+  return Number.isFinite(day.getTime()) && day.toISOString().slice(0, 10) === value
+}
 const money = (value) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-const date = (value) => new Date(value).toLocaleDateString('pt-BR', { timeZone: 'UTC' })
+const date = (value) => value ? new Date(value).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : 'Não informado'
 
 function serviceSettings(offer) {
   return { stages: offer.resources?.stages ?? offer.proposal?.stages ?? [], kind: offer.resources?.kind ?? offer.proposal?.kind ?? 'service', strictProcess: serviceDetails(offer.resources).strictProcess }
@@ -108,10 +117,13 @@ router.get('/orders', async (_request, response) => {
 })
 
 router.post('/offers', async (request, response) => {
-  const { cnpj, company, deadline, service, quantity, description, labelNumber, requester, buyer } = request.body ?? {}
-  if (!isClientDocument(cnpj) || !clean(company) || !/^\d{4}-\d{2}-\d{2}$/.test(String(deadline || '')) || !clean(service) || !Number.isInteger(Number(quantity)) || Number(quantity) < 1 || !clean(description)) {
-    return response.status(400).json({ message: 'Preencha CNPJ (14 dígitos) ou CPF (11), empresa, prazo, peça/serviço, quantidade e descrição.' })
+  const { cnpj, company, service, quantity, description, labelNumber, requester, buyer } = request.body ?? {}
+  // The requested deadline may be left for later; it is asked when the proposal PDF is generated.
+  const deadline = String(request.body?.deadline ?? '').trim()
+  if (!isClientDocument(cnpj) || !clean(company) || !clean(service) || !Number.isInteger(Number(quantity)) || Number(quantity) < 1 || !clean(description)) {
+    return response.status(400).json({ message: 'Preencha CNPJ (14 dígitos) ou CPF (11), empresa, peça/serviço, quantidade e descrição.' })
   }
+  if (deadline && !isDay(deadline)) return response.status(400).json({ message: 'Prazo solicitado inválido: escolha uma data ou deixe em branco.' })
   try {
     let requesterCreated = false, buyerCreated = false
     const offer = await mutateStore((store) => {
@@ -248,6 +260,7 @@ router.post('/offers/:id/proposal', async (request, response) => {
     const offer = (await readStore()).offers.find((item) => item.id === request.params.id)
     if (!offer || offer.orderCode || offer.status === 'rejected') return response.status(404).json({ message: 'Oferta não encontrada, já aceita ou recusada.' })
     if (offer.status === 'creating') return response.status(409).json({ message: stillCreating })
+    if (!isDay(offer.deadline)) return response.status(400).json({ message: deadlineRequired })
     const settings = serviceSettings(offer)
     if (!settings.stages.length) return response.status(400).json({ message: 'Defina as etapas nos detalhes da oferta antes de gerar a proposta.' })
     const problem = stagePlanProblem(settings.stages, offer.resources)
@@ -334,13 +347,12 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
   // accepted offer is corrected in its OS (Editar OS), which keeps the history of the order.
   configured.put('/offers/:id', requireAdmin, async (request, response) => {
     const body = request.body ?? {}
-    const fields = { cnpj: clean(body.cnpj, 18), company: clean(body.company, 160), service: clean(body.service, 160), labelNumber: clean(body.labelNumber, 80), deadline: String(body.deadline || ''), quantity: Number(body.quantity) }
+    const fields = { cnpj: clean(body.cnpj, 18), company: clean(body.company, 160), service: clean(body.service, 160), labelNumber: clean(body.labelNumber, 80), deadline: String(body.deadline ?? '').trim(), quantity: Number(body.quantity) }
     const requestedDay = String(body.requestedAt || '')
-    // A day that exists (2026-02-30 does not: Date would roll it into March).
-    const isDay = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value) && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value
-    if (!isClientDocument(fields.cnpj) || !fields.company || !fields.service || !isDay(fields.deadline) || !isDay(requestedDay) || !Number.isInteger(fields.quantity) || fields.quantity < 1 || fields.quantity > 1000000000) {
-      return response.status(400).json({ message: 'Preencha CNPJ (14 dígitos) ou CPF (11), empresa, peça/serviço, data da solicitação, prazo e quantidade.' })
+    if (!isClientDocument(fields.cnpj) || !fields.company || !fields.service || !isDay(requestedDay) || !Number.isInteger(fields.quantity) || fields.quantity < 1 || fields.quantity > 1000000000) {
+      return response.status(400).json({ message: 'Preencha CNPJ (14 dígitos) ou CPF (11), empresa, peça/serviço, data da solicitação e quantidade.' })
     }
+    if (fields.deadline && !isDay(fields.deadline)) return response.status(400).json({ message: 'Prazo solicitado inválido: escolha uma data ou deixe em branco.' })
     try {
       const document = documentDigits(fields.cnpj)
       const client = accounts && document ? (await accounts.clients()).find((item) => documentDigits(item.document) === document) || null : null
@@ -355,6 +367,8 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
         if (!item) throw Object.assign(new Error('Oferta não encontrada.'), { status: 404 })
         if (item.orderCode) throw Object.assign(new Error(`Esta oferta já virou a ${item.orderCode}: corrija os dados pela OS, em Editar OS.`), { status: 409 })
         if (item.status === 'rejected') throw Object.assign(new Error('Oferta recusada não pode ser editada: desfaça a recusa antes.'), { status: 409 })
+        // Once the PDF exists the deadline can be changed (which discards it, as below) but not left empty.
+        if (!fields.deadline && item.proposal) throw Object.assign(new Error('Com o PDF da proposta gerado, o prazo solicitado não pode ficar em branco: troque a data se precisar.'), { status: 400 })
         const requester = registerOfferContact(store, 'requesters', client, body.requester, actorOf(request))
         const buyer = registerOfferContact(store, 'buyers', client, body.buyer, actorOf(request))
         const next = { ...fields, requester: requester.name, requesterId: requester.id, buyer: buyer.name, buyerId: buyer.id }
@@ -384,6 +398,25 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
         return item
       })
       response.json({ item: offer, proposalDiscarded })
+    } catch (error) { handleError(response, error) }
+  })
+  // Asked on the proposal screen when the PDF is generated for an offer created without the requested deadline. The
+  // options with no delivery term take the same date: it becomes the "Prazo acordado" of the OS, which Editar OS needs.
+  configured.put('/offers/:id/deadline', requireAdmin, async (request, response) => {
+    const deadline = String(request.body?.deadline ?? '').trim()
+    if (!isDay(deadline)) return response.status(400).json({ message: 'Escolha o prazo solicitado pelo cliente.' })
+    try {
+      const offer = await mutateStore((store) => {
+        const item = store.offers.find((entry) => entry.id === request.params.id)
+        if (!item) throw Object.assign(new Error('Oferta não encontrada.'), { status: 404 })
+        if (item.orderCode || item.status === 'rejected') throw Object.assign(new Error('Esta oferta já foi aceita ou recusada.'), { status: 409 })
+        if (item.proposal) throw Object.assign(new Error('Esta oferta já tem o PDF da proposta: troque o prazo em Informações do serviço.'), { status: 409 })
+        item.deadline = deadline
+        if (Array.isArray(item.proposalDraft?.options)) item.proposalDraft.options = item.proposalDraft.options.map((option) => String(option.deadline ?? '').trim() ? option : { ...option, deadline })
+        item.updatedAt = new Date().toISOString()
+        return item
+      })
+      response.json({ item: offer })
     } catch (error) { handleError(response, error) }
   })
   // "Criando oferta": another administrator who confirms "editar mesmo assim" becomes the one creating it (the list shows

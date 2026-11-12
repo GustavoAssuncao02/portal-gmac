@@ -35,7 +35,7 @@ try {
     const form = page.getByRole('dialog', { name: 'Inserir oferta manualmente' })
     await form.getByLabel('CNPJ/CPF *', { exact: true }).fill('12345678000190')
     await form.getByLabel('Empresa *', { exact: true }).fill('Cliente teste')
-    await form.getByLabel('Prazo solicitado *', { exact: true }).fill('2026-12-20')
+    await form.getByLabel('Prazo solicitado', { exact: true }).fill('2026-12-20')
     await form.getByLabel('Peça/Serviço *', { exact: true }).fill(service)
     await form.getByLabel('Quantidade *', { exact: true }).fill('3')
     await form.getByLabel('Descrição do serviço *', { exact: true }).fill('Teste da oferta em criação')

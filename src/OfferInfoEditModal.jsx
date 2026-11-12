@@ -49,7 +49,8 @@ export default function OfferInfoEditModal({ offer, onClose, onSaved }) {
         <label>Comprador<RequesterNameInput label="Comprador" kind={contactKinds.buyers} who="quem compra o serviço" value={form.buyer} client={client} requesters={buyers} onChange={(value) => update('buyer', value)} /></label>
         <label>Peça/Serviço *<PieceNameInput label="Peça/Serviço *" value={form.service} onChange={(value) => update('service', value)} pieces={pieces} historyHint={false} required /></label>
         <label>Data da solicitação *<input type="date" value={form.requestedAt} onChange={(event) => update('requestedAt', event.target.value)} required /></label>
-        <label>Prazo solicitado *<input type="date" value={form.deadline} onChange={(event) => update('deadline', event.target.value)} required /></label>
+        {/* Optional until the proposal PDF, which asks for it; after the PDF it can be changed but not left empty. */}
+        <label>{offer.proposal ? 'Prazo solicitado *' : 'Prazo solicitado'}<input type="date" value={form.deadline} onChange={(event) => update('deadline', event.target.value)} required={Boolean(offer.proposal)} /></label>
         <label>Quantidade *<input type="number" min="1" step="1" value={form.quantity} onChange={(event) => update('quantity', event.target.value)} required /></label>
         <label>Número da etiqueta<input value={form.labelNumber} onChange={(event) => update('labelNumber', event.target.value)} placeholder="Opcional" /></label>
         {/* Observação interna (ofertas do site): não sai no PDF da proposta, então mudá-la não descarta a proposta. */}
