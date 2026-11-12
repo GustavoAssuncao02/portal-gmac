@@ -1,0 +1,835 @@
+===============================================================================
+                GMAC METALÚRGICA - COMO FUNCIONA O PROCESSO DA EMPRESA
+                         (no Portal GMAC, Sistema de Gestão)
+===============================================================================
+
+Situação descrita: 23/10/2026.
+Inclui as mudanças feitas nesta data (Planejamento, setores ligados ao
+cadastro, manutenção de máquina, tempo previsto obrigatório por etapa, grupo
+"Operação" no menu, modo "Escuro intenso" e janelas de Configurações), que
+ainda não foram publicadas (sem commit).
+
+Este texto explica o caminho do trabalho dentro da empresa, do pedido do
+cliente até o dinheiro recebido, e os processos de apoio (estoque, compras,
+máquinas, planejamento, financeiro, relatórios). Não traz senhas nem dados
+pessoais.
+
+
+-------------------------------------------------------------------------------
+SUMÁRIO
+-------------------------------------------------------------------------------
+  1. Visão geral em uma página
+  2. Quem usa o portal (perfis e acessos)
+  3. Cadastros que sustentam o processo
+  4. Etapa 1 - Oferta (o pedido do cliente)
+  5. Etapa 2 - Detalhamento da oferta
+  6. Etapa 3 - Proposta comercial
+  7. Etapa 4 - Aceite e criação da OS
+  8. Etapa 5 - Planejamento da produção
+  9. Etapa 6 - Execução no chão de fábrica (tablet do operador)
+ 10. Etapa 7 - Acompanhamento pela administração
+ 11. Etapa 8 - Conclusão e recebimento
+ 12. Depois da conclusão: edição, reabertura e histórico
+ 13. Estoque de materiais
+ 14. Pedidos de material e compras
+ 15. Máquinas, manutenção e serviços de hora homem
+ 16. Gestão Financeira
+ 17. Relatórios
+ 18. Notificações
+ 19. Configurações da conta
+ 20. Calculadora de pesos e medidas
+ 21. Regras importantes (resumo)
+ 22. Glossário
+ 23. Perguntas frequentes
+
+
+===============================================================================
+1. VISÃO GERAL EM UMA PÁGINA
+===============================================================================
+
+O caminho principal de um serviço é este:
+
+  CLIENTE PEDE
+     |
+     v
+  [1] OFERTA ............... a solicitação é registrada (Ofertas e serviços)
+     |
+     v
+  [2] DETALHAMENTO ......... materiais, mão de obra, etapas, tempo de cada
+     |                       etapa e máquina/serviço de cada etapa
+     v
+  [3] PROPOSTA ............. opções A, B, C e D, com margem e desconto;
+     |                       gera o PDF para o cliente
+     v
+  [4] ACEITE ............... o cliente aceitou: nasce a ORDEM DE SERVIÇO (OS),
+     |                       o material disponível sai do estoque e o que
+     |                       faltar vira Pedido de material
+     v
+  [5] PLANEJAMENTO ......... cada etapa da OS é colocada numa máquina (ou
+     |                       serviço de hora homem), num dia e horário
+     v
+  [6] EXECUÇÃO ............. o operador entra no tablet com o seu código, vê
+     |                       a fila do seu setor, inicia, registra peças,
+     |                       pausa e conclui
+     v
+  [7] ACOMPANHAMENTO ....... a administração vê tudo em tempo real (painel de
+     |                       Serviços em andamento, Planejamento, Máquinas)
+     v
+  [8] CONCLUSÃO ............ o operador conclui; a administração confirma e
+     |                       informa o recebimento (a receber ou já recebido)
+     v
+  FINANCEIRO ............... Contas a Receber / Tesouraria / Conciliação
+                             bancária / Business Intelligence
+
+Em paralelo correm os processos de apoio:
+  - Estoque (entradas, saídas, custo médio, estoque baixo).
+  - Pedidos de material e compras (o que falta para as OS ou para o estoque).
+  - Máquinas (uso em tempo real, histórico, manutenção).
+  - Contas a pagar (fornecedores, compras, despesas) e conciliação bancária.
+
+Princípios do portal:
+  - Tudo fica no mesmo banco de dados: vários computadores e tablets veem as
+    mesmas informações.
+  - As telas de acompanhamento se atualizam sozinhas a cada 10 segundos.
+  - Horários seguem o fuso da Bahia. Para máquinas e planejamento, a fábrica
+    é considerada funcionando 24 horas por dia, todos os dias.
+  - Nada importante é apagado sem rastro: históricos, justificativas e
+    autoria ficam registrados.
+
+
+===============================================================================
+2. QUEM USA O PORTAL (PERFIS E ACESSOS)
+===============================================================================
+
+2.1 Administrador
+  - Entra com CPF e senha.
+  - Acessa tudo: cadastros, ofertas, propostas, OS, estoque, pedidos,
+    planejamento, máquinas, Gestão Financeira, relatórios e configurações.
+  - Recebe notificações conforme as suas preferências.
+
+2.2 Funcionário administrativo
+  - É cadastrado em Funcionários com o tipo "Administrativo" e uma senha.
+  - Entra na mesma tela do administrador, com CPF e senha.
+  - Usa o sistema administrativo normalmente, INCLUSIVE o Planejamento,
+    EXCETO o grupo Gestão Financeira (Contas a Pagar, Contas a Receber,
+    Tesouraria, Baixa em Lote, Conciliação bancária, Business Intelligence e
+    Classificações). Esse grupo some do menu e o servidor também bloqueia.
+  - Continua vendo as partes financeiras que fazem parte de outras telas:
+    fornecedores, custo da OS, recebimento ao concluir a OS e o financeiro de
+    uma compra de estoque.
+
+2.3 Operador (tablet do chão de fábrica)
+  - O tablet entra numa CONTA COMPARTILHADA (usuário e senha do operador,
+    definidos pelos administradores em Configurações > Acesso do operador).
+  - Cada funcionário se identifica tocando em "Entrar" e digitando o seu
+    CÓDIGO DE 4 DÍGITOS (definido no cadastro do funcionário).
+  - Vê só o que precisa para produzir: fila planejada do seu setor, OS,
+    etapas, peças, tempos e materiais (sem valores comerciais).
+  - Sair tem dois passos: "Sair do funcionário" (volta para "Entrar") e,
+    depois, "Sair da conta do operador" (só se não houver trabalho em
+    andamento naquele aparelho).
+
+2.4 Sessões
+  - A sessão administrativa dura 12 horas; a do operador, 8 horas.
+  - Trocar a senha do operador obriga os tablets a entrar de novo.
+  - Atenção: existe um "modo de teste" que permite entrar sem senha. Ele
+    serve só para testes em rede confiável e deve estar desligado no uso
+    real.
+
+
+===============================================================================
+3. CADASTROS QUE SUSTENTAM O PROCESSO
+===============================================================================
+
+Ficam no grupo "Cadastros" do menu (e alguns em telas próprias).
+
+3.1 Setores (Cadastros > Setores) - A FONTE ÚNICA DE SETORES
+  - Setores atuais: Usinagem, Caldeiraria e Pintura (criados
+    automaticamente na primeira inicialização; outros podem ser criados).
+  - Máquinas, serviços de hora homem e funcionários só MARCAM setores deste
+    cadastro (não se digita setor em outro lugar).
+  - Uma máquina, um serviço ou um funcionário podem ter mais de um setor.
+  - Renomear um setor atualiza automaticamente as máquinas e os serviços.
+  - Não é possível excluir um setor em uso (por funcionário, máquina ou
+    serviço). A lista mostra onde cada setor está em uso.
+  - O setor é o que decide QUAIS serviços aparecem na fila de cada operador
+    no tablet.
+
+3.2 Funcionários
+  - Tipo: Operador (entra no tablet com código de 4 dígitos) ou
+    Administrativo (entra com CPF e senha).
+  - Nome, CPF, nascimento e e-mail (estes dois opcionais).
+  - Setores (marcados; opcional, mas sem setor o operador não recebe fila
+    planejada no tablet).
+  - Código de acesso único entre operadores (o botão "Gerar código" sugere
+    um livre).
+  - Exclusão só enquanto o funcionário não tiver nada registrado. Depois
+    disso, apenas desativar/reativar (desativado não entra).
+
+3.3 Administradores
+  - Nome, nascimento, CPF, e-mail e senha.
+
+3.4 Clientes
+  - Nome/razão social, CPF ou CNPJ, e-mail (opcional) e observação.
+
+3.5 Fornecedores
+  - Nome/razão social, CPF ou CNPJ, e-mail e telefone.
+  - Usados em Contas a Pagar; não se exclui fornecedor com contas.
+
+3.6 Bancos
+  - Nome, agência e conta. Com pelo menos um banco cadastrado, toda baixa
+    (pagamento ou recebimento) passa a pedir o banco.
+
+3.7 Razões de pausas
+  - Lista que o operador escolhe ao pausar (ex.: Descanso, Horário de
+    almoço, Troca de atividade). "Troca de serviço" é reservada: o sistema
+    grava sozinho quando o operador muda de OS.
+  - Há gráfico de quantas pausas cada razão recebeu.
+
+3.8 Máquinas e Serviços (hora homem) - ver seção 15.
+
+
+===============================================================================
+4. ETAPA 1 - OFERTA (O PEDIDO DO CLIENTE)
+===============================================================================
+
+Onde: Operação > Ofertas e serviços > "Inserir Oferta Manualmente".
+
+O que se registra:
+  - Cliente (busca entre os clientes cadastrados; aceita CNPJ ou CPF).
+  - Peça/serviço, quantidade, prazo solicitado, descrição, etiqueta e
+    anexos (desenhos, fotos, documentos).
+
+Situações de uma oferta:
+  - Em análise ......... acabou de entrar.
+  - Proposta gerada .... o PDF da proposta foi gerado.
+  - Aceita ............. o cliente aceitou; existe uma OS vinculada.
+  - Recusada ........... a oferta foi recusada (não gera OS). Uma recusa
+                         feita por engano pode ser desfeita.
+
+Código da oferta: OF-AAAA-NNNN.
+
+Peça repetida: se a peça (pelo nome) já foi feita antes, o portal avisa
+"Esta peça já foi feita antes" e oferece preencher materiais, etapas e
+tempos com base no histórico (média por peça das OS concluídas). Uma OS
+marcada como "atípica" fica fora dessas médias.
+
+
+===============================================================================
+5. ETAPA 2 - DETALHAMENTO DA OFERTA
+===============================================================================
+
+Onde: Ofertas e serviços > botão de detalhes da oferta.
+
+5.1 Materiais
+  - Material, especificação, unidade (kg ou unidade), quantidade e valor.
+  - O portal mostra se há estoque suficiente, somando linhas iguais do
+    mesmo material. Ex.: duas linhas de 20 kg e 5 kg com 24 kg em estoque
+    = falta de 1 kg.
+  - O detalhamento NÃO tira nada do estoque (só verifica e estima custo).
+
+5.2 Mão de obra
+  - Hora máquina (escolhe a máquina) ou hora homem (escolhe o serviço).
+  - O valor por hora vem do cadastro e pode ser ajustado para a proposta.
+  - São horas PREVISTAS (estimativa de custo), não apontamentos reais.
+
+5.3 Etapas do serviço (o processo)
+  Grupos e subetapas disponíveis:
+    Usinagem ...... Tornearia, Freza, Plaina, Torno CMC, C.usinagem,
+                    Montagem, Desmontagem
+    Pintura ....... Pintura
+    Caldeiraria ... Corte e dobra, Corte com Maçarico, Corte a plasma,
+                    Esmirilhamento, Montagem Estruturada, Montagem mecânica,
+                    Polimento
+  - Marca-se as etapas que a peça vai passar e a ORDEM (arrastando grupos e
+    subetapas). A ordem vale para a produção.
+  - Ao lado de cada etapa marcada:
+      * TEMPO PREVISTO (horas e minutos) - OBRIGATÓRIO. É o tempo da etapa
+        para a OS inteira. É a meta que o operador vê e a base do
+        planejamento das máquinas. Campo vazio fica marcado em vermelho.
+      * Máquina ou serviço previsto para a etapa (opcional, mas recomendado:
+        quando definido, o operador já recebe a etapa com aquela máquina).
+        Máquinas em manutenção aparecem marcadas "(em manutenção)".
+
+5.4 Outras informações
+  - Tipo: Serviço ou Produto; fabricado a partir de Amostra ou Desenho;
+    Têmpera sim/não; cor/tipo de pintura (quando há Pintura); descrição.
+  - Urgência (normal ou emergência).
+  - Interno ou Externo (local do serviço).
+  - "Processo sequencial" (na tela aparece como "Processo Injessado"),
+    marcado por padrão:
+      * Marcado: uma etapa só é liberada quando a etapa anterior tiver
+        todas as peças da OS (parte das peças não basta).
+      * Desmarcado: pode-se trabalhar e registrar em qualquer etapa.
+
+O detalhamento é salvo sozinho a cada alteração.
+
+
+===============================================================================
+6. ETAPA 3 - PROPOSTA COMERCIAL
+===============================================================================
+
+Onde: Detalhes da oferta > "Fazer proposta".
+
+Antes de abrir os modelos, o portal confere:
+  - Se há etapas definidas.
+  - Se TODAS as etapas têm tempo previsto. Se faltar, aparece a mensagem
+    dizendo quais etapas faltam, e a proposta não é gerada.
+
+6.1 As quatro opções
+  Opção   Lucro bruto inicial
+    A          15%
+    B          20%
+    C          25%
+    D          30%
+  Em cada opção só se editam: prazo de entrega, % de lucro bruto e
+  desconto. Materiais, mão de obra e horas vêm do detalhamento.
+
+6.2 Como o valor é calculado
+  Valor do serviço (CUSTO) = materiais + mão de obra
+  Valor da OS (PREÇO)      = custo x (1 + % lucro) x (1 - desconto)
+  Lucro bruto esperado     = Valor da OS - custo
+  Exemplo: custo R$ 1.832,40 com 15% -> Valor da OS R$ 2.107,26
+           -> lucro R$ 274,86.
+  Horas: tempo de máquina (hora máquina) + tempo de serviço (hora homem)
+  = horas totais.
+
+6.3 O PDF
+  - Escolhe-se o modelo do documento (ex.: modelos A/B, Nestlé, Etiqueta)
+    e o layout (Clássico, Executivo, Compacto).
+  - O PDF que vai ao cliente NÃO mostra custo, margem nem lucro: mostra o
+    valor cobrado, desconto, prazo e tempos previstos.
+  - Gerar a proposta não envia e-mail: o PDF é baixado para envio.
+
+
+===============================================================================
+7. ETAPA 4 - ACEITE E CRIAÇÃO DA OS
+===============================================================================
+
+Onde: Ofertas e serviços > "Aceitar" (depois que o cliente aprovou).
+
+Ao aceitar:
+  1. Nasce a ORDEM DE SERVIÇO (código OS-AAAA-NNNN), com os dados da
+     proposta escolhida, materiais, mão de obra, etapas, tempos e máquinas.
+  2. O material DISPONÍVEL sai do estoque para a OS (nunca deixa saldo
+     negativo).
+  3. O que faltar vira PEDIDO DE MATERIAL (código PM-AAAA-NNNN).
+     Ex.: precisa 25 kg, há 24 kg -> saem 24 kg, saldo 0, pedido de 1 kg.
+  4. A OS aparece em "Serviços em andamento", no "Planejamento" (etapas a
+     planejar) e no tablet dos operadores.
+
+Regras:
+  - Uma proposta antiga, gerada antes do tempo obrigatório, só é aceita
+    depois de preencher o tempo das etapas no detalhamento.
+  - Aceitar duas vezes não cria duas OS nem baixa o estoque em dobro.
+  - Um aceite feito por engano pode ser desfeito enquanto nada aconteceu
+    na OS.
+
+
+===============================================================================
+8. ETAPA 5 - PLANEJAMENTO DA PRODUÇÃO
+===============================================================================
+
+Onde: Operação > Planejamento.
+Quem: administradores e funcionários administrativos.
+
+Objetivo: decidir em que máquina (ou serviço de hora homem), em que dia e a
+que horas cada etapa de cada OS será feita, para manter as máquinas
+ocupadas (ex.: o Torno ocupado o dia inteiro) e acompanhar ao longo do dia
+se o plano está sendo cumprido.
+
+8.1 Como o plano é montado
+  - O plano é feito de BLOCOS. Cada bloco = uma etapa de uma OS, numa
+    máquina ou serviço, com início e duração.
+  - Os inícios seguem a grade de 15 em 15 minutos.
+  - A fábrica é considerada funcionando 24 horas (sem almoço nem fim de
+    expediente no cálculo).
+  - Uma MÁQUINA só pode ter um bloco por vez (o portal recusa sobreposição
+    e diz qual OS já está naquele horário). Serviços de hora homem podem
+    ter blocos ao mesmo tempo (são pessoas).
+  - Pode-se dividir uma etapa em vários blocos (máquinas ou dias
+    diferentes), informando quantas peças vão em cada um (opcional).
+  - Uma máquina em manutenção pode receber plano (para depois que voltar),
+    mas o portal avisa.
+
+8.2 "Serviços para planejar"
+  Lista as etapas que ainda faltam planejar, com: OS, peça, etapa, setor,
+  máquina sugerida (a prevista na oferta), tempo a planejar e prazo.
+  - Tempo a planejar = tempo previsto da etapa proporcional às peças que
+    ainda faltam, menos o que já está em blocos que não terminaram.
+  - Emergências vêm primeiro; depois, o prazo mais próximo.
+  - Para planejar: arrastar a linha para a máquina na agenda, ou clicar em
+    "Planejar" (abre a janela com OS/etapa, máquina, dia, início, duração
+    e peças). A duração já vem preenchida com o tempo a planejar.
+
+8.3 Visões
+  - DIA: agenda por máquina (agrupada por setor) com régua de 24 horas.
+      * Clicar num espaço vazio da máquina abre o planejamento naquele
+        horário.
+      * Arrastar um bloco para o lado muda o horário.
+      * Clicar num bloco abre para editar ou "Tirar do plano".
+      * Linha vermelha "Agora" mostra o momento atual.
+      * Cores dos blocos: Planejado (azul claro), Em execução (azul, com o
+        % de peças), Concluído (verde), Atrasado (laranja, com o tempo de
+        atraso).
+      * Barra fina embaixo da linha = o que REALMENTE aconteceu (quem
+        trabalhou na máquina). Listrada em laranja = trabalho fora do
+        planejamento.
+  - SEMANA: horas planejadas e ocupação de cada máquina em cada dia.
+  - MÊS: calendário com o resumo de cada dia (ocupação por setor, número
+    de OS e blocos, aviso de atraso). Clicar num dia abre o cronograma.
+
+8.4 Clicar num horário (régua de 15 em 15 minutos)
+  O painel ao lado mostra a "foto" daquele momento:
+  - Ocupadas: qual OS/etapa e até que horas.
+  - Ociosas: de que horas até que horas a máquina fica livre, com o atalho
+    "ver o que cabe" (mostra as etapas que cabem nesse intervalo).
+  - Em manutenção: com o motivo.
+  - Para horários que já passaram (ou agora), mostra também o REAL: quem
+    estava trabalhando ou "Real: parada".
+  Sem horário escolhido, o painel mostra "Agora".
+
+8.5 Indicadores do topo
+  Ocupação planejada das máquinas (24 h por dia), blocos planejados,
+  concluídos e atrasados.
+
+8.6 Situação de cada bloco (calculada sozinha a cada 10 segundos)
+  - Planejado: ainda não chegou a hora.
+  - Em execução: alguém está trabalhando naquela etapa.
+  - Concluído: a etapa (ou a OS) terminou.
+  - Atrasado: a hora chegou e ninguém começou, ou o tempo acabou e a
+    etapa continua.
+  O plano NÃO empurra os blocos sozinhos quando há atraso: mostra o atraso
+  e quem planeja decide o que mover.
+
+8.7 Visão do operador (prévia)
+  Mostra, por setor, a fila que os operadores daquele setor veem no tablet.
+
+
+===============================================================================
+9. ETAPA 6 - EXECUÇÃO NO CHÃO DE FÁBRICA (TABLET DO OPERADOR)
+===============================================================================
+
+9.1 Entrar
+  - Antes de entrar, o tablet mostra o painel das OS em andamento.
+  - O funcionário toca em "Entrar" e digita o seu código de 4 dígitos.
+
+9.2 "Planejado para você"
+  - No topo da lista aparece a fila planejada dos SETORES do funcionário,
+    na ordem do plano: Agora, Atrasado, A seguir, Depois - com OS, etapa,
+    máquina e horário.
+  - Tocar num item abre a OS já com a etapa e a máquina do plano
+    escolhidas: é só "Iniciar trabalho".
+  - Funcionário sem setor vê o aviso para pedir à administração.
+  - Trabalhar fora do plano é permitido (escolhendo a OS na lista abaixo);
+    no Planejamento esse trabalho aparece como "fora do planejamento".
+
+9.3 Trabalhar numa OS
+  Três passos grandes:
+    1. Selecionar etapa  - escolhe a etapa; se a etapa tem máquina/serviço
+                           previsto, ele vem junto; senão, escolhe-se a
+                           máquina OU o serviço de hora homem (nunca os
+                           dois).
+    2. Iniciar trabalho  - vira "Pausar trabalho" enquanto trabalha.
+    3. Concluir serviço  - só quando todas as peças passaram por todas as
+                           etapas.
+  - Registrar peças: em cada etapa, informa-se a quantidade e "Registrar".
+  - Pausar: escolhe a razão da pausa (as pausas não contam como tempo
+    trabalhado).
+  - Trocar de etapa ou de máquina/serviço durante o trabalho registra a
+    troca sem perder o tempo.
+
+9.4 Regras do chão de fábrica
+  - Uma MÁQUINA é de UMA PESSOA POR VEZ, em qualquer OS. Máquina em uso
+    aparece desabilitada: "Em uso por Fulano · OS".
+  - MÁQUINA EM MANUTENÇÃO não pode ser escolhida (aparece "Em
+    manutenção"); a etapa planejada nela fica aguardando.
+  - Serviços de hora homem podem ser usados por várias pessoas ao mesmo
+    tempo.
+  - Várias pessoas podem trabalhar na MESMA OS, cada uma com a sua sessão.
+  - Uma pessoa trabalha em UMA OS por vez. Ao iniciar outra, o tablet
+    pergunta; confirmando, a OS anterior é pausada com "Troca de serviço".
+  - Material pendente: se faltar material, o tablet avisa quanto falta e
+    pergunta se quer começar mesmo assim (a resposta fica registrada).
+  - Peças concluídas = menor quantidade entre as etapas. Ex.: com processo
+    sequencial desmarcado, 20 peças com Pintura 20, Caldeiraria 8 e
+    Usinagem 5 -> 5 peças concluídas.
+  - Com processo sequencial, a etapa só é liberada quando a anterior tiver
+    todas as peças da OS.
+  - Ao registrar a última peça da última etapa, abre sozinho "Concluir
+    serviço".
+  - O tablet mostra a meta de tempo de cada etapa (o tempo previsto).
+
+
+===============================================================================
+10. ETAPA 7 - ACOMPANHAMENTO PELA ADMINISTRAÇÃO
+===============================================================================
+
+10.1 Operação > Serviços em andamento (painel)
+  - Cada OS com cliente, operador, etapa atual, peças, progresso por etapa,
+    tempo ativo, tempo restante e situação de prazo (Dentro do prazo,
+    Próximo, Em cima, Atrasado).
+  - Material pendente destaca a linha; o botão mostra o que falta e leva ao
+    pedido de material.
+  - "Modo de exibição" coloca o painel em tela cheia (TV da fábrica).
+  - Atualiza a cada 10 segundos.
+
+10.2 Detalhes da OS (Ver OS)
+  - Dados, materiais, processo, proposta, arquivos, custo real e margem, e
+    o histórico de operações (quem fez o quê e quando).
+  - O administrador pode encerrar a sessão de quem esqueceu de pausar
+    (com justificativa) e corrigir horários de operações (o horário
+    original fica guardado, marcado como "Horário editado").
+
+10.3 Início (tela inicial)
+  - Resumos: OS abertas, em execução, atrasadas, ofertas em análise,
+    contas a pagar, estoque baixo e pendências de atenção.
+
+10.4 Máquinas
+  - Status em tempo real (Em funcionamento, Ociosa, Em manutenção), quem
+    está usando, desde quando, tempo de uso no dia e funcionários ociosos
+    agora (ver seção 15).
+
+10.5 Planejamento
+  - O cronograma do dia com o real por cima (ver seção 8).
+
+
+===============================================================================
+11. ETAPA 8 - CONCLUSÃO E RECEBIMENTO
+===============================================================================
+
+1. O operador toca em "Concluir serviço" (todas as peças em todas as
+   etapas). A administração recebe notificação.
+2. No painel de Serviços em andamento, a administração clica em
+   "Concluído". Abre a janela "Recebimento do serviço":
+     - Ainda vai receber ...... programa a conta em Contas a Receber
+                                (parcela única ou parcelado).
+     - Já recebido ............ lança a entrada na Tesouraria, já baixada,
+                                com data e forma de recebimento. Se o valor
+                                recebido for diferente do valor da OS, a
+                                diferença vira juros (a mais) ou desconto
+                                (a menos).
+     - Concluir sem lançar .... conclui sem lançamento financeiro.
+3. A OS sai do painel de andamento e vai para Operação > Serviços
+   concluídos (com os colaboradores que trabalharam nela).
+
+
+===============================================================================
+12. DEPOIS DA CONCLUSÃO: EDIÇÃO, REABERTURA E HISTÓRICO
+===============================================================================
+
+  - Editar OS: dados, prazos (mudar prazo pede justificativa), quantidade,
+    materiais, mão de obra, proposta, processo, etapas e peças. Mudar as
+    etapas exige o tempo previsto de todas elas. Editar OS concluída pede
+    confirmação. Com alguém trabalhando, etapas e peças ficam travadas.
+  - Reabrir OS: volta para o andamento mantendo peças e histórico. Se houver
+    contas a receber vinculadas, a janela pergunta se mantém ou exclui
+    (conta já recebida ou conciliada não é excluída).
+  - Marcar OS como atípica: tira a OS das médias usadas nas sugestões de
+    peças repetidas.
+  - Tudo fica no histórico da OS.
+  - Atenção: editar materiais da OS não faz novas entradas/saídas de
+    estoque automaticamente.
+
+
+===============================================================================
+13. ESTOQUE DE MATERIAIS
+===============================================================================
+
+Onde: Estoque.
+
+  - Cada material: nome, especificação, unidade (kg ou unidade), disponível,
+    mínimo, preço médio, ícone ou foto.
+  - A quantidade só muda por ENTRADA ou SAÍDA (não se edita o saldo à mão).
+  - Material "unidade" aceita só números inteiros.
+  - Estoque baixo: disponível menor ou igual ao mínimo (gera notificação e
+    aparece no Início).
+  - Custo médio ponderado a cada entrada. Ex.: 20 kg a R$ 28,00 + entrada de
+    10 kg a R$ 30,00 -> 30 kg a R$ 28,67/kg.
+  - Histórico de cada material: entradas, saídas, saldo, OS de destino e
+    responsável.
+  - Saídas para OS acontecem no aceite da proposta e no recebimento de um
+    pedido de material vinculado à OS.
+  - Depois de uma entrada (compra), o portal pergunta se a compra vai para
+    o financeiro: "Conta a pagar" (ainda vai pagar), "Pagamento já
+    realizado" (saída na Tesouraria) ou "Não lançar agora".
+
+
+===============================================================================
+14. PEDIDOS DE MATERIAL E COMPRAS
+===============================================================================
+
+Onde: Pedidos de material (logo abaixo de Estoque).
+
+Origem dos pedidos:
+  - Falta de material numa OS (nasce no aceite da proposta).
+  - Pedido manual ("Solicitar material"), com ou sem OS.
+
+Cada pedido tem código PM-AAAA-NNNN e mostra material, quantidade a pedir,
+necessária, OS relacionada, data e histórico.
+
+Ações:
+  - Adicionar material (receber): abre a entrada já preenchida.
+      * Pedido de uma OS: o material entra no estoque E sai para a OS (a
+        compra e o consumo ficam registrados separadamente).
+      * Recebeu menos: o restante continua pendente.
+      * Recebeu mais: só o necessário vai para a OS; o excedente fica no
+        estoque.
+      * Pedido manual sem OS: o material fica no estoque.
+  - Recusar pedido: com confirmação; o pedido fica visível como "Pedido
+    recusado" (a OS continua com a pendência).
+  - Histórico (ícone de informação): quem pediu, recebeu ou recusou, quando
+    e quanto.
+
+Fluxo resumido:
+  Falta na OS -> Pedido de material -> Compra/entrada -> Saída para a OS
+  -> Pendência resolvida -> (opcional) Conta a pagar da compra
+
+
+===============================================================================
+15. MÁQUINAS, MANUTENÇÃO E SERVIÇOS DE HORA HOMEM
+===============================================================================
+
+15.1 Máquinas (Máquinas)
+  - Cadastro: nome, tipo (opcional), SETORES (marcados do cadastro de
+    Setores; pelo menos um) e valor da hora.
+  - Status calculado pelo uso real: Em funcionamento, Ociosa ou Em
+    manutenção.
+  - Lista com operador atual, início de uso e tempo de uso no dia;
+    resumos de disponibilidade; máquinas ociosas hoje; funcionários
+    ociosos agora (quem está parado e desde quando).
+  - Histórico de uso de cada máquina (quem usou, em qual OS, quanto tempo).
+  - Atualiza a cada 10 segundos.
+
+15.2 Manutenção de máquina
+  - Botão "Manutenção" (na barra de ações ou no ícone de chave da linha).
+  - Colocar em manutenção exige o MOTIVO. Só é possível com a máquina
+    parada (se alguém estiver usando, é preciso pausar antes).
+  - Em manutenção, a máquina:
+      * aparece com o status laranja "Em manutenção" (filtro e indicador
+        próprios);
+      * não pode ser escolhida por nenhum operador;
+      * deixa a etapa planejada nela aguardando;
+      * aparece listrada no Planejamento.
+  - "Liberar máquina" devolve a máquina aos operadores.
+  - Cada período de manutenção fica guardado (início, fim, motivo, quem
+    colocou e quem liberou).
+
+15.3 Serviços de hora homem (Serviços)
+  - Catálogo de atividades cobradas por hora de pessoa (ex.: solda,
+    montagem, pintura), com valor da hora e SETORES (marcados).
+  - Não tem status de máquina; várias pessoas podem usar ao mesmo tempo.
+  - Histórico de uso real por funcionário e OS.
+  - O setor do serviço decide em qual fila de operador ele aparece.
+
+
+===============================================================================
+16. GESTÃO FINANCEIRA
+===============================================================================
+
+(Só administradores. O funcionário administrativo não acessa este grupo.)
+
+16.1 Contas a Pagar
+  - Fornecedor, descrição, classificação (pode dividir o valor entre
+    classificações), documento, emissão, vencimento, valor e anexos.
+  - Normal, parcelada ou recorrente (mensal/anual, com confirmação do
+    próximo lançamento).
+  - Situações: Pendente, Paga, Vencida, Desativada.
+  - Dar baixa: data, forma de pagamento, banco, juros OU desconto,
+    observação e comprovantes. Baixa individual ou em massa.
+  - Estorno com justificativa (conta paga precisa de estorno antes de ser
+    editada).
+  - Contas vinculadas a uma OS entram como custo adicional da OS.
+  - Exportação PDF e Excel.
+
+16.2 Contas a Receber
+  - Programadas na conclusão da OS ou lançadas manualmente; parcela única
+    ou parcelada; ISS retido previsto.
+  - Dar baixa: data, forma, banco, juros, desconto e ISS retido.
+
+16.3 Tesouraria (livro-caixa)
+  - Mostra todo dinheiro que entrou ou saiu, com entradas, saídas e saldo.
+  - "Nova entrada" e "Nova saída" lançam já baixado (sem passar por "dar
+    baixa"). As baixas de Contas a Pagar e a Receber também aparecem aqui.
+
+16.4 Baixa em Lote
+  - Lista compartilhada entre os administradores: junta várias contas a
+    pagar e paga todas de uma vez (valor integral, mesma data, forma e
+    banco). Mostra a divisão por classificação e o saldo em aberto por mês.
+
+16.5 Conciliação bancária
+  - Importa extratos OFX (Itaú e Sicoob; vários arquivos de uma vez).
+  - Liga cada movimento do banco à conta paga/recebida correspondente
+    (sugestões automáticas; "Conciliar tudo").
+  - Encerramento mensal por conta: trava o mês (com justificativa se houver
+    pendência); pode ser reaberto com motivo. Códigos CON-000001...
+
+16.6 Business Intelligence
+  - Resumo financeiro do período (total, pago, pendente, vencido, a vencer,
+    juros e descontos), evolução mensal de contas a receber x a pagar,
+    custo real e margem por OS, gastos por classificação e por fornecedor,
+    próximas contas e contas vencidas.
+  - O período considera a data de VENCIMENTO; o gráfico de pagamentos por
+    mês usa a data da BAIXA.
+
+16.7 Classificações
+  - Categorias das contas a pagar (não se exclui classificação em uso).
+
+16.8 Custo real e margem da OS
+  - Custos lançados = custo previsto na proposta + contas a pagar
+    vinculadas à OS.
+  - Margem real = valor cobrado - custos lançados.
+
+
+===============================================================================
+17. RELATÓRIOS
+===============================================================================
+
+Onde: Relatórios. Saem em PDF e Excel.
+  - Funcionários, Clientes e Administradores (cadastros, sem senhas).
+  - Horas trabalhadas (por funcionário, por dia).
+  - Horas de máquinas (com opção "Horas ociosas", base 24 h por dia).
+  - Serviços (horas reais por serviço, funcionário e OS).
+  - Ordens de serviço (dados, recursos, proposta, etapas e operações).
+
+As horas vêm dos registros reais de trabalho (pausas não contam; trabalho
+que passa da meia-noite é dividido por dia; sobreposições não são contadas
+em dobro).
+
+
+===============================================================================
+18. NOTIFICAÇÕES
+===============================================================================
+
+O sino no topo avisa (cada pessoa liga/desliga em Configurações):
+  - Novo pedido de material.
+  - Serviço concluído pelo operador.
+  - Estoque de material ficando baixo.
+  - Nova OS em andamento.
+  - Conta a pagar a vencer (3, 5 ou 7 dias antes, ou nunca).
+  - Conta a receber a vencer (3, 5 ou 7 dias antes e no dia, ou nunca).
+Cada conta escolhe o som da notificação (ou sem som). A leitura é
+individual: abrir o sino marca como lidas só para quem abriu.
+
+
+===============================================================================
+19. CONFIGURAÇÕES DA CONTA
+===============================================================================
+
+  - Aparência: Modo claro, Modo escuro (azul escuro) ou Escuro intenso
+    (preto); fonte e tamanho da fonte. Vale só para a própria conta.
+  - Notificações: o que avisar, prazos e som.
+  - Dados da conta: resumo (nome e CPF); "Editar dados e senha" abre uma
+    janela (a senha atual confirma qualquer alteração).
+  - Acesso do operador (administradores): resumo do usuário do tablet e da
+    última troca de senha; "Alterar acesso do operador" abre uma janela que
+    pede justificativa. Toda alteração fica no histórico.
+  - Versão do portal e "Notas de atualização" (o que mudou em cada versão),
+    no fim da página.
+
+
+===============================================================================
+20. CALCULADORA DE PESOS E MEDIDAS
+===============================================================================
+
+  - Escolhe-se o material (aço carbono, inox, alumínio, bronze, cobre,
+    latão), o perfil (barra, chapa, tubo, perfis L/T/U, tarugo, bucha...) e
+    as medidas; o peso sai em kg ou kg/m.
+  - É só uma calculadora: não mexe no estoque nem na produção.
+
+
+===============================================================================
+21. REGRAS IMPORTANTES (RESUMO)
+===============================================================================
+
+  1. Toda etapa do serviço precisa de TEMPO PREVISTO: sem ele não sai
+     proposta, a oferta não vira OS e a etapa não entra direito no plano.
+  2. A oferta só estima; o estoque só é baixado no ACEITE.
+  3. Falta de material no aceite vira Pedido de material automaticamente.
+  4. Uma máquina: uma pessoa por vez e um bloco de plano por vez.
+  5. Máquina em manutenção: ninguém usa até ser liberada.
+  6. Uma pessoa: uma OS por vez (trocar de OS pausa a anterior com "Troca
+     de serviço").
+  7. Peças concluídas = menor contador entre as etapas.
+  8. Setores vêm só de Cadastros > Setores; o setor decide a fila do
+     operador.
+  9. O plano mostra atrasos, mas não move blocos sozinho.
+ 10. O PDF da proposta nunca mostra custo, margem ou lucro.
+ 11. Conta paga só é editada depois de estornada; o estorno pede
+     justificativa.
+ 12. Mês de conciliação encerrado fica travado até ser reaberto com motivo.
+ 13. Históricos, justificativas e autoria ficam guardados.
+ 14. Horários no fuso da Bahia; máquinas e planejamento em 24 h por dia.
+
+
+===============================================================================
+22. GLOSSÁRIO
+===============================================================================
+
+  OF-AAAA-NNNN ...... código da oferta.
+  OS-AAAA-NNNN ...... ordem de serviço (nasce no aceite da proposta).
+  PM-AAAA-NNNN ...... pedido de material.
+  PAG- / REC- ....... conta a pagar / conta a receber.
+  CON-000001 ........ encerramento de conciliação bancária.
+  Etapa ............. passo do processo (ex.: Tornearia, Corte a plasma).
+  Grupo ............. conjunto de etapas (Usinagem, Pintura, Caldeiraria).
+  Passagens ......... soma das peças registradas em todas as etapas (não é
+                      o mesmo que peças concluídas).
+  Hora máquina ...... custo/tempo de máquina.
+  Hora homem ........ custo/tempo de pessoa (serviços).
+  Tempo previsto .... tempo planejado de uma etapa para a OS inteira.
+  Bloco ............. no Planejamento: uma etapa de uma OS numa máquina,
+                      num horário.
+  Fora do
+  planejamento ...... trabalho real que não bate com nenhum bloco do plano.
+  Valor do serviço .. custo (materiais + mão de obra).
+  Valor da OS ....... preço cobrado do cliente.
+  OS atípica ........ OS que fica fora das médias de peças repetidas.
+  Interno/Externo ... local onde o serviço é feito.
+  Processo
+  sequencial ........ ("Processo Injessado" na tela) uma etapa só é liberada
+                      quando a anterior tiver todas as peças da OS.
+
+
+===============================================================================
+23. PERGUNTAS FREQUENTES
+===============================================================================
+
+P: O operador não vê nada em "Planejado para você". Por quê?
+R: Pode ser: (a) o funcionário não tem setor no cadastro; (b) não há blocos
+   planejados para as máquinas/serviços dos setores dele; (c) as máquinas
+   ou serviços planejados não têm aquele setor marcado.
+
+P: Uma etapa não aparece em "Serviços para planejar".
+R: Ela já está toda coberta por blocos que ainda não terminaram, ou a etapa
+   já foi concluída. Etapas de OS antigas sem tempo aparecem como "Sem tempo
+   previsto".
+
+P: Não consigo gerar a proposta.
+R: Falta definir as etapas ou o tempo previsto de alguma etapa (a mensagem
+   diz quais). Preencha nos detalhes da oferta, ao lado de cada etapa.
+
+P: O operador não consegue escolher uma máquina.
+R: Ela está em uso por outra pessoa ou em manutenção (o tablet mostra qual
+   dos dois).
+
+P: Quero mudar o horário de um bloco do plano.
+R: Arraste o bloco na agenda do dia, ou clique nele e altere o início.
+   Se houver outro bloco na mesma máquina naquele horário, o portal avisa.
+
+P: Como sei se a máquina ficou parada?
+R: No Planejamento, clique no horário: para horários passados aparece o real
+   ("Real: parada" ou quem trabalhou). Em Máquinas há o tempo de uso e o de
+   ociosidade do dia, e em Relatórios as horas ociosas.
+
+P: Recebi o pagamento de uma OS com valor diferente.
+R: Na janela "Recebimento do serviço", em "Já recebido", informe o valor
+   recebido: a diferença vira juros (a mais) ou desconto (a menos).
+
+P: Posso apagar um setor?
+R: Só se nenhum funcionário, máquina ou serviço o usar. Renomear é possível
+   e atualiza tudo.
+
+===============================================================================
+Fim do documento.
+===============================================================================
