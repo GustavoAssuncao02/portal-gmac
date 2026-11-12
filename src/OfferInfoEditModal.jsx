@@ -10,7 +10,7 @@ import { documentDigits, maskClientDocument } from '../server/clientDocument.js'
 // deadline, quantity and label without creating the offer again (PUT /api/offers/:id). What goes printed on the proposal
 // discards a generated one: the screen says so before saving.
 const printed = ['cnpj', 'company', 'requester', 'buyer', 'service', 'labelNumber', 'deadline', 'quantity']
-const formOf = (offer) => ({ cnpj: maskClientDocument(offer.cnpj || ''), company: offer.company || '', requester: offer.requester || '', buyer: offer.buyer || '', service: offer.service || '', requestedAt: String(offer.requestedAt || '').slice(0, 10), deadline: offer.deadline || '', quantity: String(offer.quantity ?? ''), labelNumber: offer.labelNumber || '' })
+const formOf = (offer) => ({ cnpj: maskClientDocument(offer.cnpj || ''), company: offer.company || '', requester: offer.requester || '', buyer: offer.buyer || '', service: offer.service || '', requestedAt: String(offer.requestedAt || '').slice(0, 10), deadline: offer.deadline || '', quantity: String(offer.quantity ?? ''), labelNumber: offer.labelNumber || '', notes: offer.notes || '' })
 
 export default function OfferInfoEditModal({ offer, onClose, onSaved }) {
   const [form, setForm] = useState(() => formOf(offer)), [busy, setBusy] = useState(false), [error, setError] = useState('')
@@ -52,6 +52,8 @@ export default function OfferInfoEditModal({ offer, onClose, onSaved }) {
         <label>Prazo solicitado *<input type="date" value={form.deadline} onChange={(event) => update('deadline', event.target.value)} required /></label>
         <label>Quantidade *<input type="number" min="1" step="1" value={form.quantity} onChange={(event) => update('quantity', event.target.value)} required /></label>
         <label>Número da etiqueta<input value={form.labelNumber} onChange={(event) => update('labelNumber', event.target.value)} placeholder="Opcional" /></label>
+        {/* Observação interna (ofertas do site): não sai no PDF da proposta, então mudá-la não descarta a proposta. */}
+        <label className="offer-form-field--full">Observação<textarea rows={3} maxLength={2000} value={form.notes} onChange={(event) => update('notes', event.target.value)} placeholder="Interna: não sai na proposta" /></label>
       </div></fieldset>
       {(changesProposal || resized) && <div className="offer-info-edit-notes" role="note">
         {changesProposal && <p><strong>A proposta já gerada será descartada.</strong> Estes dados vão impressos na proposta: ao salvar, a oferta volta para "Em análise" e a proposta é gerada de novo com os dados corrigidos. As opções de preço salvas continuam.</p>}

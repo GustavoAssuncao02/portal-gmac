@@ -8,6 +8,7 @@ import { employeeRecords, isStaff, staffAccountId } from './employeeAccess.js'
 import { clientContactKinds, clientRequesters } from './requesters.js'
 import { recordPasswordChange } from './passwordReset.js'
 import { actorOf, recordRegistryChange } from './registryHistory.js'
+import { preRegisteredClientIds } from './sitePreRegistration.js'
 import { blockedMessage, createLoginThrottle } from './loginThrottle.js'
 
 const sessions = new Map()
@@ -392,7 +393,18 @@ export function createAccountsRouter(service) {
   const visible = (request, kind, items) => kind === 'admins' && request.adminRole !== 'admin' ? items.map(({ id, name }) => ({ id, name })) : items
   for (const kind of ['admins', 'clients']) {
     const changes = kind === 'admins' ? [onlyAdministrators] : []
-    router.get(`/${kind}`, async (request, response, next) => { try { response.json({ items: visible(request, kind, await service[kind]()) }) } catch (error) { next(error) } })
+    router.get(`/${kind}`, async (request, response, next) => {
+      try {
+        let items = await service[kind]()
+        // A etiqueta "Pré-cadastro" dos clientes criados pelo site: some quando alguém salva o cadastro (o histórico
+        // ganha um "edited"), sem nada novo no banco.
+        if (kind === 'clients') {
+          const pre = preRegisteredClientIds(await readStore())
+          if (pre.size) items = items.map((item) => pre.has(String(item.id)) ? { ...item, preRegistered: true } : item)
+        }
+        response.json({ items: visible(request, kind, items) })
+      } catch (error) { next(error) }
+    })
     for (const method of ['post', 'put']) router[method](method === 'post' ? `/${kind}` : `/${kind}/:id`, ...changes, async (request, response, next) => {
       try {
         const item = await service.save(kind, request.params.id, request.body, { actor: actorOf(request) })

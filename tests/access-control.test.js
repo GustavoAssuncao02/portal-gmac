@@ -26,5 +26,15 @@ test('sensitive routes require a session, and the operator account reaches only 
     for (const [method, route] of [['GET', '/employees'], ['POST', `/offers/${offer.id}/accept`], ['PUT', `/offers/${offer.id}/resources`], ['GET', `/offers/${offer.id}/proposal.pdf`], ['POST', '/operations/orders/OS-1/interrupt'], ['GET', '/proposal-settings']]) {
       assert.equal((await raw(route, method, operator)).status, 401, `operator: ${method} ${route}`)
     }
+    // Rotas públicas do site, abertas de propósito (sem sessão): o formulário Ofertar Serviço, guardado por origem,
+    // captcha e limite de tentativas em vez de login (server/offerRequests.js). Qualquer outra origem recebe 403.
+    const ticket = '00000000-0000-4000-8000-000000000000'
+    for (const [method, route] of [['POST', '/offer-requests'], ['PUT', `/offer-requests/${ticket}/files/${ticket}`], ['POST', `/offer-requests/${ticket}/complete`]]) {
+      const noOrigin = await fetch(`${fixture.url}/gmac/api${route}`, { method })
+      assert.equal(noOrigin.status, 403, `${method} ${route} sem origem autorizada`)
+      const gmac = await fetch(`${fixture.url}/gmac/api${route}`, { method, headers: { origin: 'https://gmacmetalurgica.com.br', 'Content-Type': 'application/json' }, body: '{}' })
+      assert.notEqual(gmac.status, 401, `${method} ${route} não exige sessão`)
+      assert.notEqual(gmac.status, 403, `${method} ${route} aceita o site da GMAC`)
+    }
   } finally { await fixture.close() }
 })

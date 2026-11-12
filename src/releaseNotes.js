@@ -1,6 +1,16 @@
 // Each commit to main is a new version: add an entry at the top, with what changed in plain words for whoever uses the portal.
 export const releaseNotes = [
   {
+    version: '1.0.15',
+    date: '2026-11-11',
+    notes: [
+      'Ofertas e serviços: solicitações enviadas pelo site da GMAC agora viram ofertas com o selo Site, filtro próprio e aviso ao comercial',
+      'Ofertas e serviços: campo Observação (interno, não sai na proposta) e recusa de ofertas do site ainda em criação',
+      'Clientes: pré-cadastro automático para CNPJ ou CPF novo vindo do site, com etiqueta na lista e origem no histórico',
+      'Notificações: aviso de nova oferta pelo site',
+    ],
+  },
+  {
     version: '1.0.14',
     date: '2026-11-11',
     notes: [

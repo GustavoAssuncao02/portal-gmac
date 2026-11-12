@@ -10,13 +10,13 @@ import { sortedByName } from '../server/byName.js'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
-export async function createWorkflowFixture({ pool, inventoryPool = pool, accountsEnv, notificationInventory, fillStageTimes = true, fillClassifications = true, ticketDevelopers } = {}) {
+export async function createWorkflowFixture({ pool, inventoryPool = pool, accountsEnv, notificationInventory, fillStageTimes = true, fillClassifications = true, ticketDevelopers, siteOffers = {} } = {}) {
   const results = path.join(root, 'test-results')
   await mkdir(results, { recursive: true })
   const directory = await mkdtemp(path.join(results, 'workflow-'))
   // The copied modules keep their data next to them; a DATA_DIR from the shell would point them at real data.
   delete process.env.DATA_DIR
-  for (const name of ['entryMode.js', 'registryHistory.js', 'materialStock.js', 'invoiceImport.js', 'loginThrottle.js', 'liveUpdates.js','planning.js','planningRules.js', 'byName.js', 'offers.js', 'stageLabor.js', 'proposalEmails.js', 'stageCatalog.js', 'orderHistory.js', 'pieces.js', 'access.js', 'orderMaterials.js', 'pendingMaterials.js', 'operations.js', 'orderEditing.js', 'operatorAuth.js', 'employeeAccess.js', 'employeeActivity.js', 'serviceStages.js', 'machines.js', 'laborServices.js', 'accounts.js', 'reports.js', 'reportData.js', 'documentExports.js', 'payables.js', 'payableRules.js', 'receivables.js', 'bankStatements.js', 'ofx.js', 'materialRequests.js', 'notificationRules.js', 'notificationEvents.js', 'operationSessions.js', 'operationEventTime.js', 'operationManualEvents.js', 'materialRequestCodes.js', 'notifications.js', 'fiscalCatalog.js', 'dataDirectory.js', 'proposalDocuments.js', 'clientDocument.js', 'proposalDefaults.js', 'proposalPdf.js', 'proposalBrand.js', 'proposalMath.js', 'moneyWords.js', 'store.js', 'materialUnits.js', 'banks.js', 'operatorAccount.js', 'registries.js', 'requesters.js','serviceLocation.js', 'materialRequestSources.js', 'inventory.js', 'inventoryAppearance.js', 'materialIcons.js', 'uploads.js', 'machineUsage.js', 'accountPlan.js', 'accountPlanRules.js', 'dre.js', 'dreRules.js', 'dreExport.js', 'passwordReset.js', 'supportTickets.js', 'ticketRules.js']) {
+  for (const name of ['entryMode.js', 'registryHistory.js', 'materialStock.js', 'invoiceImport.js', 'loginThrottle.js', 'liveUpdates.js','planning.js','planningRules.js', 'byName.js', 'offers.js', 'stageLabor.js', 'proposalEmails.js', 'stageCatalog.js', 'orderHistory.js', 'pieces.js', 'access.js', 'orderMaterials.js', 'pendingMaterials.js', 'operations.js', 'orderEditing.js', 'operatorAuth.js', 'employeeAccess.js', 'employeeActivity.js', 'serviceStages.js', 'machines.js', 'laborServices.js', 'accounts.js', 'reports.js', 'reportData.js', 'documentExports.js', 'payables.js', 'payableRules.js', 'receivables.js', 'bankStatements.js', 'ofx.js', 'materialRequests.js', 'notificationRules.js', 'notificationEvents.js', 'operationSessions.js', 'operationEventTime.js', 'operationManualEvents.js', 'materialRequestCodes.js', 'notifications.js', 'fiscalCatalog.js', 'dataDirectory.js', 'proposalDocuments.js', 'clientDocument.js', 'proposalDefaults.js', 'proposalPdf.js', 'proposalBrand.js', 'proposalMath.js', 'moneyWords.js', 'store.js', 'materialUnits.js', 'banks.js', 'operatorAccount.js', 'registries.js', 'requesters.js','serviceLocation.js', 'materialRequestSources.js', 'inventory.js', 'inventoryAppearance.js', 'materialIcons.js', 'uploads.js', 'machineUsage.js', 'accountPlan.js', 'accountPlanRules.js', 'dre.js', 'dreRules.js', 'dreExport.js', 'passwordReset.js', 'supportTickets.js', 'ticketRules.js', 'sitePreRegistration.js', 'offerRequests.js']) {
     await copyFile(path.join(root, 'server', name), path.join(directory, name))
   }
   // PDFs use the bundled logo and fonts.
@@ -179,6 +179,32 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   // The e-mails of new support tickets stay in `ticketMail`; `ticketDevelopers` lists the CPFs of the developers.
   const ticketMail = []
   app.use('/api', supportTicketsRouter(accounts, requireAdmin, { env: {}, cpfs: ticketDevelopers, mailer: { configured: () => true, send: async (message) => { ticketMail.push(message) } } }))
+  // Ofertar Serviço do site, mounted as in the portal (/gmac/api/offer-requests) with the captcha, Receita and e-mail
+  // simulated. Tests steer them through `siteOffers` on the fixture: `turnstile`/`receita` change the stub answers,
+  // `env` is live (deleting TURNSTILE_SECRET_KEY tests the 503) and `mail` keeps what would reach the commercial team.
+  const { default: offerRequestsRouter } = await import(pathToFileURL(path.join(directory, 'offerRequests.js')))
+  const siteOfferControl = {
+    mail: [],
+    failNextMail: false,
+    turnstile: { ok: true },
+    receita: { status: 'not-found' },
+    env: siteOffers.env || { TURNSTILE_SECRET_KEY: 'segredo-de-teste' },
+  }
+  siteOfferControl.router = offerRequestsRouter({
+    pool: null, accounts,
+    env: siteOfferControl.env,
+    rateLimitMax: siteOffers.rateLimitMax ?? 1000,
+    ...(siteOffers.expiryMs !== undefined ? { expiryMs: siteOffers.expiryMs } : {}),
+    from: 'comercial@gmacmetalurgica.com.br',
+    sendMail: async (message) => {
+      if (siteOfferControl.failNextMail) { siteOfferControl.failNextMail = false; throw Object.assign(new Error('down'), { code: 'ECONNECTION' }) }
+      siteOfferControl.mail.push(message)
+    },
+    verifyTurnstile: async () => siteOfferControl.turnstile,
+    lookupCnpj: async () => siteOfferControl.receita,
+    log: { error: () => {} },
+  })
+  app.use('/gmac/api/offer-requests', siteOfferControl.router)
   app.use('/api', bankStatementsRouter(accounts, requireAdmin))
   // Tests never reach the Anthropic API; they pass a fake analysis.
   app.use('/api', fiscalRouter(requireAdmin))
@@ -210,6 +236,7 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
     sentMail,
     proposalMail,
     ticketMail,
+    siteOffers: siteOfferControl,
     failNextMail: () => { mailControl.failNext = true },
     // A server module of this fixture (same database), for start-up tasks the HTTP routes do not run.
     serverModule: (name) => import(pathToFileURL(path.join(directory, name))),

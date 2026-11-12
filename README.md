@@ -187,6 +187,16 @@ O formulário de orçamento do site principal envia para o portal (antes ia para
 - Anexos: até 10 arquivos PDF, DWG, DXF, JPG, JPEG ou PNG, 10 MB cada e 25 MB no total. O balanceador da hospedagem precisa aceitar requisições desse tamanho.
 - `npm run check:smtp` testa a conexão, o TLS e o login do e-mail sem enviar nada. `tests/site-quotes.test.js` testa a rota com um envio simulado.
 
+**Ofertar Serviço do site (gmacmetalurgica.com.br/OfertarServico)**
+
+O formulário público de solicitação de serviço cria ofertas com origem **Site** na tela Ofertas de serviços. O código fica em `server/offerRequests.js`, publicado no mesmo app `/gmac` dos orçamentos (mesmas origens de `QUOTES_ALLOWED_ORIGINS`, antes do CORS e do limite gerais da API), em três etapas:
+
+- `POST /gmac/api/offer-requests`: dados da solicitação + token do captcha (Cloudflare Turnstile, validado com `TURNSTILE_SECRET_KEY` e os domínios de `TURNSTILE_HOSTNAMES`) + a lista de anexos (nome e tamanho). Valida CPF/CNPJ com dígitos verificadores, prazo não passado (fuso America/Bahia), pelo menos um contato (e-mail ou WhatsApp) e o aceite da LGPD; consulta a razão social na BrasilAPI para **todo** CNPJ (cadastrado ou não, para o tempo de resposta não denunciar quem é cliente). Responde `{ ticket, files: [{ index, fileId }], expiresAt }`; o mesmo `requestId` devolve o mesmo ticket. Limite de 5 envios por IP a cada 15 minutos.
+- `PUT /gmac/api/offer-requests/{ticket}/files/{fileId}`: um arquivo por requisição, binário (`application/octet-stream`), gravado direto no disco. Até 10 arquivos e 400 MB no total, qualquer tipo menos executáveis (pela última extensão do nome).
+- `POST /gmac/api/offer-requests/{ticket}/complete`: cria a oferta (`status: creating`, sem responsável, código OF normal) com a Observação interna (contatos e avisos), a prova do aceite LGPD e, para documento novo, um **pré-cadastro** de cliente (nome e documento, sem e-mail) registrado no histórico do "i" como criado pelo Site. Envia o e-mail "Nova oferta adicionada ao portal pelo site" ao comercial (sem anexar os arquivos; uma falha no e-mail não desfaz a oferta) e avisa no sino. A resposta é sempre `{ ok: true }`, igual para cliente cadastrado ou novo; repetir a etapa não duplica a oferta.
+
+Os envios não concluídos ficam em `DATA_DIR/offer-requests/` (sobrevivem a um reinício) e expiram em 6 horas. Sem `TURNSTILE_SECRET_KEY`, só essas rotas respondem 503 ("indisponível") e o resto do portal segue normal. No portal, a oferta do site mostra o selo **Site**, tem o filtro **Site** (ainda não assumidas), abre sem a pergunta de take-over (quem abre vira o responsável), pode ser **recusada** ainda em criação e, no **descarte**, o pré-cadastro intocado e sem outra oferta ou OS é apagado junto. `tests/site-offer-requests.test.js` cobre o fluxo com captcha, Receita e e-mail simulados.
+
 **Desempenho no navegador**
 
 - Respostas de texto (JSON, JavaScript, CSS, HTML) são comprimidas com Brotli ou gzip. Imagens, vídeos, PDFs e planilhas seguem como estão.

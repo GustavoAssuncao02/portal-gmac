@@ -46,7 +46,8 @@ export function proposalEmailDraft({ store, offer, client, senderName, from }) {
   const greeting = firstName(offer.buyer) || firstName(offer.requester)
   return {
     from,
-    to: [client?.email, buyer?.email].map((item) => String(item || '').trim().toLowerCase()).filter((item, index, list) => item && emailPattern.test(item) && list.indexOf(item) === index),
+    // A oferta do site não tem solicitante cadastrado: o e-mail informado no formulário entra como destinatário sugerido.
+    to: [offer.siteContact?.email, client?.email, buyer?.email].map((item) => String(item || '').trim().toLowerCase()).filter((item, index, list) => item && emailPattern.test(item) && list.indexOf(item) === index),
     cc: [],
     subject: `Proposta comercial nº ${number} · ${offer.service} · ${issuer.label}`,
     message: [`${greeting ? `Olá, ${greeting}!` : 'Olá!'}`, '', `Segue em anexo a nossa proposta comercial nº ${number} para ${offer.company}, referente a ${offer.service} (${offer.quantity} ${Number(offer.quantity) === 1 ? 'unidade' : 'unidades'}).`, '', 'Ficamos à disposição para esclarecer qualquer dúvida. Se estiver de acordo, é só responder este e-mail para darmos andamento ao serviço.', '', 'Obrigado pela confiança!'].join('\n'),

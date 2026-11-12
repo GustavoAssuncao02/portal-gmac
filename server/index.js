@@ -36,6 +36,7 @@ import createInventoryRouter from './inventory.js'
 import createMaterialRequestsRouter from './materialRequests.js'
 import createNotificationsRouter from './notifications.js'
 import createSupportTicketsRouter from './supportTickets.js'
+import createOfferRequestsRouter from './offerRequests.js'
 import { inventorySignal } from './notificationEvents.js'
 import { createApiRateLimiter } from './rateLimit.js'
 import { ensureInventoryAppearance } from './inventoryAppearance.js'
@@ -106,6 +107,9 @@ app.use('/api', live.fromRequests)
 app.use('/api', live.router(requireAdminOrOperator))
 app.use('/api', restrictStaffFinance)
 const accounts = createAccountService(pool)
+// Ofertar Serviço do site: as rotas públicas ficam no mesmo app /gmac dos orçamentos (antes do CORS e do limite
+// gerais da API) e usam o mesmo SMTP. Sem TURNSTILE_SECRET_KEY elas respondem 503 e o resto do portal segue normal.
+siteQuotes.app.use('/api/offer-requests', createOfferRequestsRouter({ pool, accounts, sendMail: siteQuotes.sendMail, from: siteQuotes.from }))
 app.use('/api', createOffersRouter(pool, requireAdmin, accounts))
 app.use('/api', createOperationsRouter(pool))
 app.use('/api', createAccountsRouter(accounts))

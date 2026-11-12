@@ -75,5 +75,6 @@ export function TakeOverOfferModal({ offer, onConfirm, onClose }) {
 export function DiscardOfferModal({ offer, onConfirm, onClose }) {
   return <ConfirmDialog title="Descartar oferta?" subtitle={`${offer.code} · ${offer.service}`} tone="discard" icon={<Trash2 size={16} />} confirmLabel="Descartar oferta" busyLabel="Descartando..." onConfirm={onConfirm} onClose={onClose}>
     <p>A oferta e os anexos dela serão apagados. O número {offer.code} não será usado de novo.</p>
+    {offer.siteRequest?.preRegisteredClientId != null && <p>O pré-cadastro de <strong>{offer.company}</strong> também será apagado se ninguém o tiver editado.</p>}
   </ConfirmDialog>
 }

@@ -38,16 +38,21 @@ export function createSiteQuotes(env = process.env, { log = console } = {}) {
       log.error(`Orçamentos do site: ${diagnostic.code}: ${diagnostic.message} Nova tentativa em 60 segundos.`)
     } finally { verifying = false }
   }
+  // Também usado pelas rotas do Ofertar Serviço (server/offerRequests.js): o mesmo SMTP do comercial.
+  const sendMail = async (message) => {
+    if (!transport) throw Object.assign(new Error('SMTP não configurado no portal.'), { code: 'SMTP_CONFIG_MISSING' })
+    try { return await transport.sendMail(message) } catch (error) { ready = false; smtpError = describeSmtpError(error).code; throw error }
+  }
   const app = createQuotesApp({
-    sendMail: async (message) => {
-      try { return await transport.sendMail(message) } catch (error) { ready = false; smtpError = describeSmtpError(error).code; throw error }
-    },
+    sendMail,
     from: env.MAIL_FROM,
     origins, isReady: () => ready, getSmtpError: () => smtpError,
   })
   let retry = null
   return {
     app,
+    sendMail,
+    from: env.MAIL_FROM,
     start() {
       if (missing.length) { log.warn(`Orçamentos do site desligados: preencha ${missing.join(', ')} nas variáveis do portal e reinicie.`); return }
       void verify()

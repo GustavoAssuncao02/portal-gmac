@@ -273,7 +273,12 @@ São valores iniciais editáveis, não uma tabela comercial definitiva da empres
 - A ação **Recusar** está disponível para oferta manual em análise, com confirmação, sem apagar o registro.
 - Oferta recusada não pode gerar uma OS.
 - Oferta aceita permite acessar a OS vinculada.
-- Não pressupor que exista uma integração externa de entrada de ofertas: a integração com outros sites não está descrita como implementada.
+- Além das ofertas manuais, o formulário público **Ofertar Serviço** do site (gmacmetalurgica.com.br/OfertarServico) cria ofertas com origem **Site** (`server/offerRequests.js`, rotas `/gmac/api/offer-requests`, detalhes no README):
+  - A oferta chega como **Criando oferta**, sem responsável: a lista mostra o selo com "Site" e o tempo desde a chegada, e o filtro **Site** conta as ainda não assumidas. Abrir uma delas não faz a pergunta de "editar mesmo assim": quem abre vira o responsável (take-over direto).
+  - Ela traz a **Observação** (interna, não sai no PDF da proposta: contatos informados e avisos como possível filial ou CNPJ fora da Receita), `siteContact` (e-mail/WhatsApp), a prova do aceite LGPD (`consent`) e `siteRequest` (qual pré-cadastro ela criou). A Observação aparece nos detalhes da oferta e é editada junto com as informações do serviço, sem descartar a proposta.
+  - Documento novo gera um **pré-cadastro** de cliente (nome e documento, sem e-mail), com a etiqueta "Pré-cadastro" na lista de clientes enquanto o único evento do histórico for a criação pelo Site (`server/sitePreRegistration.js`).
+  - Oferta do site pode ser **recusada** ainda em criação (botão ao lado do selo). O **descarte** apaga também o pré-cadastro, somente se ninguém o editou e não há outra oferta nem OS com o mesmo documento.
+  - O comercial é avisado por e-mail e pelo sino ("Nova oferta pelo site"); o e-mail informado no site entra como destinatário sugerido do e-mail da proposta.
 
 ### Inserir oferta manualmente
 

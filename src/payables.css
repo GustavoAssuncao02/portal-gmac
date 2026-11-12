@@ -222,6 +222,7 @@
 .registry-table td { overflow-wrap:break-word; }
 .registry-table :is(td,th):first-child { width:auto; }
 .registry-name strong { font-weight:600; color:#17385f; }
+.registry-name .registry-badge { margin-left:8px; vertical-align:1px; }
 .registry-name small { display:block; max-width:60ch; margin-top:2px; overflow:hidden; color:#6b8299; font-size:12px; text-overflow:ellipsis; white-space:nowrap; }
 .registry-document, .registry-code { font-variant-numeric:tabular-nums; }
 .registry-code { font-weight:700; letter-spacing:.04em; }

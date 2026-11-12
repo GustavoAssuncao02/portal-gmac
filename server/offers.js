@@ -20,8 +20,9 @@ import { proposalMargins, PROPOSAL_MARGIN_GAP, declineReasons } from './proposal
 import { requireAdminOrOperator } from './access.js'
 import { documentDigits, documentKind, isClientDocument } from './clientDocument.js'
 import { materialsStock } from './materialStock.js'
-import { registerOfferContact } from './requesters.js'
-import { actorOf } from './registryHistory.js'
+import { clientRequesters, registerOfferContact } from './requesters.js'
+import { actorOf, recordRegistryChange } from './registryHistory.js'
+import { isPreRegisteredClient } from './sitePreRegistration.js'
 import { currentServiceLocation, serviceLocationLabel, validServiceLocation } from './serviceLocation.js'
 import { formatQuantity, materialUnit, validMaterialUnit, validQuantityFor } from './materialUnits.js'
 
@@ -66,7 +67,7 @@ function proposalDraft(body) {
   return { selectedKey: body.selectedKey, options: options.map(({ key, margin, discount, deadline }) => ({ key, margin, discount, deadline: clean(deadline, 40) })) }
 }
 
-function nextCode(prefix, rows) {
+export function nextCode(prefix, rows) {
   const year = new Date().getFullYear()
   const start = `${prefix}-${year}-`
   const maximum = rows.reduce((max, row) => row.code?.startsWith(start) ? Math.max(max, Number(row.code.slice(start.length)) || 0) : max, 0)
@@ -363,6 +364,8 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
         const changed = printed.some((key) => String(item[key] ?? '') !== String(next[key] ?? ''))
         const quantityChanged = Number(item.quantity) !== fields.quantity
         Object.assign(item, next)
+        // Observação (interna, das ofertas do site): não sai no PDF da proposta, então mudá-la não descarta a proposta.
+        if (body.notes !== undefined) item.notes = clean(body.notes, 2000)
         // The list and the details show the day of the request (UTC): a new day keeps it at noon of that day.
         if (requestedDay !== String(item.requestedAt || '').slice(0, 10)) item.requestedAt = `${requestedDay}T12:00:00.000Z`
         if (quantityChanged && item.resources?.entryMode === 'piece') {
@@ -425,17 +428,43 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
   })
   // "Descartar oferta": an offer given up while being created is erased with its files. Its number is not reused (a short
   // record stays in discardedOffers); the requester and buyer registered with it stay registered.
+  // A site offer also takes with it the pre-registration it created, but only while nobody touched it: the client is
+  // still a pre-registration (sitePreRegistration.js), has no requesters or buyers, and no other offer or OS uses the
+  // same document. The deletion joins the same transaction as the discard (commit/rollback of the store).
   configured.delete('/offers/:id', requireAdmin, async (request, response) => {
+    let connection
     try {
-      const removed = await mutateStore((store) => {
+      const removed = await mutateStore(async (store) => {
         const item = creatingOffer(store, request.params.id)
         store.offers = store.offers.filter((entry) => entry !== item)
         store.discardedOffers = [...(store.discardedOffers || []), { id: item.id, code: item.code, service: item.service, company: item.company, createdAt: item.createdAt, createdByName: item.createdByName, discardedAt: new Date().toISOString(), discardedBy: request.adminId ?? null, discardedByName: request.adminName || 'Administrador' }]
+        const clientId = item.origin === 'Site' ? item.siteRequest?.preRegisteredClientId : null
+        if (clientId != null && isPreRegisteredClient(store, clientId) && !clientRequesters(store, clientId, 'requesters') && !clientRequesters(store, clientId, 'buyers')) {
+          const document = documentDigits(item.cnpj)
+          const used = store.offers.some((entry) => documentDigits(entry.cnpj) === document) || (store.orders || []).some((entry) => documentDigits(entry.cnpj) === document)
+          if (!used) {
+            let client = null
+            if (pool) {
+              connection = await pool.getConnection()
+              await connection.beginTransaction()
+              const [[row]] = await connection.execute('SELECT id, name, document_type AS documentType, document, email FROM clients WHERE id = ?', [clientId])
+              if (row && documentDigits(row.document) === document) {
+                await connection.execute('DELETE FROM clients WHERE id = ?', [clientId])
+                client = row
+              }
+            } else {
+              const index = (store.clients || []).findIndex((row) => String(row.id) === String(clientId))
+              if (index >= 0 && documentDigits(store.clients[index].document) === document) client = store.clients.splice(index, 1)[0]
+            }
+            if (client) recordRegistryChange(store, { registry: 'clients', recordId: clientId, type: 'deleted', actor: actorOf(request), before: { name: client.name, documentType: client.documentType, document: client.document, email: client.email || '', notes: client.notes || '' }, note: `Pré-cadastro apagado ao descartar a oferta ${item.code} do site.` })
+          }
+        }
         return item
-      })
+      }, { commit: () => connection?.commit(), rollback: () => connection?.rollback() })
       await Promise.all((removed.attachments || []).map((file) => rm(path.join(filesDirectory, file.id), { force: true }).catch(() => {})))
       response.status(204).end()
     } catch (error) { handleError(response, error) }
+    finally { connection?.release() }
   })
   configured.get('/offers/:id/attachments/:attachmentId', requireAdminOrOperator)
   configured.use(router)
@@ -584,11 +613,15 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
       const offer = await mutateStore((store) => {
         const item = store.offers.find((entry) => entry.id === request.params.id)
         if (!item) throw Object.assign(new Error('Oferta não encontrada.'), { status: 404 })
-        if (item.origin !== 'Inserida Manualmente' || item.orderCode || !['review', 'rejected'].includes(item.status)) throw Object.assign(new Error('Somente ofertas manuais em análise podem ser recusadas.'), { status: 409 })
+        // Ofertas manuais em análise e, desde o formulário do site, também as ofertas do site ainda em criação.
+        const allowed = item.origin === 'Inserida Manualmente' ? ['review', 'rejected'] : item.origin === 'Site' ? ['creating', 'review', 'rejected'] : []
+        if (item.orderCode || !allowed.includes(item.status)) throw Object.assign(new Error('Somente ofertas manuais em análise ou ofertas do site podem ser recusadas.'), { status: 409 })
         if (item.status === 'rejected') return item
         item.status = 'rejected'
         item.rejectedAt = new Date().toISOString()
         item.rejectedBy = request.adminId
+        // Uma oferta do site recusada ainda em criação deixa de estar "sendo criada".
+        delete item.editingBy
         return item
       })
       response.json({ item: offer })

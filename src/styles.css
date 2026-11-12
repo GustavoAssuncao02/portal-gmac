@@ -1872,6 +1872,11 @@ button {
   line-height: 1.65;
 }
 
+/* Observação das ofertas do site: texto interno em várias linhas (contatos e avisos). */
+.offer-detail-notes {
+  white-space: pre-line;
+}
+
 .offer-observations {
   margin-top: 18px;
 }
