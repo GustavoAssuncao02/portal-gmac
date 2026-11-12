@@ -22,7 +22,7 @@ let tokenVersion = 0
 export function setOperatorTokenVersion(version) { tokenVersion = Number(version) || 0 }
 
 export function issueOperatorToken() {
-  const payload = Buffer.from(JSON.stringify({ role: 'operator', exp: Date.now() + 8 * 60 * 60 * 1000, v: tokenVersion })).toString('base64url')
+  const payload = Buffer.from(JSON.stringify({ role: 'operator', exp: Date.now() + 15 * 60 * 60 * 1000, v: tokenVersion })).toString('base64url')
   const signature = createHmac('sha256', signingKey).update(payload).digest('base64url')
   return `${payload}.${signature}`
 }
