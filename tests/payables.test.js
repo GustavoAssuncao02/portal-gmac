@@ -74,7 +74,7 @@ test('payables enforce payment locks, duplicates, installments, recurrence, audi
     await request(`/payables/${row.id}/reverse`, 'POST', { reason: 'Pagamento registrado por engano' })
     assert.equal((await request(`/payables/${row.id}`)).data.item.status, 'pending')
     assert.equal((await request(`/payables/${row.id}/activation`, 'POST', { inactive: true })).status, 400)
-    assert.equal((await request(`/payables/${row.id}`, 'DELETE')).status, 409)
+    assert.equal((await request(`/payables/${row.id}`)).data.canDelete, true, 'reversed: open again, it can be deleted (ticket TCK-0001)')
     assert.equal((await request(`/payables/${row.id}`, 'PUT', { ...draft, dueDate: '2020-01-01' })).status, 200)
     await request(`/payables/${row.id}/pay`, 'POST', { date: todayBahia(), method: 'boleto', discount: '5' })
     await request(`/payables/${row.id}/reverse`, 'POST', { reason: 'Estorno para corrigir conta' })

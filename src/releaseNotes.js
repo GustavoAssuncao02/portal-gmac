@@ -1,6 +1,13 @@
 // Each commit to main is a new version: add an entry at the top, with what changed in plain words for whoever uses the portal.
 export const releaseNotes = [
   {
+    version: '1.0.16',
+    date: '2026-11-13',
+    notes: [
+      'Contas a Pagar e Contas a Receber: correção do problema do ticket TCK-0001. Uma conta com a baixa estornada (inclusive ao desfazer a conciliação bancária) volta a poder ser excluída; o histórico continua guardando a baixa, o estorno e a exclusão',
+    ],
+  },
+  {
     version: '1.0.15',
     date: '2026-11-12',
     notes: [

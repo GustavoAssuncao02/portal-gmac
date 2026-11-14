@@ -143,7 +143,7 @@ test('receivables follow OS completion, receipts, reversal reasons and duplicate
     assert.equal((await request('/receivables/REC-000001', 'PUT', { value: '1', dueDate: nextMonth })).status, 409)
     assert.equal((await request('/receivables/REC-000001/reverse', 'POST', { reason: 'curto' })).status, 400)
     assert.equal((await request('/receivables/REC-000001/reverse', 'POST', { reason: 'Recebimento lançado em duplicidade' })).status, 200)
-    assert.equal((await request('/receivables/REC-000001', 'DELETE')).status, 409, 'History with receipts is preserved')
+    assert.equal((await request('/receivables/REC-000001')).data.canDelete, true, 'reversed: open again, it can be deleted; the history keeps the receipt (ticket TCK-0001)')
     const detail = (await request('/receivables/REC-000001')).data
     assert.deepEqual(detail.history.map((row) => row.type), ['reversed', 'received', 'created'])
     // The ISS withheld comes off what arrives, together with a discount; it cannot exceed the account nor go in a bulk receipt.

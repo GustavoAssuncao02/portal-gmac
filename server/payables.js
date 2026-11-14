@@ -127,7 +127,9 @@ function view(row, store) {
 
 // Deleting an account: money already paid keeps its history (deactivate it instead); a Tesouraria entry posted by mistake
 // is removed directly. An installment plan with a paid installment keeps its structure. The history keeps the data.
-const paidHistory = (store, row) => Boolean(row.payment) || store.payableEvents.some((e) => e.accountId === row.id && ['paid', 'reversed'].includes(e.type))
+// Only a payment the account has NOW blocks the deletion: once it is reversed (by hand or by undoing a bank
+// reconciliation) the account is open again and can be deleted; its history keeps the payment, the reversal and the deletion.
+const paidHistory = (store, row) => Boolean(row.payment)
 const relatedPayables = (store, row) => row.groupId ? store.payables.filter((r) => r.groupId === row.groupId) : row.seriesId ? store.payables.filter((r) => r.seriesId === row.seriesId) : [row]
 function payableDeleteBlock(store, row) {
   if (!row.treasury && paidHistory(store, row)) return 'Conta com pagamento: preserve o histórico; desative quando paga.'

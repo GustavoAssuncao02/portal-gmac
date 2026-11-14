@@ -43,8 +43,10 @@ const groupOf = (store, row) => row.groupId ? store.receivables.filter((item) =>
 const hasReceiptHistory = (store, row) => Boolean(row.receipt) || store.receivableEvents.some((e) => e.accountId === row.id && ['received', 'reversed'].includes(e.type))
 // Why an account (with its whole installment plan) cannot be deleted, or null when it can: a receipt history has to be
 // preserved (a Tesouraria entry posted by mistake is the exception) and a bank reconciliation has to be undone first.
+// Only a receipt the account has NOW blocks it: a reversed receipt (by hand or by undoing a reconciliation) leaves the
+// account open, and the history keeps the receipt, the reversal and the deletion.
 function deletionBlock(store, row, group = groupOf(store, row)) {
-  if (!row.treasury && group.some((item) => hasReceiptHistory(store, item))) return { message: row.groupId ? 'Há parcela com recebimento: preserve o histórico do parcelamento.' : 'Conta com recebimento: preserve o histórico.', status: 409 }
+  if (!row.treasury && group.some((item) => Boolean(item.receipt))) return { message: row.groupId ? 'Há parcela com recebimento: preserve o histórico do parcelamento.' : 'Conta com recebimento: preserve o histórico.', status: 409 }
   for (const item of group) { try { assertNotReconciled(store, 'receivable', item.id, 'excluir') } catch (error) { return { message: error.message, status: error.status || 409 } } }
   return null
 }
