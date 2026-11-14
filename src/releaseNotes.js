@@ -5,6 +5,9 @@ export const releaseNotes = [
     date: '2026-11-13',
     notes: [
       'Contas a Pagar e Contas a Receber: correção do problema do ticket TCK-0001. Uma conta com a baixa estornada (inclusive ao desfazer a conciliação bancária) volta a poder ser excluída; o histórico continua guardando a baixa, o estorno e a exclusão',
+      'Ticket: correção do erro que aparecia ao fechar um ticket em navegadores com tradutor ou extensões que alteram a página',
+      'Ticket: quem abriu o ticket pode responder ao desenvolvedor enquanto ele estiver aberto; os desenvolvedores recebem o aviso no sistema e por e-mail',
+      'Ticket: anexos de imagem e PDF abrem no próprio portal pelo botão de visualizar (olho)',
     ],
   },
   {

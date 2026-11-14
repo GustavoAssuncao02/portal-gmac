@@ -115,8 +115,8 @@ test('everybody sees every ticket; attachments open for administrators and the a
     assert.deepEqual((await notices(mine)).map((item) => item.title).sort(), ['Ticket TCK-0001 fechado', 'Ticket TCK-0001 reaberto'])
     assert.deepEqual((await notices(dev)).map((item) => item.type), ['ticket-opened'], 'the developer is not told of their own change')
 
-    // Comments: only developers write them; whoever opened the ticket is told in the bell and by e-mail.
-    assert.equal((await mine(`/support-tickets/${first.id}/comments`, 'POST', { text: 'Também acontece comigo' })).status, 403)
+    // Comments: developers write them and whoever opened the ticket is told in the bell and by e-mail; whoever opened it
+    // answers back while it is open (support-ticket-replies.test.js); nobody else writes on it.
     assert.equal((await admin(`/support-tickets/${first.id}/comments`, 'POST', { text: 'Olá' })).status, 403)
     assert.equal((await dev(`/support-tickets/${first.id}/comments`, 'POST', { text: '   ' })).status, 400)
     const mailsBefore = fixture.ticketMail.length

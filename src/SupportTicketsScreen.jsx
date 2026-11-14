@@ -1,13 +1,17 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { CircleCheck, CircleDot, Clock3, Download, FilterX, Info, Lock, Mail, MessageCircle, Paperclip, RotateCcw, Search, Send } from 'lucide-react'
+import { CircleCheck, CircleDot, Clock3, Download, Eye, FilterX, Info, Lock, Mail, MessageCircle, Paperclip, RotateCcw, Search, Send } from 'lucide-react'
 import AdminWorkspace from './AdminWorkspace.jsx'
-import { PayableModal, FilePicker } from './PayableModal.jsx'
+import { PayableModal, FilePicker, FilePreview, previewable } from './PayableModal.jsx'
 import { payableRequest, uploadFiles, downloadFile } from './payablesApi.js'
 import { SortableRows, SortHeader } from './RegistryList.jsx'
 import { latestOnly, pollWhileVisible } from './polling.js'
 import { COMMENT_MAX, DESCRIPTION_MAX, TITLE_MAX, bahiaDate, daysLabel, ticketDays, bahiaMonth, monthRange, moduleLabel, moduleTitle, statusLabel, submoduleLabel, submodulesOf, ticketModules, ticketUrgencies, urgencyLabel } from '../server/ticketRules.js'
 import './payables.css'
 import './supportTickets.css'
+
+// Images and PDFs open inside the portal (the eye); a file sent without its type is recognized by the extension.
+const typesByExtension = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', pdf: 'application/pdf' }
+const withType = (file) => file.contentType && file.contentType !== 'application/octet-stream' ? file : { ...file, contentType: typesByExtension[file.name.split('.').pop().toLowerCase()] || file.contentType }
 
 const dateOf = (at) => new Date(at).toLocaleDateString('pt-BR', { timeZone: 'America/Bahia' })
 const timeOf = (at) => new Date(at).toLocaleTimeString('pt-BR', { timeZone: 'America/Bahia', hour: '2-digit', minute: '2-digit' })
@@ -32,7 +36,9 @@ export function UrgencyBadge({ value }) {
 }
 export function StatusBadge({ value }) {
   const Icon = value === 'closed' ? CircleCheck : CircleDot
-  return <span className={`ticket-status ticket-status--${value}`}><Icon size={14} aria-hidden="true" />{statusLabel(value)}</span>
+  // The label in its own element: closing a ticket swaps the icon, and a page translated or changed by an extension of
+  // the browser no longer has the bare text React expects next to it ("insertBefore" error).
+  return <span className={`ticket-status ticket-status--${value}`}><Icon size={14} aria-hidden="true" /><span>{statusLabel(value)}</span></span>
 }
 
 // The form: urgency, the module of the problem (a strip of options), title, description and the evidence files.
@@ -191,7 +197,7 @@ function relativeTime(at, now) {
   return days === 1 ? 'há 1 dia' : `há ${days} dias`
 }
 const emailNote = (email, who, label = 'E-mail') => email?.sentAt ? `${label} enviado para ${who} em ${dateTime(email.sentAt)}.` : email?.failedAt || email?.skippedAt ? `${label} não enviado: ${email.reason}` : `Enviando ${label.toLowerCase()} para ${who}...`
-const threadActions = { opened: 'abriu o ticket', closed: 'fechou o ticket', reopened: 'reabriu o ticket' }
+const threadActions = { opened: 'abriu o ticket', closed: 'fechou o ticket', reopened: 'reabriu o ticket', reply: 'respondeu' }
 const threadIcons = { opened: CircleDot, closed: CircleCheck, reopened: RotateCcw }
 
 // The conversation of a ticket, oldest first and going down like a thread: its opening, the developers' comments and
@@ -200,27 +206,28 @@ function TicketThread({ ticket, viewer }) {
   const now = Date.now()
   const entries = [
     { key: 'opened', kind: 'opened', at: ticket.createdAt, userName: ticket.createdByName },
-    ...(ticket.comments || []).map((comment) => ({ ...comment, key: comment.id, kind: 'comment' })),
+    // A comment is a developer's (all the old ones are); whoever opened the ticket answers with a reply.
+    ...(ticket.comments || []).map((comment) => ({ ...comment, key: comment.id, kind: comment.byDeveloper === false ? 'reply' : 'comment' })),
     ...(ticket.history || []).filter((entry) => entry.type !== 'opened').map((entry, index) => ({ key: `history-${index}`, kind: entry.type, at: entry.at, userName: entry.userName, text: entry.note })),
   ].sort((left, right) => Date.parse(left.at) - Date.parse(right.at))
-  return <ol className="ticket-thread">{entries.map((entry) => { const Icon = threadIcons[entry.kind]; return <li key={entry.key} className={`ticket-thread-item ticket-thread-item--${entry.kind}`}>
+  return <ol className="ticket-thread">{entries.map((entry) => { const Icon = threadIcons[entry.kind]; return <li key={entry.key} className={`ticket-thread-item ticket-thread-item--${entry.kind}${entry.kind === 'reply' ? ' ticket-thread-item--comment' : ''}`}>
     <span className="ticket-thread-avatar" aria-hidden="true">{Icon ? <Icon size={16} /> : initialsOf(entry.userName)}</span>
     <div className="ticket-thread-body">
       <header><strong>{entry.userName}</strong>{entry.kind === 'comment' && <span className="ticket-dev-badge">Desenvolvedor</span>}{threadActions[entry.kind] && <span>{threadActions[entry.kind]}</span>}<time dateTime={entry.at} title={dateTime(entry.at)}>· {relativeTime(entry.at, now)}</time></header>
       {entry.kind === 'closed' && entry.text && <small className="ticket-thread-label">Resposta do desenvolvedor</small>}
       {entry.text && <p className="ticket-detail-text">{entry.text}</p>}
-      {viewer.developer && entry.kind === 'comment' && <small className="ticket-thread-email"><Mail size={12} aria-hidden="true" />{emailNote(entry.email, ticket.createdByName)}</small>}
+      {viewer.developer && (entry.kind === 'comment' || entry.kind === 'reply') && <small className="ticket-thread-email"><Mail size={12} aria-hidden="true" /><span>{entry.kind === 'reply' ? emailNote(entry.email, 'os desenvolvedores') : emailNote(entry.email, ticket.createdByName)}</span></small>}
     </div>
   </li> })}</ol>
 }
 
 function TicketDetail({ ticket, viewer, onClose, onChanged }) {
-  const [note, setNote] = useState(''), [busy, setBusy] = useState(''), [error, setError] = useState('')
-  const closing = ticket.status === 'open'
+  const [note, setNote] = useState(''), [busy, setBusy] = useState(''), [error, setError] = useState(''), [preview, setPreview] = useState(null)
+  const closing = ticket.status === 'open', replying = !viewer.developer && ticket.own
   async function send(kind) {
     setBusy(kind); setError('')
     try {
-      const { item } = kind === 'comment' ? await payableRequest(`/support-tickets/${ticket.id}/comments`, 'POST', { text: note }) : await payableRequest(`/support-tickets/${ticket.id}/status`, 'POST', { status: closing ? 'closed' : 'open', note })
+      const { item } = kind === 'comment' || kind === 'reply' ? await payableRequest(`/support-tickets/${ticket.id}/comments`, 'POST', { text: note }) : await payableRequest(`/support-tickets/${ticket.id}/status`, 'POST', { status: closing ? 'closed' : 'open', note })
       setNote(''); await onChanged(item)
     } catch (caught) { setError(caught.message) } finally { setBusy('') }
   }
@@ -236,7 +243,7 @@ function TicketDetail({ ticket, viewer, onClose, onChanged }) {
     </dl>
     <section className="ticket-detail-block"><h3>Descrição do problema</h3><p className="ticket-detail-text">{ticket.description}</p></section>
     <section className="ticket-detail-block"><h3>Anexos</h3>
-      {ticket.attachments.length ? <ul className="ticket-detail-files">{ticket.attachments.map((file) => <li key={file.id}><Paperclip size={14} aria-hidden="true" /><span>{file.name}</span><button type="button" className="payable-icon" title="Baixar" aria-label={`Baixar ${file.name}`} onClick={() => downloadFile(`/api/support-tickets/${ticket.id}/files/${file.id}`, file.name).catch((caught) => setError(caught.message))}><Download size={15} /></button></li>)}</ul>
+      {ticket.attachments.length ? <ul className="ticket-detail-files">{ticket.attachments.map((file) => <li key={file.id}><Paperclip size={14} aria-hidden="true" /><span>{file.name}</span>{previewable(withType(file)) && <button type="button" className="payable-icon" title="Visualizar" aria-label={`Visualizar ${file.name}`} onClick={() => setPreview(withType(file))}><Eye size={15} /></button>}<button type="button" className="payable-icon" title="Baixar" aria-label={`Baixar ${file.name}`} onClick={() => downloadFile(`/api/support-tickets/${ticket.id}/files/${file.id}`, file.name).catch((caught) => setError(caught.message))}><Download size={15} /></button></li>)}</ul>
         : ticket.attachmentsLocked ? <p className="ticket-locked"><Lock size={15} aria-hidden="true" />{ticket.attachmentCount} {ticket.attachmentCount === 1 ? 'anexo' : 'anexos'}. Os anexos abrem só para quem abriu o ticket e para os administradores.</p>
         : <p className="payable-muted">Sem anexos.</p>}
     </section>
@@ -245,12 +252,17 @@ function TicketDetail({ ticket, viewer, onClose, onChanged }) {
       <label className="ticket-field">Mensagem<textarea aria-label="Mensagem do desenvolvedor" rows={3} maxLength={COMMENT_MAX} disabled={Boolean(busy)} placeholder={closing ? 'Ex.: a correção entra na próxima atualização.' : 'Motivo da reabertura (opcional).'} value={note} onChange={(event) => setNote(event.target.value)} /></label>
       <small className="payable-hint">{ticket.own ? 'O comentário fica no ticket para todos verem.' : `Comentar avisa ${ticket.createdByName} no sistema e por e-mail.`} {closing ? 'Para fechar, escreva como o problema foi resolvido.' : 'Para reabrir, a mensagem é opcional.'}</small>
       <div className="ticket-form-actions">
-        <button className="admin-tool-button admin-tool-button--primary" type="button" disabled={Boolean(busy) || !note.trim()} onClick={() => send('comment')}><MessageCircle size={16} aria-hidden="true" />{busy === 'comment' ? 'Enviando...' : 'Comentar'}</button>
-        <button className="admin-tool-button" type="button" disabled={Boolean(busy) || (closing && !note.trim())} onClick={() => send('status')}>{closing ? <CircleCheck size={16} aria-hidden="true" /> : <RotateCcw size={16} aria-hidden="true" />}{busy === 'status' ? 'Salvando...' : closing ? 'Fechar ticket' : 'Reabrir ticket'}</button>
+        <button className="admin-tool-button admin-tool-button--primary" type="button" disabled={Boolean(busy) || !note.trim()} onClick={() => send('comment')}><MessageCircle size={16} aria-hidden="true" /><span>{busy === 'comment' ? 'Enviando...' : 'Comentar'}</span></button>
+        <button className="admin-tool-button" type="button" disabled={Boolean(busy) || (closing && !note.trim())} onClick={() => send('status')}>{closing ? <CircleCheck size={16} aria-hidden="true" /> : <RotateCcw size={16} aria-hidden="true" />}<span>{busy === 'status' ? 'Salvando...' : closing ? 'Fechar ticket' : 'Reabrir ticket'}</span></button>
       </div>
       <p className="payable-muted ticket-email-status"><Send size={13} aria-hidden="true" />{emailNote(ticket.email, 'os desenvolvedores', 'E-mail de abertura')}</p>
-    </section> : <p className="payable-muted">Somente os desenvolvedores do sistema comentam e alteram o status do ticket.</p>}
+    </section> : replying && closing ? <section className="ticket-detail-block ticket-developer ticket-reply"><h3>Responder</h3>
+      <label className="ticket-field">Sua resposta<textarea aria-label="Sua resposta" rows={3} maxLength={COMMENT_MAX} disabled={Boolean(busy)} placeholder="Ex.: deu certo, obrigado." value={note} onChange={(event) => setNote(event.target.value)} /></label>
+      <small className="payable-hint">Os desenvolvedores recebem um aviso no sistema e por e-mail. Quem fecha o ticket são eles, quando o problema estiver resolvido.</small>
+      <div className="ticket-form-actions"><button className="admin-tool-button admin-tool-button--primary" type="button" disabled={Boolean(busy) || !note.trim()} onClick={() => send('reply')}><Send size={16} aria-hidden="true" /><span>{busy === 'reply' ? 'Enviando...' : 'Responder'}</span></button></div>
+    </section> : <p className="payable-muted">{replying ? 'Este ticket está fechado. Se o problema continuar, abra um novo ticket.' : 'Somente quem abriu o ticket e os desenvolvedores do sistema respondem nele; o status, só os desenvolvedores alteram.'}</p>}
     {error && <p className="admin-tool-error" role="alert">{error}</p>}
+    {preview && <FilePreview url={`/api/support-tickets/${ticket.id}/files/${preview.id}`} file={preview} onClose={() => setPreview(null)} />}
   </PayableModal>
 }
 

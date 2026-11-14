@@ -52,6 +52,24 @@ function ticketMail(ticket, recipients) {
   }
 }
 
+// A reply of whoever opened the ticket, e-mailed to the developers (the same list of a new ticket).
+function replyMail(ticket, comment, recipients) {
+  const intro = `${comment.userName} respondeu no ticket ${ticket.id} em ${bahiaTime(comment.at)} (horário da Bahia).`
+  return {
+    to: recipients.join(', '),
+    subject: `Portal GMAC: nova resposta no ticket ${ticket.id} · ${ticket.title}`,
+    text: `${intro}
+
+Ticket: ${ticket.id} · ${ticket.title}
+
+Resposta:
+${comment.text}
+
+Veja a conversa completa no Portal GMAC, no menu Ticket.`,
+    html: `<p>${escapeHtml(intro)}</p><p><strong>Ticket:</strong> ${escapeHtml(ticket.id)} · ${escapeHtml(ticket.title)}</p><p><strong>Resposta</strong></p><p style="white-space:pre-wrap;padding:10px 14px;border-left:3px solid #0c4c91;background:#f3f7fb">${escapeHtml(comment.text)}</p><p>Veja a conversa completa no Portal GMAC, no menu Ticket.</p>`,
+  }
+}
+
 // A developer's comment, e-mailed to whoever opened the ticket.
 function commentMail(ticket, comment, author) {
   const intro = `${comment.userName} comentou no seu ticket ${ticket.id} em ${bahiaTime(comment.at)} (horário da Bahia).`
@@ -169,21 +187,32 @@ export default function createSupportTicketsRouter(accounts, requireAdmin, { mai
     await sendStoredFile(res, path.join(ticketFilesDirectory, file.id))
   }))
 
-  // A developer's comment (an activity that will be fixed, a question): everybody sees it on the ticket, and whoever
-  // opened the ticket is told in the bell and by e-mail.
+  // The conversation of a ticket. A developer's comment (an activity that will be fixed, a question): everybody sees it,
+  // and whoever opened the ticket is told in the bell and by e-mail. Whoever opened it answers back while it is open
+  // ("deu certo, obrigado"), and the developers are told the same way; only the developers close it.
   router.post('/support-tickets/:id/comments', handle(async (req, res) => {
-    if (!req.viewer.developer) fail('Somente os desenvolvedores do sistema comentam nos tickets.', 403)
+    const developer = req.viewer.developer
     const text = multiline(req.body.text, COMMENT_MAX)
-    if (!text) fail('Escreva o comentário.')
+    if (!text) fail(developer ? 'Escreva o comentário.' : 'Escreva a resposta.')
+    const notify = developer ? [] : await developerIds()
     const { ticket, comment } = await mutateStore((store) => {
       init(store)
       const row = find(store, req.params.id), at = new Date().toISOString(), selfAuthored = sameId(row.createdBy, req.viewer.id)
-      const added = { id: randomUUID(), text, at, userId: req.viewer.id, userName: req.viewer.name, ...(selfAuthored ? { email: { skippedAt: at, reason: 'O comentário é de quem abriu o ticket.' } } : {}) }
+      if (!developer && !selfAuthored) fail('Somente quem abriu o ticket e os desenvolvedores do sistema respondem nele.', 403)
+      if (!developer && row.status === 'closed') fail('Este ticket está fechado. Se o problema continuar, abra um novo ticket.', 409)
+      const added = { id: randomUUID(), text, at, userId: req.viewer.id, userName: req.viewer.name, byDeveloper: developer, ...(developer && selfAuthored ? { email: { skippedAt: at, reason: 'O comentário é de quem abriu o ticket.' } } : {}) }
       row.comments = [...(row.comments || []), added]
-      addNotification(store, { type: 'ticket-comment', at, ticketId: row.id, commentId: added.id, authorId: req.viewer.id, recipientIds: [row.createdBy], title: `Novo comentário no ticket ${row.id}`, description: `${row.title} · ${text.length > 120 ? `${text.slice(0, 117)}...` : text}`, employeeName: req.viewer.name })
+      const summary = `${row.title} · ${text.length > 120 ? `${text.slice(0, 117)}...` : text}`
+      if (developer) addNotification(store, { type: 'ticket-comment', at, ticketId: row.id, commentId: added.id, authorId: req.viewer.id, recipientIds: [row.createdBy], title: `Novo comentário no ticket ${row.id}`, description: summary, employeeName: req.viewer.name })
+      else addNotification(store, { type: 'ticket-comment', at, ticketId: row.id, commentId: added.id, authorId: req.viewer.id, recipientIds: notify, title: `Nova resposta no ticket ${row.id}`, description: summary, employeeName: req.viewer.name })
       return { ticket: row, comment: added }
     })
-    if (!comment.email) {
+    const saveEmail = (store, email) => {
+      const item = store.supportTickets.find((row) => row.id === ticket.id)?.comments?.find((entry) => entry.id === comment.id)
+      if (item) item.email = email
+    }
+    if (!developer) deliver(`da resposta no ticket ${ticket.id}`, replyMail(ticket, comment, recipients()), saveEmail)
+    else if (!comment.email) {
       const author = await accounts.account(ticket.createdBy).catch(() => null)
       deliver(`do comentário no ticket ${ticket.id}`, commentMail(ticket, comment, { name: author?.name || ticket.createdByName, email: author?.email || '' }), (store, email) => {
         const item = store.supportTickets.find((row) => row.id === ticket.id)?.comments?.find((entry) => entry.id === comment.id)
