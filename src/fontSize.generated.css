@@ -131,6 +131,12 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .operator-plan-item small { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .operator-plan-item time { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .operator-plan-empty { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .operator-app .operator-fullscreen { font-size: calc(12px * var(--account-font-scale)); }
+@media (min-width: 761px) and (max-width: 1150px) {:root:is([data-font-size="small"], [data-font-size="large"]) .operator-nav-item { font-size: calc(11px * var(--account-font-scale)); } }
+@media (min-width: 761px) and (max-width: 1150px) {:root:is([data-font-size="small"], [data-font-size="large"]) .operator-app .operator-fullscreen { font-size: calc(11px * var(--account-font-scale)); } }
+@media (min-width: 761px) and (max-width: 1150px) {:root:is([data-font-size="small"], [data-font-size="large"]) .operator-overview-header h1 { font-size: calc(20px * var(--account-font-scale)); } }
+@media (min-width: 761px) and (max-width: 1150px) {:root:is([data-font-size="small"], [data-font-size="large"]) .operator-overview .admin-os-table td:first-child strong { font-size: calc(14px * var(--account-font-scale)); } }
+@media (min-width: 761px) and (max-width: 1150px) {:root:is([data-font-size="small"], [data-font-size="large"]) .operator-header h1 { font-size: calc(20px * var(--account-font-scale)); } }
 :root:is([data-font-size="small"], [data-font-size="large"]) .employee-activity-heading > div > span { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .employee-activity-heading h2 { font-size: calc(21px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .employee-activity-heading p { font-size: calc(12px * var(--account-font-scale)); }
