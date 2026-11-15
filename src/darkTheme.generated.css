@@ -719,15 +719,6 @@
 :root[data-theme="dark"] .operator-plan-empty {
     color: #b6c1ce
 }
-:root[data-theme="dark"] .operator-app .operator-fullscreen {
-    border: 1px solid #36516f;
-    background: #203c59;
-    color: #e1ebf6
-}
-:root[data-theme="dark"] .operator-fullscreen[aria-pressed="true"] {
-    border-color: #4776ae;
-    background: #203c59
-}
 :root[data-theme="dark"] .employee-activity-modal {
     border: 1px solid #36516f;
     color: #e1ebf6;

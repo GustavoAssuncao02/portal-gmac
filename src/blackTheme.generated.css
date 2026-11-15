@@ -635,15 +635,6 @@
 :root[data-theme="dark"][data-tone="black"] .operator-plan-empty {
     color: #bfc2c5
 }
-:root[data-theme="dark"][data-tone="black"] .operator-app .operator-fullscreen {
-    border: 1px solid #303133;
-    background: #232425;
-    color: #ebebec
-}
-:root[data-theme="dark"][data-tone="black"] .operator-fullscreen[aria-pressed="true"] {
-    border-color: #47494c;
-    background: #232425
-}
 :root[data-theme="dark"][data-tone="black"] .employee-activity-modal {
     border: 1px solid #303133;
     color: #ebebec;

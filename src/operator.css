@@ -409,9 +409,6 @@
   .operator-app .employee-activity-modal { max-height: calc((100dvh - 40px) / 1.4); }
   .operator-app .employee-activity-content { max-height: calc(55dvh / 1.4); }
 }
-/* "Tela cheia": under the screen name in the sidebar. */
-.operator-app .operator-fullscreen { display: flex; align-items: center; gap: 7px; width: 100%; min-height: 44px; margin-top: 10px; padding: 6px 8px; border: 1px solid #c9d9ea; border-radius: 7px; background: #f4f8fc; color: #1d4f86; font-size: 12px; font-weight: 700; text-align: left; cursor: pointer; }
-.operator-fullscreen[aria-pressed="true"] { border-color: #164c8c; background: #eaf2fc; }
 /* Tablet of the factory (1280x800 panel at 1.27x: 1004px wide, 460px to 628px tall): a narrow rail instead of the
    sidebar, and each OS of the panel in three short lines instead of a card as tall as the screen. */
 @media (min-width: 761px) and (max-width: 1150px) {
@@ -420,9 +417,7 @@
   .operator-logo img { width: 60px; max-height: 56px; }
   .operator-sidebar nav { padding: 10px 6px; }
   .operator-nav-item { flex-direction: column; justify-content: center; gap: 3px; padding: 6px 4px; font-size: 11px; text-align: center; }
-  .operator-app .operator-fullscreen { flex-direction: column; justify-content: center; gap: 3px; padding: 6px 4px; font-size: 11px; text-align: center; }
   .operator-sidebar-bottom { flex-direction: column; justify-content: center; gap: 2px; padding: 8px 4px; }
-  .operator-sidebar-bottom div { display: none; }
   .operator-sidebar-bottom button { margin-left: 0; }
   .operator-main { padding: 12px 12px 18px; }
   .operator-entry--overview { gap: 10px; padding: 12px 12px 10px; }
@@ -449,7 +444,16 @@
   .operator-project-group { grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .operator-project-group > h2, .operator-project-list > .operator-empty { grid-column: 1 / -1; }
 }
+/* Under the avatar, the name of who is signed in ("Operador" before the code): it is how the shop floor knows whose
+   account is open. The narrow rail of tablets and the top bar of phones keep it, smaller. */
+@media (min-width: 541px) and (max-width: 1150px) {
+  .operator-sidebar { flex-basis: 96px; }
+  .operator-sidebar-bottom div { display: flex; width: 100%; align-items: center; text-align: center; }
+  .operator-sidebar-bottom strong { font-size: 11px; line-height: 1.25; overflow-wrap: anywhere; }
+  .operator-sidebar-bottom small { display: none; }
+}
 @media (max-width: 540px) {
-  .operator-sidebar nav { display: flex; align-items: center; gap: 6px; }
-  .operator-app .operator-fullscreen { width: auto; margin-top: 0; white-space: nowrap; }
+  .operator-sidebar-bottom div { display: flex; max-width: 120px; }
+  .operator-sidebar-bottom strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+  .operator-sidebar-bottom small { display: none; }
 }

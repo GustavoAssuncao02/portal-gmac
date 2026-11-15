@@ -12,7 +12,7 @@ import { byDeliveryDeadline, servicePanelOrders } from './servicePanels.js'
 import { SortableRows, SortHeader } from './RegistryList.jsx'
 import './operator.css'
 import { upper } from './displayCase.js'
-import { Maximize2, Minimize2, Monitor } from 'lucide-react'
+import { Minimize2, Monitor } from 'lucide-react'
 
 // Every stage comes with its machine or service from the offer; an OS from before that rule may still lack one.
 const UNPLANNED_STAGE = 'Esta etapa não tem máquina ou serviço definido. Peça ao administrador para definir na edição da OS.'
@@ -69,7 +69,7 @@ const panelColumns = [
 // alone, covering the page.
 function OperatorOverview({ orders, now }) {
   const [displayMode, setDisplayMode] = useState(false)
-  // Leaving the display mode leaves the full screen only when the display mode turned it on (not the "Tela cheia" button).
+  // Leaving the display mode leaves the full screen only when the display mode turned it on.
   const displayFullscreen = useRef(false)
   useEffect(() => {
     if (!displayMode) return
@@ -101,29 +101,6 @@ function OperatorOverview({ orders, now }) {
       <tbody>{sorted.rows.map((order) => <ServicePanelRow key={order.code} order={order} now={now} />)}</tbody></table>}</SortableRows>
       {!panel.length && <p className="admin-os-empty">Nenhuma OS em andamento.</p>}</div>
   </section>
-}
-
-// The tablet of the factory shows the portal without the browser's tabs and address bar. Hidden where the browser has no
-// full screen for pages (iPhone) and where the portal already opens in full screen, installed as an app from
-// "Adicionar à tela inicial" (public/manifest.webmanifest).
-function FullscreenButton() {
-  const [active, setActive] = useState(() => Boolean(document.fullscreenElement))
-  useEffect(() => {
-    const sync = () => setActive(Boolean(document.fullscreenElement))
-    document.addEventListener('fullscreenchange', sync)
-    return () => document.removeEventListener('fullscreenchange', sync)
-  }, [])
-  const installed = !active && window.matchMedia?.('(display-mode: fullscreen)').matches
-  if (!document.fullscreenEnabled || installed) return null
-  async function toggle() {
-    try {
-      if (document.fullscreenElement) await document.exitFullscreen()
-      else await document.documentElement.requestFullscreen({ navigationUI: 'hide' })
-    } catch { /* O navegador recusou a tela cheia: a página continua como estava. */ }
-  }
-  return <button type="button" className="operator-fullscreen" onClick={toggle} aria-pressed={active} title={active ? 'Sair da tela cheia' : 'Mostrar o portal em tela cheia, sem as abas e a barra de endereço'}>
-    {active ? <Minimize2 size={18} aria-hidden="true" /> : <Maximize2 size={18} aria-hidden="true" />}<span>{active ? 'Sair da tela cheia' : 'Tela cheia'}</span>
-  </button>
 }
 
 // In a mandatory sequence (Processo Injessado) a stage waits until the one before it has every piece; returns that stage.
@@ -601,7 +578,7 @@ export default function OperatorDashboard({ token, onLogout }) {
   if (!employee) return <div className="operator-app">
     <aside className="operator-sidebar">
       <div className="operator-logo"><img src="/images/gmac-logo-transparent.png" alt="GMAC Metalúrgica" /></div>
-      <nav><span className="operator-nav-item operator-nav-item--active">▣ <b>Entrar</b></span><FullscreenButton /></nav>
+      <nav><span className="operator-nav-item operator-nav-item--active">▣ <b>Entrar</b></span></nav>
       <div className="operator-sidebar-bottom"><span className="operator-avatar">OP</span><div><strong>Operador</strong><small>Conta compartilhada</small></div><button type="button" onClick={logout} title="Sair da conta do operador" aria-label="Sair da conta do operador">↪</button></div>
     </aside>
     <main className="operator-main operator-entry operator-entry--overview">
@@ -627,7 +604,7 @@ export default function OperatorDashboard({ token, onLogout }) {
   return <div className="operator-app">
     <aside className="operator-sidebar">
       <div className="operator-logo"><img src="/images/gmac-logo-transparent.png" alt="GMAC Metalúrgica" /></div>
-      <nav><span className="operator-nav-item operator-nav-item--active">▣ <b>Projetos em andamento</b></span><FullscreenButton /></nav>
+      <nav><span className="operator-nav-item operator-nav-item--active">▣ <b>Projetos em andamento</b></span></nav>
       <div className="operator-sidebar-bottom"><span className="operator-avatar">{initials(employee.name)}</span><div><strong>{employee.name}</strong><small>Conta compartilhada</small></div><button type="button" onClick={switchEmployee} title="Sair do funcionário" aria-label="Sair do funcionário">↪</button></div>
     </aside>
     <main className="operator-main">
