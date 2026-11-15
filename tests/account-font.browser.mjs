@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { mkdir } from 'node:fs/promises'
 import { chromium } from 'playwright'
 import { createWorkflowFixture } from './workflowFixture.js'
+import { sidebarGroupOf } from './sidebarNavigation.js'
 
 const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Gustavo' }
 const fixture = await createWorkflowFixture({ accountsEnv: env })
@@ -21,7 +22,7 @@ async function login(cpf = env.DEMO_ADMIN_CPF) {
 }
 async function navigate(name) {
   const item = page.locator('.sidebar').getByRole('button', { name, exact: true })
-  if (!(await item.isVisible())) await page.locator('.sidebar').getByRole('button', { name: ['Fornecedores', 'Administradores', 'Funcionários', 'Clientes'].includes(name) ? 'Cadastros' : ['Serviços em andamento', 'Serviços concluídos', 'Ofertas e serviços'].includes(name) ? 'Operação' : 'Gestão Financeira', exact: true }).click()
+  if (!(await item.isVisible())) await page.locator('.sidebar').getByRole('button', { name: sidebarGroupOf(name), exact: true }).click()
   await item.click()
   await page.waitForTimeout(100)
 }

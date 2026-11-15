@@ -3,6 +3,7 @@ import { mkdir } from 'node:fs/promises'
 import { chromium } from 'playwright'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
 import { enterOperatorCode, openOrder } from './operatorEntry.js'
+import { openSidebarItem } from './sidebarNavigation.js'
 
 // Máquinas puts a machine in maintenance with the reason; the operator sees the stage planned on it disabled until it
 // is released.
@@ -28,7 +29,7 @@ try {
   await admin.getByLabel('Senha', { exact: true }).fill(env.DEMO_ADMIN_PASSWORD)
   await admin.getByRole('button', { name: 'Entrar', exact: true }).click()
   await admin.locator('.admin-home-main').waitFor()
-  await admin.locator('.sidebar').getByRole('button', { name: 'Máquinas', exact: true }).click()
+  await openSidebarItem(admin, 'Máquinas')
   // The sector is only marked, from Cadastros > Setores; one is required.
   for (const name of ['Usinagem', 'Caldeiraria']) await fixture.adminRequest('/sectors', 'POST', { name })
   await admin.getByRole('button', { name: 'Adicionar máquina', exact: true }).click()

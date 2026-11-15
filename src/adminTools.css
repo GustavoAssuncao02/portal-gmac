@@ -176,6 +176,12 @@
 .account-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 24px; margin: 0; }
 .account-summary dt { margin-bottom: 4px; color: #6b8096; font-size: 12px; }
 .account-summary dd { margin: 0; color: #21496e; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+/* Role of the e-mail signature (AccountSettings.jsx, EmailSignatureRole). */
+.account-job-title { display: grid; gap: 6px; margin-top: 18px; padding-top: 16px; border-top: 1px solid #e3eaf2; }
+.account-job-title label { display: grid; gap: 6px; color: #6b8096; font-size: 12px; }
+.account-job-title input { max-width: 360px; padding: 9px 11px; border: 1px solid #c9d6e2; border-radius: 6px; font: inherit; font-size: 14px; color: #21496e; }
+.account-job-title .admin-tool-button { justify-self: start; }
+.account-job-title p { margin: 0; }
 .operator-access-last { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .account-settings-modal .account-settings-form { max-width: none; }
 .account-settings-modal fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }

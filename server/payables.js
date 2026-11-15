@@ -12,25 +12,15 @@ import { orderValue } from './receivables.js'
 import { settlementBank, bankFilterNote } from './banks.js'
 import { classificationList, entryClassification } from './accountPlan.js'
 import { sortedByName } from './byName.js'
+import { materialCostDeltaCents } from './orderMaterials.js'
 
 const directory = path.join(dataDirectory, 'payable-files')
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), { status }) }
 const clean = (value, limit = 1000) => String(value ?? '').trim().slice(0, limit)
 const money = (value) => (value / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const statusLabel = { pending: 'Pendente', overdue: 'Vencido', paid: 'Pago' }
-const actionLabel = { created: 'Conta criada', edited: 'Conta editada', paid: 'Pagamento baixado', reversed: 'Baixa estornada', deleted: 'Conta excluída', deactivated: 'Conta desativada', reactivated: 'Conta reativada', attachment_added: 'Anexo adicionado', attachment_removed: 'Anexo removido', status_changed: 'Status alterado' }
 const paymentLabel = settlementMethods
 const billMethods = ['pix', 'boleto', 'card']
-const detailLabel = { before: 'Antes', after: 'Depois', valueCents: 'Valor', finalCents: 'Valor pago', interestCents: 'Juros', discountCents: 'Desconto', dueDate: 'Vencimento', date: 'Data', method: 'Forma de pagamento', note: 'Observação', text: 'Descrição', name: 'Nome', supplierName: 'Fornecedor', classificationName: 'Classificação', description: 'Descrição', documentNumber: 'Documento', issueDate: 'Emissão', previousId: 'Origem recorrente', payment: 'Pagamento', bulk: 'Baixa em massa', batch: 'Baixa em lote', receipt: 'Comprovante', changes: 'Alterações' }
-function readableDetails(value, key = '') {
-  if (value == null) return 'Não informado'
-  if (Array.isArray(value)) return value.map((item) => readableDetails(item)).join('\n')
-  if (typeof value === 'object') return Object.entries(value).map(([field, item]) => `${detailLabel[field] || field}: ${readableDetails(item, field)}`).join('\n')
-  if (/Cents$/.test(key)) return money(Number(value))
-  if (typeof value === 'boolean') return value ? 'Sim' : 'Não'
-  if (/^\d{4}-\d{2}-\d{2}$/.test(String(value))) return String(value).split('-').reverse().join('/')
-  return Object.hasOwn(statusLabel, value) ? statusLabel[value] : Object.hasOwn(paymentLabel, value) ? paymentLabel[value] : String(value)
-}
 const init = (store) => { store.payables ||= []; store.payableEvents ||= []; store.classifications ||= []; store.payableNotifications ||= [] }
 function event(store, actor, type, accountId, details = {}) {
   store.payableEvents.push({ id: randomUUID(), at: new Date().toISOString(), type, accountId, userId: actor?.id ?? null, userName: actor?.name || 'Sistema', ...details })
@@ -88,7 +78,12 @@ function fields(store, body, current) {
   }
   const orderCode = clean(body.orderCode, 40) || null
   if (orderCode && !(store.orders || []).some((order) => order.code === orderCode)) fail('OS vinculada não encontrada.')
-  return { orderCode, supplierId: supplier.id, supplierName: supplier.name, classificationId: classification.id, classificationName: classificationSplit ? classificationSplit.map((part) => part.classificationName).join(' + ') : classification.name, classificationSplit, description: clean(body.description, 5000), documentNumber: clean(body.documentNumber, 160), issueDate: body.issueDate, dueDate: body.dueDate, valueCents, kind: body.kind, recurrence: body.kind === 'recurring' ? body.recurrence : null }
+  // The purchase of a material request of an OS ("Lançar esta compra no financeiro?" after its receipt) is that request's
+  // purchase: its value is already the real material cost of the OS. The link holds while the account stays on that OS.
+  const requestId = clean(body.materialRequestId ?? current?.materialRequestId, 160) || null
+  const requestOrder = requestId ? (store.orders || []).find((order) => (order.resources?.materials || []).some((material) => `${order.offerId}-${material.id}` === requestId)) : null
+  const materialRequestId = requestOrder && requestOrder.code === orderCode ? requestId : null
+  return { orderCode, materialRequestId, supplierId: supplier.id, supplierName: supplier.name, classificationId: classification.id, classificationName: classificationSplit ? classificationSplit.map((part) => part.classificationName).join(' + ') : classification.name, classificationSplit, description: clean(body.description, 5000), documentNumber: clean(body.documentNumber, 160), issueDate: body.issueDate, dueDate: body.dueDate, valueCents, kind: body.kind, recurrence: body.kind === 'recurring' ? body.recurrence : null }
 }
 function installments(body, valueCents, dueDate) {
   const count = Number(body.count ?? 1)
@@ -159,16 +154,21 @@ function removePayables(store, actor, row, all) {
   return [...ids]
 }
 
+// The material is counted at its real cost: what already left the stock for the OS at the stock price of that moment,
+// and what was bought for it at the price paid (the Valor da OS and the proposal stay as they were). The purchase of a
+// material request of the OS is listed with its costs but is already in that material cost, so it is not counted again.
 export function orderCosts(store, order) {
   const value = orderValue(order), proposal = order.proposal || {}
   const linked = (store.payables || []).filter((row) => row.orderCode === order.code)
+  const extras = linked.filter((row) => !row.materialRequestId)
   const amount = (row) => row.payment ? row.payment.finalCents : row.valueCents
-  const estimatedCostCents = Math.round((Number(proposal.materials || 0) + Number(proposal.labor || 0)) * 100)
-  const extraCostCents = linked.reduce((sum, row) => sum + amount(row), 0), paidCostCents = linked.filter((row) => row.payment).reduce((sum, row) => sum + amount(row), 0)
-  const costCents = estimatedCostCents + extraCostCents
+  const materialEstimatedCents = Math.round(Number(proposal.materials || 0) * 100), laborCents = Math.round(Number(proposal.labor || 0) * 100)
+  const estimatedCostCents = materialEstimatedCents + laborCents, materialCostCents = materialEstimatedCents + materialCostDeltaCents(order)
+  const extraCostCents = extras.reduce((sum, row) => sum + amount(row), 0), paidCostCents = extras.filter((row) => row.payment).reduce((sum, row) => sum + amount(row), 0)
+  const costCents = materialCostCents + laborCents + extraCostCents
   const receivables = (store.receivables || []).filter((row) => row.orderCode === order.code && !row.inactive)
   const marginCents = value.valueCents - costCents
-  return { code: order.code, service: order.service, company: order.company, status: order.operation?.status || 'waiting', ...value, estimatedCostCents, expectedMarginPercent: Number(proposal.margin || 0), extraCostCents, costCents, paidCostCents, pendingCostCents: extraCostCents - paidCostCents, marginCents, marginPercent: costCents ? Math.round(marginCents / costCents * 1000) / 10 : null, receivableCents: receivables.reduce((sum, row) => sum + row.valueCents, 0), receivedCents: receivables.reduce((sum, row) => sum + (row.receipt?.finalCents || 0), 0), payables: linked.map((row) => view(row, store)) }
+  return { code: order.code, service: order.service, company: order.company, status: order.operation?.status || 'waiting', labelQuotePending: Boolean(order.labelQuote?.pending), ...value, estimatedCostCents, materialEstimatedCents, materialCostCents, laborCents, expectedMarginPercent: Number(proposal.margin || 0), extraCostCents, costCents, paidCostCents, pendingCostCents: extraCostCents - paidCostCents, marginCents, marginPercent: costCents ? Math.round(marginCents / costCents * 1000) / 10 : null, receivableCents: receivables.reduce((sum, row) => sum + row.valueCents, 0), receivedCents: receivables.reduce((sum, row) => sum + (row.receipt?.finalCents || 0), 0), extraCount: extras.length, payables: linked.map((row) => ({ ...view(row, store), materialPurchase: Boolean(row.materialRequestId) })) }
 }
 export function activeNotifications(store, userId) {
   const { payableReminderDays } = notificationSettings(store, userId)
@@ -184,11 +184,7 @@ export function notificationItems(store, userId) {
 function report(rows, store, individual = false, filters = {}) {
   const columns = ['ID', 'Fornecedor', 'Descrição', 'Classificação', 'Documento', 'Emissão', 'Valor (R$)', 'Vencimento', 'Status', 'Parcela', 'Pagamento', 'Forma', 'Banco', 'Juros (R$)', 'Desconto (R$)', 'Pago (R$)', 'Observação da baixa', 'Compra original (R$)', 'Origem recorrente']
   const sections = [{ name: 'Contas a pagar', columns, rows: rows.map((raw) => { const r = view(raw, store), p = r.payment; return [r.id, r.supplierName, `${r.description}${r.inactive ? ' (D)' : ''}`, r.classificationSplit ? r.classificationSplit.map((part) => `${part.classificationName} (${money(part.valueCents)})`).join(' + ') : r.classificationName, r.documentNumber, r.issueDate, r.valueCents / 100, r.dueDate, `${statusLabel[r.status]}${r.inactive ? ' (D)' : ''}`, r.groupId ? `${r.installmentNumber} de ${r.installmentCount}` : '', p?.date, paymentLabel[p?.method] || p?.method, p?.bankName || '', (p?.interestCents || 0) / 100, (p?.discountCents || 0) / 100, p ? p.finalCents / 100 : '', p?.note, (r.originalTotalCents || r.valueCents) / 100, r.previousId] }) }]
-  if (individual) {
-    const ids = rows.map((row) => row.id)
-    sections.push({ name: 'Histórico', columns: ['Conta', 'Data/hora (Bahia)', 'Usuário', 'Ação', 'Detalhes'], rows: store.payableEvents.filter((e) => ids.includes(e.accountId)).map((e) => [e.accountId, new Date(e.at).toLocaleString('pt-BR', { timeZone: 'America/Bahia' }), e.userName, actionLabel[e.type] || e.type, [e.reason, readableDetails(e.changes || e.details || '')].filter(Boolean).join('\n')]) })
-    sections.push({ name: 'Anexos e comprovantes', columns: ['Conta', 'Arquivo', 'Tipo', 'Tamanho (bytes)'], rows: rows.flatMap((r) => [...(r.attachments || []), ...(r.payment?.receipts || [])].map((f) => [r.id, f.name, f.contentType, f.size])) })
-  }
+  // The individual PDF is the account itself: header, summary and the account row (no history or file list).
   const notes = individual ? [] : [`Situação: ${{ all: 'Todas', inactive: 'Desativadas', ...statusLabel }[filters.status] || (filters.bankId ? 'Pagas' : 'Pendentes e vencidas')}`, ...bankFilterNote(store, filters.bankId), ...(filters.search ? [`Busca: ${filters.search}`] : []), ...(filters.supplierId ? [`Fornecedor: ${store.suppliers?.find((row) => row.id === filters.supplierId)?.name || filters.supplierId}`] : []), ...(filters.classificationId ? [`Classificação: ${store.classifications.find((row) => row.id === filters.classificationId)?.name || filters.classificationId}`] : [])]
   return { title: individual ? `Conta ${rows[0]?.id || ''}` : 'Contas a pagar', eyebrow: 'Financeiro', generatedAt: new Date().toISOString(), start: filters.start, end: filters.end, summary: [['Contas', rows.length], ['Valor original', money(rows.reduce((sum, r) => sum + r.valueCents, 0))]], notes, sections }
 }
@@ -227,7 +223,7 @@ export default function createPayablesRouter(accounts, requireAdmin) {
   }
   router.get('/payables', handle(async (req, res) => { const store = await sweep(); res.json({ items: req.actor.role === 'staff' ? [] : store.payables.map((r) => view(r, store)), classifications: classificationList(store), suppliers: sortedByName(store.suppliers), orders: (store.orders || []).map((order) => ({ code: order.code, service: order.service, company: order.company, status: order.operation?.status || 'waiting' })) }) }))
   router.get('/payables/history', handle(async (_req, res) => { const store = await sweep(); res.json({ items: [...store.payableEvents].reverse() }) }))
-  router.get('/payables/order-costs', handle(async (_req, res) => { const store = await sweep(); res.json({ items: (store.orders || []).map((order) => { const { payables, ...summary } = orderCosts(store, order); return { ...summary, payableCount: payables.length } }) }) }))
+  router.get('/payables/order-costs', handle(async (_req, res) => { const store = await sweep(); res.json({ items: (store.orders || []).map((order) => { const { payables, extraCount, ...summary } = orderCosts(store, order); return { ...summary, payableCount: extraCount } }) }) }))
   router.get('/payables/order-costs/:code', handle(async (req, res) => { const store = await sweep(); const order = (store.orders || []).find((item) => item.code === req.params.code); if (!order) fail('OS não encontrada.', 404); res.json({ item: orderCosts(store, order) }) }))
   router.get('/payables/notifications', handle(async (req, res) => { const store = await sweep(req.actor.id); res.set('Cache-Control', 'no-store').json({ items: notificationItems(store, req.actor.id) }) }))
   router.post('/payables/notifications/read-all', handle(async (req, res) => {

@@ -9,7 +9,7 @@ const errors = []
 page.on('pageerror', (error) => errors.push(error.message))
 const sidebar = page.locator('.sidebar')
 const group = sidebar.getByRole('button', { name: 'Cadastros', exact: true })
-const members = ['Fornecedores', 'Administradores', 'Funcion\u00e1rios', 'Setores', 'Clientes', 'Solicitantes', 'Compradores', 'Bancos', 'Raz\u00f5es de pausas']
+const members = ['Fornecedores', 'Administradores', 'Funcion\u00e1rios', 'Setores', 'Clientes', 'Solicitantes', 'Compradores', 'Modelos de e-mail', 'Bancos', 'Raz\u00f5es de pausas']
 const navigate = (name) => sidebar.getByRole('button', { name: name === 'Dashboard' ? 'In\u00edcio' : name, exact: true }).click()
 
 try {
@@ -37,10 +37,10 @@ try {
   await group.click()
   assert.equal(await group.getAttribute('aria-expanded'), 'false')
   for (const name of members) assert.equal(await sidebar.getByRole('button', { name, exact: true }).count(), 0)
-  await navigate('M\u00e1quinas')
+  await navigate('Calculadora de pesos e medidas')
   assert.equal(await group.getAttribute('aria-expanded'), 'false')
   await page.reload()
-  await page.getByRole('heading', { name: 'M\u00e1quinas', exact: true }).waitFor()
+  await page.getByRole('heading', { name: 'Calculadora de pesos e medidas', exact: true }).waitFor()
   assert.equal(await group.getAttribute('aria-expanded'), 'false')
   await page.getByRole('tab', { name: 'Clientes', exact: true }).click()
   await page.getByRole('heading', { name: 'Clientes', exact: true }).waitFor()

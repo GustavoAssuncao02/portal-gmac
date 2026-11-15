@@ -17,7 +17,11 @@ test('the developers are the accounts of the two CPFs, written with or without p
   assert.equal(isDeveloper({}), false)
   assert.deepEqual(monthRange('2026-11', '2027-02'), ['2026-11', '2026-12', '2027-01', '2027-02'])
   assert.equal(moduleTitle('finance', 'payables'), 'Gestão Financeira › Contas a Pagar')
-  assert.equal(moduleTitle('stock'), 'Estoque')
+  assert.equal(moduleTitle('operational', 'machines'), 'Gestão Operacional › Máquinas')
+  // Estoque and Pedidos de material became screens of Gestão Operacional; their old tickets are shown there.
+  assert.equal(moduleTitle('stock'), 'Gestão Operacional › Estoque')
+  assert.equal(moduleTitle('material-requests'), 'Gestão Operacional › Pedidos de material')
+  assert.equal(moduleTitle('admin-stock'), 'Estoque Administrativo', 'outside Gestão Operacional: a module of its own')
   // Days by the calendar in Bahia: 23h of the 10th there is still the 10th.
   assert.equal(daysBetween('2026-11-09T12:00:00Z', '2026-11-11T02:00:00Z'), 1)
   assert.deepEqual([daysLabel(0), daysLabel(1), daysLabel(3)], ['Menos de 1 dia', '1 dia', '3 dias'])
@@ -47,10 +51,13 @@ test('everybody sees every ticket; attachments open for administrators and the a
     assert.equal((await mine('/support-tickets', 'POST', ticket({ urgency: '' }))).status, 400)
     assert.equal((await mine('/support-tickets', 'POST', ticket({ module: 'nada' }))).status, 400)
     assert.equal((await mine('/support-tickets', 'POST', ticket({ title: '   ' }))).status, 400)
-    // Cadastros, Operação and Gestão Financeira ask for the screen involved, one of their own.
+    // Gestão Operacional, Cadastros, Operação and Gestão Financeira ask for the screen involved, one of their own.
     assert.equal((await mine('/support-tickets', 'POST', ticket({ submodule: '' }))).status, 400)
     assert.equal((await mine('/support-tickets', 'POST', ticket({ submodule: 'planning' }))).status, 400)
     assert.equal((await mine('/support-tickets', 'POST', ticket({ module: 'operation', submodule: 'nada' }))).status, 400)
+    const operational = await mine('/support-tickets', 'POST', ticket({ module: 'operational', submodule: '' }))
+    assert.deepEqual([operational.status, operational.data.message], [400, 'Escolha o sub-módulo de Gestão Operacional onde está o problema.'])
+    assert.equal((await mine('/support-tickets', 'POST', ticket({ module: 'stock', submodule: '' }))).status, 400, 'Estoque is no longer a module of its own')
     assert.equal((await mine('/support-tickets', 'POST', ticket({ description: '' }))).status, 400)
     const othersFile = (await (await upload(developer, 'outro.png', 'x')).json()).item.id
     assert.equal((await mine('/support-tickets', 'POST', ticket({ fileIds: [othersFile] }))).status, 400, 'a file sent by someone else is not claimed')
@@ -142,6 +149,13 @@ test('everybody sees every ticket; attachments open for administrators and the a
     assert.equal(second.data.item.submodule, undefined, 'a module without screens keeps no sub-module')
     assert.deepEqual((await mine('/support-tickets')).data.items.map((item) => [item.id, item.own]), [['TCK-0002', false], ['TCK-0001', true]])
     assert.equal((await mine('/support-tickets/TCK-0009/files/x')).status, 404)
+
+    // Gestão Operacional and its screens; a ticket saved when Estoque was a module comes inside it.
+    const machines = await mine('/support-tickets', 'POST', ticket({ module: 'operational', submodule: 'machines', title: 'Máquina sem histórico' }))
+    assert.deepEqual([machines.status, machines.data.item.module, machines.data.item.submodule], [201, 'operational', 'machines'])
+    await fixture.mutateStore((store) => { store.supportTickets.push({ ...store.supportTickets[0], id: 'TCK-0090', module: 'stock', submodule: undefined, title: 'Ticket antigo do estoque' }) })
+    const old = (await mine('/support-tickets')).data.items.find((item) => item.id === 'TCK-0090')
+    assert.deepEqual([old.module, old.submodule], ['operational', 'stock'])
   } finally {
     await fixture.close()
   }

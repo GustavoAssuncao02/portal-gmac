@@ -1,4 +1,5 @@
 import { consumeOrderIncrease } from './orderMaterials.js'
+import { labelQuoteRequired } from './labelQuoteRules.js'
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto'
 import express from 'express'
 import { mutateStore, readStore } from './offers.js'
@@ -627,6 +628,7 @@ export default function createOperationsRouter(pool) {
         const previousMaterials = structuredClone(order.resources?.materials || [])
         const previousMaterialIds = new Set(previousMaterials.map((material) => material.id))
         const changes = editOrder(order, state, { ...request.body, actorName: request.adminName }, { machines: store.machines, laborServices: store.laborServices })
+        if (order.labelQuote && !String(order.labelNumber ?? '').trim()) throw new OperationError(400, 'Esta OS é de etiqueta: o número da etiqueta não pode ficar em branco.')
         if (connection) await consumeOrderIncrease(connection, order, previousMaterials)
         for (const material of order.resources.materials) if (!previousMaterialIds.has(material.id)) Object.assign(material, { requestedBy: request.adminId, requestedByName: request.adminName || null, requestedAt: new Date().toISOString(), requestedQuantity: material.purchaseQuantity ?? material.quantity })
         const offer = store.offers.find((item) => item.id === order.offerId)
@@ -995,9 +997,11 @@ export default function createOperationsRouter(pool) {
 
   router.post('/operations/orders/:code/acknowledge-completion', requireAdmin, async (request, response) => {
     try {
-      const result = await changeOperation(request.params.code, (state) => {
+      const result = await changeOperation(request.params.code, (state, order) => {
         if (state.status !== 'completed') throw new OperationError(409, 'Esta OS ainda não foi concluída.')
         if (state.completionAcknowledgedAt) return null
+        // An etiqueta is concluded with its quote: the receivable and the NF-e come from it.
+        if (order?.labelQuote?.pending) throw new OperationError(409, labelQuoteRequired)
         const event = eventFor('completion_acknowledged', null, { employeeName: 'Administrador' })
         state.completionAcknowledgedAt = event.at
         return event

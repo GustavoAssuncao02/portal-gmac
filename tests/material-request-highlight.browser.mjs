@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
+import { openSidebarItem } from './sidebarNavigation.js'
 
 const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Gustavo' }
 const fixture = await createWorkflowFixture({ accountsEnv: env })
@@ -33,7 +34,7 @@ try {
     if (viewport.dark) await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'))
     async function navigate(name) {
       if (viewport.width < 768) await page.getByRole('button', { name: 'Abrir menu de navega\u00e7\u00e3o', exact: true }).click()
-      await page.locator('.sidebar').getByRole('button', { name, exact: true }).click()
+      await openSidebarItem(page, name)
     }
     const highlighted = page.locator('.material-request--highlighted')
     for (let attempt = 0; attempt < 2; attempt++) {

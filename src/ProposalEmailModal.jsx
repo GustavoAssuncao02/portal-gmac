@@ -3,9 +3,12 @@ import { Eye, FileText, Mail, Paperclip, PenLine, Plus, Send, TriangleAlert, X }
 import { PayableModal } from './PayableModal.jsx'
 import DownloadLink from './DownloadLink.jsx'
 import './proposalEmail.css'
+import './emailTemplates.css'
+import './emailSignaturePreview.css'
 
-// "Enviar E-mail" of the proposal screen (server/proposalEmails.js). The e-mail comes ready (client and buyer, subject,
-// message and signature, the proposal PDF attached) and everything can be changed before sending. A client or buyer
+// "Enviar E-mail" of the proposal screen (server/proposalEmails.js). The e-mail comes ready (client and buyer, subject and
+// message from a template of Cadastros › Modelos de e-mail, the proposal PDF attached) and everything but the signature —
+// drawn by the server with the sender's name and role — can be changed before sending. A client or buyer
 // without e-mail is warned about: the address typed for it goes to "Para" and is registered for it once the e-mail is sent.
 const emailPattern = /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/
 const MAX_BYTES_FALLBACK = 20 * 1024 * 1024
@@ -61,7 +64,7 @@ function MissingContact({ kind, contact, value, onChange }) {
   </div>
 }
 
-function EmailPreview({ from, to, cc, subject, message, signature, attachments }) {
+function EmailPreview({ from, to, cc, subject, message, signature, signatureHtml, attachments }) {
   return <article className="proposal-email-preview" aria-label="Prévia do e-mail">
     <header>
       <h3>{subject || '(sem assunto)'}</h3>
@@ -70,14 +73,14 @@ function EmailPreview({ from, to, cc, subject, message, signature, attachments }
       {cc.length > 0 && <p><span>Cc</span>{cc.join(', ')}</p>}
     </header>
     <div className="proposal-email-preview-body">{message}</div>
-    <div className="proposal-email-preview-signature">{signature}</div>
+    {signatureHtml ? <div className="proposal-email-signature-preview"><p>Atenciosamente,</p><div dangerouslySetInnerHTML={{ __html: signatureHtml }} /></div> : <div className="proposal-email-preview-signature">{signature}</div>}
     {attachments.length > 0 && <ul className="proposal-email-preview-files">{attachments.map((file) => <li key={file.key}><FileText size={15} aria-hidden="true" />{file.name}<small>{sizeLabel(file.size)}</small></li>)}</ul>}
   </article>
 }
 
 export default function ProposalEmailModal({ offer, onClose, onSent }) {
   const [loaded, setLoaded] = useState(null), [error, setError] = useState(''), [busy, setBusy] = useState(false), [tab, setTab] = useState('edit')
-  const [to, setTo] = useState([]), [cc, setCc] = useState([]), [subject, setSubject] = useState(''), [message, setMessage] = useState(''), [signature, setSignature] = useState('')
+  const [to, setTo] = useState([]), [cc, setCc] = useState([]), [subject, setSubject] = useState(''), [message, setMessage] = useState(''), [templateId, setTemplateId] = useState('')
   const [includeProposal, setIncludeProposal] = useState(true), [files, setFiles] = useState([])
   const [missing, setMissing] = useState({ client: '', buyer: '' })
   const fileInput = useRef(null), formId = useId()
@@ -85,11 +88,19 @@ export default function ProposalEmailModal({ offer, onClose, onSent }) {
   useEffect(() => {
     request(`/api/offers/${encodeURIComponent(offer.id)}/proposal-email`, { cache: 'no-store' }).then((data) => {
       setLoaded(data)
-      setTo(data.draft.to); setCc(data.draft.cc); setSubject(data.draft.subject); setMessage(data.draft.message); setSignature(data.draft.signature)
+      setTo(data.draft.to); setCc(data.draft.cc); setSubject(data.draft.subject); setMessage(data.draft.message); setTemplateId(data.draft.templateId)
     }).catch((caught) => setError(caught.message))
   }, [offer.id])
 
   const contacts = loaded?.contacts || {}
+  // Another template replaces the subject and the text; its fixed recipients take the place of the previous one's.
+  function chooseTemplate(id) {
+    const templates = loaded.draft.templates, before = templates.find((item) => item.id === templateId), next = templates.find((item) => item.id === id)
+    if (!next) return
+    const swap = (current, previous = [], added = []) => [...new Set([...current.filter((item) => !previous.includes(item)), ...added])]
+    setTo((current) => swap(current, before?.to, next.to)); setCc((current) => swap(current, before?.cc, next.cc))
+    setSubject(next.subject); setMessage(next.message); setTemplateId(id)
+  }
   const lacking = ['client', 'buyer'].filter((kind) => contacts[kind] && !contacts[kind].email)
   // The address typed for a contact without e-mail replaces, in "Para", the one typed before.
   function changeMissing(kind, value) {
@@ -114,7 +125,7 @@ export default function ProposalEmailModal({ offer, onClose, onSent }) {
     try {
       const body = new FormData()
       const register = Object.fromEntries(lacking.map((kind) => [kind, normalized(missing[kind])]).filter(([, address]) => emailPattern.test(address)))
-      body.append('email', JSON.stringify({ to, cc, subject, message, signature, includeProposal, fileNames: files.map((file) => file.name), register }))
+      body.append('email', JSON.stringify({ to, cc, subject, message, templateId, includeProposal, fileNames: files.map((file) => file.name), register }))
       for (const file of files) body.append('files', file, 'anexo')
       const result = await request(`/api/offers/${encodeURIComponent(offer.id)}/proposal-email`, { method: 'POST', body })
       await onSent(result)
@@ -134,15 +145,16 @@ export default function ProposalEmailModal({ offer, onClose, onSent }) {
         <button type="button" role="tab" aria-selected={tab === 'edit'} onClick={() => setTab('edit')}><PenLine size={15} aria-hidden="true" />Editar</button>
         <button type="button" role="tab" aria-selected={tab === 'preview'} onClick={() => setTab('preview')}><Eye size={15} aria-hidden="true" />Prévia</button>
       </div>
-      {tab === 'preview' ? <EmailPreview from={loaded.draft.from} to={to} cc={cc} subject={subject} message={message} signature={signature} attachments={attachments} /> : <div className="proposal-email-compose">
+      {tab === 'preview' ? <EmailPreview from={loaded.draft.from} to={to} cc={cc} subject={subject} message={message} signatureHtml={loaded.draft.signatureHtml} attachments={attachments} /> : <div className="proposal-email-compose">
         {lacking.map((kind) => <MissingContact key={kind} kind={kind} contact={contacts[kind]} value={missing[kind]} onChange={(value) => changeMissing(kind, value)} />)}
         {!contacts.client && <p className="proposal-email-info"><Mail size={15} aria-hidden="true" />{offer.company} não está em Cadastros › Clientes: o e-mail digitado vale só para este envio.</p>}
+        <div className="proposal-email-row"><label htmlFor={`${formId}-template`}>Modelo</label><span className="proposal-email-template"><select id={`${formId}-template`} value={templateId} onChange={(event) => chooseTemplate(event.target.value)}>{loaded.draft.templates.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><small className="payable-hint">Os modelos ficam em Cadastros › Modelos de e-mail.</small></span></div>
         <div className="proposal-email-row"><span className="proposal-email-label">De</span><span className="proposal-email-from">{loaded.draft.from}</span></div>
         <AddressField label="Para" value={to} onChange={setTo} tags={tags} />
         <AddressField label="Cc" value={cc} onChange={setCc} />
         <div className="proposal-email-row"><label htmlFor={`${formId}-subject`}>Assunto</label><input id={`${formId}-subject`} value={subject} maxLength={250} onChange={(event) => setSubject(event.target.value)} required /></div>
         <label className="proposal-email-field">Mensagem<textarea value={message} rows={9} maxLength={20000} onChange={(event) => setMessage(event.target.value)} required /></label>
-        <label className="proposal-email-field">Assinatura<textarea className="proposal-email-signature" value={signature} rows={7} maxLength={2000} onChange={(event) => setSignature(event.target.value)} /></label>
+        <div className="proposal-email-field"><span>Assinatura</span><div className="proposal-email-signature-preview" aria-label="Assinatura do e-mail"><p>Atenciosamente,</p><div dangerouslySetInnerHTML={{ __html: loaded.draft.signatureHtml }} /></div><small className="payable-hint">Com o seu nome e o cargo de Configurações › Dados da conta (sem cargo, a linha não aparece). E-mail e WhatsApp são sempre os da empresa.</small></div>
         <div className="proposal-email-files">
           <div className="proposal-email-files-heading"><strong><Paperclip size={15} aria-hidden="true" />Anexos</strong><small className={total > maxBytes ? 'proposal-email-error' : ''}>{sizeLabel(total || 0)} de {sizeLabel(maxBytes)}</small></div>
           <ul>{attachments.map((file) => <li key={file.key}><FileText size={16} aria-hidden="true" /><span>{file.name}{file.proposal && <em>Proposta</em>}</span><small>{sizeLabel(file.size)}</small>

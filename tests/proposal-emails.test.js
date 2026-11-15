@@ -35,7 +35,12 @@ test('the proposal e-mail goes, once the PDF exists, to the client and the buyer
   assert.deepEqual(draft.to, ['compras@nestle.com', 'carla@nestle.com'])
   assert.match(draft.subject, new RegExp(`Proposta comercial nº ${offer.code}`))
   assert.match(draft.message, /^Olá, Carla!/)
-  assert.match(draft.signature, /Comercial · GMAC Usinagem[\s\S]*Enviado pelo Sistema GMAC$/)
+  // The signature: who sends (no role filled in yet), the issuer and the company's contacts; the HTML one carries the logo.
+  assert.match(draft.signature, /^Atenciosamente,[\s\S]*GMAC Usinagem[\s\S]*anos de experiência$/)
+  assert.match(draft.signatureHtml, /data:image\/jpeg;base64,[\s\S]*comercial@gmacmetalurgica\.com\.br/)
+  // The e-mail of a normal proposal opens with its template; the etiqueta one is there to be picked.
+  assert.equal(draft.templateId, 'proposal')
+  assert.deepEqual(draft.templates.slice(0, 2).map((item) => item.name), ['Proposta comercial', 'Medição de etiqueta'])
   assert.match(proposal.name, /\.pdf$/)
 
   // Wrong or missing recipients, subject and message are refused before anything is sent.
@@ -57,7 +62,10 @@ test('the proposal e-mail goes, once the PDF exists, to the client and the buyer
   assert.deepEqual([mail.from, mail.to, mail.cc, mail.bcc], ['comercial@gmacmetalurgica.com.br', ['carla@nestle.com'], ['gerente@nestle.com', 'compras@nestle.com'], 'comercial@gmacmetalurgica.com.br'])
   assert.equal(mail.subject, 'Proposta revisada')
   assert.match(mail.text, /^Segue a proposta\.\n\nAtenciosamente,/)
-  assert.deepEqual(mail.attachments.map((file) => file.filename), [proposal.name, 'Desenho técnico.txt'])
+  assert.deepEqual(mail.attachments.filter((file) => !file.cid).map((file) => file.filename), [proposal.name, 'Desenho técnico.txt'])
+  // The signature's logo and icons go inside the e-mail (cid), the Usinagem logo for a proposal it issued.
+  assert.deepEqual(mail.attachments.filter((file) => file.cid).map((file) => file.filename), ['gmac-usinagem-logo.jpg', 'icon-email.png', 'icon-whatsapp-small.png', 'icon-site.png', 'icon-instagram.png', 'icon-maps.png', 'icon-whatsapp.png'])
+  assert.match(mail.html, /<p style="margin:0 0 12px">Atenciosamente,<\/p><table[\s\S]*src="cid:logo@assinatura\.gmac"/)
 
   // The offer keeps the e-mail, with the files exactly as they went.
   const [record] = sent.data.item.proposalEmails

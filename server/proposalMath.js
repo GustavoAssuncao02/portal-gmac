@@ -64,7 +64,8 @@ const fromPriceList = (proposal) => PRICE_LIST_MODELS.includes(proposal?.documen
 export function proposalMargins(orders = [], offers = []) {
   let previous = -Infinity
   return PROPOSAL_OPTIONS.map(([key, initial]) => {
-    const tracked = orders.filter((order) => order.pieceTracking && order.proposal?.key === key)
+    // An etiqueta is measured at the end: it was never an option offered to the client, so it counts in neither.
+    const tracked = orders.filter((order) => order.pieceTracking && !order.labelQuote && order.proposal?.key === key)
     const accepted = tracked.filter((order) => !order.atypical && !fromPriceList(order.proposal) && Number.isFinite(Number(order.proposal.margin))).map((order) => Number(order.proposal.margin))
     const average = [initial, ...accepted].reduce((total, value) => total + value, 0) / (accepted.length + 1)
     // Only the option that would break the order moves up.

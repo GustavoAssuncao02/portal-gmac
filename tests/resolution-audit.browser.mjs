@@ -5,6 +5,7 @@ import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
 import { identifiedOperator } from './operatorEntry.js'
 import { todayBahia } from '../server/payableRules.js'
 import { stageLabel } from '../server/serviceStages.js'
+import { sidebarGroupOf } from './sidebarNavigation.js'
 
 const resolutions = [[3456, 2234], [3024, 1964], [3072, 1920], [2880, 1864], [2880, 1800], [2560, 1664], [2560, 1600], [2304, 1440], [1440, 900], [1920, 1080]]
 const before = process.argv.includes('--before')
@@ -92,7 +93,7 @@ try {
     }
     async function navigate(name) {
       const button = page.locator('.sidebar').getByRole('button', { name, exact: true })
-      if (!(await button.isVisible())) await page.locator('.sidebar').getByRole('button', { name: ['Fornecedores', 'Administradores', 'Funcionários', 'Clientes'].includes(name) ? 'Cadastros' : ['Serviços em andamento', 'Serviços concluídos', 'Ofertas e serviços'].includes(name) ? 'Operação' : 'Gestão Financeira', exact: true }).click()
+      if (!(await button.isVisible())) await page.locator('.sidebar').getByRole('button', { name: sidebarGroupOf(name), exact: true }).click()
       await button.click()
       await page.evaluate(() => window.scrollTo(0, 0))
     }

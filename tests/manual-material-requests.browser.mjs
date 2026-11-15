@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
 import { createWorkflowFixture } from './workflowFixture.js'
+import { openSidebarItem } from './sidebarNavigation.js'
 
 const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Gustavo' }
 const fixture = await createWorkflowFixture({ accountsEnv: env })
@@ -34,7 +35,7 @@ try {
     await page.locator('.admin-home-main').waitFor()
     if (viewport.dark) await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'))
     if (viewport.width < 768) await page.getByRole('button', { name: 'Abrir menu de navega\u00e7\u00e3o', exact: true }).click()
-    await page.locator('.sidebar').getByRole('button', { name: 'Pedidos de material', exact: true }).click()
+    await openSidebarItem(page, 'Pedidos de material')
     await page.locator('.material-request-create').click()
     let dialog = page.getByRole('dialog', { name: 'Solicitar material', exact: true })
     await dialog.getByRole('button', { name: 'Cancelar', exact: true }).click()
@@ -71,7 +72,7 @@ try {
     await dialog.getByLabel('Material do estoque', { exact: true }).check()
     await dialog.locator('select').waitFor({ timeout: 5000 })
     await dialog.getByLabel('Material', { exact: true }).selectOption('8')
-    assert.equal(await dialog.getByLabel('Especifica\u00e7\u00e3o', { exact: true }).inputValue(), items[0].detail)
+    assert.equal(await dialog.getByLabel('Especifica\u00e7\u00e3o', { exact: true }).inputValue(), '', 'the specification is typed for the request, not copied from stock')
     await dialog.getByLabel('Quantidade solicitada (kg)', { exact: true }).fill('6')
     await dialog.getByRole('button', { name: 'Solicitar material', exact: true }).click()
     await dialog.waitFor({ state: 'hidden' })

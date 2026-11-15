@@ -39,6 +39,9 @@
 /* Fiscal identification: highlighted like in the PDF. */
 .proposal-fiscal { border-color: #f0b46a; border-left: 5px solid #e8891d; background: #fff8ef; }
 .payable-modal .proposal-fiscal h3 { color: #9a4f00; }
+/* CNAE is mandatory; of NBS and NCM one is enough. The line turns red while neither is filled. */
+.proposal-fiscal-rule { margin: 10px 0 0; color: #7a5a2e; font-size: 12.5px; }
+.proposal-fiscal-rule--missing { color: #b42318; font-weight: 600; }
 .proposal-doc-grid--fiscal { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); align-items: start; }
 .fiscal-picker { position: relative; display: grid; gap: 6px; }
 .fiscal-picker-search { position: relative; display: block; }

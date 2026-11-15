@@ -31,7 +31,7 @@ try {
   }
 
   // Máquinas: the hourly rate has a column, and it sorts from the largest; a second click reverses.
-  await nav('Máquinas')
+  await nav('Máquinas', 'Gestão Operacional')
   const machineNames = () => page.locator('.machine-row:not(.machine-row--header) .machine-name strong').allTextContents()
   const rate = page.locator('.machine-row--header').getByRole('button', { name: 'Valor/hora', exact: true })
   await rate.waitFor()
@@ -55,7 +55,7 @@ try {
   assert.deepEqual(await bankRows.allTextContents(), ['Banco Beta', 'Banco Alfa'])
 
   // Every other list that gained titles opens without breaking.
-  for (const [name, group, title] of [['Estoque', null, 'Disponível'], ['Ofertas e serviços', null, 'Peça / Serviço'], ['Serviços em andamento', null, 'Status'], ['Serviços', null, 'Valor/hora']]) {
+  for (const [name, group, title] of [['Estoque', 'Gestão Operacional', 'Disponível'], ['Ofertas e serviços', null, 'Peça / Serviço'], ['Serviços em andamento', null, 'Status'], ['Serviços', 'Gestão Operacional', 'Valor/hora']]) {
     await nav(name, group)
     await page.getByRole('button', { name: title, exact: true }).first().click()
   }
@@ -65,7 +65,7 @@ try {
   }
 
   // Etapas: the "i" of a stage and the general one.
-  await nav('Etapas')
+  await nav('Etapas', 'Gestão Operacional')
   await page.getByRole('button', { name: `Ver histórico de ${stages[0].name}`, exact: true }).click()
   const history = page.locator('dialog[open]').last()
   await history.getByText('Etapa reativada', { exact: true }).waitFor()

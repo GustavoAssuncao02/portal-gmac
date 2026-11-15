@@ -149,6 +149,9 @@ function rememberEmployee(employee) {
 
 const initials = (name) => { const words = String(name || '').trim().split(/\s+/); return [words[0], words.length > 1 ? words.at(-1) : ''].map((word) => word?.[0] || '').join('').toUpperCase() || 'OP' }
 
+// Time without any use of the screen after which the identified employee leaves.
+const OPERATOR_IDLE_MS = 10 * 60 * 1000
+
 function forgetSessions(code, ids) {
   const sessions = savedSessions(code)
   for (const id of ids) delete sessions[id]
@@ -185,6 +188,23 @@ export default function OperatorDashboard({ token, onLogout }) {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [now, setNow] = useState(Date.now())
+  const [idleNotice, setIdleNotice] = useState(false)
+  const leaveEmployee = useRef(null)
+
+  // An identified employee who does nothing on the screen for 10 minutes leaves (as the exit button does): the work
+  // in progress keeps running and the next one enters with their code. Any touch, movement, key or scroll counts.
+  useEffect(() => {
+    if (!employee) return undefined
+    let last = Date.now()
+    const active = () => { last = Date.now() }
+    const kinds = ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart', 'scroll']
+    for (const kind of kinds) window.addEventListener(kind, active, { capture: true, passive: true })
+    const check = window.setInterval(() => { if (Date.now() - last >= OPERATOR_IDLE_MS) { leaveEmployee.current?.(); setIdleNotice(true) } }, 5000)
+    return () => {
+      window.clearInterval(check)
+      for (const kind of kinds) window.removeEventListener(kind, active, { capture: true })
+    }
+  }, [employee?.id])
 
   async function refresh(signal) {
     try {
@@ -385,6 +405,7 @@ export default function OperatorDashboard({ token, onLogout }) {
     setDialog(null)
     openOrder(null)
   }
+  leaveEmployee.current = switchEmployee
 
   // `confirmed` carries what the operator already accepted: the switch from another OS and/or the pending materials.
   function begin(confirmed = {}) {
@@ -560,6 +581,7 @@ export default function OperatorDashboard({ token, onLogout }) {
       <OperatorOverview orders={orders} now={now} />
       <section className={`operator-entry-card${entering ? ' operator-entry-card--keypad' : ''}`} aria-label="Entrar com o código do funcionário">
         <p>{entering ? 'Digite o seu código de 4 dígitos.' : 'Toque em Entrar e digite o seu código para trabalhar nas OS.'}</p>
+        {idleNotice && !entering && <p className="operator-idle-notice" role="status">Saída automática após 10 minutos sem uso. O trabalho em andamento continua contando.</p>}
         {error && <p className="operator-error" role="alert">{error}</p>}
         {entering ? <form onSubmit={identify} aria-label="Código do operador">
           <div className="operator-code-dots" role="status" aria-label={`${accessCode.length} de 4 dígitos digitados`}>{[0, 1, 2, 3].map((index) => <span key={index} className={index < accessCode.length ? 'filled' : ''} />)}</div>
@@ -570,7 +592,7 @@ export default function OperatorDashboard({ token, onLogout }) {
             <button type="submit" className="operator-keypad-ok" disabled={busy || accessCode.length !== 4}>{busy ? '...' : 'OK'}</button>
           </div>
           <button className="operator-entry-cancel" type="button" disabled={busy} onClick={() => { setEntering(false); setAccessCode(''); setError('') }}>Cancelar</button>
-        </form> : <button className="operator-primary" type="button" onClick={() => { setEntering(true); setError('') }}>Entrar</button>}
+        </form> : <button className="operator-primary" type="button" onClick={() => { setEntering(true); setError(''); setIdleNotice(false) }}>Entrar</button>}
       </section>
     </main>
   </div>

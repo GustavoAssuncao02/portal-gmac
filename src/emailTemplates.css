@@ -1,0 +1,23 @@
+/* Cadastros › Modelos de e-mail (EmailTemplatesScreen.jsx) and the template picker of the e-mail screen. */
+.email-templates-intro { max-width:760px; margin:0 0 14px; color:#46576b; font-size:13.5px; line-height:1.55; }
+.email-templates-table td:first-child strong { display:block; }
+.email-templates-table td { vertical-align:top; }
+.email-template-badge { display:inline-block; margin-top:4px; padding:2px 8px; border-radius:999px; background:#e8f0f8; color:#0b376c; font-size:11px; font-weight:700; }
+.email-template-form textarea { min-height:220px; font:inherit; line-height:1.5; resize:vertical; }
+.email-template-recipients { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.email-template-fields { display:grid; gap:6px; padding:12px 14px; border:1px solid #dce6ef; border-radius:8px; background:#f7fafc; }
+.email-template-fields strong { color:#0b376c; font-size:13px; }
+.email-template-fields ul { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:6px 14px; margin:4px 0 0; padding:0; list-style:none; }
+.email-template-fields li { display:flex; align-items:center; gap:8px; color:#46576b; font-size:12px; }
+.email-template-field { flex:none; padding:3px 8px; border:1px solid #b9cbe0; border-radius:6px; background:#fff; color:#0b376c; font-family:ui-monospace, Consolas, monospace; font-size:12px; font-weight:600; line-height:1.4; cursor:pointer; }
+.email-template-field:hover, .email-template-field:focus-visible { border-color:#f57c16; color:#c25e0a; }
+.proposal-email-template { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.proposal-email-template select { min-width:220px; max-width:100%; }
+@media (max-width: 760px) {
+  .email-template-recipients { grid-template-columns:1fr; }
+  .email-template-fields ul { grid-template-columns:1fr; }
+  .proposal-email-template select { min-width:0; width:100%; }
+}
+/* .payable-table keeps its first column for a checkbox (36px); here it is the name. */
+.email-templates-table :is(td, th):first-child { width:24%; min-width:180px; overflow-wrap:normal; }
+.email-templates-table :is(td, th):last-child { width:1%; white-space:nowrap; }

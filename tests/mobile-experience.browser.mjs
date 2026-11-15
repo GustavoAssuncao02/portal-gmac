@@ -4,6 +4,7 @@ import { chromium, webkit, devices } from 'playwright'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
 import { todayBahia } from '../server/payableRules.js'
 import { stageLabel } from '../server/serviceStages.js'
+import { sidebarGroupOf } from './sidebarNavigation.js'
 
 const before = process.argv.includes('--before')
 const dark = process.argv.includes('--dark')
@@ -85,7 +86,7 @@ try {
       const opener = page.getByRole('button', { name: 'Abrir menu de navegação', exact: true })
       if (await opener.isVisible()) await opener.click()
       const item = page.locator('.sidebar').getByRole('button', { name, exact: true })
-      if (!(await item.isVisible())) await page.locator('.sidebar').getByRole('button', { name: ['Fornecedores', 'Administradores', 'Funcionários', 'Clientes'].includes(name) ? 'Cadastros' : ['Serviços em andamento', 'Serviços concluídos', 'Ofertas e serviços'].includes(name) ? 'Operação' : 'Gestão Financeira', exact: true }).click()
+      if (!(await item.isVisible())) await page.locator('.sidebar').getByRole('button', { name: sidebarGroupOf(name), exact: true }).click()
       await item.click()
       await page.waitForTimeout(200)
       await page.evaluate(() => window.scrollTo(0, 0))
@@ -190,7 +191,6 @@ try {
       if (!before && name === 'Estoque') {
         await page.getByRole('button', { name: 'Adicionar material', exact: true }).click()
         await dialog().getByPlaceholder('Digite para buscar no estoque', { exact: true }).fill(`Aco mobile ${width}`)
-        await dialog().getByLabel('Especificação', { exact: true }).fill('Barra 10 mm')
         await dialog().getByLabel(/^Quantidade disponível/).fill('15')
         await dialog().getByLabel('Estoque mínimo (kg)', { exact: true }).fill('5')
         await dialog().getByLabel('Valor por kg', { exact: true }).fill('20')

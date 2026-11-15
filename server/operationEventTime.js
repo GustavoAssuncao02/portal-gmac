@@ -70,6 +70,42 @@ export function sessionStageTimes(events, sessionId) {
   return times
 }
 
+// Worked time behind each registration of pieces (stage_progress), by event id: the time the employee spent on that
+// stage since their previous registration on it, or since they started it, without pauses (a pause ends the session).
+// Sessions recorded before the stage was kept with them count for any stage.
+export function pieceWorkTimes(events) {
+  const ordered = chronological(events)
+  const who = (event) => String(event.employeeId ?? event.employeeName ?? '')
+  const segments = new Map(), open = new Map()
+  const begin = (event, at) => {
+    const segment = { start: at, end: Infinity, stage: event.workStageKey || null }
+    open.set(event.sessionId, segment)
+    if (!segments.has(who(event))) segments.set(who(event), [])
+    segments.get(who(event)).push(segment)
+  }
+  for (const event of ordered) {
+    if (!event.sessionId) continue
+    const at = Date.parse(event.at), current = open.get(event.sessionId)
+    if (sessionStarts.includes(event.type)) { begin(event, at); continue }
+    if (event.type !== 'stage_changed' && !sessionEnds.includes(event.type)) continue
+    if (current) { current.end = at; open.delete(event.sessionId) }
+    // Records older than the start event only carry the duration of the session.
+    else if (sessionEnds.includes(event.type) && Number(event.durationMs) > 0) { begin(event, at - Number(event.durationMs)); open.get(event.sessionId).end = at; open.delete(event.sessionId) }
+    if (event.type === 'stage_changed') begin(event, at)
+  }
+  const times = new Map(), previous = new Map()
+  for (const event of ordered) {
+    if (event.type !== 'stage_progress') continue
+    const at = Date.parse(event.at), key = `${who(event)}|${event.stageKey}`
+    const from = previous.get(key) ?? -Infinity
+    previous.set(key, at)
+    const ms = (segments.get(who(event)) || []).filter((segment) => !segment.stage || !event.stageKey || segment.stage === event.stageKey)
+      .reduce((sum, segment) => sum + Math.max(0, Math.min(segment.end, at) - Math.max(segment.start, from)), 0)
+    if (Number.isFinite(ms) && ms > 0) times.set(event.id, ms)
+  }
+  return times
+}
+
 export function editEventTime(state, events, eventId, at, editor = {}, now = Date.now()) {
   const event = events.find((item) => item.id === eventId)
   if (!event) fail(404, 'Operação não encontrada no histórico desta OS.')

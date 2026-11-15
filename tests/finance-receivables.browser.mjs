@@ -78,7 +78,7 @@ try {
 
   await navigate('Serviços em andamento')
   const row = page.locator('.admin-os-table tbody tr').filter({ hasText: order.code })
-  await row.getByRole('button', { name: 'Concluído', exact: true }).click()
+  await row.getByRole('button', { name: 'Aguardando NF-e', exact: true }).click()
   const schedule = page.getByRole('dialog', { name: 'Recebimento do serviço', exact: true })
   await schedule.getByRole('button', { name: /^Ainda vai receber/ }).click()
   await schedule.getByLabel('Valor a receber', { exact: true }).waitFor()

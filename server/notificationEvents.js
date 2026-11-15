@@ -38,7 +38,7 @@ export function inventorySignal(store, row, previousLow) {
   store.notificationInventory ||= {}
   const low = Number(row.quantity) <= Number(row.minimum)
   const previous = store.notificationInventory[String(row.id)]
-  if (low && (previous ? !previous.low : previousLow === false || store.notificationInventoryInitialized)) addNotification(store, { type: 'low-stock', materialId: row.id, title: 'Estoque baixo', description: row.name, quantity: Number(row.quantity), minimum: Number(row.minimum), unit: materialUnit(row.unit) })
+  if (low && (previous ? !previous.low : previousLow === false || store.notificationInventoryInitialized)) addNotification(store, { type: 'low-stock', materialId: row.id, ...(row.admin ? { admin: true } : {}), title: row.admin ? 'Estoque administrativo baixo' : 'Estoque baixo', description: row.name, quantity: Number(row.quantity), minimum: Number(row.minimum), unit: materialUnit(row.unit) })
   store.notificationInventory[String(row.id)] = { low, quantity: Number(row.quantity), minimum: Number(row.minimum), name: row.name }
 }
 

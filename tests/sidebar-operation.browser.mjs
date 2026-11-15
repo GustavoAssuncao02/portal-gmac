@@ -24,7 +24,7 @@ try {
   assert.equal(await group.getAttribute('aria-expanded'), 'true', 'Operação starts open')
   assert.deepEqual(await submenu.locator('.nav-item').allTextContents(), members)
   const order = await sidebar.locator('.sidebar-nav-group-toggle').evaluateAll((buttons) => buttons.map((button) => button.getAttribute('aria-label')))
-  assert.deepEqual(order, ['Cadastros', 'Operação', 'Gestão Financeira'])
+  assert.deepEqual(order, ['Gestão Operacional', 'Cadastros', 'Operação', 'Gestão Financeira'])
   for (const name of members) {
     assert.equal(await sidebar.getByRole('button', { name, exact: true }).count(), 1)
     await navigate(name)
@@ -59,7 +59,7 @@ try {
   await group.press(' ')
   assert.equal(await group.getAttribute('aria-expanded'), 'false')
   assert.deepEqual(errors, [])
-  console.log('Operation sidebar passed: starts open, three ordered entries between Cadastros and Gestão Financeira, routes, session state, tab auto-open, keyboard and mobile.')
+  console.log('Operation sidebar passed: starts open, four ordered entries between Cadastros and Gestão Financeira, routes, session state, tab auto-open, keyboard and mobile.')
 } catch (error) {
   await page.screenshot({ path: 'test-results/sidebar-operation-failure.png' })
   throw error

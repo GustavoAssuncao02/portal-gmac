@@ -9,6 +9,9 @@ import { proposalCosts, proposalPricing, hoursText } from './proposalMath.js'
 import { todayBahia } from './payableRules.js'
 import { materialUnit } from './materialUnits.js'
 import { stagePlanPlace, stagePlanProblem } from './serviceStages.js'
+import { documentDigits } from './clientDocument.js'
+import { actorOf } from './registryHistory.js'
+import { legacyPaymentDays, paymentDaysValue } from './clientPaymentTerm.js'
 
 export const documentModels = ['model-a', 'model-b', 'nestle', 'etiqueta']
 const tableModels = ['nestle', 'etiqueta']
@@ -177,13 +180,14 @@ export function nextQuoteNumber(store, settings) {
 
 // Every generated PDF has a quote number of its own: a number already issued (the previous PDF of this same offer, or one
 // taken by someone else while the form was open) moves to the next one. A higher number typed by hand is kept.
-function claimQuoteNumber(store, document) {
+export function claimQuoteNumber(store, document) {
   if (!Number.isInteger(Number(document.quoteNumber))) return
   const next = nextQuoteNumber(store, proposalSettings(store))
   if (Number(document.quoteNumber) < Number(next)) document.quoteNumber = next
 }
 
-export async function buildDraft({ model, store, offer, value, deadline }) {
+// `client`: the registered client of the offer (Cadastros › Clientes); its payment term fills the letter models.
+export async function buildDraft({ model, store, offer, value, deadline, client = null }) {
   if (!documentModels.includes(model)) fail('Modelo de proposta inválido.')
   const settings = proposalSettings(store)
   const source = offer
@@ -196,10 +200,10 @@ export async function buildDraft({ model, store, offer, value, deadline }) {
     const total = Number(value) > 0 ? round2(value) : 0
     const quantityValue = Number(source?.quantity) > 0 ? Number(source.quantity) : 1
     return {
-      ...base, quoteNumber: nextQuoteNumber(store, settings), customer: source?.company || '', customerDocument: formatDocument(source?.cnpj), requester: String(source?.requester || '').slice(0, 80), attention: String(source?.buyer || '').slice(0, 80), subject: `serviço de ${source?.service || ''}`.trim(),
+      ...base, quoteNumber: nextQuoteNumber(store, settings), customer: source?.company || '', customerDocument: formatDocument(source?.cnpj), requester: String(source?.requester || '').slice(0, 80), attention: String(source?.buyer || '').slice(0, 80), subject: String(source?.service || '').trim(),
       scope: String(source?.description || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
       items: [{ description: source?.service || 'Serviço', quantity: quantityValue, unit: 'Un', unitPrice: round2(total / quantityValue) }],
-      deliveryTerm: /^\d{4}-\d{2}-\d{2}$/.test(String(deadline || '').trim()) ? String(deadline).trim().split('-').reverse().join('/') : String(deadline || '').trim(), payment: '', validityDays: settings.validityDays, important: settings.important,
+      deliveryTerm: /^\d{4}-\d{2}-\d{2}$/.test(String(deadline || '').trim()) ? String(deadline).trim().split('-').reverse().join('/') : String(deadline || '').trim(), paymentDays: client?.paymentDays || null, validityDays: settings.validityDays, important: settings.important,
       fiscal: { cnae: asList(previous?.cnae).length ? asList(previous.cnae) : asList(suggestedActivity(source, catalog, issuer.cnpj)), nbs: asList(previous?.nbs), ncm: asList(previous?.ncm) },
       technician: issuerTechnician(issuer),
     }
@@ -290,7 +294,7 @@ export async function normalizeDocument(model, input, store) {
   const document = {
     ...common, city: issuer.city, quoteNumber: text(input.quoteNumber, 20, 'o número da cotação', { required: true }), customer: text(input.customer, 160, 'o cliente', { required: true }), customerDocument: text(input.customerDocument, 20, 'o CNPJ do cliente'),
     requester: text(input.requester, 80, 'o solicitante'), attention: text(input.attention, 80, 'o comprador'), subject: text(input.subject, 300, 'o objeto da proposta', { required: true }),
-    scope, items, deliveryTerm: text(input.deliveryTerm, 200, 'o prazo de entrega'), payment: text(input.payment, 300, 'a condição de pagamento'),
+    scope, items, deliveryTerm: text(input.deliveryTerm, 200, 'o prazo de entrega'), paymentDays: paymentDaysValue(input.paymentDays),
     validityDays: Math.min(365, Math.max(1, Number(input.validityDays) || settings.validityDays)), important: settings.important, fiscal: { cnae, nbs, ncm },
     technician: input.technician && typeof input.technician === 'object' ? { name: text(input.technician.name, 120, 'o técnico responsável'), registry: text(input.technician.registry, 60, 'o registro do técnico'), phone: text(input.technician.phone, 40, 'o contato do técnico') } : issuerTechnician(issuer),
   }
@@ -300,8 +304,8 @@ export async function normalizeDocument(model, input, store) {
 }
 
 // A saved document is reopened on the current price list: rows removed since then are dropped, new ones start empty.
-function fromSaved(document, settings) {
-  if (!tableModels.includes(document.model)) return { ...document, technician: document.technician || issuerTechnician(settings.issuers.find((item) => item.id === document.issuerId) || document.issuer) }
+export function fromSaved(document, settings) {
+  if (!tableModels.includes(document.model)) { const { payment, ...rest } = document; return { ...rest, paymentDays: document.paymentDays || legacyPaymentDays(payment), technician: document.technician || issuerTechnician(settings.issuers.find((item) => item.id === document.issuerId) || document.issuer) } }
   const table = settings.tables[document.model]
   const find = (list, id) => (list || []).find((row) => row.id === id)
   return {
@@ -312,7 +316,7 @@ function fromSaved(document, settings) {
   }
 }
 
-function remember(store, model, document, assignments) {
+export function remember(store, model, document, assignments) {
   const saved = store.proposalSettings ||= {}
   if (document.quoteNumber && Number.isInteger(Number(document.quoteNumber))) saved.lastQuoteNumber = Math.max(Number(saved.lastQuoteNumber) || 13482, Number(document.quoteNumber))
   if (tableModels.includes(model) && Array.isArray(assignments)) {
@@ -342,7 +346,30 @@ export function documentProposal({ item, option = {}, document, model, stages, g
     stages, kind: item.resources?.kind ?? 'service', layout: model, document, generatedAt: new Date().toISOString(), generatedBy,
   }
 }
-export default function createProposalDocumentsRouter(requireAdmin) {
+// The registered client of an offer, by its CNPJ/CPF (as the proposal e-mail finds it).
+export async function clientOfOffer(accounts, offer) {
+  const digits = documentDigits(offer?.cnpj)
+  if (!accounts || !digits) return null
+  return (await accounts.clients()).find((client) => documentDigits(client.document) === digits) || null
+}
+// What the letter form says about the term: the client's name and the term it has (null when the client is not registered).
+export const paymentClientView = (client) => (client ? { name: client.name, paymentDays: client.paymentDays || null } : null)
+// The term typed in a proposal goes to a client that has none yet, as the e-mail typed for a client without one: the next
+// proposal comes filled. A term already registered is kept (it is changed in Cadastros › Clientes). Never fails the PDF.
+export async function rememberClientPaymentDays({ accounts, offer, document, actor }) {
+  if (!document?.paymentDays || !accounts) return null
+  try {
+    const client = await clientOfOffer(accounts, offer)
+    if (!client || client.paymentDays) return null
+    await accounts.save('clients', client.id, { ...client, paymentDays: document.paymentDays }, { actor, note: `Prazo de pagamento informado na proposta ${document.quoteNumber || offer.code}` })
+    return { name: client.name, paymentDays: document.paymentDays }
+  } catch (error) {
+    console.error('Falha ao salvar o prazo de pagamento no cadastro do cliente:', error.message)
+    return null
+  }
+}
+
+export default function createProposalDocumentsRouter(requireAdmin, accounts = null) {
   const router = express.Router()
   router.use((request, _response, next) => { const actor = adminIdentity(request); if (actor) { request.adminId = actor.id; request.adminName = actor.name } next() })
   const handle = (task) => async (request, response, next) => { try { await task(request, response) } catch (error) { if (error.status) return response.status(error.status).json({ message: error.message }); next(error) } }
@@ -366,10 +393,11 @@ export default function createProposalDocumentsRouter(requireAdmin) {
     const store = await readStore()
     const offer = store.offers.find((item) => item.id === request.params.id) || fail('Oferta não encontrada.', 404)
     const model = String(request.query.model || '')
-    const fresh = await buildDraft({ model, store, offer, value: request.query.value, deadline: request.query.deadline })
+    const client = await clientOfOffer(accounts, offer)
+    const fresh = await buildDraft({ model, store, offer, value: request.query.value, deadline: request.query.deadline, client })
     // Reopening the saved document keeps what was typed, but a new PDF takes the next quote number.
     const draft = offer.proposal?.document?.model === model && !request.query.fresh ? { ...fromSaved(offer.proposal.document, proposalSettings(store)), ...(fresh.quoteNumber ? { quoteNumber: fresh.quoteNumber } : {}), usage: fresh.usage } : fresh
-    response.set('Cache-Control', 'no-store').json({ draft, settings: proposalSettings(store) })
+    response.set('Cache-Control', 'no-store').json({ draft, settings: proposalSettings(store), paymentClient: paymentClientView(client) })
   }))
 
   router.post('/offers/:id/proposal-document', requireAdmin, handle(async (request, response) => {
@@ -399,7 +427,8 @@ export default function createProposalDocumentsRouter(requireAdmin) {
       remember(store, model, document, assignments)
       return item
     })
-    response.json({ item: updated })
+    const paymentRegistered = await rememberClientPaymentDays({ accounts, offer: updated, document, actor: actorOf(request) })
+    response.json({ item: updated, paymentRegistered })
   }))
 
   return router

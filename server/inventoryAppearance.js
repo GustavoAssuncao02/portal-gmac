@@ -4,10 +4,10 @@ import { defaultMaterialIcon, materialIcons } from './materialIcons.js'
 const fail = (message) => { throw Object.assign(new Error(message), { status: 400 }) }
 export const maxMaterialPhotoBytes = 48000
 
-export async function inventoryAppearance(body) {
+export async function inventoryAppearance(body, icons = materialIcons) {
   const result = {}
   if (Object.hasOwn(body, 'icon')) {
-    if (!materialIcons.some((icon) => icon.key === body.icon)) fail('Selecione um ícone válido para o material.')
+    if (!icons.some((icon) => icon.key === body.icon)) fail('Selecione um ícone válido para o material.')
     result.icon = body.icon
   }
   if (!Object.hasOwn(body, 'photo')) return result

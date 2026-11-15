@@ -25,6 +25,7 @@ import { actorOf, recordRegistryChange } from './registryHistory.js'
 import { isPreRegisteredClient } from './sitePreRegistration.js'
 import { currentServiceLocation, serviceLocationLabel, validServiceLocation } from './serviceLocation.js'
 import { formatQuantity, materialUnit, validMaterialUnit, validQuantityFor } from './materialUnits.js'
+import { labelEstimate, labelPlaceholderProposal } from './labelQuoteRules.js'
 
 const filesDirectory = path.join(dataDirectory, 'files')
 const router = express.Router()
@@ -118,6 +119,8 @@ router.get('/orders', async (_request, response) => {
 
 router.post('/offers', async (request, response) => {
   const { cnpj, company, service, quantity, description, labelNumber, requester, buyer } = request.body ?? {}
+  // "Deixar oferta em aberto e notificar": someone registers it and the people in charge take it over later.
+  const open = request.body?.open === true
   // The requested deadline may be left for later; it is asked when the proposal PDF is generated.
   const deadline = String(request.body?.deadline ?? '').trim()
   if (!isClientDocument(cnpj) || !clean(company) || !clean(service) || !Number.isInteger(Number(quantity)) || Number(quantity) < 1 || !clean(description)) {
@@ -134,8 +137,10 @@ router.post('/offers', async (request, response) => {
       // A manual offer starts as "Criando oferta": only "Fazer proposta" in its details (POST /offers/:id/finish) puts it
       // in analysis. The person who is creating it (editingBy) and since when are shown on the list.
       const at = new Date().toISOString(), author = { id: request.adminId ?? null, name: request.adminName || 'Administrador' }
-      const item = { id: randomUUID(), code: nextCode('OF', [...store.offers, ...(store.discardedOffers || [])]), createdAt: at, createdBy: author.id, createdByName: author.name, editingBy: { ...author, at }, cnpj: clean(cnpj, 18), company: clean(company, 160), requester: link.name, requesterId: link.id, buyer: buyerLink.name, buyerId: buyerLink.id, deadline, service: clean(service, 160), quantity: Number(quantity), description: clean(description, 5000), labelNumber: clean(labelNumber, 80), requestedAt: at, origin: 'Inserida Manualmente', status: 'creating', attachments: [], resources: { materials: [], laborEntries: [] }, proposal: null, orderCode: null }
+      const item = { id: randomUUID(), code: nextCode('OF', [...store.offers, ...(store.discardedOffers || [])]), createdAt: at, createdBy: author.id, createdByName: author.name, ...(open ? { openForTeam: true } : { editingBy: { ...author, at } }), cnpj: clean(cnpj, 18), company: clean(company, 160), requester: link.name, requesterId: link.id, buyer: buyerLink.name, buyerId: buyerLink.id, deadline, service: clean(service, 160), quantity: Number(quantity), description: clean(description, 5000), labelNumber: clean(labelNumber, 80), requestedAt: at, origin: 'Inserida Manualmente', status: 'creating', attachments: [], resources: { materials: [], laborEntries: [] }, proposal: null, orderCode: null }
       store.offers.unshift(item)
+      // An open offer has nobody creating it: it waits on the list, like the offers of the site, and the others are told.
+      if (open) addNotification(store, { type: 'open-offer', offerId: item.id, authorId: author.id, title: 'Nova oferta em aberto', description: `${item.code} · ${item.company} · inserida por ${author.name}` })
       return item
     })
     response.status(201).json({ item: offer, requesterCreated, buyerCreated })
@@ -318,6 +323,12 @@ router.get('/offers/:id/proposal.pdf', async (request, response) => {
   } catch (error) { handleError(response, error) }
 })
 
+// "Deixar oferta em aberto e notificar" comes checked for the CPFs listed in OPEN_OFFER_DEFAULT_CPFS (comma separated).
+export const openOfferDefault = (cpf, env = process.env) => {
+  const own = documentDigits(cpf)
+  return own.length === 11 && String(env.OPEN_OFFER_DEFAULT_CPFS || '').split(',').map((item) => documentDigits(item)).includes(own)
+}
+
 export default function createOffersRouter(pool, requireAdmin, accounts) {
   migrateStageLabor().catch((error) => console.error('Falha ao montar a mão de obra das etapas nas ofertas abertas:', error.message))
   const configured = express.Router()
@@ -338,6 +349,14 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
       request.offerClient = accounts && document ? (await accounts.clients()).find((client) => documentDigits(client.document) === document) || null : null
       next()
     } catch (error) { next(error) }
+  })
+  // Whether "Deixar oferta em aberto e notificar" comes checked for this account: the CPFs are in OPEN_OFFER_DEFAULT_CPFS
+  // (server environment, outside the public repository); the browser only gets the answer.
+  configured.get('/offers/open-default', requireAdmin, async (request, response) => {
+    try {
+      const account = accounts && request.adminId != null ? await accounts.account(request.adminId) : null
+      response.set('Cache-Control', 'no-store').json({ checked: openOfferDefault(account?.cpf) })
+    } catch (error) { handleError(response, error) }
   })
   configured.put(['/offers/:id/resources', '/offers/:id/proposal-draft'], requireAdmin)
   // Informações do serviço of an offer not yet accepted: client (CPF/CNPJ and name), requester, buyer, piece, request date,
@@ -516,7 +535,7 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
         const item = store.orders.find((entry) => entry.code === request.params.code)
         if (!item) return null
         item.purchaseOrders = [...(item.purchaseOrders || []), file]
-        recordOrderEvent(item, 'purchase_order_added', request.adminName, `Pedido de compra anexado: ${file.name}`)
+        recordOrderEvent(item, 'purchase_order_added', request.adminName, `Anexo administrativo adicionado: ${file.name}`)
         return item
       }).catch(async (error) => { await discard(); throw error })
       if (!order) { await discard(); return response.status(404).json({ message: 'OS não encontrada.' }) }
@@ -537,7 +556,7 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
         if (!item?.purchaseOrders?.some((file) => file.id === request.params.fileId)) return false
         const removed = item.purchaseOrders.find((file) => file.id === request.params.fileId)
         item.purchaseOrders = item.purchaseOrders.filter((file) => file.id !== request.params.fileId)
-        recordOrderEvent(item, 'purchase_order_removed', request.adminName, `Pedido de compra removido: ${removed.name}`)
+        recordOrderEvent(item, 'purchase_order_removed', request.adminName, `Anexo administrativo removido: ${removed.name}`)
         return true
       })
       if (!removed) return response.status(404).json({ message: 'Anexo não encontrado.' })
@@ -666,14 +685,18 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
       const order = await mutateStore(async (store) => {
         const item = store.offers.find((entry) => entry.id === request.params.id)
         if (item?.status === 'rejected') throw Object.assign(new Error('Esta oferta foi recusada e não pode gerar uma OS.'), { status: 409 })
-        if (!item?.proposal) return null
+        // Etiqueta: an offer with a label number and no proposal opens its OS now; the quote comes at the end (labelQuotes.js).
+        const label = Boolean(String(item?.labelNumber ?? '').trim()) && !item?.proposal
+        if (!item?.proposal && !label) return null
+        if (label && item.status === 'creating') throw Object.assign(new Error(stillCreating), { status: 409 })
+        if (label && !isDay(item.deadline)) throw Object.assign(new Error('Informe o prazo solicitado pelo cliente (em Informações do serviço) antes de abrir a OS da etiqueta.'), { status: 400 })
         const existing = item.orderCode && store.orders.find((entry) => entry.offerId === item.id)
         if (existing?.inventoryConsumption) return existing
         if (item.orderCode && !existing) { const error = new Error('OS vinculada não encontrada.'); error.status = 409; throw error }
         // A proposal generated before the planned times and resources became mandatory still needs them to become an OS.
         const problem = existing ? '' : stagePlanProblem(serviceSettings(item).stages, item.resources)
         if (problem) throw Object.assign(new Error(`${problem} Preencha nos detalhes da oferta antes de aceitar.`), { status: 400 })
-        const created = existing || { code: nextCode('OS', [...store.orders, ...(store.cancelledOrders || [])]), offerId: item.id, createdAt: new Date().toISOString(), createdBy: request.adminId ?? null, status: 'Em andamento', company: item.company, cnpj: item.cnpj, service: item.service, description: item.description, labelNumber: item.labelNumber, quantity: item.quantity, deadline: item.deadline, requestedAt: item.requestedAt, attachments: [...item.attachments], resources: item.resources, proposal: item.proposal }
+        const created = existing || { code: nextCode('OS', [...store.orders, ...(store.cancelledOrders || [])]), offerId: item.id, createdAt: new Date().toISOString(), createdBy: request.adminId ?? null, status: 'Em andamento', company: item.company, cnpj: item.cnpj, service: item.service, description: item.description, labelNumber: item.labelNumber, quantity: item.quantity, deadline: item.deadline, requestedAt: item.requestedAt, attachments: [...item.attachments], resources: item.resources, proposal: label ? labelPlaceholderProposal(item) : item.proposal, ...(label ? { labelQuote: { pending: true, openedAt: new Date().toISOString(), openedByName: request.adminName || 'Administrador', estimate: labelEstimate(item.resources) } } : {}) }
         const materials = created.resources?.materials || []
         let consumption = []
         if (materials.length && pool) {
@@ -686,9 +709,10 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
           const error = new Error('O banco de estoque precisa estar disponível para baixar os materiais e gerar a OS.'); error.status = 503; throw error
         }
         created.inventoryConsumption = { processedAt: new Date().toISOString(), materials: consumption.map(({ materialIndexes, ...row }) => row) }
-        if (!existing) { Object.assign(created, pieceTracking(store, created)); recordOrderEvent(created, 'order_created', request.adminName, `OS gerada a partir da proposta aceita (${item.code || item.id}).`); store.orders.unshift(created) }
+        if (!existing) { Object.assign(created, pieceTracking(store, created)); recordOrderEvent(created, 'order_created', request.adminName, label ? `OS da etiqueta ${item.labelNumber} aberta sem proposta (${item.code || item.id}): o orçamento é gerado no fim, com as horas e o material usados.` : `OS gerada a partir da proposta aceita (${item.code || item.id}).`); store.orders.unshift(created) }
         item.orderCode = created.code
         item.status = 'accepted'
+        if (created.labelQuote) item.labelQuote = { pending: created.labelQuote.pending }
         item.resources = created.resources
         return created
       }, { commit: () => connection?.commit(), rollback: () => connection?.rollback() })
@@ -744,11 +768,13 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
         store.orders = store.orders.filter((entry) => entry !== order)
         item.acceptHistory = [...(item.acceptHistory || []), { orderCode: order.code, acceptedAt: order.createdAt, undoneAt: at, undoneBy: request.adminId, undoneByName: byName }]
         item.orderCode = null
-        item.status = 'proposed'
+        // An etiqueta had no proposal: it goes back to analysis, where "Abrir OS da etiqueta" is again.
+        item.status = item.labelQuote ? 'review' : 'proposed'
+        delete item.labelQuote
         // The offer goes back to before the acceptance: what the OS took from the stock is not on it anymore, and the
         // decisions taken on its material requests during the OS (purchase requested, refused) are cleared, so a new
         // acceptance starts from zero. The notices of the cancelled OS go away with it.
-        item.resources = { ...item.resources, materials: (item.resources?.materials || []).map(({ inventoryConsumedQuantity, groupStockStatus, groupPurchaseQuantity, requestRejection, ...material }) => material) }
+        item.resources = { ...item.resources, materials: (item.resources?.materials || []).map(({ inventoryConsumedQuantity, inventoryConsumedCost, groupStockStatus, groupPurchaseQuantity, requestRejection, ...material }) => material) }
         const requestIds = (item.resources.materials || []).map((material) => `${item.id}-${material.id}`)
         store.materialRequestStatuses = (store.materialRequestStatuses || []).filter((status) => !requestIds.includes(status.id))
         store.silentMaterialRequestIds = requestIds

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { mkdir } from 'node:fs/promises'
 import { chromium } from 'playwright'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
+import { openSidebarItem } from './sidebarNavigation.js'
 
 const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123' }
 const fixture = await createWorkflowFixture({ accountsEnv: env })
@@ -31,7 +32,7 @@ try {
   await page.getByLabel('Senha', { exact: true }).fill(env.DEMO_ADMIN_PASSWORD)
   await page.getByRole('button', { name: 'Entrar', exact: true }).click()
   await page.locator('.admin-home-main').waitFor()
-  await page.locator('.sidebar').getByRole('button', { name: 'Máquinas', exact: true }).click()
+  await openSidebarItem(page, 'Máquinas')
   const row = (name) => page.locator('.machine-row:not(.machine-row--header)').filter({ has: page.getByText(name.toLocaleUpperCase('pt-BR'), { exact: true }) })
   await row(machine.name).waitFor()
   assert.equal(await row(machine.name).locator('.machine-status').innerText(), 'Ociosa')

@@ -171,6 +171,10 @@ Ficam no grupo "Cadastros" do menu (e alguns em telas próprias).
 
 3.4 Clientes
   - Nome/razão social, CPF ou CNPJ, e-mail (opcional) e observação.
+  - Prazo de pagamento em dias (opcional): preenche o "Pagamento" da
+    proposta (modelos A/B); no PDF sai "45 dias". Se o cliente ainda não
+    tem prazo, o prazo digitado na proposta é salvo no cadastro ao gerar o
+    PDF. Um prazo já cadastrado só muda aqui.
 
 3.5 Fornecedores
   - Nome/razão social, CPF ou CNPJ, e-mail e telefone.
@@ -187,6 +191,14 @@ Ficam no grupo "Cadastros" do menu (e alguns em telas próprias).
   - Há gráfico de quantas pausas cada razão recebeu.
 
 3.8 Máquinas e Serviços (hora homem) - ver seção 15.
+
+3.9 Modelos de e-mail
+  - Assunto, texto e destinatários fixos dos e-mails enviados com a
+    proposta. Vêm dois com o portal: "Proposta comercial" e "Medição de
+    etiqueta" (podem ser editados e restaurados, não excluídos).
+  - Administradores e funcionários administrativos criam outros.
+  - Campos como {etiqueta}, {numero}, {servico} e {saudacao} são
+    preenchidos com os dados da oferta. Ver 6.4.
 
 
 ===============================================================================
@@ -299,7 +311,42 @@ Antes de abrir os modelos, o portal confere:
     e o layout (Clássico, Executivo, Compacto).
   - O PDF que vai ao cliente NÃO mostra custo, margem nem lucro: mostra o
     valor cobrado, desconto, prazo e tempos previstos.
-  - Gerar a proposta não envia e-mail: o PDF é baixado para envio.
+  - Nestlé (FS-3055): a planilha usa os preços do contrato. Ao gerar o
+    PDF, o Valor da OS da opção passa a ser o total do PDF; o lucro bruto
+    e a % são recalculados sobre ele. Materiais e mão de obra continuam
+    com o custo da GMAC. As máquinas e os materiais da oferta já vêm
+    lançados nas linhas da planilha; o que o sistema não reconhecer, o
+    usuário escolhe a linha e o sistema aprende.
+  - Gerar a proposta não envia e-mail: o PDF é baixado e o envio é feito
+    em "Enviar E-mail" (6.4).
+
+6.4 E-mail da proposta
+  - O e-mail já vem pronto com um modelo de Cadastros > Modelos de e-mail
+    (etiqueta -> "Medição de etiqueta"); o modelo pode ser trocado e o
+    texto mudado antes de enviar.
+  - A assinatura é montada pelo portal: nome de quem envia, cargo (só se
+    preenchido em Configurações > Dados da conta), e-mail e WhatsApp da
+    empresa e os anos de experiência (desde 2008). Se a empresa emissora
+    for a Usinagem, entram o logo e o nome da Usinagem.
+
+6.5 Etiqueta: o orçamento vem DEPOIS do serviço
+  - Oferta com número de etiqueta e sem proposta é uma ETIQUETA: não se faz
+    proposta antes. Nos detalhes da oferta, "Abrir OS da etiqueta" abre a
+    OS direto (o prazo solicitado é obrigatório).
+  - O previsto (material e horas) sai do estoque na abertura, como em
+    qualquer OS. Até o orçamento, o valor da OS aparece como "Orçamento
+    pendente".
+  - Quando os operadores concluem todas as peças, o botão verde "Aguardando
+    NF-e" abre a janela da etiqueta (ver 11):
+      - horas trabalhadas, previsto x real (todas como hora normal);
+      - material consumido, editável: menos volta ao estoque, mais sai do
+        estoque;
+      - Gerar orçamento (modelo Etiqueta como padrão; o usuário escolhe o
+        modelo e os preços e pode editar antes do PDF);
+      - Enviar por e-mail;
+      - Concluir OS: só depois do PDF; abre o Recebimento do serviço com o
+        valor do orçamento.
+  - Ofertas antigas que já têm proposta seguem o fluxo normal.
 
 
 ===============================================================================
@@ -472,11 +519,18 @@ se o plano está sendo cumprido.
   - Material pendente destaca a linha; o botão mostra o que falta e leva ao
     pedido de material.
   - "Modo de exibição" coloca o painel em tela cheia (TV da fábrica).
+  - A lupa (canto superior direito, igual em Ofertas e serviços e em
+    Serviços concluídos) procura serviço, cliente, OS, nº da cotação e o
+    nome dos anexos, inclusive os Anexos administrativos. Um anexo da OS
+    acha também a oferta, e vice-versa.
   - Atualiza a cada 10 segundos.
 
 10.2 Detalhes da OS (Ver OS)
   - Dados, materiais, processo, proposta, arquivos, custo real e margem, e
     o histórico de operações (quem fez o quê e quando).
+  - Anexos administrativos: documentos administrativos da OS, fora da
+    operação (ex.: pedido de compra). Só administradores e funcionários
+    administrativos veem.
   - O administrador pode encerrar a sessão de quem esqueceu de pausar
     (com justificativa) e corrigir horários de operações (o horário
     original fica guardado, marcado como "Horário editado").
@@ -500,8 +554,9 @@ se o plano está sendo cumprido.
 
 1. O operador toca em "Concluir serviço" (todas as peças em todas as
    etapas). A administração recebe notificação.
-2. No painel de Serviços em andamento, a administração clica em
-   "Concluído". Abre a janela "Recebimento do serviço":
+2. No painel de Serviços em andamento, a administração clica no botão
+   verde "Aguardando NF-e". Abre a janela "Recebimento do serviço"
+   (numa etiqueta, antes abre a janela do orçamento - ver 6.5):
      - Ainda vai receber ...... programa a conta em Contas a Receber
                                 (parcela única ou parcelado).
      - Já recebido ............ lança a entrada na Tesouraria, já baixada,
@@ -536,10 +591,15 @@ se o plano está sendo cumprido.
 13. ESTOQUE DE MATERIAIS
 ===============================================================================
 
-Onde: Estoque.
+Onde: Gestão Operacional > Estoque.
 
-  - Cada material: nome, especificação, unidade (kg ou unidade), disponível,
-    mínimo, preço médio, ícone ou foto.
+  - Cada material: nome, unidade (kg ou unidade), disponível, mínimo, preço
+    médio, ícone ou foto.
+  - O material do estoque NÃO tem especificação (desde 14/11/2026): as
+    medidas usadas em cada serviço são informadas na oferta/OS, na linha do
+    material, e no pedido de material.
+  - Filtro por ícone acima da lista (ícone e nome de cada tipo de material,
+    com a quantidade de materiais); "Todos" mostra a lista inteira.
   - A quantidade só muda por ENTRADA ou SAÍDA (não se edita o saldo à mão).
   - Material "unidade" aceita só números inteiros.
   - Estoque baixo: disponível menor ou igual ao mínimo (gera notificação e
@@ -554,12 +614,32 @@ Onde: Estoque.
     o financeiro: "Conta a pagar" (ainda vai pagar), "Pagamento já
     realizado" (saída na Tesouraria) ou "Não lançar agora".
 
+ESTOQUE ADMINISTRATIVO (desde 14/11/2026)
+
+Onde: menu Estoque Administrativo (item próprio, logo abaixo do grupo
+Gestão Operacional).
+
+  - Materiais do escritório, limpeza e copa: papel higiênico, lápis, caneta...
+  - Funciona igual ao Estoque: cadastro com ícone ou foto, entradas com custo
+    médio, histórico, estoque baixo (notificação "Estoque administrativo
+    baixo") e a pergunta do financeiro depois de uma compra.
+  - Ícones próprios, por grupo de material: Material de expediente,
+    Material de limpeza, Copa e cozinha, Higiene pessoal, Descartáveis,
+    Suprimentos de informática, Material elétrico, EPI e uniformes,
+    Primeiros socorros, Embalagens, Manutenção predial e Outros. O mesmo
+    filtro por ícone do Estoque.
+  - Nenhuma OS tira material daqui: a saída é a BAIXA, no botão de baixa de
+    cada material. Informa a quantidade (nunca maior que o saldo), quem
+    retirou ou o destino e uma observação. O histórico mostra a baixa e
+    quem a registrou.
+  - Esses materiais não aparecem nas ofertas nem nas OS.
+
 
 ===============================================================================
 14. PEDIDOS DE MATERIAL E COMPRAS
 ===============================================================================
 
-Onde: Pedidos de material (logo abaixo de Estoque).
+Onde: Gestão Operacional > Pedidos de material (logo abaixo de Estoque).
 
 Origem dos pedidos:
   - Falta de material numa OS (nasce no aceite da proposta).
@@ -590,7 +670,7 @@ Fluxo resumido:
 15. MÁQUINAS, MANUTENÇÃO E SERVIÇOS DE HORA HOMEM
 ===============================================================================
 
-15.1 Máquinas (Máquinas)
+15.1 Máquinas (Gestão Operacional > Máquinas)
   - Cadastro: nome, tipo (opcional), SETORES (marcados do cadastro de
     Setores; pelo menos um) e valor da hora.
   - Status calculado pelo uso real: Em funcionamento, Ociosa ou Em
@@ -615,7 +695,7 @@ Fluxo resumido:
   - Cada período de manutenção fica guardado (início, fim, motivo, quem
     colocou e quem liberou).
 
-15.3 Serviços de hora homem (Serviços)
+15.3 Serviços de hora homem (Gestão Operacional > Serviços)
   - Catálogo de atividades cobradas por hora de pessoa (ex.: solda,
     montagem, pintura), com valor da hora e SETORES (marcados).
   - Não tem status de máquina; várias pessoas podem usar ao mesmo tempo.
@@ -656,6 +736,9 @@ Fluxo resumido:
   - Lista compartilhada entre os administradores: junta várias contas a
     pagar e paga todas de uma vez (valor integral, mesma data, forma e
     banco). Mostra a divisão por classificação e o saldo em aberto por mês.
+  - Para achar as contas: busca, Fornecedor (só quem tem conta em aberto),
+    Classificação, vencimento de/até e valor mínimo/máximo. Não há filtro
+    de banco: o banco só é gravado quando a conta é paga.
 
 16.5 Conciliação bancária
   - Importa extratos OFX (Itaú e Sicoob; vários arquivos de uma vez).
@@ -676,8 +759,18 @@ Fluxo resumido:
   - Categorias das contas a pagar (não se exclui classificação em uso).
 
 16.8 Custo real e margem da OS
-  - Custos lançados = custo previsto na proposta + contas a pagar
-    vinculadas à OS.
+  - Custos lançados = material pelo custo real + mão de obra prevista
+    + contas a pagar vinculadas à OS (custos adicionais).
+  - Material pelo custo real: o que saiu do estoque custa o preço do
+    estoque naquele momento; o que foi comprado para a OS (pedido de
+    material) custa o preço pago na entrada. O que ainda falta comprar
+    fica pelo preço previsto.
+    Ex.: 20 kg de aço previstos por R$ 120, comprados por R$ 130:
+    a margem real cai R$ 10. O Valor da OS e o PDF não mudam.
+  - A compra lançada pelo "Lançar esta compra no financeiro?" depois de
+    receber o pedido de material da OS já vem com a OS vinculada e NÃO
+    conta de novo como custo adicional (já está no material). Outras
+    contas vinculadas à OS (frete, terceirizado) contam como adicionais.
   - Margem real = valor cobrado - custos lançados.
 
 

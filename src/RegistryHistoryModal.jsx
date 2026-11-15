@@ -8,7 +8,7 @@ import './payables.css'
 // Cadastros: the "i" next to the trash can opens who created, changed or deleted the registration and when, with each
 // field before and after (server/registryHistory.js). Same look as the history of Contas a Pagar.
 const typeLabels = { created: 'Cadastro criado', edited: 'Cadastro alterado', deleted: 'Cadastro excluído' }
-const fieldLabels = { name: 'Nome', email: 'E-mail', document: 'CPF/CNPJ', documentType: 'Tipo de documento', notes: 'Observação', cpf: 'CPF', birthDate: 'Nascimento', agency: 'Agência', account: 'Conta', client: 'Cliente', phone: 'Telefone' }
+const fieldLabels = { name: 'Nome', email: 'E-mail', document: 'CPF/CNPJ', documentType: 'Tipo de documento', notes: 'Observação', paymentDays: 'Prazo de pagamento (dias)', cpf: 'CPF', birthDate: 'Nascimento', agency: 'Agência', account: 'Conta', client: 'Cliente', phone: 'Telefone' }
 const nameLabels = { clients: 'Nome / razão social', suppliers: 'Nome / razão social', banks: 'Banco', sectors: 'Nome do setor', pauseReasons: 'Razão da pausa' }
 const phoneLabel = (digits) => digits.length === 11 ? digits.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3') : digits.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3')
 function valueLabel(field, value) {

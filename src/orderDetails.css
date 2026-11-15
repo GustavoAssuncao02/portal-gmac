@@ -203,6 +203,7 @@
 .os-cost-list li > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .os-cost-list li > div:last-child { flex-shrink: 0; align-items: flex-end; text-align: right; }
 .os-cost-list span { color: #6c8092; font-size: 12px; overflow-wrap: anywhere; }
+.os-cost-list small { color: #2f6f8f; font-size: 11.5px; font-weight: 600; }
 .os-purchase-orders .os-section-heading { gap:12px; }.os-purchase-add { margin-left:auto; padding:6px 12px; border:1px solid #0c4c91; border-radius:6px; background:#0c4c91; color:#fff; font:inherit; font-size:12px; cursor:pointer; }.os-purchase-add:disabled { opacity:.6; cursor:default; }
 .os-purchase-hint { margin:0 0 10px; color:#6b84a0; font-size:12px; }
 .os-purchase-orders li { display:flex; align-items:center; gap:8px; }.os-purchase-file { display:flex; flex:1; align-items:center; gap:8px; min-width:0; padding:8px 0; border:0; background:none; color:inherit; font:inherit; text-align:left; cursor:pointer; }.os-purchase-file span { overflow-wrap:anywhere; }.os-purchase-file small { margin-left:auto; color:#6b84a0; white-space:nowrap; }

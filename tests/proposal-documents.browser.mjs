@@ -23,7 +23,7 @@ try {
   const company = { razao_social: 'GMAC USINAGEM LTDA', estabelecimento: { nome_fantasia: 'GMAC USINAGEM', atividade_principal: { subclasse: '2512-8/00', descricao: 'Fabricação de esquadrias de metal' }, atividades_secundarias: [{ subclasse: '2539-0/01', descricao: 'Serviços de usinagem, torneiria e solda' }] } }
   await syncFiscalCatalog({ fetcher: async (url) => ({ status: 200, body: Buffer.from(url === fiscalSources.cnae ? JSON.stringify(cnae) : url === fiscalSources.ncm ? JSON.stringify(ncm) : url === fiscalSources.nbs ? nbs : JSON.stringify(company), url === fiscalSources.nbs ? 'latin1' : 'utf8') }) })
 
-  const offer = (await fixture.adminRequest('/offers', 'POST', { ...offerDraft, company: 'Nestlé Brasil Ltda', service: 'Tampa graxadeira', description: 'Fabricação de 20 unidades, conforme amostra', quantity: 20, labelNumber: '5319' })).data.item
+  const offer = (await fixture.adminRequest('/offers', 'POST', { ...offerDraft, company: 'Nestlé Brasil Ltda', service: 'Tampa graxadeira', description: 'Fabricação de 20 unidades, conforme amostra', quantity: 20, labelNumber: '' })).data.item
   await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [{ id: 'm1', name: 'Aço SAE 1020', detail: 'redondo', quantity: 4, unitPrice: 10 }], laborEntries: [{ id: 'l1', type: 'machine', resource: 'Torno CNC 01', hours: 25, hourlyRate: 120 }, { id: 'l2', type: 'labor', resource: 'Ajustagem', hours: 2, hourlyRate: 50 }], stages: ['machining'] })
 
   await page.goto(fixture.url)
@@ -47,7 +47,9 @@ try {
   const etiqueta = page.getByRole('dialog', { name: 'Proposta · Etiqueta', exact: true })
   assert.equal(await etiqueta.getByLabel('Horas de Serv Usinagem em Torno CNC', { exact: true }).inputValue(), '25')
   assert.equal(await etiqueta.getByLabel('Quantidade de Barra Metalica Aco Sae1020 1M', { exact: true }).inputValue(), '4')
-  assert.equal(await etiqueta.getByLabel('Etiqueta', { exact: true }).inputValue(), '5319')
+  // An offer with a label number is an etiqueta (its quote is made after the OS, server/labelQuotes.js), so this commercial
+  // proposal has none and the number is typed here.
+  await etiqueta.getByLabel('Etiqueta', { exact: true }).fill('5319')
   await etiqueta.getByLabel('Linha da planilha para Ajustagem', { exact: true }).selectOption({ label: '11. Serv Mecânica' })
   assert.equal(await etiqueta.getByLabel('Horas de Serv Mecânica', { exact: true }).inputValue(), '2')
   await etiqueta.getByLabel('Requisitante', { exact: true }).fill('Joaci')
@@ -68,8 +70,11 @@ try {
   const letter = page.getByRole('dialog', { name: 'Proposta · Modelo A', exact: true })
   assert.equal(await letter.getByLabel('Nº da cotação', { exact: true }).inputValue(), '13483')
   await letter.locator('.fiscal-picker-value').filter({ hasText: '2539-0/01' }).waitFor()
+  // Of NBS and NCM, one is enough (both are allowed): the rule is marked while neither is filled, and only NBS is used here.
+  await letter.locator('.proposal-fiscal-rule--missing').getByText('ao menos um').waitFor()
   await letter.getByRole('combobox', { name: 'NBS (serviço)' }).fill('manutenção industrial')
   await letter.getByRole('option', { name: /1\.2001\.50\.00/ }).click()
+  assert.equal(await letter.locator('.proposal-fiscal-rule--missing').count(), 0, 'NBS alone satisfies the rule')
   await letter.getByRole('combobox', { name: 'CNAE (código de atividade)' }).fill('construção de edifícios')
   await letter.getByRole('option', { name: /4120-4\/00/ }).getByText('Fora do CNPJ').waitFor()
   await letter.getByRole('option', { name: /4120-4\/00/ }).click()
@@ -90,7 +95,7 @@ try {
   const pdfText = (await readFile(await letterFile.path())).toString('latin1')
   assert.ok(pdfText.startsWith('%PDF'))
   saved = (await fixture.adminRequest('/offers', 'GET', undefined, fixture.admin)).data.items.find((item) => item.id === offer.id).proposal
-  assert.deepEqual([saved.document.fiscal.cnae[0].code, saved.document.fiscal.nbs[0].code, saved.osValue, saved.document.technician.name], ['2539-0/01', '1.2001.50.00', 5170, 'Maria Souza'])
+  assert.deepEqual([saved.document.fiscal.cnae[0].code, saved.document.fiscal.nbs[0].code, saved.document.fiscal.ncm.length, saved.osValue, saved.document.technician.name], ['2539-0/01', '1.2001.50.00', 0, 5170, 'Maria Souza'])
 
   // Settings: price lists, companies and the catalog status.
   await page.getByRole('button', { name: 'Gerar proposta em PDF', exact: true }).click()

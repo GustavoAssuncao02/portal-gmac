@@ -6,6 +6,8 @@ import express from 'express'
 import mysql from 'mysql2/promise'
 import createOffersRouter, { mutateStore } from './offers.js'
 import createOperationsRouter from './operations.js'
+import createLabelQuotesRouter from './labelQuotes.js'
+import createEmailTemplatesRouter from './emailTemplates.js'
 import { createAccountService, createAccountsRouter, loadAdminSessions, requireAdmin, restrictStaffFinance } from './accounts.js'
 import { ensureEmployeeAccess } from './employeeAccess.js'
 import createLoginRouter, { testLoginEnabled } from './authLogin.js'
@@ -33,6 +35,7 @@ import createFiscalRouter, { startFiscalCatalogSchedule, importJsonFiscalCatalog
 import createProposalDocumentsRouter from './proposalDocuments.js'
 import createInventoryImportRouter from './inventoryImport.js'
 import createInventoryRouter from './inventory.js'
+import createAdminInventoryRouter, { ensureAdminInventory, loadAdminInventoryRows } from './adminInventory.js'
 import createMaterialRequestsRouter from './materialRequests.js'
 import createNotificationsRouter from './notifications.js'
 import createSupportTicketsRouter from './supportTickets.js'
@@ -87,6 +90,7 @@ await configureStore(pool)
 if (await importJsonStore(path.join(dataDirectory, 'offers.json'), path.join(dataDirectory, 'backups'))) console.log('Dados de offers.json importados para o banco; o arquivo foi movido para backups/.')
 if (await importJsonFiscalCatalog(path.join(dataDirectory, 'fiscal-catalog.json'))) console.log('Catálogo fiscal importado para o banco.')
 await ensureInventoryAppearance(pool)
+await ensureAdminInventory(pool)
 
 await ensureEmployeeAccess(pool)
 await ensureLaborServices()
@@ -112,6 +116,8 @@ const accounts = createAccountService(pool)
 siteQuotes.app.use('/api/offer-requests', createOfferRequestsRouter({ pool, accounts, sendMail: siteQuotes.sendMail, from: siteQuotes.from }))
 app.use('/api', createOffersRouter(pool, requireAdmin, accounts))
 app.use('/api', createOperationsRouter(pool))
+app.use('/api', createLabelQuotesRouter({ pool, requireAdmin, accounts }))
+app.use('/api', createEmailTemplatesRouter(requireAdmin))
 app.use('/api', createAccountsRouter(accounts))
 // One count of wrong passwords, cleared when the password is reset by e-mail.
 const loginThrottle = createLoginThrottle()
@@ -137,11 +143,11 @@ app.use('/api', createAccountPlanRouter(accounts, requireAdmin))
 app.use('/api', createDreRouter(accounts, requireAdmin))
 app.use('/api', createBankStatementsRouter(accounts, requireAdmin))
 app.use('/api', createFiscalRouter(requireAdmin))
-app.use('/api', createProposalDocumentsRouter(requireAdmin))
+app.use('/api', createProposalDocumentsRouter(requireAdmin, accounts))
 app.use('/api', createSupportTicketsRouter(accounts, requireAdmin))
 const notificationsRouter = createNotificationsRouter({ requireAdmin, payables: payablesRouter, receivables: receivablesRouter, loadInventory: async () => {
   const [rows] = await pool.execute('SELECT id, name, unit, quantity_kg AS quantity, minimum_kg AS minimum FROM inventory_materials')
-  return rows
+  return [...rows, ...await loadAdminInventoryRows(pool)]
 } })
 app.use('/api', notificationsRouter)
 const refreshInventoryNotifications = () => notificationsRouter.sweepInventory().catch((error) => console.error('Falha ao verificar avisos de estoque:', error.message))
@@ -169,6 +175,7 @@ app.get('/api/health', async (_request, response) => {
 })
 
 app.use('/api', createInventoryRouter(pool, requireAdmin, { recordInventoryNotification, refreshInventoryNotifications }))
+app.use('/api', createAdminInventoryRouter(pool, requireAdmin, { recordInventoryNotification }))
 
 const interfacePublished = serveInterface(app, path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist'))
 

@@ -4,6 +4,7 @@ import { chromium } from 'playwright'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
 import { todayBahia } from '../server/payableRules.js'
 import { stageLabel } from '../server/serviceStages.js'
+import { openSidebarItem } from './sidebarNavigation.js'
 
 const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Gustavo' }
 const fixture = await createWorkflowFixture({ accountsEnv: env })
@@ -43,7 +44,7 @@ try {
   await page.getByRole('button', { name: 'Entrar', exact: true }).click()
   await page.locator('.admin-home-main').waitFor()
   const sidebar = page.locator('.sidebar')
-  const navigate = (name) => sidebar.getByRole('button', { name, exact: true }).click()
+  const navigate = (name) => openSidebarItem(page, name)
   const group = sidebar.getByRole('button', { name: 'Gestão Financeira', exact: true })
   if (await group.getAttribute('aria-expanded') === 'false') await group.click()
   const finance = await sidebar.locator('#sidebar-finance-menu .nav-item').allTextContents()
@@ -205,7 +206,7 @@ try {
   // Finishing an OS: the administrator says whether the customer still has to pay or has already paid.
   await navigate('Serviços em andamento')
   const service = page.locator('.admin-os-table tbody tr').filter({ hasText: order.code })
-  await service.getByRole('button', { name: 'Concluído', exact: true }).click()
+  await service.getByRole('button', { name: 'Aguardando NF-e', exact: true }).click()
   const schedule = page.getByRole('dialog', { name: 'Recebimento do serviço', exact: true })
   await schedule.getByText('O cliente já pagou este serviço?', { exact: true }).waitFor()
   assert.equal(await schedule.locator('form').count(), 0, 'nothing is assumed before the answer')

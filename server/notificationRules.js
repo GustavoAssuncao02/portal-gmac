@@ -5,10 +5,11 @@ export const notificationOptions = [
   ['serviceAdded', 'Novos serviços em andamento'],
   ['proposalSaved', 'Propostas salvas'],
   ['siteOffers', 'Ofertas recebidas pelo site'],
+  ['openOffers', 'Ofertas em aberto para assumir'],
   ['supportTickets', 'Tickets de suporte'],
 ]
 export const notificationDefaults = Object.fromEntries(notificationOptions.map(([key]) => [key, true]))
-export const notificationPreference = { 'material-request': 'materialRequests', 'service-completed': 'serviceCompleted', 'low-stock': 'lowStock', 'service-added': 'serviceAdded', 'proposal-saved': 'proposalSaved', 'site-offer': 'siteOffers', 'ticket-opened': 'supportTickets', 'ticket-status': 'supportTickets', 'ticket-comment': 'supportTickets' }
+export const notificationPreference = { 'material-request': 'materialRequests', 'service-completed': 'serviceCompleted', 'low-stock': 'lowStock', 'service-added': 'serviceAdded', 'proposal-saved': 'proposalSaved', 'site-offer': 'siteOffers', 'open-offer': 'openOffers', 'ticket-opened': 'supportTickets', 'ticket-status': 'supportTickets', 'ticket-comment': 'supportTickets' }
 // Sound played when a new notification arrives; each account picks one or turns them off ('off').
 // The sounds themselves are synthesized in the browser (src/notificationSounds.js).
 export const notificationSounds = [

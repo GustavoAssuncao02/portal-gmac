@@ -151,15 +151,13 @@
 .payable-quick-filters { display:flex; flex-wrap:wrap; align-items:center; gap:8px 18px; padding:0 0 20px; }.payable-quick-filters .payable-status-filters { padding:0; }
 .payable-due-filters { align-items:center; }.payable-status-filters .payable-quick-label { padding:0 2px 0 0; background:none; color:#5f7489; font-size:12px; font-weight:600; }
 .payable-status-filters small { color:#5f7489; font-size:11px; font-variant-numeric:tabular-nums; }.payable-status-filters button[aria-pressed=true] small { color:#0c4c91; }
-.payable-detail-actions { justify-content:flex-end; width:100%; }.payable-more { position:relative; margin-right:auto; }
-.payable-more-menu { position:absolute; bottom:calc(100% + 6px); left:0; z-index:5; display:grid; min-width:220px; padding:6px; border:1px solid #cddce9; border-radius:6px; background:#fff; box-shadow:0 10px 30px #102b4226; }
-.payable-more-menu button { display:flex; align-items:center; gap:8px; padding:9px 10px; border:0; border-radius:4px; background:none; color:#24486b; font:inherit; font-size:13px; text-align:left; cursor:pointer; }.payable-more-menu button:is(:hover,:focus-visible) { background:#edf4fb; outline:0; }.payable-more-menu .payable-danger { color:#bd3548; }
+.payable-detail-actions { justify-content:flex-end; width:100%; }
 .payable-preview .payable-modal-body { padding:0; background:#eef2f6; }.payable-preview-frame { display:block; width:100%; height:min(72vh,900px); border:0; }.payable-preview-image { display:block; max-width:100%; max-height:72vh; margin:auto; object-fit:contain; }
 .order-margins { margin-top:32px; padding-top:26px; border-top:1px solid #dce6ef; }.order-margins-heading { display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:12px 24px; margin-bottom:14px; }.order-margins-heading h2 { margin:0 0 6px; }.order-margins-heading p { margin:0; }
 .admin-tools-main .order-margins-heading .payable-mobile-select { flex-direction:row; align-items:center; gap:8px; font-size:12px; }
 .order-margins-table tbody tr { cursor:default; }.order-margins-table :is(td:first-child,th:first-child) { width:auto; }.order-margins-table td small { display:block; margin-top:3px; color:#71859a; font-size:11px; font-weight:400; }
 .order-margin { font-weight:700; }.order-margin--ok { color:#137b44; }.order-margin--below { color:#9f6508; }.order-margin--negative { color:#b42c3c; }
-@media(max-width:760px) { .payable-adjustments { grid-template-columns:minmax(0,1fr); }.payable-more-menu { left:0; right:auto; }.payable-quick-label { flex:0 0 auto; padding-left:6px; } }
+@media(max-width:760px) { .payable-adjustments { grid-template-columns:minmax(0,1fr); }.payable-quick-label { flex:0 0 auto; padding-left:6px; } }
 .receivable-sum--off { color:#b42c3c; }.payable-siblings button[aria-current] { padding-left:10px; border-left:3px solid #0c4c91; background:#f1f6fb; }
 .ai-intro { max-width:860px; margin:0 0 18px; line-height:1.5; }.ai-intro + .bank-warning { margin-bottom:18px; }
 .ai-toolbar { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px 16px; margin-bottom:8px; }.ai-toolbar .bank-filter { flex:0 1 auto; min-width:0; max-width:100%; }.ai-toolbar select { flex:1 1 auto; min-width:0; max-width:640px; text-overflow:ellipsis; }

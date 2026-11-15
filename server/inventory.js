@@ -5,6 +5,8 @@ import { allocateReceivedMaterial } from './orderMaterials.js'
 import { invalidUnitMessage, materialUnit, validMaterialUnit, validQuantityFor } from './materialUnits.js'
 
 // Materials and movements of the shared stock (tables inventory_materials and inventory_movements).
+// A stock material has no specification: the measures belong to each offer/OS line (2026-11-14). The old
+// inventory_materials.detail column stays in the database, unread and unwritten, so nothing is lost.
 // `recordInventoryNotification(row, previousLow)` registers a low-stock notice after a movement;
 // `refreshInventoryNotifications()` checks every material again after an edit.
 export default function createInventoryRouter(pool, requireAdmin, { recordInventoryNotification = async () => {}, refreshInventoryNotifications = async () => {} } = {}) {
@@ -13,7 +15,7 @@ export default function createInventoryRouter(pool, requireAdmin, { recordInvent
   router.get('/inventory', requireAdmin, async (_request, response) => {
     try {
       const [materials] = await pool.execute(
-        `SELECT id, name, detail, unit, quantity_kg AS quantity, minimum_kg AS minimum,
+        `SELECT id, name, unit, quantity_kg AS quantity, minimum_kg AS minimum,
                 unit_price AS unitPrice, icon, photo, created_at
            FROM inventory_materials
           ORDER BY name ASC`,
@@ -47,7 +49,7 @@ export default function createInventoryRouter(pool, requireAdmin, { recordInvent
   })
 
   router.post('/inventory', requireAdmin, async (request, response) => {
-    const { name, detail, quantity, minimum, unitPrice } = request.body ?? {}
+    const { name, quantity, minimum, unitPrice } = request.body ?? {}
     const initialQuantity = Number(quantity)
     if (request.body?.unit != null && !validMaterialUnit(request.body.unit)) return response.status(400).json({ message: invalidUnitMessage })
     const unit = materialUnit(request.body?.unit)
@@ -64,9 +66,9 @@ export default function createInventoryRouter(pool, requireAdmin, { recordInvent
         connection = await pool.getConnection()
         await connection.beginTransaction()
         const [result] = await connection.execute(
-          `INSERT INTO inventory_materials (name, detail, unit, quantity_kg, minimum_kg, unit_price, icon, photo)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [String(name).trim(), detail || null, unit, initialQuantity, Number(minimum) || 0, Number(unitPrice) || 0, appearance.icon || 'sheet', appearance.photo || null],
+          `INSERT INTO inventory_materials (name, unit, quantity_kg, minimum_kg, unit_price, icon, photo)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [String(name).trim(), unit, initialQuantity, Number(minimum) || 0, Number(unitPrice) || 0, appearance.icon || 'sheet', appearance.photo || null],
         )
         await connection.execute(
           `INSERT INTO inventory_movements
@@ -74,7 +76,7 @@ export default function createInventoryRouter(pool, requireAdmin, { recordInvent
            VALUES (?, 'creation', ?, ?, ?, ?, ?)`,
           [result.insertId, initialQuantity, Number(unitPrice) || 0, initialQuantity, order ? 'Entrada de material para a OS' : 'Cadastro inicial', order?.code || null],
         )
-        return { id: result.insertId, receivedQuantity: initialQuantity }
+        return { id: result.insertId, receivedQuantity: initialQuantity, purchaseUnitPrice: Number(unitPrice) || 0 }
       }, { commit: () => connection?.commit(), rollback: () => connection?.rollback(), receiptId: request.body.materialReceiptId, adminName: request.adminName, allocate: (result, context) => allocateReceivedMaterial(connection, result, context) })
       if (!receipt.alreadyReceived) await recordInventoryNotification({ id: receipt.id, name: String(name).trim(), quantity: receipt.balance ?? initialQuantity, minimum: Number(minimum) || 0 }, false)
       return response.status(201).json(receipt)
@@ -89,7 +91,7 @@ export default function createInventoryRouter(pool, requireAdmin, { recordInvent
   })
 
   router.patch('/inventory/:materialId', requireAdmin, async (request, response) => {
-    const { name, detail, minimum, unitPrice } = request.body ?? {}
+    const { name, minimum, unitPrice } = request.body ?? {}
     if (request.body?.unit != null && !validMaterialUnit(request.body.unit)) return response.status(400).json({ message: invalidUnitMessage })
     try {
       const [[current]] = await pool.execute('SELECT unit, quantity_kg AS quantity FROM inventory_materials WHERE id = ?', [request.params.materialId])
@@ -102,9 +104,9 @@ export default function createInventoryRouter(pool, requireAdmin, { recordInvent
       const appearanceFields = Object.keys(appearance)
       const [result] = await pool.execute(
         `UPDATE inventory_materials
-            SET name = ?, detail = ?, unit = ?, minimum_kg = ?, unit_price = ?${appearanceFields.map((field) => `, ${field} = ?`).join('')}
+            SET name = ?, unit = ?, minimum_kg = ?, unit_price = ?${appearanceFields.map((field) => `, ${field} = ?`).join('')}
           WHERE id = ?`,
-        [String(name || '').trim(), detail || null, unit, Number(minimum) || 0, Number(unitPrice) || 0, ...appearanceFields.map((field) => appearance[field]), request.params.materialId],
+        [String(name || '').trim(), unit, Number(minimum) || 0, Number(unitPrice) || 0, ...appearanceFields.map((field) => appearance[field]), request.params.materialId],
       )
       if (!result.affectedRows) return response.status(404).json({ message: 'Material não encontrado.' })
       await refreshInventoryNotifications()
@@ -191,7 +193,7 @@ export default function createInventoryRouter(pool, requireAdmin, { recordInvent
           [request.params.materialId, type, quantity, type === 'entry' ? incomingUnitPrice : currentUnitPrice, nextBalance, order ? 'Entrada de material para a OS' : destination || null, order?.code || orderCode || null, notes || null],
         )
         notification = { row: { id: material.id, name: material.name, quantity: nextBalance, minimum: Number(material.minimum_kg) }, previousLow: currentBalance <= Number(material.minimum_kg) }
-        return { materialId: Number(request.params.materialId), balance: nextBalance, unitPrice: nextUnitPrice, receivedQuantity: quantity }
+        return { materialId: Number(request.params.materialId), balance: nextBalance, unitPrice: nextUnitPrice, receivedQuantity: quantity, ...(type === 'entry' && Number.isFinite(incomingUnitPrice) && incomingUnitPrice >= 0 ? { purchaseUnitPrice: incomingUnitPrice } : {}) }
       }, { commit: () => connection?.commit(), rollback: () => connection?.rollback(), receiptId: request.body.materialReceiptId, adminName: request.adminName, allocate: (result, context) => allocateReceivedMaterial(connection, result, context) })
       if (notification) await recordInventoryNotification({ ...notification.row, quantity: receipt.balance }, notification.previousLow)
       return response.status(201).json(receipt)

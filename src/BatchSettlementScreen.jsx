@@ -11,8 +11,9 @@ import './batchSettlement.css'
 import BankSelect from './BankSelect.jsx'
 import MoneyInput from './MoneyInput.jsx'
 import { useResetOnChange } from './savedListState.js'
+import ClassificationSelect from './ClassificationSelect.jsx'
 
-const emptyFilters = { start: '', end: '', min: '', max: '' }
+const emptyFilters = { supplierId: '', classificationId: '', start: '', end: '', min: '', max: '' }
 const pickerColumns = [['id', 'ID'], ['supplierName', 'Fornecedor'], ['description', 'Descrição'], ['classificationName', 'Classificação'], ['dueDate', 'Vencimento'], ['valueCents', 'Valor']]
 
 const compact = (cents) => { const value = cents / 100; return value >= 1e6 ? `${(value / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mi` : value >= 1e3 ? `${(value / 1e3).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil` : value.toLocaleString('pt-BR', { maximumFractionDigits: 0 }) }
@@ -80,8 +81,8 @@ function SettleForm({ count, total, onClose, onConfirm }) {
 // A single list shared by every administrator: what one person adds, the others see on their next refresh.
 export default function BatchSettlementScreen(props) {
   const [items, setItems] = useState([]), [batch, setBatch] = useState({ ids: [] }), [loading, setLoading] = useState(true), [error, setError] = useState(''), [search, setSearch] = useState(''), [dueOnly, setDueOnly] = useState(false), [settling, setSettling] = useState(false), [notice, setNotice] = useState(''), [sort, setSort] = useState({ key: 'dueDate', direction: 1 })
-  const [filters, setFilters] = useState(emptyFilters), [page, setPage] = useState(1), pickerScroll = useRef(null)
-  const load = async () => { const [payables, current] = await Promise.all([payableRequest('/payables'), payableRequest('/payables/batch')]); setItems(payables.items); setBatch(current); setError('') }
+  const [filters, setFilters] = useState(emptyFilters), [page, setPage] = useState(1), pickerScroll = useRef(null), [lists, setLists] = useState({ suppliers: [], classifications: [] })
+  const load = async () => { const [payables, current] = await Promise.all([payableRequest('/payables'), payableRequest('/payables/batch')]); setItems(payables.items); setLists({ suppliers: payables.suppliers || [], classifications: payables.classifications || [] }); setBatch(current); setError('') }
   useEffect(() => {
     let active = true
     const run = () => load().catch((caught) => { if (active) setError(caught.message) }).finally(() => { if (active) setLoading(false) })
@@ -92,11 +93,14 @@ export default function BatchSettlementScreen(props) {
   const today = todayBahia(), open = items.filter((row) => !row.payment && !row.inactive)
   const inBatch = batch.ids.map((id) => open.find((row) => row.id === id)).filter(Boolean)
   const total = inBatch.reduce((sum, row) => sum + row.valueCents, 0)
-  // Due date range and value range (MoneyInput gives "1234.56", or "" when empty).
+  // Only the suppliers that have an open account (the registry has hundreds).
+  const openSuppliers = lists.suppliers.filter((supplier) => open.some((row) => String(row.supplierId) === String(supplier.id)))
+  // Supplier, classification, due date range and value range (MoneyInput gives "1234.56", or "" when empty). The bank is
+  // not a filter here: it is only recorded when the account is paid, and this list has only open accounts.
   const setFilter = (key, value) => setFilters((current) => ({ ...current, [key]: value }))
   const filtering = Object.values(filters).some(Boolean)
   const minCents = filters.min ? Math.round(Number(filters.min) * 100) : null, maxCents = filters.max ? Math.round(Number(filters.max) * 100) : null
-  const available = filterPayables(open, { search, start: filters.start, end: filters.end }, today).filter((row) => !batch.ids.includes(row.id) && (!dueOnly || row.dueDate <= today) && (minCents == null || row.valueCents >= minCents) && (maxCents == null || row.valueCents <= maxCents)).sort((a, b) => { const av = a[sort.key] ?? '', bv = b[sort.key] ?? ''; return sort.direction * (typeof av === 'number' ? av - bv : String(av).localeCompare(String(bv), 'pt-BR')) || a.id.localeCompare(b.id) })
+  const available = filterPayables(open, { search, supplierId: filters.supplierId, classificationId: filters.classificationId, start: filters.start, end: filters.end }, today).filter((row) => !batch.ids.includes(row.id) && (!dueOnly || row.dueDate <= today) && (minCents == null || row.valueCents >= minCents) && (maxCents == null || row.valueCents <= maxCents)).sort((a, b) => { const av = a[sort.key] ?? '', bv = b[sort.key] ?? ''; return sort.direction * (typeof av === 'number' ? av - bv : String(av).localeCompare(String(bv), 'pt-BR')) || a.id.localeCompare(b.id) })
   // 50 per page; a new search, filter or order goes back to the first page.
   const pageSize = 50, pages = Math.max(1, Math.ceil(available.length / pageSize)), currentPage = Math.min(page, pages)
   const shown = available.slice((currentPage - 1) * pageSize, currentPage * pageSize)
@@ -127,6 +131,8 @@ export default function BatchSettlementScreen(props) {
         <h2>Adicionar lançamentos</h2>
         <div className="payable-toolbar"><label className="payable-search"><Search size={18} /><input aria-label="Buscar contas em aberto" placeholder="ID, fornecedor, descrição ou documento" value={search} onChange={(event) => setSearch(event.target.value)} /></label><label className="batch-check"><input type="checkbox" checked={dueOnly} onChange={(event) => setDueOnly(event.target.checked)} />Somente vencidas e que vencem hoje</label>{shown.length > 0 && <button type="button" className="admin-tool-button" onClick={() => change('/payables/batch/items', 'POST', { ids: shown.map((row) => row.id) })}><Plus size={15} />Adicionar esta página ({shown.length})</button>}</div>
         <div className="batch-filters">
+          <label>Fornecedor<select aria-label="Fornecedor" value={filters.supplierId} onChange={(event) => setFilter('supplierId', event.target.value)}><option value="">Todos</option>{openSuppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select></label>
+          <label>Classificação<ClassificationSelect classifications={lists.classifications} use="payable" keep={lists.classifications.filter((item) => item.nature !== 'revenue').map((item) => item.id)} required={false} placeholder="Todas" value={filters.classificationId} onChange={(id) => setFilter('classificationId', id)} /></label>
           <label>Vencimento de<input type="date" value={filters.start} onChange={(event) => setFilter('start', event.target.value)} /></label>
           <label>Vencimento até<input type="date" min={filters.start || undefined} value={filters.end} onChange={(event) => setFilter('end', event.target.value)} /></label>
           <label>Valor mínimo<MoneyInput aria-label="Valor mínimo" placeholder="0,00" value={filters.min} onChange={(value) => setFilter('min', value)} /></label>

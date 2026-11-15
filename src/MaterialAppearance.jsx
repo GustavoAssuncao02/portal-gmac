@@ -1,12 +1,13 @@
 import { useRef, useState } from 'react'
-import { Layers, Minus, Cylinder, Columns3, Disc3, Box, Cog, Bolt, Hexagon, Link, Flame, PaintBucket, Disc, Wrench, Upload, Trash2 } from 'lucide-react'
-import { materialIcon, materialIcons } from '../server/materialIcons.js'
+import { Layers, Minus, Cylinder, Columns3, Disc3, Box, Cog, Bolt, Hexagon, Link, Flame, PaintBucket, Disc, Wrench, PenLine, SprayCan, Coffee, SoapDispenserDroplet, CupSoda, Keyboard, Lightbulb, HardHat, BriefcaseMedical, Package, Hammer, Archive, Upload, Trash2, LayoutGrid } from 'lucide-react'
+import { iconIn, materialIcons } from '../server/materialIcons.js'
 
-const icons = { Layers, Minus, Cylinder, Columns3, Disc3, Box, Cog, Bolt, Hexagon, Link, Flame, PaintBucket, Disc, Wrench }
+// Factory stock icons and Estoque Administrativo icons (server/materialIcons.js names them).
+const icons = { Layers, Minus, Cylinder, Columns3, Disc3, Box, Cog, Bolt, Hexagon, Link, Flame, PaintBucket, Disc, Wrench, PenLine, SprayCan, Coffee, SoapDispenserDroplet, CupSoda, Keyboard, Lightbulb, HardHat, BriefcaseMedical, Package, Hammer, Archive }
 
-export function MaterialVisual({ icon, photo, name = '', className = '' }) {
+export function MaterialVisual({ icon, photo, name = '', className = '', iconSet = materialIcons }) {
   const [failedPhoto, setFailedPhoto] = useState(null)
-  const selected = materialIcon(icon)
+  const selected = iconIn(iconSet, icon)
   const Symbol = icons[selected.icon]
   return <span className={`material-visual ${className}`}>
     {photo && photo !== failedPhoto ? <img src={photo} alt={`Foto de ${name || 'material'}`} onError={() => setFailedPhoto(photo)} /> : <Symbol size={22} aria-label={selected.label} />}
@@ -45,7 +46,7 @@ export async function reduceMaterialPhoto(file) {
   } finally { URL.revokeObjectURL(url) }
 }
 
-export default function MaterialAppearance({ value, disabled, processing, onProcessing, onChange }) {
+export default function MaterialAppearance({ value, disabled, processing, onProcessing, onChange, iconSet = materialIcons }) {
   const input = useRef(null)
   const [error, setError] = useState('')
   async function upload(event) {
@@ -61,7 +62,7 @@ export default function MaterialAppearance({ value, disabled, processing, onProc
   return <fieldset className="material-appearance" disabled={disabled || processing}>
     <legend>Imagem do material</legend>
     <div className="material-appearance-top">
-      <MaterialVisual {...value} className="material-appearance-preview" />
+      <MaterialVisual {...value} iconSet={iconSet} className="material-appearance-preview" />
       <div className="material-photo-actions">
         <button type="button" onClick={() => input.current?.click()}><Upload size={16} />{processing ? 'Preparando foto...' : value.photo ? 'Trocar foto' : 'Enviar foto'}</button>
         {value.photo && <button type="button" onClick={() => { setError(''); onChange({ photo: null }) }}><Trash2 size={16} />Remover foto</button>}
@@ -70,10 +71,23 @@ export default function MaterialAppearance({ value, disabled, processing, onProc
     </div>
     {error && <p className="workflow-error" role="alert">{error}</p>}
     <div className="material-icon-grid" role="group" aria-label="Ícones do material">
-      {materialIcons.map((item) => {
+      {iconSet.map((item) => {
         const Symbol = icons[item.icon]
-        return <button key={item.key} type="button" title={item.label} aria-label={item.label} aria-pressed={!value.photo && materialIcon(value.icon).key === item.key} onClick={() => { setError(''); onChange({ icon: item.key, photo: null }) }}><Symbol size={21} /><span>{item.label}</span></button>
+        return <button key={item.key} type="button" title={item.label} aria-label={item.label} aria-pressed={!value.photo && iconIn(iconSet, value.icon).key === item.key} onClick={() => { setError(''); onChange({ icon: item.key, photo: null }) }}><Symbol size={21} /><span>{item.label}</span></button>
       })}
     </div>
   </fieldset>
+}
+
+// The stock filter: the same tiles as the icon picker (icon over its name), one per icon of the stock plus "Todos", with
+// how many materials each has. Used by Estoque and Estoque Administrativo alike.
+export function MaterialIconFilter({ iconSet, items, value, onChange }) {
+  const count = (key) => items.filter((item) => iconIn(iconSet, item.icon).key === key).length
+  return <div className="material-icon-grid material-icon-filter" role="group" aria-label="Filtrar por tipo de material">
+    <button type="button" aria-pressed={!value} onClick={() => onChange('')}><LayoutGrid size={21} /><span>Todos</span><small>{items.length}</small></button>
+    {iconSet.map((item) => {
+      const Symbol = icons[item.icon], total = count(item.key)
+      return <button key={item.key} type="button" aria-pressed={value === item.key} className={total ? '' : 'material-icon-filter-empty'} onClick={() => onChange(value === item.key ? '' : item.key)}><Symbol size={21} /><span>{item.label}</span><small>{total}</small></button>
+    })}
+  </div>
 }

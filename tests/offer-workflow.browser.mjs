@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
+import { openSidebarItem } from './sidebarNavigation.js'
 
 const modulePath = process.env.PLAYWRIGHT_MODULE
 const { chromium } = await import(modulePath ? pathToFileURL(modulePath).href : 'playwright')
@@ -26,7 +27,7 @@ page.on('pageerror', (error) => errors.push(error.message))
 const navigate = async (label) => {
   const opener = page.getByRole('button', { name: 'Abrir menu de navegação', exact: true })
   if (await opener.isVisible() && await opener.getAttribute('aria-expanded') === 'false') await opener.click()
-  await page.locator('.sidebar').getByRole('button', { name: label, exact: true }).click()
+  await openSidebarItem(page, label)
 }
 const waitSaved = () => page.waitForFunction(() => !document.querySelector('.offer-proposal-button')?.disabled)
 
@@ -154,7 +155,7 @@ try {
   await otherPage.getByLabel('CPF', { exact: true }).fill('12345678901')
   await otherPage.getByLabel('Senha', { exact: true }).fill('teste')
   await otherPage.getByRole('button', { name: 'Entrar', exact: true }).click()
-  await otherPage.locator('.sidebar').getByRole('button', { name: 'Pedidos de material', exact: true }).click()
+  await openSidebarItem(otherPage, 'Pedidos de material')
   await otherPage.locator('.material-orders-table tbody tr').filter({ hasText: 'Titanio novo teste' }).waitFor()
   await otherContext.close()
   await page.reload()

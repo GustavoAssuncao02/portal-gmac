@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
 import { createWorkflowFixture } from './workflowFixture.js'
+import { sidebarGroupOf } from './sidebarNavigation.js'
 
 const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Gustavo' }
 const fixture = await createWorkflowFixture({ accountsEnv: env })
@@ -11,7 +12,7 @@ page.on('pageerror', (error) => errors.push(error.message))
 // Cadastros and Gestão Financeira are menu groups that may start collapsed.
 const nav = async (name) => {
   const item = page.locator('.sidebar').getByRole('button', { name, exact: true })
-  if (!await item.isVisible()) await page.locator('.sidebar').getByRole('button', { name: ['Fornecedores', 'Administradores', 'Funcionários', 'Clientes'].includes(name) ? 'Cadastros' : ['Serviços em andamento', 'Serviços concluídos', 'Ofertas e serviços'].includes(name) ? 'Operação' : 'Gestão Financeira', exact: true }).click()
+  if (!await item.isVisible()) await page.locator('.sidebar').getByRole('button', { name: sidebarGroupOf(name), exact: true }).click()
   await item.click()
 }
 const home = page.locator('.admin-home-main')

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
 import { createWorkflowFixture } from './workflowFixture.js'
 import { todayBahia, shiftMonth } from '../server/payableRules.js'
+import { sidebarGroupOf } from './sidebarNavigation.js'
 
 const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Gustavo' }
 const fixture = await createWorkflowFixture({ accountsEnv: env })
@@ -11,7 +12,7 @@ const errors = []; page.on('pageerror', (e) => errors.push(e.message))
 // Cadastros and Gestão Financeira are menu groups that may start collapsed.
 const nav = async (name) => {
   const item = page.locator('.sidebar').getByRole('button', { name, exact: true })
-  if (!await item.isVisible()) await page.locator('.sidebar').getByRole('button', { name: ['Fornecedores', 'Administradores', 'Funcionários', 'Clientes'].includes(name) ? 'Cadastros' : ['Serviços em andamento', 'Serviços concluídos', 'Ofertas e serviços'].includes(name) ? 'Operação' : 'Gestão Financeira', exact: true }).click()
+  if (!await item.isVisible()) await page.locator('.sidebar').getByRole('button', { name: sidebarGroupOf(name), exact: true }).click()
   await item.click()
 }
 const modal = () => page.locator('dialog[open]').last()
@@ -67,14 +68,14 @@ try {
   await modal().getByLabel('Comprovantes', { exact: true }).setInputFiles({ name: 'comprovante.txt', mimeType: 'text/plain', buffer: Buffer.from('Pagamento confirmado') })
   await modal().getByRole('button', { name: 'Confirmar baixa', exact: true }).click()
   await modal().getByRole('heading', { name: 'Pagamento', exact: true }).waitFor()
-  assert.equal(await modal().getByRole('button', { name: 'Editar', exact: true }).count(), 0, 'Paid accounts only show possible actions')
+  assert.equal(await modal().getByRole('button', { name: 'Editar', exact: true }).isDisabled(), true, 'a paid account keeps Editar visible but disabled')
   assert.equal(await modal().getByRole('button', { name: 'Estornar baixa', exact: true }).count(), 1)
   assert.equal(await modal().getByLabel('Adicionar anexos', { exact: true }).isDisabled(), true)
   assert.ok((await modal().innerText()).includes('comprovante.txt'))
   await page.screenshot({ path: 'test-results/payable-paid-details.png', fullPage: true })
   for (const width of [390, 320]) { await page.setViewportSize({ width, height: 844 }); assert.ok(await modal().evaluate((el) => el.scrollWidth <= el.clientWidth)); assert.ok(await modal().locator('footer').evaluate((el) => el.getBoundingClientRect().bottom <= innerHeight)); await page.screenshot({ path: `test-results/payable-details-${width}.png`, fullPage: true }) }
   await page.setViewportSize({ width: 1440, height: 1000 })
-  const pdfEvent = page.waitForEvent('download'); await modal().getByRole('button', { name: 'Mais ações', exact: true }).click(); await modal().getByRole('menuitem', { name: 'Gerar PDF individual', exact: true }).click(); await (await pdfEvent).saveAs('test-results/payable-individual.pdf')
+  const pdfEvent = page.waitForEvent('download'); await modal().getByRole('button', { name: 'Gerar PDF individual', exact: true }).click(); await (await pdfEvent).saveAs('test-results/payable-individual.pdf')
   await modal().getByRole('button', { name: 'Estornar baixa', exact: true }).click()
   await modal().getByLabel('Motivo', { exact: true }).fill('Baixa registrada por engano'); await modal().getByRole('button', { name: 'Confirmar', exact: true }).click()
   await page.waitForFunction(() => document.querySelectorAll('dialog[open]').length === 1)

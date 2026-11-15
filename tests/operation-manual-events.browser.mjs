@@ -62,7 +62,10 @@ try {
   await form.getByText(`${stage.name}: +2 peça(s), 2/${total} no total`, { exact: true }).waitFor()
   await save.click()
   await form.waitFor({ state: 'detached' })
-  await row('Peças registradas').getByText(`${stage.name}: +2 peça(s), 2/${total} no total`, { exact: true }).waitFor()
+  // The history shows the time behind the pieces: one hour of work since the start, for two pieces.
+  const pieces = row('Peças registradas')
+  await pieces.getByText(`${stage.name.toLocaleUpperCase('pt-BR')}: +2 peças - 30 minutos por peça`, { exact: true }).waitFor()
+  await pieces.getByText(`2/${total} no total`, { exact: true }).waitFor()
 
   // A pause without an open start is refused with the reason; the form stays filled in.
   await add.click()

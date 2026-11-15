@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, CalendarClock, CheckCircle2, ChevronLeft, ChevronRight, Gauge, ListChecks, Plus, Trash2, Wrench } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, CalendarClock, CheckCircle2, ChevronLeft, ChevronRight, FileText, Gauge, ListChecks, Plus, Trash2, Wrench, X } from 'lucide-react'
 import { PayableModal } from './PayableModal.jsx'
+import { backdropClose } from './dialogBackdrop.js'
 import { payableRequest } from './payablesApi.js'
 import { pollWhileVisible } from './polling.js'
 import { DAY_MS, SLOT_MS, addDays, blockEnd, blockStart, clockTime, dayStart, localDay, operatorQueue, planningSnapshot, resourceKey } from '../server/planningRules.js'
@@ -34,7 +35,8 @@ function rangeOf(view, date) {
 
 // The planning of the machines: a calendar (day, week, month) of blocks — one stage of one OS on one machine or labor
 // service — read again every 10 seconds, with the real work drawn over it.
-export default function PlanningScreen({ Sidebar, WorkspaceTabs, navigationProps }) {
+// `renderOrder(code, back)` draws the whole OS (the same view of the Ordem de serviço screen) inside the block window.
+export default function PlanningScreen({ Sidebar, WorkspaceTabs, navigationProps, renderOrder }) {
   const [view, setView] = useState('day')
   const [date, setDate] = useState(() => localDay(Date.now()))
   const [sector, setSector] = useState('')
@@ -132,7 +134,7 @@ export default function PlanningScreen({ Sidebar, WorkspaceTabs, navigationProps
       </div>
     </>}
     {editing && data && (editing.block
-      ? <BlockModal data={data} block={editing.block} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); refresh() }} />
+      ? <BlockModal data={data} block={editing.block} renderOrder={renderOrder} onClose={() => { setEditing(null); refresh() }} onSaved={() => { setEditing(null); refresh() }} />
       : <OrderPlanModal data={data} initial={editing.plan} date={date} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); setFit(null); refresh() }} />)}
   </main></div>
 }
@@ -501,9 +503,23 @@ function OrderPlanModal({ data, initial, date, onClose, onSaved }) {
   </PayableModal>
 }
 
+// The whole OS opened from a block (Ver OS), in a large window of its own: the form rules of the block window
+// (.payable-modal label, input…) would restyle the OS and the windows it opens, such as the history and Editar OS.
+function OrderWindow({ code, renderOrder, onBack, onClose }) {
+  const ref = useRef(null)
+  useEffect(() => { const dialog = ref.current; dialog.showModal(); return () => dialog.close() }, [])
+  return <dialog ref={ref} className="planning-os-modal" aria-labelledby="planning-os-title" onCancel={(event) => { event.preventDefault(); onClose() }} {...backdropClose(onClose)}>
+    <header><h2 id="planning-os-title">{`Ordem de serviço ${code}`}</h2><button type="button" className="payable-icon" aria-label="Fechar janela" title="Fechar janela" onClick={onClose}><X size={20} /></button></header>
+    <div className="planning-os-body">{renderOrder(code, onBack)}</div>
+    <footer><button className="admin-tool-button planning-back" type="button" onClick={onBack}><ArrowLeft size={16} aria-hidden="true" />Voltar ao bloco</button><button className="admin-tool-button" type="button" onClick={onClose}>Fechar</button></footer>
+  </dialog>
+}
+
 // One block of the plan: its day, start, duration and pieces. The machine or service is the one defined in the OS for the
 // stage; only a stage without it (an older OS) lets the block choose.
-function BlockModal({ data, block, onClose, onSaved }) {
+// Ver OS grows the same window and shows the whole OS; Voltar ao bloco returns with what was typed in the block kept.
+function BlockModal({ data, block, renderOrder, onClose, onSaved }) {
+  const [viewing, setViewing] = useState(false)
   const fixed = block.stageResource && data.resources.find((item) => item.type === block.stageResource.type && item.id === String(block.stageResource.id))
   const [resource, setResource] = useState(fixed ? resourceKey(fixed.type, fixed.id) : resourceKey(block.resourceType, block.resourceId))
   const [day, setDay] = useState(localDay(blockStart(block)))
@@ -532,12 +548,13 @@ function BlockModal({ data, block, onClose, onSaved }) {
     try { await payableRequest(`/planning/blocks/${block.id}`, 'DELETE'); onSaved() } catch (caught) { setError(caught.message); setBusy(false) }
   }
   const machines = data.resources.filter((item) => item.type === 'machine'), services = data.resources.filter((item) => item.type === 'labor-service')
+  if (viewing) return <OrderWindow code={block.orderCode} renderOrder={renderOrder} onBack={() => setViewing(false)} onClose={onClose} />
   return <PayableModal title="Bloco do planejamento" className="planning-modal" busy={busy} onClose={onClose} footer={<>
     <button className="admin-tool-button planning-remove" type="button" disabled={busy} onClick={remove}><Trash2 size={16} aria-hidden="true" />Tirar do plano</button>
     <button className="admin-tool-button" type="button" disabled={busy} onClick={onClose}>Cancelar</button>
     <button className="admin-tool-button admin-tool-button--primary" type="submit" form="planning-form" disabled={busy}><CalendarClock size={16} aria-hidden="true" />{busy ? 'Salvando...' : 'Salvar bloco'}</button></>}>
     <form id="planning-form" className="planning-form" onSubmit={submit}><fieldset disabled={busy}>
-      <p className="planning-order-facts"><strong>{block.orderCode} · {upper(block.stageName)}</strong> · {block.service}</p>
+      <div className="planning-order-line"><p className="planning-order-facts"><strong>{block.orderCode} · {upper(block.stageName)}</strong> · {upper(block.service)}</p>{renderOrder && <button className="admin-tool-button planning-view-order" type="button" onClick={() => setViewing(true)}><FileText size={16} aria-hidden="true" />Ver OS</button>}</div>
       {fixed ? <p className="planning-order-facts">Máquina ou serviço: <strong>{fixed.name}</strong> (definido na OS)</p> : <label>Máquina ou serviço<select value={resource} onChange={(event) => setResource(event.target.value)}>
         <optgroup label="Máquinas">{machines.map((item) => <option key={item.id} value={resourceKey(item.type, item.id)}>{upper(item.name)}{item.maintenance ? ' (em manutenção)' : ''}</option>)}</optgroup>
         {services.length > 0 && <optgroup label="Serviços (hora homem)">{services.map((item) => <option key={item.id} value={resourceKey(item.type, item.id)}>{upper(item.name)}</option>)}</optgroup>}

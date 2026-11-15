@@ -10,6 +10,7 @@ import { recordPasswordChange } from './passwordReset.js'
 import { actorOf, recordRegistryChange } from './registryHistory.js'
 import { preRegisteredClientIds } from './sitePreRegistration.js'
 import { blockedMessage, createLoginThrottle } from './loginThrottle.js'
+import { paymentDaysValue } from './clientPaymentTerm.js'
 
 const sessions = new Map()
 const safe = ({ id, name, birthDate, cpf, email, createdAt, role }) => ({ id, name, birthDate, cpf, email, createdAt, role: role || 'admin' })
@@ -205,10 +206,23 @@ export function createAccountService(pool, env = process.env) {
       return false
     }
   })()
+  // The payment term in days (server/clientPaymentTerm.js) came later too: the column is added the same way.
+  let paymentColumn = null
+  const ensureClientPaymentDays = () => paymentColumn ||= (async () => {
+    try {
+      const [columns] = await pool.execute("SELECT COLUMN_NAME AS name FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'clients' AND COLUMN_NAME = 'payment_days'")
+      if (columns.length) return true
+      try { await pool.execute('ALTER TABLE clients ADD COLUMN payment_days SMALLINT UNSIGNED NULL') } catch (error) { if (error.code !== 'ER_DUP_FIELDNAME') throw error }
+      return true
+    } catch (error) {
+      console.error(`O prazo de pagamento dos clientes ficará indisponível: não foi possível criar a coluna (${error.code || error.message}). Rode no banco: ALTER TABLE clients ADD COLUMN payment_days SMALLINT UNSIGNED NULL`)
+      return false
+    }
+  })()
   async function clients() {
     if (pool) {
-      const notes = await ensureClientNotes()
-      const [rows] = await pool.execute(`SELECT id, name, document_type AS documentType, document, email, ${notes ? "COALESCE(notes, '')" : "''"} AS notes, created_at AS createdAt FROM clients ORDER BY name`)
+      const notes = await ensureClientNotes(), payment = await ensureClientPaymentDays()
+      const [rows] = await pool.execute(`SELECT id, name, document_type AS documentType, document, email, ${notes ? "COALESCE(notes, '')" : "''"} AS notes, ${payment ? 'payment_days' : 'NULL'} AS paymentDays, created_at AS createdAt FROM clients ORDER BY name`)
       return rows
     }
     return (await readStore()).clients || []
@@ -217,7 +231,7 @@ export function createAccountService(pool, env = process.env) {
   // The client or administrator is already saved in its own table: a failure to record the history is logged, not raised.
   const recordHistory = (change) => mutateStore((store) => recordRegistryChange(store, change)).catch((error) => console.error('Falha ao registrar o histórico do cadastro:', error.message))
   const registryView = (kind, row) => row && (kind === 'clients'
-    ? { name: row.name, documentType: row.documentType, document: row.document, email: row.email || '', notes: row.notes || '' }
+    ? { name: row.name, documentType: row.documentType, document: row.document, email: row.email || '', notes: row.notes || '', paymentDays: row.paymentDays ? String(row.paymentDays) : '' }
     : { name: row.name, cpf: row.cpf, email: row.email || '', birthDate: row.birthDate || '' })
   // `audit`: who saved ({ actor }) and, when the change came from elsewhere, why ({ note }).
   async function save(kind, id, body, audit = {}) {
@@ -232,6 +246,8 @@ export function createAccountService(pool, env = process.env) {
     const current = id == null ? null : rows.find((item) => String(item.id) === String(id))
     if (id != null && !current) fail(404, 'Cadastro não encontrado.')
     if (!isClient && Number(id) === 0 && id != null) fail(409, 'Edite esta conta em Configurações.')
+    // A save that does not send the term (an older screen, another part of the portal) keeps the registered one.
+    if (isClient) fields.paymentDays = Object.hasOwn(body, 'paymentDays') ? paymentDaysValue(body.paymentDays) : current?.paymentDays ?? null
     if (!isClient && (!id || body.password)) {
       if (typeof body.password !== 'string' || body.password.length < 6 || body.password.length > 72) fail(400, 'A senha deve ter entre 6 e 72 caracteres.')
       fields.passwordHash = await bcrypt.hash(body.password, 12)
@@ -243,9 +259,9 @@ export function createAccountService(pool, env = process.env) {
     let item
     if (pool) {
       const table = isClient ? 'clients' : 'users'
-      const notes = isClient && await ensureClientNotes()
-      const columns = isClient ? ['name', 'email', 'document_type', 'document', ...(notes ? ['notes'] : [])] : ['name', 'email', 'birth_date', 'cpf', 'password_hash']
-      const values = isClient ? [name, email, fields.documentType, fields.document, ...(notes ? [fields.notes || null] : [])] : [name, email, fields.birthDate, fields.cpf, fields.passwordHash || current.passwordHash]
+      const notes = isClient && await ensureClientNotes(), payment = isClient && await ensureClientPaymentDays()
+      const columns = isClient ? ['name', 'email', 'document_type', 'document', ...(notes ? ['notes'] : []), ...(payment ? ['payment_days'] : [])] : ['name', 'email', 'birth_date', 'cpf', 'password_hash']
+      const values = isClient ? [name, email, fields.documentType, fields.document, ...(notes ? [fields.notes || null] : []), ...(payment ? [fields.paymentDays] : [])] : [name, email, fields.birthDate, fields.cpf, fields.passwordHash || current.passwordHash]
       if (id == null) {
         const [result] = await pool.execute(`INSERT INTO ${table} (${columns.join(', ')}${isClient ? '' : ', role'}) VALUES (${columns.map(() => '?').join(', ')}${isClient ? '' : ", 'admin'"})`, values)
         item = { id: result.insertId, ...fields }

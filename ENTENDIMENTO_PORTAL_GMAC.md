@@ -125,37 +125,56 @@ Na configuração local consultada nesta atualização, `TEST_LOGIN_ENABLED=true
 
 ```text
 Início
-Máquinas
-Serviços
-Estoque
-Pedidos de material
+Gestão Operacional
+    Máquinas
+    Serviços
+    Etapas
+    Estoque
+    Pedidos de material
+Estoque Administrativo
 Calculadora de pesos e medidas
 Cadastros
     Fornecedores
     Administradores
     Funcionários
+    Setores
     Clientes
-Serviços em andamento
-Serviços concluídos
-Ofertas e serviços
+    Solicitantes
+    Compradores
+    Bancos
+    Razões de pausas
+Operação
+    Serviços em andamento
+    Serviços concluídos
+    Ofertas e serviços
+    Planejamento
 Gestão Financeira
     Contas a Pagar
     Contas a Receber
     Tesouraria
+    Fluxo de caixa
     Baixa em Lote
     Conciliação bancária
     Business Intelligence
+    DRE
+    Ajustes da DRE
+    Grupos de contas
     Classificações
 Relatórios
+Ticket
 Configurações
 ```
 
 - **Início** é o nome visível do antigo Dashboard.
+- **Gestão Operacional** (desde 2026-11-13) reúne os recursos da fábrica: Máquinas, Serviços, Etapas, Estoque e Pedidos de material, nessa ordem. O funcionário administrativo também vê o grupo.
 - **Pedidos de material** aparece logo abaixo de Estoque.
+- **Estoque Administrativo** (desde 2026-11-14) fica fora do grupo, como item próprio logo abaixo de Gestão Operacional.
 - **Serviços**, abaixo de Máquinas, é o catálogo de atividades cobradas por hora homem. Não é a lista de OS em andamento.
 - Peças e serviços, Produção e Qualidade não são destinos atuais do menu. Não reintroduzi-los com base no TXT antigo.
 - Internamente, algumas chaves antigas foram preservadas: `Dashboard` é exibido como Início, e `Pedidos` como Pedidos de material.
-- Os grupos Cadastros e Gestão Financeira podem ser expandidos ou recolhidos.
+- Os grupos podem ser expandidos ou recolhidos. **Operação** começa aberto; **Gestão Operacional**, **Cadastros** e **Gestão Financeira** começam fechados. Abrir uma tela de um grupo (pelo menu ou pela aba) abre o grupo, e o estado de cada grupo vale para a sessão do navegador.
+- No **Ticket**, o módulo segue os grupos do menu: Gestão Operacional, Cadastros, Operação e Gestão Financeira pedem o sub-módulo (a tela). Tickets antigos dos módulos "Estoque" e "Pedidos de material" aparecem como Gestão Operacional › Estoque e › Pedidos de material (`ticketPlace` em `server/ticketRules.js`).
+- Nos testes de navegador, `tests/sidebarNavigation.js` (`openSidebarItem`) abre o grupo certo antes de clicar numa tela.
 
 ### Abas e cabeçalho global
 
@@ -202,10 +221,17 @@ Configurações
 | --- | --- | --- |
 | Funcionários | Tipo (Operador ou Administrativo), nome, CPF, nascimento e e-mail (opcionais), identificação de 3 dígitos; código de acesso de 4 dígitos (operador) ou senha (administrativo) | Nascimento e e-mail são opcionais só para funcionários (colunas `birth_date` e `email` aceitam nulo, ajustadas na inicialização); administradores continuam exigindo os dois. Os 20 funcionários importados da listagem do RH (16/10/2026) usam como código de acesso o **Nº identificador** da folha com 4 dígitos (identificador 6 → `0006`). A identificação preserva zeros à esquerda, como `001`. Criar, editar e excluir exigem login de administrador ou de funcionário administrativo. A lista pública de funcionários nunca devolve código nem senha; o código aparece só para quem está logado no sistema administrativo. Colunas no MySQL: `employee_type`, `access_code` e `password_hash`, criadas automaticamente na inicialização (`ensureEmployeeAccess`). |
 | Administradores | Nome, nascimento, CPF, e-mail, senha | Cadastro, edição e exclusão; senha nova pode ser omitida na edição para manter a atual. |
-| Clientes | Nome/razão social, tipo de documento, CPF/CNPJ, e-mail (opcional), observação | Formatação e validação da quantidade de dígitos do documento. O e-mail é opcional (gravado como NULL; a coluna é ajustada na inicialização). Os 175 clientes da planilha `CLIENTES_CNPJ_ATUALIZADO.xlsx` (16/10/2026; só o "CLIENTE AVULSO", sem documento, e a linha repetida da GAZIN ficaram de fora) entraram com razão social, CNPJ e, quando diferente da razão social, o nome fantasia na observação. |
+| Clientes | Nome/razão social, tipo de documento, CPF/CNPJ, e-mail (opcional), observação, prazo de pagamento em dias (opcional) | Formatação e validação da quantidade de dígitos do documento. O e-mail é opcional (gravado como NULL; a coluna é ajustada na inicialização). Os 175 clientes da planilha `CLIENTES_CNPJ_ATUALIZADO.xlsx` (16/10/2026; só o "CLIENTE AVULSO", sem documento, e a linha repetida da GAZIN ficaram de fora) entraram com razão social, CNPJ e, quando diferente da razão social, o nome fantasia na observação. |
 | Fornecedores | Nome/razão social, CPF/CNPJ, e-mail, telefone | Usados nas contas a pagar; a exclusão é impedida quando há contas vinculadas. Os 411 fornecedores da listagem do sistema antigo (16/10/2026) foram importados só com nome e CPF/CNPJ. |
 
 Os registros são persistidos pelo backend. Não tratar Administradores e Clientes como telas meramente demonstrativas, como dizia o documento antigo.
+
+**Prazo de pagamento do cliente** (decisão de 14/11/2026, `server/clientPaymentTerm.js`):
+- Só o número de dias é gravado (`clients.payment_days SMALLINT UNSIGNED NULL`, de 1 a 365). A API cria a coluna sozinha, como fez com `notes`; se o usuário do banco não puder alterar tabelas, o servidor registra o `ALTER TABLE` a rodar à mão e os clientes seguem funcionando sem o prazo.
+- Um salvamento que não envia o campo mantém o prazo cadastrado; em branco, o prazo é removido.
+- Ele preenche **Pagamento (dias)** dos modelos A/B (proposta e orçamento da etiqueta), e o PDF escreve "45 dias". Os modelos Etiqueta e Nestlé não têm campo de pagamento.
+- Se o cliente cadastrado ainda não tem prazo, o prazo digitado na proposta é salvo no cadastro ao gerar o PDF (como o e-mail digitado no envio da proposta), com nota no histórico "i". Um prazo já cadastrado nunca é trocado pela proposta: muda-se em Cadastros › Clientes.
+- Propostas geradas antes guardavam o pagamento como texto livre ("45 DDL"): ao reabrir, o número do começo do texto preenche o campo; o PDF antigo continua com o texto.
 
 As listas de cadastro (Funcionários, Clientes, Administradores e Fornecedores) usam `src/RegistryList.jsx`: busca por nome, CPF/CNPJ, e-mail (e nome fantasia/código), contagem, ordenação nos títulos e CPF/CNPJ formatado com a etiqueta do tipo; a coluna do nome fica com a maior parte da largura. Clientes e fornecedores aceitam CPF ou CNPJ.
 
@@ -263,7 +289,7 @@ São valores iniciais editáveis, não uma tabela comercial definitiva da empres
 
 ### Ofertas e serviços
 
-- Lista solicitações inseridas manualmente, com busca e filtro de data.
+- Lista solicitações inseridas manualmente, com filtro de data e busca: a mesma lupa no canto superior direito de Ofertas e serviços, Serviços em andamento e Serviços concluídos (`src/workSearch.js`, decisão de 15/11/2026): serviço, cliente, códigos da oferta e da OS, etiqueta, nº da cotação (e o número do orçamento da etiqueta) e o nome de qualquer anexo — da oferta, dos e-mails da proposta, da OS e dos **Anexos administrativos**. A oferta e a OS são o mesmo trabalho: um anexo de uma acha as duas. Acentos e maiúsculas não importam.
 - Exibe serviço, cliente, etiqueta, quantidade, solicitação, prazo, status, origem e ações.
 - Estados do fluxo incluem Criando oferta, Em análise, Propostas, Aceitas e Recusadas.
 - Oferta manual começa **Criando oferta** (status `creating`) e só passa a **Em análise** quando alguém clica em **Fazer proposta** nos detalhes, com as etapas planejadas (`POST /api/offers/:id/finish`).
@@ -340,6 +366,8 @@ Exemplo: uma OS de 20 peças com Pintura = 20, Caldeiraria = 8 e Usinagem = 5 po
 - A proposta salva guarda `serviceValue` (custo), `osValue` (Valor da OS), `profit`, `machine`, `serviceTime`, `totalTime`, `materials`, `labor`, `margin` e `discount`. Ao gerar um documento, `osValue` é o **total do documento** (é o que o cliente recebe e o que o recebimento da OS usa). A margem e o desconto escolhidos só são guardados se o documento cobra o Valor da OS que eles produzem; com tabela de preços (Nestlé, Etiqueta) ou preço editado no documento, guarda-se a margem real sobre o custo e desconto 0.
 - `osValueOf` devolve o valor cobrado de uma proposta salva: total do documento, depois `osValue`, depois (propostas antigas, sem `osValue`) o valor do serviço com o desconto aplicado. Recebimento da OS, margem real (`orderCosts`) e PDF genérico usam esse valor, nunca o custo.
 - No modal dos modelos A/B, o preço vem preenchido com o Valor da OS da opção. Se o total digitado no documento for diferente, aparece um aviso no rodapé; o recebimento da OS segue o total do documento.
+- **Nestlé (FS-3055)** (decisão do usuário em 15/11/2026): a planilha cobra os preços do contrato, que estão certos. O rodapé do formulário avisa que o total da planilha passa a ser o Valor da OS da opção. Depois de gerar o PDF, o cartão da opção em **Fazer proposta** mostra o total do PDF como Valor da OS, e o lucro bruto e a % são calculados sobre ele. Materiais e mão de obra continuam com o **custo da GMAC** (preço por hora e preço do material da oferta), não com os preços do contrato, que são o que a Nestlé paga. Mudar a % ou o desconto do cartão volta ao valor calculado, para um novo PDF.
+- Os materiais da oferta também vão para a planilha Nestlé, como as máquinas: o nome é ligado à linha da tabela (ex.: chapas de aço 1020 somadas na linha "Barra Metalica Aco Sae1020 1M"). O que não é reconhecido fica para o usuário escolher a linha, e a escolha é lembrada. Na planilha, o "Valor total" e os totais saem sem centavos (como a planilha da Nestlé); o sistema guarda o valor com centavos.
 - A opção selecionada fica destacada.
 - **Salvar** guarda as quatro opções (prazo, % de lucro bruto e desconto) e a opção marcada em `proposalDraft` da oferta (`PUT /api/offers/:id/proposal-draft`), para outra pessoa terminar o orçamento. Ao abrir a tela, o que foi salvo volta como estava; uma proposta gerada em PDF depois desse salvamento prevalece para a sua opção e para a escolha. Abaixo dos botões aparece quem salvou por último e quando, ou "Alterações ainda não salvas". Cada salvamento gera a notificação "Proposta salva" para os outros administradores (quem salvou não a recebe). Oferta aceita ou recusada não pode mais ser salva.
 - Escolha de layout de PDF: Clássico, Executivo ou Compacto.
@@ -353,11 +381,38 @@ Exemplo: uma OS de 20 peças com Pintura = 20, Caldeiraria = 8 e Usinagem = 5 po
 - A edição geral da OS, em propostas com Valor da OS, recalcula o `profit` como Valor da OS menos valor do serviço (custo); em propostas antigas, sem Valor da OS, mantém o cálculo anterior (valor do serviço menos materiais e mão de obra). A aba de proposta da edição mostra "Valor da OS" e "Horas totais" só quando a proposta os tem.
 - O PDF da proposta, que vai ao cliente, **não mostra margem de lucro, lucro bruto esperado nem custos** (regra fixa em `proposalSections`, em `server/offers.js`, coberta por `tests/proposal-privacy.test.js` e pela auditoria dos PDFs). Ele é montado de novo a cada download a partir da proposta salva; nenhum arquivo de PDF é mais gravado em `server/data/files/` para propostas, e arquivos antigos dessa pasta (referenciados por `pdfId`) não são enviados. Também não mostra custos: materiais e mão de obra aparecem só por nome, especificação, quantidade e horas, sem valor por kg, valor por hora, totais ou os totais de materiais e mão de obra. O cliente vê o valor cobrado (o Valor da OS, sob o rótulo "Valor do serviço" no layout genérico), o desconto, o prazo e os tempos previstos; o valor do serviço interno (custo) nunca vai ao cliente.
 
+### Etiqueta: orçamento depois da OS
+
+Decisões do usuário em 14/11/2026 (`server/labelQuotes.js`, `server/labelQuoteRules.js`, `src/LabelQuoteModal.jsx`).
+
+- **Oferta com número de etiqueta e sem proposta é uma etiqueta** (`labelQuoteOffer`). Em vez de "Fazer proposta", os detalhes da oferta mostram **Abrir OS da etiqueta**, com confirmação ("Abrir a OS da etiqueta?"). A lista de ofertas tem o mesmo atalho para ofertas em análise.
+- A OS abre **sem proposta**, mas o prazo solicitado é obrigatório (400 sem ele). O orçamento previsto (materiais e horas) baixa o estoque na abertura, como em qualquer OS. A OS recebe uma proposta provisória (`labelPlaceholderProposal`: Valor da OS 0, `labelQuotePending: true`) e `labelQuote: { pending: true, openedAt, openedByName, estimate }`.
+- Enquanto o orçamento está pendente: o Valor da OS aparece como **Orçamento pendente** (lista de ofertas, detalhes da OS e cartão de custos); a margem real diz "Calculada com o orçamento da etiqueta"; a margem das propostas (`proposalMargins`) não conta a OS; **Contas a Receber** e a confirmação da conclusão respondem 409 "Gere o orçamento da etiqueta antes de concluir a OS."; o número da etiqueta não pode ficar em branco na edição da OS.
+- Quando os operadores concluem todas as peças, o botão verde **Aguardando NF-e** abre o modal da etiqueta (as OS normais continuam abrindo direto o Recebimento do serviço):
+  - informações da OS;
+  - **Horas trabalhadas**: previsto × real por etapa (tempo real da operação, `stageMinutes`), todas como hora normal;
+  - **Material consumido**, editável: diminuir devolve ao estoque (entrada "Devolução da OS"); aumentar tira do estoque (`consumeOrderIncrease`; o que faltar vira pedido de material). Salvar o material descarta um orçamento já gerado;
+  - **Gerar orçamento**: o mesmo formulário dos modelos de proposta, com o modelo **Etiqueta** como padrão (o usuário pode escolher outro e mudar preços). As horas reais e o material usado entram como uso do sistema ("Horas reais da OS", "Consumido na OS"). Gerar baixa o PDF, numera como as propostas e grava a proposta da OS e da oferta;
+  - **Enviar por e-mail**, com o modelo "Medição de etiqueta";
+  - **Concluir OS**: só depois do PDF; abre o Recebimento do serviço com o valor do orçamento e tira a OS do painel.
+- Rotas: `GET /api/orders/:code/label-quote`, `PUT /api/orders/:code/label-quote/materials`, `GET /api/orders/:code/label-quote-draft?model=`, `POST /api/orders/:code/label-quote-document`. Eventos da OS: `label_materials_adjusted` e `label_quote_generated`.
+- Desfazer o aceite de uma etiqueta volta a oferta para "Em análise".
+- Ofertas antigas que já têm proposta seguem o fluxo normal, mesmo com etiqueta. Em produção, só a oferta de teste OF-2026-0041 / OS-2026-0008 (etiqueta "1") estava nesse caso e ficou como está.
+
+### E-mail da proposta: modelos e assinatura
+
+- **Cadastros › Modelos de e-mail** (`src/EmailTemplatesScreen.jsx`, `server/emailTemplates.js`): assunto, texto e destinatários fixos (Para/Cc). Dois modelos vêm com o portal: **Proposta comercial** e **Medição de etiqueta**. Eles podem ser editados e restaurados ao texto original, mas não excluídos. Administradores e funcionários administrativos criam outros (nome único).
+- Campos preenchidos com os dados da oferta: `{saudacao}`, `{nome}`, `{numero}`, `{etiqueta}`, `{servico}`, `{cliente}`, `{quantidade}`, `{empresa}`, `{oferta}`, `{os}`. Na tela do modelo, clicar num campo o insere onde está o cursor.
+- Na tela de envio, o modelo vem escolhido pelo tipo da oferta (etiqueta → "Medição de etiqueta") e pode ser trocado; trocar substitui assunto, texto e os destinatários fixos do modelo anterior. O e-mail guarda `templateId`.
+- **Assinatura em HTML** (`server/emailSignature.js`), montada pelo servidor e não editável: nome de quem envia, cargo (só se preenchido em Configurações › Dados da conta, "Cargo na assinatura de e-mail", `accountProfiles[id].jobTitle`, até 80 caracteres), e-mail e WhatsApp da empresa, site, Instagram e mapa, e "N anos de experiência" contados desde 2008. Quando a empresa emissora é a Usinagem, entram o logo e o nome da Usinagem. As imagens vão anexadas inline (cid) e ficam em `server/assets/email-signature/`. A prévia na tela fica branca também nos temas escuros (`src/emailSignaturePreview.css`, fora dos temas gerados).
+- Nada disso precisa de SQL em produção: `emailTemplates` e `accountProfiles` são chaves novas do store, que o MySQL grava sozinho.
+
 ## 9. Estoque e consumo de materiais
 
 ### Cadastro e movimentação
 
-- Material contém nome, especificação, disponível em kg, mínimo em kg e preço médio por kg.
+- Material contém nome, unidade, disponível, mínimo e preço médio. **Desde 2026-11-14 o material do estoque não tem especificação**: as medidas (ex.: "AÇO 1045 Ø 10 MM X 161MM") são informadas em cada linha de material da oferta/OS e no pedido de material. Escolher um material do estoque na oferta não preenche a especificação, e a entrada de um pedido não grava a especificação no estoque. A coluna antiga `inventory_materials.detail` continua no banco, sem leitura nem gravação; o import de estoque antigo junta a especificação ao nome.
+- O estoque filtra por ícone: os blocos (ícone + nome + quantidade de materiais) ficam acima da lista, iguais aos do cadastro; "Todos" volta a lista inteira. No celular a fileira rola para o lado.
 - Quantidade não é alterada diretamente pela edição cadastral: deve mudar por entrada ou saída.
 - É possível editar ícone e usar uma foto própria. As imagens são reduzidas para armazenamento compacto, com validação no backend; não guardar o original em alta resolução sem necessidade.
 - A API reduz a foto para até 256 x 256, em WebP, com limite de 48.000 bytes para a imagem compacta.
@@ -365,6 +420,14 @@ Exemplo: uma OS de 20 peças com Pintura = 20, Caldeiraria = 8 e Usinagem = 5 po
 - A tela se atualiza em tempo real (ver Atualização em tempo real, na seção 4).
 - O histórico individual registra cadastro/movimentos, quantidades, valores, saldo, origem/destino, OS e responsável quando essa identificação está registrada.
 - A OS vinculada no histórico pode ser aberta por clique.
+
+### Estoque Administrativo
+
+- Desde 2026-11-14, em **Estoque Administrativo** (item próprio do menu, logo abaixo de Gestão Operacional): papel higiênico, lápis, caneta, limpeza, copa. Funciona como o Estoque (cadastro, ícone ou foto, entradas com preço médio, histórico, estoque baixo com notificação "Estoque administrativo baixo", pergunta do financeiro após a compra), com ícones próprios, que são os grupos de materiais do escritório: Material de expediente, Material de limpeza, Copa e cozinha, Higiene pessoal, Descartáveis, Suprimentos de informática, Material elétrico, EPI e uniformes, Primeiros socorros, Embalagens, Manutenção predial e Outros.
+- Unidade padrão: unidade (un).
+- Nenhuma OS consome esse estoque. A saída é a **baixa** feita na própria tela (botão de baixa em cada material): quantidade (nunca acima do saldo), "Retirado por / destino" e observação; o histórico mostra "Baixa de material" e quem registrou.
+- Tabelas próprias `admin_inventory_materials` e `admin_inventory_movements` (`server/adminInventory.js`, migração `database/migrations/005_admin_inventory.sql`); o portal cria as tabelas sozinho ao iniciar. Os materiais nunca aparecem na busca de materiais da oferta/OS.
+- No Ticket é um módulo próprio, "Estoque Administrativo" (sem sub-módulo).
 
 Ao receber mais quantidade de um material existente, o custo é recalculado por **média ponderada**, não substituído simplesmente pelo preço da última compra.
 
@@ -442,7 +505,7 @@ Pedido para uma OS com 10 kg pendentes
 - A etapa atual deve representar Usinagem, Caldeiraria ou Pintura conforme a subetapa. Há tratamento de compatibilidade para etapas antigas.
 - Filtros de prazo incluem Dentro do prazo, Próximo do prazo, Em cima do prazo e Atrasado, além do filtro de concluídos ainda não confirmados.
 - O status de prazo é diferente do estado operacional, como Aguardando, Em execução ou Pausado.
-- Busca por informações do serviço, cliente e código da OS.
+- Busca: a mesma lupa de Ofertas e serviços (ver lá): serviço, cliente, OS, nº da cotação e anexos, inclusive os administrativos.
 - Atualização em tempo real pelo canal de avisos do servidor (Server-Sent Events, não WebSocket); ver Atualização em tempo real, na seção 4.
 - Material pendente destaca a linha e oferece um botão que abre modal com nomes e quantidades faltantes.
 - O modal possui **Ir ao pedido**, que abre Pedidos de material e destaca as linhas relacionadas com uma piscada vermelha suave, temporária, voltando ao normal.
@@ -496,7 +559,7 @@ Pedido para uma OS com 10 kg pendentes
 ### Serviços concluídos
 
 - Concluir pelo operador não remove imediatamente a OS do painel de andamento.
-- A administração confirma a conclusão pelo botão **Concluído**; isso registra `completionAcknowledgedAt`.
+- A administração confirma a conclusão pelo botão verde **Aguardando NF-e** (antes "Concluído"; só o nome mudou, em 14/11/2026); isso registra `completionAcknowledgedAt`. Em OS de etiqueta, o botão abre antes o modal do orçamento (ver "Etiqueta: orçamento depois da OS").
 - O botão abre a janela **Recebimento do serviço**, que pergunta se o cliente já pagou: **Ainda vai receber** programa a conta em Contas a Receber (parcela única ou parcelado) e **Já recebido** registra a entrada na Tesouraria, já baixada, com data e forma de recebimento. **Concluir sem lançar** finaliza a OS sem criar lançamento financeiro. Nada é criado antes de uma dessas confirmações.
 - Depois dessa confirmação, o serviço sai do painel de andamento e aparece em **Serviços concluídos**.
 - Lista mantém a apresentação do processo e o acesso à OS, do mais recente para o menos recente.
@@ -513,6 +576,7 @@ Pedido para uma OS com 10 kg pendentes
 - A correção respeita a sequência das operações do funcionário na OS, não aceita horário futuro e recalcula tempo da sessão, tempo ativo da OS e as horas de máquina, serviço e funcionário nos relatórios.
 - Encerrar uma sessão ativa administrativamente pede justificativa em modal próprio, não em `window.prompt`.
 - Em **Operação da OS**, cada etapa mostra as peças, o tempo previsto e a máquina ou o serviço. **Editar tempos e máquinas** transforma a lista em campos (horas, minutos, máquina ou serviço) e salva todas as etapas juntas pelo mesmo caminho do Editar OS (`PUT /api/operations/orders/:code`), porque a OS exige os dois em todas as etapas. Não aparece em OS concluída.
+- **Anexos administrativos** (antes "Anexos de pedido de compra"; só o nome mudou em 15/11/2026, o campo continua `order.purchaseOrders` e a rota `/api/orders/:code/purchase-orders`): documentos administrativos da OS, fora da operação, vistos só por administradores e funcionários administrativos. Em Serviços concluídos, a coluna "Anexos administrativos" diz se a OS tem algum.
 - **Editar OS** permite alterar dados do serviço/cliente, prazos, quantidade, materiais, mão de obra, proposta, processo, etapas, quantidades produzidas e anexos associados.
 - Editar OS concluída exige confirmação explícita.
 - Há verificação de versão para impedir salvar sobre mudanças feitas enquanto o formulário estava aberto.
@@ -575,11 +639,14 @@ eceived da API, como em "Dar baixa"). A janela avisa a diferença numa linha dis
 
 - Depois de uma entrada de material (material novo com saldo ou entrada em material existente), pela tela de Estoque ou por Pedidos de material, o sistema pergunta se a compra vai para o financeiro: **Conta a pagar** (ainda será paga) ou **Pagamento já realizado** (saída na Tesouraria, já baixada). **Não lançar agora** apenas fecha a pergunta.
 - O formulário abre com valor (quantidade × valor por kg) e descrição preenchidos; fornecedor e classificação são informados pelo usuário. Editar um material não é compra e não pergunta nada.
-- A compra não é vinculada automaticamente a uma OS, porque o material previsto na proposta já está no custo da OS.
+- Uma entrada comum de estoque não é vinculada a uma OS. A entrada de um **pedido de material de uma OS** (Pedidos de material › Adicionar material) abre o formulário já com **OS vinculada (custo)** = a OS do pedido e guarda na conta o pedido (`materialRequestId`); o formulário avisa que a compra já entra no custo real do material. Essa conta aparece na lista de custos da OS como "Compra do pedido de material", mas **não** soma de novo como custo adicional. O vínculo vale enquanto a conta continuar na OS do pedido; tirar a OS da conta desfaz o vínculo.
 
 ### Custo real da OS
 
-- **Custos lançados** = custo previsto na proposta (materiais + mão de obra) + contas a pagar vinculadas à OS. As contas vinculadas são custos adicionais, que surgiram depois do planejado; sem elas, o custo lançado é igual ao previsto.
+- **Custos lançados** = material pelo custo real + mão de obra prevista na proposta + contas a pagar vinculadas à OS (custos adicionais). A compra do pedido de material da OS não entra como custo adicional, porque já está no material.
+- **Material pelo custo real** (decisão do usuário em 15/11/2026): cada material da OS guarda `inventoryConsumedCost` (R$) junto de `inventoryConsumedQuantity`. O que saiu do estoque para a OS (aceite, aumento de quantidade, ajuste da etiqueta) custa o preço do estoque naquele momento; o que entrou por um pedido de material da OS custa o **preço pago** na entrada (não a média do estoque); devolução ao estoque reduz o custo pela média do que a OS tinha tirado. O que ainda está pendente continua pelo preço previsto. O cartão mostra **Material**: real × previsto.
+- Exemplo: 20 kg de aço previstos a R$ 6/kg (R$ 120), comprados a R$ 6,50/kg (R$ 130): material real R$ 130, custo R$ 330, margem R$ 150. O **Valor da OS** e o PDF da proposta não mudam.
+- Materiais gravados antes dessa regra (sem `inventoryConsumedCost`) contam pelo preço previsto. Regra em `server/orderMaterials.js` (`materialCostDeltaCents`) e `orderCosts` em `server/payables.js`.
 - A margem real usa esse total. Vale para a seção **Custo real e margem** da OS e para a tabela por OS do Business Intelligence.
 
 ### Business Intelligence
@@ -720,6 +787,7 @@ Todos os dados ficam no **MySQL**, que é obrigatório: sem `DB_HOST`, `DB_USER`
 | Dados | Persistência atual |
 | --- | --- |
 | Estoque e movimentações | MySQL (`inventory_materials`, `inventory_movements`) |
+| Estoque Administrativo | MySQL (`admin_inventory_materials`, `admin_inventory_movements`) |
 | Funcionários, administradores e clientes | MySQL (`employees`, `users`, `clients`) |
 | Estado operacional e eventos de trabalho | MySQL (`order_operations`, `order_operation_events`) |
 | Ofertas, OS, propostas, recursos, máquinas, serviços de hora homem, pedidos manuais, contas a pagar/receber, fornecedores, classificações, conciliação bancária, notificações e preferências | MySQL, pelo armazenamento do portal (`server/store.js`): uma tabela `portal_<coleção>` por lista com id (ex.: `portal_offers`, `portal_orders`, `portal_payables`), e `portal_values` para sequências, configurações e listas sem id |
@@ -739,6 +807,7 @@ Todos os dados ficam no **MySQL**, que é obrigatório: sem `DB_HOST`, `DB_USER`
 - **Cadastros simples** (`server/registries.js`, tela `SimpleRegistryScreen.jsx`): Setores (vinculados ao funcionário; não exclui setor em uso), Razões de pausas (lista usada na pausa do operador; "Troca de serviço" é reservada ao sistema; gráfico de pizza com filtro em `PauseReasonsChart.jsx`) e Bancos (nome, agência e conta; não exclui banco com baixas).
 - **Funcionário**: só pode ser excluído enquanto não tiver nada no sistema (`employeesWithActivity`: eventos de OS ou autoria `employee-<id>` em registros). Depois disso, apenas desativar/reativar; desativado não entra com o código nem faz login administrativo.
 - **Unidade dos materiais** (`server/materialUnits.js`): `kg` (padrão) ou `un`. As colunas SQL `quantity_kg`, `minimum_kg` etc. guardam a quantidade na unidade do material (`inventory_materials.unit`). Unidade aceita só inteiros; a unidade de um material do estoque só muda com saldo zero; o vínculo por nome só acontece entre materiais da mesma unidade.
+- **Baixa em Lote › Adicionar lançamentos** (`src/BatchSettlementScreen.jsx`): busca, Fornecedor (só os fornecedores com conta em aberto), Classificação, vencimento de/até e valor mínimo/máximo, 50 por página. Sem filtro de banco, por decisão do usuário em 14/11/2026: o banco só existe depois da baixa e a lista tem só contas em aberto.
 - **Banco na baixa** (`server/banks.js`): pagamento, recebimento, baixa em massa, baixa em lote e Tesouraria gravam `bankId`/`bankName`. Com pelo menos um banco cadastrado, o banco é obrigatório; sem bancos, a baixa continua sem banco (comportamento anterior). Contas a Pagar, Contas a Receber e Tesouraria filtram por banco.
 - **Pedido de material**: só nasce quando a oferta é aceita (`server/materialRequestSources.js`).
 - **Dividir entre classificações** (contas a pagar e saídas da Tesouraria): uma conta, um lançamento, com `classificationSplit` = partes `{ classificationId, classificationName, valueCents }` que somam o valor. `classificationId` guarda a primeira parte e `classificationName` junta os nomes ("Energia + Combustível"). Parcelas recebem a divisão proporcional, e a última fecha o arredondamento (`splitInstallments`). Filtro por classificação, Business Intelligence e Baixa em Lote contam cada parte na sua classificação (`classificationParts`).

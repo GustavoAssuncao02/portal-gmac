@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { pathToFileURL } from 'node:url'
 import { createWorkflowFixture } from './workflowFixture.js'
+import { openSidebarItem } from './sidebarNavigation.js'
 
 const modulePath = process.env.PLAYWRIGHT_MODULE
 const { chromium } = await import(modulePath ? pathToFileURL(modulePath).href : 'playwright')
@@ -78,10 +79,8 @@ try {
   await page.keyboard.press('Escape')
   await page.setViewportSize({ width: 1366, height: 900 })
   for (const screen of ['Serviços em andamento', 'Estoque', 'Funcionários', 'Início']) {
-    const item = page.locator('.sidebar').getByRole('button', { name: screen, exact: true })
-    // Funcionários is inside the "Cadastros" group of the side menu.
-    if (!await item.isVisible()) await page.locator('.sidebar').getByRole('button', { name: 'Cadastros', exact: true }).click()
-    await item.click()
+    // Estoque and Funcionários are inside groups of the side menu (Gestão Operacional, Cadastros).
+    await openSidebarItem(page, screen)
     await bell.click()
     await popup.waitFor()
     await page.keyboard.press('Escape')

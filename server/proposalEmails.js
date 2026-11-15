@@ -9,11 +9,14 @@ import { proposalSettings } from './proposalDocuments.js'
 import { createMailer } from './passwordReset.js'
 import { documentDigits } from './clientDocument.js'
 import { actorOf, recordRegistryChange } from './registryHistory.js'
+import { accountJobTitle, emailTemplates, fillTemplate } from './emailTemplates.js'
+import { signatureAttachments, signatureHtml, signatureText } from './emailSignature.js'
 
 // "Enviar E-mail" on the proposal screen: once the proposal PDF is generated, it goes from the commercial account of the
-// portal (MAIL_FROM, the same SMTP of the site quotes) to the client and the buyer registered for the offer. Everything is
-// editable before sending: recipients, copy, subject, message, signature and attachments (the PDF can be removed, other
-// files added). The commercial account gets a blind copy, so the e-mail also shows up in its Outlook. Each e-mail is kept
+// portal (MAIL_FROM, the same SMTP of the site quotes) to the client and the buyer registered for the offer. The text comes
+// from a template of Cadastros › Modelos de e-mail (emailTemplates.js; an etiqueta opens with "Medição de etiqueta") and
+// everything but the signature is editable before sending: recipients, copy, subject, message and attachments (the PDF can
+// be removed, other files added). The signature is drawn by the server (emailSignature.js) with the sender's name and role. The commercial account gets a blind copy, so the e-mail also shows up in its Outlook. Each e-mail is kept
 // on the offer (`proposalEmails`) with a copy of the files exactly as they were sent.
 const filesDirectory = path.join(dataDirectory, 'files')
 // Microsoft 365 refuses messages over 35 MB once encoded (about 25 MB of files); 20 MB leaves room for the text.
@@ -38,20 +41,30 @@ function issuerOf(store, offer) {
   return issuers.find((issuer) => issuer.id === offer.proposal?.document?.issuerId) || issuers[0]
 }
 
-export function proposalEmailDraft({ store, offer, client, senderName, from }) {
-  const buyer = (store.buyers || []).find((row) => row.id === offer.buyerId)
+// The {campos} of the templates for this offer.
+export function templateValues(store, offer) {
   const issuer = issuerOf(store, offer)
   const document = offer.proposal?.document
-  const number = document?.quoteNumber || document?.number || document?.labelNumber || offer.code
-  const greeting = firstName(offer.buyer) || firstName(offer.requester)
+  const name = firstName(offer.buyer) || firstName(offer.requester)
+  return { saudacao: name ? `Olá, ${name}!` : 'Olá!', nome: name, numero: document?.quoteNumber || document?.number || document?.labelNumber || offer.code, etiqueta: offer.labelNumber || document?.labelNumber || '', servico: offer.service, cliente: offer.company, quantidade: `${offer.quantity} ${Number(offer.quantity) === 1 ? 'unidade' : 'unidades'}`, empresa: issuer.label, oferta: offer.code, os: offer.orderCode || '' }
+}
+const unique = (list) => list.map((item) => String(item || '').trim().toLowerCase()).filter((item, index, all) => item && emailPattern.test(item) && all.indexOf(item) === index)
+
+// The e-mail of an offer in each template; an etiqueta comes with "Medição de etiqueta", the others with "Proposta comercial".
+export function proposalEmailDraft({ store, offer, client, senderName, jobTitle = '', from, templateId }) {
+  const buyer = (store.buyers || []).find((row) => row.id === offer.buyerId)
+  const issuer = issuerOf(store, offer)
+  const values = templateValues(store, offer)
+  // A oferta do site não tem solicitante cadastrado: o e-mail informado no formulário entra como destinatário sugerido.
+  const contacts = [offer.siteContact?.email, client?.email, buyer?.email]
+  const templates = emailTemplates(store).map((template) => ({ id: template.id, name: template.name, builtin: Boolean(template.builtin), subject: fillTemplate(template.subject, values), message: fillTemplate(template.message, values), to: unique(template.to || []), cc: unique(template.cc || []) }))
+  const chosen = templates.find((template) => template.id === templateId) || templates.find((template) => template.id === (offer.labelQuote ? 'label' : 'proposal')) || templates[0]
   return {
-    from,
-    // A oferta do site não tem solicitante cadastrado: o e-mail informado no formulário entra como destinatário sugerido.
-    to: [offer.siteContact?.email, client?.email, buyer?.email].map((item) => String(item || '').trim().toLowerCase()).filter((item, index, list) => item && emailPattern.test(item) && list.indexOf(item) === index),
-    cc: [],
-    subject: `Proposta comercial nº ${number} · ${offer.service} · ${issuer.label}`,
-    message: [`${greeting ? `Olá, ${greeting}!` : 'Olá!'}`, '', `Segue em anexo a nossa proposta comercial nº ${number} para ${offer.company}, referente a ${offer.service} (${offer.quantity} ${Number(offer.quantity) === 1 ? 'unidade' : 'unidades'}).`, '', 'Ficamos à disposição para esclarecer qualquer dúvida. Se estiver de acordo, é só responder este e-mail para darmos andamento ao serviço.', '', 'Obrigado pela confiança!'].join('\n'),
-    signature: ['Atenciosamente,', '', senderName || 'Equipe Comercial', `Comercial · ${issuer.label}`, ...[[issuer.phone, issuer.email].filter(Boolean).join(' · '), issuer.website].filter(Boolean), '', 'Enviado pelo Sistema GMAC'].join('\n'),
+    from, templateId: chosen.id, templates,
+    to: unique([...contacts, ...chosen.to]), cc: chosen.cc,
+    subject: chosen.subject, message: chosen.message,
+    signature: signatureText({ name: senderName, jobTitle, issuer }),
+    signatureHtml: signatureHtml({ name: senderName, jobTitle, issuer, images: 'data' }),
   }
 }
 
@@ -62,7 +75,7 @@ const sendProblem = (error) => {
   return 'O servidor de e-mail recusou o envio. Tente de novo ou fale com o TI.'
 }
 
-const html = (message, signature) => `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.55;color:#1f2d3d">${escapeHtml(message).replace(/\n/g, '<br>')}<br><br><div style="color:#4a5d72;border-top:1px solid #dce6ef;padding-top:12px">${escapeHtml(signature).replace(/\n/g, '<br>')}</div></div>`
+const html = (message, signature) => `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.55;color:#1f2d3d">${escapeHtml(message).replace(/\n/g, '<br>')}<br><br><p style="margin:0 0 12px">Atenciosamente,</p>${signature}</div>`
 
 export default function createProposalEmailsRouter(accounts, requireAdmin, { mailer = createMailer(), env = process.env } = {}) {
   const router = express.Router()
@@ -94,7 +107,7 @@ export default function createProposalEmailsRouter(accounts, requireAdmin, { mai
     const { store, offer } = await offerWithProposal(request.params.id)
     const pdf = await proposalPdfFile(offer)
     const client = await clientOf(offer)
-    const draft = proposalEmailDraft({ store, offer, client, senderName: request.adminName, from: sender() })
+    const draft = proposalEmailDraft({ store, offer, client, senderName: request.adminName, jobTitle: accountJobTitle(store, request.adminId), from: sender(), templateId: String(request.query.template || '') })
     response.set('Cache-Control', 'no-store').json({ draft, contacts: contactsOf(store, offer, client), proposal: { name: pdf.name, size: pdf.content.length }, configured: mailer.configured(), maxBytes: PROPOSAL_EMAIL_MAX_BYTES })
   }))
 
@@ -139,9 +152,13 @@ export default function createProposalEmailsRouter(accounts, requireAdmin, { mai
     if (to.length + cc.length > MAX_RECIPIENTS) fail(400, `São no máximo ${MAX_RECIPIENTS} destinatários.`)
     const subject = clean(input.subject, 250).replace(/\s+/g, ' ')
     if (!subject) fail(400, 'Informe o assunto do e-mail.')
-    const message = clean(input.message, 20000), signature = clean(input.signature, 2000)
+    const message = clean(input.message, 20000)
     if (!message) fail(400, 'Escreva a mensagem do e-mail.')
-    const { offer } = await offerWithProposal(request.params.id)
+    const { store, offer } = await offerWithProposal(request.params.id)
+    // The signature is always the one of who sends, as the e-mail screen shows it; it is not typed.
+    const issuer = issuerOf(store, offer), jobTitle = accountJobTitle(store, request.adminId)
+    const signature = signatureText({ name: request.adminName, jobTitle, issuer })
+    const templateId = emailTemplates(store).some((template) => template.id === input.templateId) ? input.templateId : null
     const names = Array.isArray(input.fileNames) ? input.fileNames : []
     const files = (request.files || []).map((file, index) => ({ name: path.basename(String(names[index] || file.originalname)).slice(0, 180) || 'anexo', contentType: file.mimetype || 'application/octet-stream', content: file.buffer }))
     if (input.includeProposal !== false) {
@@ -158,14 +175,14 @@ export default function createProposalEmailsRouter(accounts, requireAdmin, { mai
     try { await Promise.all(stored.map((file) => writeFile(path.join(filesDirectory, file.id), file.content))) } catch (error) { await discard(); throw error }
     const from = sender()
     try {
-      await mailer.send({ from, to, cc, bcc: from, replyTo: from, subject, text: `${message}\n\n${signature}`.trim(), html: html(message, signature), attachments: stored.map((file) => ({ filename: file.name, content: file.content, contentType: file.contentType })) })
+      await mailer.send({ from, to, cc, bcc: from, replyTo: from, subject, text: `${message}\n\n${signature}`.trim(), html: html(message, signatureHtml({ name: request.adminName, jobTitle, issuer })), attachments: [...stored.map((file) => ({ filename: file.name, content: file.content, contentType: file.contentType })), ...signatureAttachments(issuer)] })
     } catch (error) {
       await discard()
       console.error('Falha no envio do e-mail da proposta:', error)
       fail(502, `O e-mail não foi enviado. ${sendProblem(error)}`)
     }
     const { registered, warnings } = await registerContacts(offer, input.register, [...to, ...cc], actorOf(request))
-    const record = { id: randomUUID(), sentAt: new Date().toISOString(), sentBy: request.adminId ?? null, sentByName: request.adminName || 'Administrador', from, to, cc, subject, message, signature, registered, attachments:stored.map(({ id, name, contentType, content, proposal }) => ({ id, name, contentType, size: content.length, proposal: Boolean(proposal) })) }
+    const record = { id: randomUUID(), sentAt: new Date().toISOString(), sentBy: request.adminId ?? null, sentByName: request.adminName || 'Administrador', from, to, cc, subject, message, signature, templateId, registered, attachments:stored.map(({ id, name, contentType, content, proposal }) => ({ id, name, contentType, size: content.length, proposal: Boolean(proposal) })) }
     const item = await mutateStore((store) => {
       const current = store.offers.find((entry) => entry.id === offer.id)
       if (!current) return null

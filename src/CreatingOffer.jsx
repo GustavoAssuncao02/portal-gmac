@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { PencilLine, Trash2, X } from 'lucide-react'
+import { Inbox, PencilLine, Trash2, X } from 'lucide-react'
 import { backdropClose } from './dialogBackdrop.js'
 
 // A manual offer starts as "Criando oferta" (status 'creating'): the list shows who is creating it and for how long, and
@@ -24,6 +24,12 @@ export function CreatingOfferBadge({ offer, onOpen }) {
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(timer) }, [])
   const name = offer.editingBy?.name || offer.createdByName || 'Administrador'
   const since = creatingSinceText(creatingSince(offer), now)
+  // Inserted with "Deixar oferta em aberto e notificar": nobody is creating it yet; whoever opens it first takes it.
+  if (offer.openForTeam && !offer.editingBy) return <button className="offer-creating-badge offer-creating-badge--open" type="button" onClick={onOpen} title={`Inserida por ${offer.createdByName || 'Administrador'} em ${new Date(creatingSince(offer)).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })}. Quem abrir primeiro assume a oferta.`}>
+    <strong><Inbox size={15} aria-hidden="true" />Em aberto</strong>
+    <span>Aguardando responsável</span>
+    <small>{since}</small>
+  </button>
   return <button className="offer-creating-badge" type="button" onClick={onOpen} title={`${name} está criando esta oferta desde ${new Date(creatingSince(offer)).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })}`}>
     <strong><PencilLine size={15} aria-hidden="true" />Criando oferta</strong>
     <span>{name}</span>

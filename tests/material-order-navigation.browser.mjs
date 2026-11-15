@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
+import { openSidebarItem } from './sidebarNavigation.js'
 
 const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Gustavo' }
 const fixture = await createWorkflowFixture({ accountsEnv: env })
@@ -26,7 +27,7 @@ try {
     await page.locator('.admin-home-main').waitFor()
     const openOrders = async () => {
       if (viewport.width < 768) await page.getByRole('button', { name: 'Abrir menu de navega\u00e7\u00e3o', exact: true }).click()
-      await page.locator('.sidebar').getByRole('button', { name: 'Pedidos de material', exact: true }).click()
+      await openSidebarItem(page, 'Pedidos de material')
       const labels = await page.locator('.sidebar-nav .nav-item').evaluateAll((buttons) => buttons.map((button) => button.getAttribute('aria-label')))
       assert.equal(labels[labels.indexOf('Estoque') + 1], 'Pedidos de material')
       await page.getByRole('heading', { name: 'Pedidos de material', exact: true }).waitFor()

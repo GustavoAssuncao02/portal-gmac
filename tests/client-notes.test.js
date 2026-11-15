@@ -24,8 +24,12 @@ test('clients keep working when the note column cannot be created', async () => 
     const saved = await service.save('clients', null, { name: 'Vipal', email: 'v@p.com', documentType: 'cnpj', document: '22222222000191', notes: 'Cliente novo' })
     assert.equal(saved.name, 'Vipal')
     assert.ok(!executed.find((sql) => sql.startsWith('INSERT INTO clients')).includes('notes'), 'saving does not write the missing column')
-    assert.equal(executed.filter((sql) => sql.startsWith('ALTER TABLE clients')).length, 1, 'the column is tried only once')
-    assert.match(errors[0], /ALTER TABLE clients ADD COLUMN notes/)
+    assert.equal(executed.filter((sql) => sql.startsWith('ALTER TABLE clients ADD COLUMN notes')).length, 1, 'the column is tried only once')
+    assert.match(errors.join('\n'), /ALTER TABLE clients ADD COLUMN notes/)
+    // The payment term (server/clientPaymentTerm.js) is added the same way and also stays out when it cannot be.
+    assert.equal(executed.filter((sql) => sql.startsWith('ALTER TABLE clients ADD COLUMN payment_days')).length, 1)
+    assert.ok(!executed.find((sql) => sql.startsWith('INSERT INTO clients')).includes('payment_days'))
+    assert.match(errors.join('\n'), /ALTER TABLE clients ADD COLUMN payment_days SMALLINT UNSIGNED NULL/)
   } finally { console.error = original }
 })
 

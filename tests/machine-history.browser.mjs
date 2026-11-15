@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { mkdir } from 'node:fs/promises'
 import { chromium, webkit, devices } from 'playwright'
 import { createWorkflowFixture } from './workflowFixture.js'
+import { openSidebarItem } from './sidebarNavigation.js'
 
 const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123' }
 const fixture = await createWorkflowFixture({ accountsEnv: env })
@@ -31,7 +32,7 @@ try {
     await page.locator('.admin-home-main').waitFor()
     const opener = page.getByRole('button', { name: 'Abrir menu de navegação', exact: true })
     if (await opener.isVisible()) await opener.click()
-    await page.locator('.sidebar').getByRole('button', { name: 'Máquinas', exact: true }).click()
+    await openSidebarItem(page, 'Máquinas')
     const icon = page.getByRole('button', { name: 'Ver histórico de uso de Torno histórico', exact: true })
     await icon.waitFor()
     assert.ok(await icon.evaluate((element) => element.getBoundingClientRect().left >= element.previousElementSibling.getBoundingClientRect().right))

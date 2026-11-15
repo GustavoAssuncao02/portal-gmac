@@ -2,6 +2,19 @@ import { formatQuantity, materialUnit } from './materialUnits.js'
 const normalize = (value) => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLocaleLowerCase('pt-BR')
 const fail = (status, message) => { const error = new Error(message); error.status = status; throw error }
 const kg = (value) => Number(Number(value).toFixed(3))
+const reais = (value) => Number(Number(value).toFixed(4))
+
+// Real cost of what an OS material took from the stock (inventoryConsumedCost, in reais): what left the stock at its
+// price at that moment, and what came in for the OS (material request received) at the price paid. A material saved
+// before this cost was kept counts at its estimated price, so its real cost is the estimate.
+export const consumedQuantity = (material) => Number(material.inventoryConsumedQuantity ?? (Number(material.quantity) - (Number(material.purchaseQuantity) || 0))) || 0
+export const consumedCost = (material) => material.inventoryConsumedCost != null ? Number(material.inventoryConsumedCost) : reais(consumedQuantity(material) * (Number(material.unitPrice) || 0))
+// Difference between the real and the estimated material cost of an OS, in cents: only what already left the stock
+// counts at its real price; what is still pending keeps the estimate.
+export function materialCostDeltaCents(order) {
+  return Math.round((order.resources?.materials || []).filter((material) => material.inventoryConsumedCost != null)
+    .reduce((total, material) => total + Number(material.inventoryConsumedCost) - consumedQuantity(material) * (Number(material.unitPrice) || 0), 0) * 100)
+}
 
 export async function allocateReceivedMaterial(connection, result, { order, remainingQuantity, requestId }) {
   if (!order) return { allocatedQuantity: 0 }
@@ -18,7 +31,9 @@ export async function allocateReceivedMaterial(connection, result, { order, rema
      VALUES (?, 'exit', ?, ?, ?, ?, ?, ?)`,
     [materialId, quantity, Number(material.unit_price), balance, 'Utilizado na ordem de serviço', order.code, `Recebimento do pedido de material ${requestId}.`],
   )
-  return { allocatedQuantity: quantity, balance, orderCode: order.code }
+  // The OS pays what was paid for this purchase, not the average price of the stock.
+  const paid = Number(result.purchaseUnitPrice)
+  return { allocatedQuantity: quantity, allocatedUnitPrice: Number.isFinite(paid) && paid >= 0 ? paid : Number(material.unit_price), balance, orderCode: order.code }
 }
 
 // An OS that needs more of a material takes the increase from the stock when it is saved, as in the acceptance; what the
@@ -46,7 +61,7 @@ export async function consumeOrderIncrease(connection, order, previousMaterials 
     )
     const consumed = kg(Number(before.inventoryConsumedQuantity ?? Number(before.quantity) - (Number(before.purchaseQuantity) || 0)) + quantity)
     const remaining = kg(Math.max(0, Number(material.quantity) - consumed))
-    Object.assign(material, { inventoryConsumedQuantity: consumed, stockAvailable: consumed, purchaseQuantity: remaining, stockStatus: remaining > 0 ? 'partial' : 'available' })
+    Object.assign(material, { inventoryConsumedQuantity: consumed, inventoryConsumedCost: reais(consumedCost(before) + quantity * Number(item.unit_price)), stockAvailable: consumed, purchaseQuantity: remaining, stockStatus: remaining > 0 ? 'partial' : 'available' })
     const group = materials.filter((entry) => entry.inventoryId === material.inventoryId)
     const groupPending = kg(group.reduce((total, entry) => total + (Number(entry.purchaseQuantity) || 0), 0))
     for (const entry of group) Object.assign(entry, { groupPurchaseQuantity: groupPending, groupStockStatus: groupPending > 0 ? 'partial' : 'available' })
@@ -92,7 +107,7 @@ export async function consumeOrderMaterials(connection, order, { allowPartial = 
     return {
       ...material, inventoryId: group.inventoryId, unit: group.unit, stockAvailable: available,
       stockStatus: group.inventoryId == null ? 'unknown' : available <= 0 ? 'missing' : available < Number(material.quantity) ? 'partial' : 'available',
-      purchaseQuantity: kg(Number(material.quantity) - consumed), inventoryConsumedQuantity: consumed,
+      purchaseQuantity: kg(Number(material.quantity) - consumed), inventoryConsumedQuantity: consumed, inventoryConsumedCost: reais(consumed * (Number(group.unitPrice) || 0)),
       groupStockStatus: group.inventoryId == null ? 'unknown' : group.stockAvailable <= 0 ? 'missing' : group.purchaseQuantity > 0 ? 'partial' : 'available',
       groupPurchaseQuantity: group.purchaseQuantity,
     }

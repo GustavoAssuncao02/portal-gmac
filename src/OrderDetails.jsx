@@ -3,8 +3,10 @@ import './orderDetails.css'
 import { stageCodeOf, stageLabel } from '../server/serviceStages.js'
 import OrderEditModal, { OrderActionModal, orderEditDraft } from './OrderEditModal.jsx'
 import { activeEmployeeNames, activeSessions } from '../server/operationSessions.js'
-import { timeEditableEvents } from '../server/operationEventTime.js'
+import { pieceWorkTimes, timeEditableEvents } from '../server/operationEventTime.js'
+import { piecesText } from './pieceWorkText.js'
 import { osValueOf, proposalCosts, hoursText } from '../server/proposalMath.js'
+import { labelQuotePendingText } from '../server/labelQuoteRules.js'
 import { pollWhileVisible } from './polling.js'
 import { Info, Pencil, Plus } from 'lucide-react'
 import PieceTrack, { workingStageKeys } from './PieceTrack.jsx'
@@ -26,7 +28,7 @@ const duration = (value) => {
   return [Math.floor(seconds / 3600), Math.floor(seconds % 3600 / 60), seconds % 60].map((part) => String(part).padStart(2, '0')).join(':')
 }
 const statusLabels = { waiting: 'Aguardando', running: 'Em execução', paused: 'Pausado', stage_done: 'Etapa concluída', finalizing: 'Finalizando', completed: 'Concluído' }
-const eventLabels = { started: 'Início', resumed: 'Retomada', paused: 'Pausa', stage_completed: 'Etapa concluída', machine_changed: 'Troca de máquina', labor_service_changed: 'Troca de serviço de hora homem', resource_changed: 'Troca entre máquina e serviço', session_ended: 'Sessão encerrada na conclusão', stage_progress: 'Peças registradas', completed: 'Conclusão', completion_acknowledged: 'Conclusão confirmada no painel', admin_interrupted: 'Interrupção administrativa', stages_configured: 'Etapas configuradas', order_edited: 'OS editada', order_reopened: 'OS reaberta', order_created: 'OS criada', attachment_added: 'Anexo incluído', purchase_order_added: 'Pedido de compra anexado', purchase_order_removed: 'Pedido de compra removido', payable_event: 'Contas a pagar', receivable_event: 'Contas a receber', stage_changed: 'Troca de etapa', marked_atypical: 'Marcada como OS atípica', unmarked_atypical: 'Desmarcada como OS atípica', location_changed: 'Tipo de serviço alterado', attachment_removed: 'Anexo removido' }
+const eventLabels = { started: 'Início', resumed: 'Retomada', paused: 'Pausa', stage_completed: 'Etapa concluída', machine_changed: 'Troca de máquina', labor_service_changed: 'Troca de serviço de hora homem', resource_changed: 'Troca entre máquina e serviço', session_ended: 'Sessão encerrada na conclusão', stage_progress: 'Peças registradas', completed: 'Conclusão', completion_acknowledged: 'Conclusão confirmada no painel', admin_interrupted: 'Interrupção administrativa', stages_configured: 'Etapas configuradas', order_edited: 'OS editada', order_reopened: 'OS reaberta', order_created: 'OS criada', attachment_added: 'Anexo incluído', purchase_order_added: 'Anexo administrativo adicionado', purchase_order_removed: 'Anexo administrativo removido', payable_event: 'Contas a pagar', receivable_event: 'Contas a receber', stage_changed: 'Troca de etapa', marked_atypical: 'Marcada como OS atípica', unmarked_atypical: 'Desmarcada como OS atípica', location_changed: 'Tipo de serviço alterado', attachment_removed: 'Anexo removido' }
 
 const moment = (value) => new Date(value).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })
 // Operation times are typed and shown in Bahia time (UTC-3, without daylight saving time).
@@ -37,7 +39,10 @@ const bahiaInstant = (value) => new Date(`${value.length === 16 ? `${value}:00` 
 const fromCents = (cents) => currency(cents / 100)
 const payableState = (row) => row.inactive ? 'Desativada' : row.payment ? 'Paga' : row.status === 'overdue' ? 'Vencida' : 'A pagar'
 
-// Real cost of the OS: the cost planned in the proposal plus the payables linked to it later, compared with the OS price.
+// Real cost of the OS: the cost planned in the proposal, with the material at what it really cost (stock price when it
+// left, price paid when it was bought for the OS), plus the payables linked to it later, compared with the OS price.
+// The purchase of a material request of the OS is listed but already counted in the material.
+const signedCents = (cents) => `${cents < 0 ? '−' : '+'} ${fromCents(Math.abs(cents))}`
 function OrderCosts({ code }) {
   const [data, setData] = useState(null), [error, setError] = useState('')
   useEffect(() => {
@@ -49,15 +54,19 @@ function OrderCosts({ code }) {
     }).catch((caught) => { if (active) setError(caught.message) })
     return () => { active = false }
   }, [code])
-  const tone = !data || data.marginPercent == null ? '' : data.marginCents < 0 ? 'negative' : data.marginPercent < data.expectedMarginPercent ? 'below' : 'ok'
-  return <section className="os-section os-costs"><div className="os-section-heading"><h3>Custo real e margem</h3>{data && <span>{data.payables.length} {data.payables.length === 1 ? 'custo adicional' : 'custos adicionais'}</span>}</div>
+  const pending = Boolean(data?.labelQuotePending)
+  const materialDelta = data ? data.materialCostCents - data.materialEstimatedCents : 0, extraCount = data?.extraCount ?? data?.payables.length ?? 0
+  const launched = [materialDelta ? `${signedCents(materialDelta)} no material` : '', data?.extraCostCents ? `+ ${fromCents(data.extraCostCents)} de custos adicionais${data.pendingCostCents ? ` (${fromCents(data.pendingCostCents)} a pagar)` : ''}` : ''].filter(Boolean)
+  const tone = !data || pending || data.marginPercent == null ? '' : data.marginCents < 0 ? 'negative' : data.marginPercent < data.expectedMarginPercent ? 'below' : 'ok'
+  return <section className="os-section os-costs"><div className="os-section-heading"><h3>Custo real e margem</h3>{data && <span>{extraCount} {extraCount === 1 ? 'custo adicional' : 'custos adicionais'}</span>}</div>
     {error ? <p className="os-empty">{error}</p> : !data ? <p className="os-empty">Carregando custos...</p> : <>
       <Facts className="os-cost-facts" items={[
-        ['Valor da OS', data.discount ? `${fromCents(data.valueCents)} (com ${String(data.discount).replace('.', ',')}% de desconto)` : fromCents(data.valueCents)], ['Custo previsto na proposta', fromCents(data.estimatedCostCents)],
-        ['Custos lançados', fromCents(data.costCents), data.extraCostCents ? `Previsto + ${fromCents(data.extraCostCents)} de custos adicionais${data.pendingCostCents ? ` (${fromCents(data.pendingCostCents)} a pagar)` : ''}` : 'Igual ao previsto na proposta'], ['Margem real', <span className={`order-margin order-margin--${tone}`}>{fromCents(data.marginCents)}{data.marginPercent == null ? '' : ` · ${String(data.marginPercent).replace('.', ',')}%`}</span>],
+        ['Valor da OS', pending ? labelQuotePendingText : data.discount ? `${fromCents(data.valueCents)} (com ${String(data.discount).replace('.', ',')}% de desconto)` : fromCents(data.valueCents)], ['Custo previsto na proposta', fromCents(data.estimatedCostCents)],
+        ['Material', `${fromCents(data.materialCostCents)} real`, materialDelta ? `Previsto ${fromCents(data.materialEstimatedCents)} · ${signedCents(materialDelta)} pelo preço real do material` : `Previsto ${fromCents(data.materialEstimatedCents)} · igual ao previsto`],
+        ['Custos lançados', fromCents(data.costCents), launched.length ? `Previsto ${launched.join(' ')}` : 'Igual ao previsto na proposta'], ['Margem real', pending ? 'Calculada com o orçamento da etiqueta' : <span className={`order-margin order-margin--${tone}`}>{fromCents(data.marginCents)}{data.marginPercent == null ? '' : ` · ${String(data.marginPercent).replace('.', ',')}%`}</span>],
         ['Margem prevista', `${String(data.expectedMarginPercent).replace('.', ',')}%`], ['Recebimento do cliente', data.receivableCents ? `${fromCents(data.receivedCents)} recebido` : 'Nada lançado ainda', data.receivableCents ? `de ${fromCents(data.receivableCents)} lançado no contas a receber${data.receivableCents > data.receivedCents ? ` · faltam ${fromCents(data.receivableCents - data.receivedCents)}` : ' · tudo recebido'}` : 'O recebimento é programado no contas a receber quando a OS é concluída.'],
       ]} />
-      {data.payables.length ? <ul className="os-cost-list">{data.payables.map((row) => <li key={row.id}><div><strong>{row.id} · {row.supplierName}</strong><span>{row.description || row.classificationName}</span></div><div><strong>{fromCents(row.payment ? row.payment.finalCents : row.valueCents)}</strong><span>{payableState(row)}</span></div></li>)}</ul> : <p className="os-empty">Nenhum custo adicional. Os custos previstos na proposta já estão lançados; se surgir uma compra além do previsto, vincule a conta a esta OS no campo "OS vinculada (custo)".</p>}
+      {data.payables.length ? <ul className="os-cost-list">{data.payables.map((row) => <li key={row.id}><div><strong>{row.id} · {row.supplierName}</strong><span>{row.description || row.classificationName}</span>{row.materialPurchase && <small>Compra do pedido de material: já está no custo do material</small>}</div><div><strong>{fromCents(row.payment ? row.payment.finalCents : row.valueCents)}</strong><span>{payableState(row)}</span></div></li>)}</ul> : <p className="os-empty">Nenhum custo adicional. Os custos previstos na proposta já estão lançados; se surgir uma compra além do previsto, vincule a conta a esta OS no campo "OS vinculada (custo)".</p>}
     </>}
   </section>
 }
@@ -161,6 +170,7 @@ function OrderHistoryModal({ order, onClose, onEditTime, onAddEvent, Icon }) {
   const canEditTime = Boolean(onEditTime && sessionStorage.getItem('gmac-admin-token'))
   const canAdd = Boolean(onAddEvent && sessionStorage.getItem('gmac-admin-token'))
   const [adding, setAdding] = useState(false)
+  const workTimes = pieceWorkTimes(items)
   async function addEvent(body) {
     await onAddEvent(body)
     setAdding(false)
@@ -234,7 +244,7 @@ function OrderHistoryModal({ order, onClose, onEditTime, onAddEvent, Icon }) {
       {loading ? <p className="os-history-empty" role="status">Carregando operações...</p> : !error && !items.length ? <p className="os-history-empty">Nenhuma interação registrada.</p> : items.length > 0 && <>
         <p className="os-history-count" role="status">{items.length} {items.length === 1 ? 'operação registrada' : 'operações registradas'}</p>
         <div className="os-history-table-wrap"><SortableRows rows={items} columns={[{ key: "Data e hora", label: "Data e hora", value: (event) => event.at, numeric: true }, { key: "Operação", label: "Operação", value: (event) => eventLabels[event.type] || event.type }, { key: "Responsável", label: "Responsável", value: (event) => event.employeeName || 'Administrador' }, { key: "Detalhes", label: "Detalhes" }]}>{(sorted) => <table><thead><tr><SortHeader column={sorted.columns[0]} list={sorted} /><SortHeader column={sorted.columns[1]} list={sorted} /><SortHeader column={sorted.columns[2]} list={sorted} /><th>Detalhes</th></tr></thead><tbody>{sorted.rows.map((event) => <tr key={event.id}>
-          <td>{timeCell(event)}</td><td><strong>{eventLabels[event.type] || event.type}</strong></td><td>{event.employeeName || 'Administrador'}{event.affectedEmployeeName && <small>Operador: {event.affectedEmployeeName}</small>}</td><td>{event.reason && <span>{event.reason}</span>}{event.workStageName && event.type !== 'stage_changed' && <span>Etapa: {event.workStageName}</span>}{event.stageName && <span>{upper(event.stageName)}: +{number(event.quantity)} peça(s), {number(event.stageTotal)}/{number(order.quantity)} no total</span>}{event.details && <span>{Array.isArray(event.details) ? event.details.join(', ') : String(event.details)}</span>}{event.lines?.length > 0 && <ul className="os-history-changes">{event.lines.map((line) => <li key={line}>{line}</li>)}</ul>}{event.durationMs != null && <span>{event.type === 'machine_changed' ? 'Tempo na máquina anterior' : 'Tempo da sessão'}: {duration(event.durationMs)}</span>}{!event.reason && !event.stageName && !event.details && event.durationMs == null && '—'}</td>
+          <td>{timeCell(event)}</td><td><strong>{eventLabels[event.type] || event.type}</strong></td><td>{event.employeeName || 'Administrador'}{event.affectedEmployeeName && <small>Operador: {event.affectedEmployeeName}</small>}</td><td>{event.reason && <span>{event.reason}</span>}{event.workStageName && event.type !== 'stage_changed' && <span>Etapa: {event.workStageName}</span>}{event.stageName && <><span>{upper(event.stageName)}: {piecesText(event, workTimes.get(event.id))}</span><span>{number(event.stageTotal)}/{number(order.quantity)} no total</span></>}{event.details && <span>{Array.isArray(event.details) ? event.details.join(', ') : String(event.details)}</span>}{event.lines?.length > 0 && <ul className="os-history-changes">{event.lines.map((line) => <li key={line}>{line}</li>)}</ul>}{event.durationMs != null && <span>{event.type === 'machine_changed' ? 'Tempo na máquina anterior' : 'Tempo da sessão'}: {duration(event.durationMs)}</span>}{!event.reason && !event.stageName && !event.details && event.durationMs == null && '—'}</td>
         </tr>)}</tbody></table>}</SortableRows></div>
       </>}
     </div>
@@ -379,9 +389,9 @@ function PurchaseOrders({ order, onChanged, Icon }) {
     try { const blob = await (await check(await fetch(`${base}/${file.id}`, { headers: authHeaders() }))).blob(); const url = URL.createObjectURL(blob), link = document.createElement('a'); link.href = url; link.download = file.name; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000) } catch (caught) { setError(caught.message) }
   }
   const remove = (file) => { if (window.confirm(`Remover o anexo "${file.name}"?`)) run(async () => { await check(await fetch(`${base}/${file.id}`, { method: 'DELETE', headers: authHeaders() })) }) }
-  return <section className="os-section os-attachments os-purchase-orders"><div className="os-section-heading"><h3>Anexos de pedido de compra</h3><span>{files.length} {files.length === 1 ? 'arquivo' : 'arquivos'}</span><button type="button" className="os-purchase-add" disabled={busy} onClick={() => input.current.click()}>{busy ? 'Enviando...' : 'Anexar pedido de compra'}</button><input ref={input} type="file" multiple hidden aria-label="Arquivo do pedido de compra" onChange={(event) => { const list = [...event.target.files]; event.target.value = ''; if (list.length) upload(list) }} /></div>
-    <p className="os-purchase-hint">Visível somente para administradores e funcionários administrativos. Usado no faturamento do serviço.</p>
-    {files.length ? <ul>{files.map((file) => <li key={file.id}><button type="button" className="os-purchase-file" onClick={() => download(file)}><Icon name="orders" /><span>{file.name}</span><small>{file.uploadedBy ? `${file.uploadedBy} · ` : ''}{file.uploadedAt ? new Date(file.uploadedAt).toLocaleDateString('pt-BR', { timeZone: 'America/Bahia' }) : ''}</small></button><button type="button" className="os-purchase-remove" disabled={busy} aria-label={`Remover ${file.name}`} title="Remover" onClick={() => remove(file)}>×</button></li>)}</ul> : <p className="os-empty">Nenhum pedido de compra anexado.</p>}
+  return <section className="os-section os-attachments os-purchase-orders"><div className="os-section-heading"><h3>Anexos administrativos</h3><span>{files.length} {files.length === 1 ? 'arquivo' : 'arquivos'}</span><button type="button" className="os-purchase-add" disabled={busy} onClick={() => input.current.click()}>{busy ? 'Enviando...' : 'Anexar documento'}</button><input ref={input} type="file" multiple hidden aria-label="Arquivo administrativo" onChange={(event) => { const list = [...event.target.files]; event.target.value = ''; if (list.length) upload(list) }} /></div>
+    <p className="os-purchase-hint">Documentos administrativos da OS, fora da operação (como o pedido de compra do faturamento). Visível somente para administradores e funcionários administrativos. A busca das listas de ofertas e serviços também procura por eles.</p>
+    {files.length ? <ul>{files.map((file) => <li key={file.id}><button type="button" className="os-purchase-file" onClick={() => download(file)}><Icon name="orders" /><span>{file.name}</span><small>{file.uploadedBy ? `${file.uploadedBy} · ` : ''}{file.uploadedAt ? new Date(file.uploadedAt).toLocaleDateString('pt-BR', { timeZone: 'America/Bahia' }) : ''}</small></button><button type="button" className="os-purchase-remove" disabled={busy} aria-label={`Remover ${file.name}`} title="Remover" onClick={() => remove(file)}>×</button></li>)}</ul> : <p className="os-empty">Nenhum anexo administrativo.</p>}
     {error && <p className="workflow-error" role="alert">{error}</p>}
   </section>
 }
@@ -494,7 +504,7 @@ export default function OrderDetails({ order, activeTime, stageNamesInput, onCha
     </div><div className="os-detail-secondary">
       <section className="os-section os-proposal"><div className="os-section-heading"><h3>Proposta aceita</h3><span className="os-proposal-option">Opção {proposal.key || '—'}</span></div>{proposal.title && proposal.title !== `Opção ${proposal.key}` && <p className="os-proposal-title">{proposal.title}</p>}
         <Facts className="os-proposal-summary" items={[
-          ['Valor da OS', currency(osValueOf(proposal))], ['Prazo acordado', date(proposal.deadline)],
+          ['Valor da OS', order.labelQuote?.pending ? labelQuotePendingText : currency(osValueOf(proposal))], ['Prazo acordado', date(proposal.deadline)],
         ]} />
         <h4>Composição e condições</h4><Facts className="os-proposal-values" items={[
           ['Materiais', currency(proposal.materials)], ['Mão de obra', currency(proposal.labor)], ['Valor do serviço', currency(serviceCost)], ['Lucro bruto', currency(osValueOf(proposal) - serviceCost)], ['Desconto', `${number(proposal.discount)}%`], ['Margem', `${number(proposal.margin)}%`],

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
+import { openSidebarItem } from './sidebarNavigation.js'
 
 const fixture = await createWorkflowFixture({ accountsEnv: { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123' } })
 const browser = await chromium.launch({ headless: true })
@@ -117,7 +118,7 @@ try {
   assert.ok(!(await tabs()).includes('Ordem de serviço'))
 
   // The material requests screen no longer turns into the OS.
-  await page.locator('.sidebar').getByRole('button', { name: 'Pedidos de material', exact: true }).click()
+  await openSidebarItem(page, 'Pedidos de material')
   await page.getByRole('heading', { name: 'Pedidos de material', exact: true }).waitFor()
   assert.equal(await article.count(), 0)
   assert.deepEqual(errors, [])

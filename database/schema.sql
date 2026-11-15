@@ -38,6 +38,8 @@ CREATE TABLE IF NOT EXISTS clients (
   document VARCHAR(14) NOT NULL UNIQUE,
   email VARCHAR(160) NULL UNIQUE,
   notes VARCHAR(1000) NULL,
+  -- Payment term in days (only the number; the proposal PDF writes "45 dias"). Added by the API when missing.
+  payment_days SMALLINT UNSIGNED NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -107,5 +109,39 @@ CREATE TABLE IF NOT EXISTS inventory_movements (
   INDEX idx_inventory_movements_order_type (order_code, movement_type),
   CONSTRAINT fk_inventory_movements_material
     FOREIGN KEY (material_id) REFERENCES inventory_materials (id)
+    ON DELETE CASCADE
+);
+
+-- Estoque Administrativo: office, cleaning and pantry supplies, apart from the factory stock (migration 005).
+CREATE TABLE IF NOT EXISTS admin_inventory_materials (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  name VARCHAR(160) NOT NULL,
+  unit VARCHAR(4) NOT NULL DEFAULT 'un',
+  quantity DECIMAL(12,3) NOT NULL DEFAULT 0,
+  minimum DECIMAL(12,3) NOT NULL DEFAULT 0,
+  unit_price DECIMAL(12,2) NOT NULL DEFAULT 0,
+  icon VARCHAR(24) NOT NULL DEFAULT 'office',
+  photo TEXT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_admin_inventory_materials_name (name)
+);
+
+CREATE TABLE IF NOT EXISTS admin_inventory_movements (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  material_id INT UNSIGNED NOT NULL,
+  movement_type ENUM('creation', 'entry', 'exit') NOT NULL,
+  quantity DECIMAL(12,3) NOT NULL,
+  unit_price DECIMAL(12,2) NOT NULL DEFAULT 0,
+  balance_after DECIMAL(12,3) NOT NULL,
+  destination VARCHAR(255) NULL,
+  notes VARCHAR(500) NULL,
+  user_name VARCHAR(160) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_admin_inventory_movements_material_date (material_id, created_at),
+  CONSTRAINT fk_admin_inventory_movements_material
+    FOREIGN KEY (material_id) REFERENCES admin_inventory_materials (id)
     ON DELETE CASCADE
 );

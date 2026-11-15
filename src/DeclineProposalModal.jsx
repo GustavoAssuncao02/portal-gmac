@@ -2,6 +2,7 @@ import { useId, useState } from 'react'
 import { PayableModal } from './PayableModal.jsx'
 import { declineReasons, osValueOf } from '../server/proposalMath.js'
 import { formatQuantity } from '../server/materialUnits.js'
+import { labelQuoteOffer } from '../server/labelQuoteRules.js'
 
 // The customer said no to the proposal sent. The offer is closed as declined and the option counts in its acceptance rate.
 export default function DeclineProposalModal({ offer, onConfirm, onClose }) {
@@ -46,9 +47,13 @@ export function AcceptOfferModal({ offer, onConfirm, onClose }) {
     setBusy(true); setError('')
     try { await onConfirm(); onClose() } catch (caught) { setError(caught.message) } finally { setBusy(false) }
   }
-  return <PayableModal title="Tem certeza que deseja aceitar a oferta?" busy={busy} onClose={onClose} footer={<><button className="admin-tool-button" type="button" disabled={busy} onClick={onClose}>Cancelar</button><button className="admin-tool-button admin-tool-button--primary" type="button" disabled={busy} onClick={confirm}>{busy ? 'Aceitando...' : 'Sim, aceitar e gerar a OS'}</button></>}>
+  // An etiqueta opens its OS without proposal: the quote comes at the end, with what was really used.
+  const label = labelQuoteOffer(offer)
+  return <PayableModal title={label ? 'Abrir a OS da etiqueta?' : 'Tem certeza que deseja aceitar a oferta?'} busy={busy} onClose={onClose} footer={<><button className="admin-tool-button" type="button" disabled={busy} onClick={onClose}>Cancelar</button><button className="admin-tool-button admin-tool-button--primary" type="button" disabled={busy} onClick={confirm}>{busy ? (label ? 'Abrindo...' : 'Aceitando...') : label ? 'Sim, abrir a OS' : 'Sim, aceitar e gerar a OS'}</button></>}>
     <p><strong>{offer.code} · {offer.service}</strong></p>
-    <dl className="offer-decision-facts"><div><dt>Opção</dt><dd>Proposta {offer.proposal?.key}</dd></div><div><dt>Valor da OS</dt><dd>{brl(osValueOf(offer.proposal))}</dd></div><div><dt>Quantidade</dt><dd>{offer.quantity} un</dd></div></dl>
+    {label ? <dl className="offer-decision-facts"><div><dt>Etiqueta</dt><dd>{offer.labelNumber}</dd></div><div><dt>Valor da OS</dt><dd>Orçamento pendente</dd></div><div><dt>Quantidade</dt><dd>{offer.quantity} un</dd></div></dl>
+      : <dl className="offer-decision-facts"><div><dt>Opção</dt><dd>Proposta {offer.proposal?.key}</dd></div><div><dt>Valor da OS</dt><dd>{brl(osValueOf(offer.proposal))}</dd></div><div><dt>Quantidade</dt><dd>{offer.quantity} un</dd></div></dl>}
+    {label && <p>A OS da etiqueta abre sem proposta, com a estimativa de material e horas. Quando os operadores concluírem todas as peças, o orçamento é gerado com as horas trabalhadas e o material realmente usado, no botão <strong>Aguardando NF-e</strong>.</p>}
     <p>A OS será gerada agora e aparecerá para os operadores.{materials.length ? ' O material disponível sai do estoque neste momento:' : ''}</p>
     {materials.length > 0 && <ul className="offer-decision-list">{materials.map((material) => <li key={material.id}>{material.name}{material.detail ? ` (${material.detail})` : ''}: {formatQuantity(material.quantity, material.unit)}</li>)}</ul>}
     {error && <p className="admin-tool-error" role="alert">{error}</p>}

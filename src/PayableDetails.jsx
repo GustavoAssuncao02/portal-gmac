@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { Pencil, Check, Undo2, Copy, Power, Trash2, FileDown, Download, Upload, Eye, Ellipsis } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Pencil, Check, Undo2, Copy, Power, Trash2, FileDown, Download, Upload, Eye } from 'lucide-react'
 import { PayableModal, FilePreview, previewable } from './PayableModal.jsx'
 import { payableRequest, downloadPayableFile, uploadPayableFiles, money, dateLabel } from './payablesApi.js'
 import { settlementMethods, treasuryEntry } from '../server/payableRules.js'
@@ -14,22 +14,6 @@ export function HistoryRows({ rows }) {
   })}{!rows.length && <li>Nenhuma movimentação.</li>}</ol>
 }
 
-function MoreActions({ actions, disabled, onPick }) {
-  const [open, setOpen] = useState(false), box = useRef(null)
-  useEffect(() => {
-    if (!open) return undefined
-    box.current.querySelector('[role=menuitem]')?.focus()
-    const close = (event) => { if (!box.current?.contains(event.target)) setOpen(false) }
-    document.addEventListener('pointerdown', close)
-    return () => document.removeEventListener('pointerdown', close)
-  }, [open])
-  if (!actions.length) return null
-  return <div className="payable-more" ref={box} onKeyDown={(event) => { if (event.key === 'Escape' && open) { event.stopPropagation(); event.preventDefault(); setOpen(false); box.current.querySelector('button').focus() } }}>
-    <button type="button" className="admin-tool-button" aria-haspopup="menu" aria-expanded={open} disabled={disabled} onClick={() => setOpen(!open)}><Ellipsis size={15} />Mais ações</button>
-    {open && <div className="payable-more-menu" role="menu">{actions.map(([key, label, Icon]) => <button type="button" role="menuitem" key={key} className={key === 'delete' ? 'payable-danger' : ''} onClick={() => { setOpen(false); onPick(key) }}><Icon size={15} />{label}</button>)}</div>}
-  </div>
-}
-
 export default function PayableDetails({ id, onClose, onAction, refreshVersion }) {
   const [data, setData] = useState(null), [error, setError] = useState(''), [busy, setBusy] = useState(false), [version, setVersion] = useState(0), [preview, setPreview] = useState(null)
   useEffect(() => { let active = true; payableRequest(`/payables/${id}`).then((result) => { if (active) { setData(result); setError('') } }).catch((caught) => { if (active) setError(caught.message) }); return () => { active = false } }, [id, version, refreshVersion])
@@ -37,10 +21,9 @@ export default function PayableDetails({ id, onClose, onAction, refreshVersion }
   async function run(fn) { setBusy(true); setError(''); try { await fn(); setVersion((v) => v + 1) } catch (caught) { setError(caught.message) } finally { setBusy(false) } }
   // An entry posted in Tesouraria stays paid while it is corrected.
   const paid = Boolean(row?.payment), direct = treasuryEntry(row), locked = paid && !direct || row?.inactive
-  // Only actions that are possible now; the main ones stay visible and the rest go to "Mais ações".
-  const primary = !row ? [] : row.inactive ? [['reactivate', 'Reativar', Power]] : direct ? [['edit', 'Editar', Pencil]] : paid ? [['reverse', 'Estornar baixa', Undo2]] : [['pay', 'Dar baixa', Check], ['edit', 'Editar', Pencil]]
-  const secondary = !row ? [] : [['duplicate', 'Duplicar', Copy], ...(direct ? [['reverse', 'Estornar baixa', Undo2]] : []), ...(paid && !row.inactive ? [['deactivate', 'Desativar', Power]] : []), ['pdf', 'Gerar PDF individual', FileDown], ...(data.canDelete ? [['delete', 'Excluir', Trash2]] : [])]
-  return <PayableModal title={id} wide busy={busy} onClose={onClose} footer={row && <div className="payable-detail-actions"><MoreActions actions={secondary} disabled={busy} onPick={(key) => onAction(key, data)} />{primary.map(([key, label, Icon]) => <button type="button" className={`admin-tool-button ${key === 'pay' ? 'admin-tool-button--primary' : ''}`} disabled={busy} key={key} onClick={() => onAction(key, data)}><Icon size={15} />{label}</button>)}</div>}>
+  // Same footer as Contas a Receber: every action always visible, disabled when it does not apply now (no "Mais ações").
+  const actions = !row ? [] : [['edit', 'Editar', Pencil, locked], ['duplicate', 'Duplicar', Copy, false], ['pay', 'Dar baixa', Check, paid || row.inactive], ['reverse', 'Estornar baixa', Undo2, !paid || row.inactive], row.inactive ? ['reactivate', 'Reativar', Power, false] : ['deactivate', 'Desativar', Power, !paid], ['delete', 'Excluir', Trash2, !data.canDelete], ['pdf', 'Gerar PDF individual', FileDown, false]]
+  return <PayableModal title={id} wide busy={busy} onClose={onClose} footer={row && <div className="payable-detail-actions">{actions.map(([key, label, Icon, disabled]) => <button type="button" className={`admin-tool-button ${key === 'pay' ? 'admin-tool-button--primary' : ''}`} disabled={disabled || busy} key={key} onClick={() => onAction(key, data)}><Icon size={15} />{label}</button>)}</div>}>
     {error && <p className="admin-tool-error" role="alert">{error}<button type="button" className="admin-tool-button" onClick={() => setVersion((v) => v + 1)}>Tentar novamente</button></p>}{!row ? !error && <p>Carregando conta...</p> : <>
       <section><h3>Dados principais</h3><dl className="payable-facts">{[['Fornecedor', row.supplierName], ['Descrição', `${row.description || '—'}${row.inactive ? ' (D)' : ''}`], row.classificationSplit?.length ? ['Classificações', row.classificationSplit.map((part) => `${part.classificationName} ${money(part.valueCents)}`).join(' · ')] : ['Classificação', row.classificationName], ['Documento / boleto / NF', row.documentNumber || '—'], ['Emissão', dateLabel(row.issueDate)], ['Valor', money(row.valueCents)], ['Vencimento', dateLabel(row.dueDate)], ['Status', `${row.status === 'paid' ? 'Pago' : row.status === 'overdue' ? 'Vencido' : 'Pendente'}${row.inactive ? ' (D)' : ''}`], ['Tipo', row.kind === 'installment' ? `Parcela ${row.installmentNumber} de ${row.installmentCount}` : row.kind === 'recurring' ? `Recorrente · ${row.recurrence === 'monthly' ? 'Mensal' : 'Anual'}${row.seriesId ? ` · ocorrência ${row.seriesIndex} de ${row.seriesCount}` : ''}` : 'Normal'], ['OS vinculada (custo)', row.orderCode || 'Nenhuma'], ...(row.treasury ? [['Origem', 'Tesouraria · lançada já paga']] : []), ...(row.groupId ? [['Valor total original', money(row.originalTotalCents)]] : []), ...(row.previousId ? [['Criada a partir de', row.previousId]] : [])].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
       {paid && <><h3>Pagamento</h3><dl className="payable-facts">{[['Data', dateLabel(row.payment.date)], ['Forma', settlementMethods[row.payment.method]], ...(row.payment.bankName ? [['Banco', row.payment.bankName]] : []), ['Juros', money(row.payment.interestCents)], ['Desconto', money(row.payment.discountCents)], ['Valor final', money(row.payment.finalCents)], ['Observação', row.payment.note || '—']].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl></>}

@@ -7,7 +7,7 @@ import { receiveFile, sendStoredFile } from './uploads.js'
 import { dataDirectory } from './dataDirectory.js'
 import { addNotification } from './notificationEvents.js'
 import { createMailer } from './passwordReset.js'
-import { COMMENT_MAX, DESCRIPTION_MAX, RESOLUTION_MAX, TITLE_MAX, moduleLabel, moduleTitle, submodulesOf, ticketModules, ticketUrgencies, urgencyLabel } from './ticketRules.js'
+import { COMMENT_MAX, DESCRIPTION_MAX, RESOLUTION_MAX, TITLE_MAX, moduleLabel, moduleTitle, submodulesOf, ticketModules, ticketPlace, ticketUrgencies, urgencyLabel } from './ticketRules.js'
 
 // Tickets de suporte: administrators and administrative employees report problems of the portal to its developers.
 // Everybody sees every ticket; the attachments (evidence of the problem) open for administrators and, for an
@@ -37,7 +37,8 @@ function ticketView(ticket, viewer) {
   const files = viewer.role !== 'staff' || own
   const { email, ...rest } = ticket
   const comments = (ticket.comments || []).map(({ email: delivery, ...comment }) => viewer.developer ? { ...comment, email: delivery || null } : comment)
-  return { ...rest, own, comments, attachments: files ? ticket.attachments || [] : [], attachmentCount: (ticket.attachments || []).length, attachmentsLocked: !files && (ticket.attachments || []).length > 0, ...(viewer.developer ? { email: email || null } : {}) }
+  // Tickets of modules that became screens of a group (Estoque → Gestão Operacional) come in the group, like new ones.
+  return { ...rest, ...ticketPlace(ticket.module, ticket.submodule), own, comments, attachments: files ? ticket.attachments || [] : [], attachmentCount: (ticket.attachments || []).length, attachmentsLocked: !files && (ticket.attachments || []).length > 0, ...(viewer.developer ? { email: email || null } : {}) }
 }
 
 function ticketMail(ticket, recipients) {
@@ -148,7 +149,7 @@ export default function createSupportTicketsRouter(accounts, requireAdmin, { mai
     const urgency = clean(req.body.urgency, 20), module = clean(req.body.module, 40)
     if (!ticketUrgencies.some(([key]) => key === urgency)) fail('Escolha o grau de urgência: baixo, médio ou alto.')
     if (!ticketModules.some(([key]) => key === module)) fail('Escolha o módulo do sistema onde está o problema.')
-    // Cadastros, Operação and Gestão Financeira also ask for the screen involved; the other modules have none.
+    // Gestão Operacional, Cadastros, Operação and Gestão Financeira also ask for the screen involved; the others have none.
     const screens = submodulesOf(module), submodule = screens.length ? clean(req.body.submodule, 40) : ''
     if (screens.length && !screens.some(([key]) => key === submodule)) fail(`Escolha o sub-módulo de ${moduleLabel(module)} onde está o problema.`)
     const title = clean(req.body.title, TITLE_MAX).replace(/\s+/g, ' ')

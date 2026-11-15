@@ -3,6 +3,7 @@ import { chromium } from 'playwright'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
 import { enterOperatorCode, openOrder } from './operatorEntry.js'
 import { localDate } from '../server/reportData.js'
+import { openSidebarItem } from './sidebarNavigation.js'
 
 const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Gustavo' }
 const fixture = await createWorkflowFixture({ accountsEnv: env })
@@ -31,7 +32,7 @@ try {
     if (viewport.theme) await page.evaluate((theme) => document.documentElement.setAttribute('data-theme', theme), viewport.theme)
     const navigate = async (name) => {
       if (viewport.width < 768) await page.getByRole('button', { name: 'Abrir menu de navega\u00e7\u00e3o', exact: true }).click()
-      await page.locator('.sidebar').getByRole('button', { name, exact: true }).click()
+      await openSidebarItem(page, name)
     }
     await navigate('Servi\u00e7os')
     await page.locator('.labor-services-list tbody tr').filter({ hasText: service.name }).waitFor()

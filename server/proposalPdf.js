@@ -6,6 +6,7 @@ import { integerInWords, moneyInWords } from './moneyWords.js'
 import { round2, rateFor, tableTotals, itemTotal, letterTotal, situationLabels } from './proposalMath.js'
 import { brandColors, brandPaths } from './proposalBrand.js'
 import { documentKind } from './clientDocument.js'
+import { paymentDaysText } from './clientPaymentTerm.js'
 
 export { round2, tableTotals, letterTotal }
 
@@ -740,7 +741,7 @@ export async function renderLetter(document) {
 
   section('4. Prazos e condições', 70)
   const days = Number(document.validityDays) || 10
-  const terms = [['Prazo de entrega', document.deliveryTerm || 'A combinar'], ['Pagamento', document.payment || 'A combinar'], ['Validade da proposta', `${days} (${integerInWords(days).toUpperCase()}) dias corridos a partir da data de emissão da proposta comercial.`]]
+  const terms = [['Prazo de entrega', document.deliveryTerm || 'A combinar'], ['Pagamento', paymentDaysText(document.paymentDays) || document.payment || 'A combinar'], ['Validade da proposta', `${days} (${integerInWords(days).toUpperCase()}) dias corridos a partir da data de emissão da proposta comercial.`]]
   const labelWidth = 150
   terms.forEach(([label, value], index) => {
     const height = Math.max(22, heightOf(value, { size: 10.5, w: width - labelWidth - 20 }) + 10)

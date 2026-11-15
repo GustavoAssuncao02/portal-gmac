@@ -1,0 +1,8 @@
+/* The signature preview of the e-mail screen (ProposalEmailModal.jsx). The signature HTML (server/emailSignature.js)
+   carries the inline colors of a real e-mail, so the preview stays white in every theme — outside the generated themes
+   on purpose (scripts/build-dark-theme.mjs). */
+.proposal-email-signature-preview { padding:12px 14px; border:1px solid #dce6ef; border-radius:8px; background:#fff; color:#1f2d3d; overflow-x:auto; }
+.proposal-email-signature-preview p { margin:0 0 10px; color:#1f2d3d; font-size:14px; }
+:root[data-theme="dark"] .proposal-email-signature-preview { border-color:#36516f; background:#fff; color:#1f2d3d; }
+:root[data-theme="dark"] .proposal-email-signature-preview p { color:#1f2d3d; }
+:root[data-theme="dark"][data-tone="black"] .proposal-email-signature-preview { border-color:#333333; }

@@ -148,14 +148,13 @@
   .inventory-row--header, .pending-material-row--header { display: none; }
   .inventory-row:not(.inventory-row--header), .pending-material-row:not(.pending-material-row--header) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 12px; padding: 18px 0; min-height: 0; min-width: 0; font-size: 14px; }
   .inventory-row > *, .pending-material-row > * { min-width: 0; padding: 0; overflow-wrap: anywhere; }
-  .inventory-material-name, .inventory-row > :nth-child(2), .inventory-row-actions { grid-column: 1 / -1; }
+  .inventory-material-name, .inventory-row-actions { grid-column: 1 / -1; }
   .inventory-material-name { font-size: 16px; }
   .inventory-row > :is(span, strong) { display: flex; flex-direction: column; gap: 5px; }
   .inventory-row > :is(span, strong)::before { font-size: 12px; font-weight: normal; color: #698097; }
-  .inventory-row > :nth-child(2)::before { content: 'Especificação'; }
-  .inventory-row > :nth-child(3)::before { content: 'Disponível'; }
-  .inventory-row > :nth-child(4)::before { content: 'Estoque mínimo'; }
-  .inventory-row > :nth-child(5)::before { content: 'Valor por kg'; }
+  .inventory-row > :nth-child(2)::before { content: 'Disponível'; }
+  .inventory-row > :nth-child(3)::before { content: 'Estoque mínimo'; }
+  .inventory-row > :nth-child(4)::before { content: 'Valor unitário'; }
   .inventory-row-actions { justify-content: flex-end; gap: 8px; }
   .dashboard-shell .inventory-row-actions button { width: 44px; height: 44px; }
   .inventory-status { font-size: 12px; justify-self: start; width: fit-content; align-self: end; }
@@ -179,6 +178,8 @@
   .measure-fields label input { width: 100%; padding: 10px; border: 1px solid #cbd9e6; border-radius: 5px; background: #fff; }
   .weight-result { padding: 16px; margin-top: 18px; border-left: 3px solid #0c4c91; background: #f1f6fb; }
   .weight-result strong { font-size: 26px; background: none; padding: 8px 0 0; }
+  .weight-result--length { grid-template-columns: minmax(0, 1fr) 112px; align-items: center; }
+  .weight-length-input input { height: 44px; border: 1px solid #cbd9e6; border-radius: 5px; background: #fff; font-size: 16px; }
   .calculator-clear { width: 100%; font-size: 14px; border-width: 1px; }
   .calculator-footnote { display: none; }
   .conversion-panel { display: block; margin-top: 28px; padding: 18px 0 0; border: 0; border-top: 1px solid #dce5ee; border-radius: 0; box-shadow: none; }
@@ -435,7 +436,9 @@
   .payable-modal > footer > :last-child:nth-child(3) { grid-column: 1 / -1; }
   .payable-modal--form .admin-tool-button, .payable-modal .admin-tool-button { min-height: 44px; font-size: 14px; }
   .payable-modal .payable-icon { width: 44px; height: 44px; }
-  .payable-detail-actions { gap: 8px; }
+  /* Account details (Pagar, Receber, Tesouraria): every action visible, two per row across the whole footer. */
+  .payable-detail-actions { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .payable-detail-actions > button:last-child:nth-child(odd) { grid-column: 1 / -1; }
   .payable-detail-actions button { flex: 1 1 130px; font-size: 14px; }
   .payable-type .payable-radio { min-height: 44px; }
   .payable-history li > div { flex-wrap: wrap; gap: 8px; }

@@ -1,0 +1,22 @@
+/* "Aguardando NF-e" of an etiqueta OS (LabelQuoteModal.jsx). */
+.label-quote-modal .payable-modal-body { display:grid; gap:16px; }
+.label-quote-section { display:grid; gap:8px; }
+.label-quote-section h3 { margin:0; color:#0b376c; font-size:14px; font-weight:700; }
+.label-quote-table td small { display:block; margin-top:2px; color:#6b7f92; font-size:11.5px; }
+.label-quote-table td small.label-quote-pending { color:#b45309; font-weight:600; }
+.label-quote-quantity { display:inline-flex; align-items:center; gap:6px; }
+.label-quote-quantity input { width:96px; padding:6px 8px; border:1px solid #c9d6e2; border-radius:6px; font:inherit; text-align:right; }
+.label-quote-quantity span { color:#6b7f92; font-size:12px; }
+.label-quote-save { display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:10px; }
+.label-quote-save .payable-hint { margin:0; color:#b45309; }
+.label-quote-state { margin:0; padding:12px 14px; border-left:3px solid #2e7d4f; background:#f1f8f4; font-size:13px; line-height:1.6; }
+.label-quote-state--pending { border-left-color:#d97706; background:#fff7ed; color:#7c2d12; font-weight:600; }
+.label-quote-emails { display:grid; gap:4px; margin:0; padding:0; list-style:none; color:#46576b; font-size:12.5px; }
+.label-quote-emails li { display:flex; align-items:center; gap:6px; }
+@media (max-width: 760px) {
+  .label-quote-quantity input { width:80px; }
+  .label-quote-save { justify-content:stretch; }
+  .label-quote-save .admin-tool-button { width:100%; justify-content:center; }
+}
+/* .payable-table keeps its first column for a checkbox (36px); here it is the stage or the material. */
+.label-quote-table :is(td, th):first-child { width:auto; min-width:150px; overflow-wrap:normal; }

@@ -3,6 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { chromium } from 'playwright'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
 import { todayBahia } from '../server/payableRules.js'
+import { sidebarGroupOf } from './sidebarNavigation.js'
 
 const fixture = await createWorkflowFixture({ accountsEnv: { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Gustavo' } })
 const browser = await chromium.launch({ headless: true })
@@ -21,7 +22,7 @@ async function login(cpf = '12345678901') {
 }
 async function navigate(name) {
   const button = page.locator('.sidebar').getByRole('button', { name, exact: true })
-  if (!(await button.isVisible())) await page.locator('.sidebar').getByRole('button', { name: ['Fornecedores', 'Administradores', 'Funcionários', 'Clientes'].includes(name) ? 'Cadastros' : ['Serviços em andamento', 'Serviços concluídos', 'Ofertas e serviços'].includes(name) ? 'Operação' : 'Gestão Financeira', exact: true }).click()
+  if (!(await button.isVisible())) await page.locator('.sidebar').getByRole('button', { name: sidebarGroupOf(name), exact: true }).click()
   await button.click()
   await page.waitForTimeout(100)
 }

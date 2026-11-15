@@ -17,3 +17,24 @@ export const materialIcons = [
 
 export const defaultMaterialIcon = 'sheet'
 export const materialIcon = (key) => materialIcons.find((item) => item.key === key) || materialIcons[0]
+
+// Estoque Administrativo: groups of supplies, as the office organizes them ("Material de expediente", "Material de
+// limpeza", "Copa e cozinha"... — user's choice of 2026-11-14). Also used by its filter.
+export const adminMaterialIcons = [
+  { key: 'office', label: 'Material de expediente', icon: 'PenLine' },
+  { key: 'cleaning', label: 'Material de limpeza', icon: 'SprayCan' },
+  { key: 'kitchen', label: 'Copa e cozinha', icon: 'Coffee' },
+  { key: 'hygiene', label: 'Higiene pessoal', icon: 'SoapDispenserDroplet' },
+  { key: 'disposable', label: 'Descartáveis', icon: 'CupSoda' },
+  { key: 'computer', label: 'Suprimentos de informática', icon: 'Keyboard' },
+  { key: 'electrical', label: 'Material elétrico', icon: 'Lightbulb' },
+  { key: 'safety', label: 'EPI e uniformes', icon: 'HardHat' },
+  { key: 'first-aid', label: 'Primeiros socorros', icon: 'BriefcaseMedical' },
+  { key: 'packaging', label: 'Embalagens', icon: 'Package' },
+  { key: 'maintenance', label: 'Manutenção predial', icon: 'Hammer' },
+  { key: 'other', label: 'Outros', icon: 'Archive' },
+]
+
+export const defaultAdminMaterialIcon = 'office'
+// The icon of a material in the given set (a missing or foreign key falls back to the set's first icon).
+export const iconIn = (icons, key) => icons.find((item) => item.key === key) || icons[0]

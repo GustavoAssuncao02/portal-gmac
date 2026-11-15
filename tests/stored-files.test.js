@@ -26,7 +26,7 @@ test('start-up check lists each document whose record exists but whose file is g
     assert.deepEqual(byLabel['Contas a Pagar e Tesouraria'].missing.map((file) => file.name), ['NF - Gmac Metalúrgica.pdf', 'Comprovante.pdf'])
     assert.equal(byLabel['Contas a Pagar e Tesouraria'].total, 3)
     assert.equal(byLabel['Ofertas e OS'].total, 3)
-    assert.deepEqual(byLabel['Ofertas e OS'].missing.map((file) => file.where), ['OF-2026-0001 (e-mail da proposta)', 'OS-2026-0001 (pedido de compra)'])
+    assert.deepEqual(byLabel['Ofertas e OS'].missing.map((file) => file.where), ['OF-2026-0001 (e-mail da proposta)', 'OS-2026-0001 (anexo administrativo)'])
     assert.equal(byLabel['Extratos OFX importados'].missing.length, 0)
     const report = missingFilesReport(areas)
     assert.ok(report.includes('ATENCAO: 2 de 3 arquivos de Contas a Pagar e Tesouraria estão sem o documento no disco:'))

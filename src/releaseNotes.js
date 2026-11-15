@@ -1,6 +1,28 @@
 // Each commit to main is a new version: add an entry at the top, with what changed in plain words for whoever uses the portal.
 export const releaseNotes = [
   {
+    version: '1.0.17',
+    date: '2026-11-15',
+    notes: [
+      'Gestão Operacional: novo grupo no menu com Máquinas, Serviços, Etapas, Estoque e Pedidos de material',
+      'Estoque Administrativo: nova funcionalidade para materiais do escritório, limpeza e copa, com baixa',
+      'Estoque: filtro por ícone, medidas do material informadas na oferta e na OS',
+      'Ofertas e serviços: oferta em aberto para a equipe, busca por número da cotação e por anexos',
+      'Serviços em andamento e concluídos: mesma busca das ofertas, botão "Aguardando NF-e", Anexos administrativos',
+      'Etiqueta: orçamento feito depois do serviço, com as horas reais e o material consumido',
+      'Propostas: prazo de pagamento do cliente, objeto da proposta sem "serviço de", valor da Nestlé igual ao do PDF',
+      'E-mail da proposta: modelos de e-mail e assinatura da empresa',
+      'Clientes: prazo de pagamento em dias',
+      'Custo real e margem: material pelo preço pago, compra do pedido de material sem contar duas vezes',
+      'Contas a Pagar, Contas a Receber e Tesouraria: todas as ações visíveis nos detalhes, PDF individual mais limpo',
+      'Baixa em lote: filtros de fornecedor e classificação',
+      'Planejamento: OS completa aberta pelo bloco',
+      'Ticket: tempos de resposta',
+      'Tablet da produção: saída automática após 10 minutos sem uso, tempo de cada peça',
+      'Calculadora de pesos e medidas: peso pelo comprimento da peça',
+    ],
+  },
+  {
     version: '1.0.16',
     date: '2026-11-13',
     notes: [

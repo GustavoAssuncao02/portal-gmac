@@ -144,7 +144,17 @@ try {
 
   // A click on the block opens it.
   await torno.locator('.planning-block').first().click()
-  await page.getByRole('dialog', { name: 'Bloco do planejamento' }).getByRole('button', { name: 'Cancelar' }).click()
+  // Ver OS: the block gives way to a large window with the whole OS; Voltar ao bloco returns to the block.
+  const blockDialog = page.getByRole('dialog', { name: 'Bloco do planejamento' })
+  const narrow = (await blockDialog.boundingBox()).width
+  await blockDialog.getByRole('button', { name: 'Ver OS', exact: true }).click()
+  const orderDialog = page.getByRole('dialog', { name: `Ordem de serviço ${order.code}`, exact: true })
+  await orderDialog.locator('.os-detail').getByText('Proposta aceita', { exact: true }).waitFor()
+  assert.equal(await page.locator('dialog[open]').count(), 1, 'the OS takes the place of the block window')
+  assert.ok((await orderDialog.boundingBox()).width > narrow + 300, 'the window grows to show the OS')
+  await page.screenshot({ path: 'test-results/planning/ver-os.png' })
+  await orderDialog.getByRole('button', { name: 'Voltar ao bloco', exact: true }).click()
+  await blockDialog.getByRole('button', { name: 'Cancelar' }).click()
 
   // Week and month.
   await page.getByRole('group', { name: 'Período' }).getByRole('button', { name: 'Semana' }).click()

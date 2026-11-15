@@ -9,6 +9,7 @@ import mysql from 'mysql2/promise'
 import bcrypt from 'bcryptjs'
 import sharp from 'sharp'
 import { chromium, webkit, devices } from 'playwright'
+import { openSidebarItem } from './sidebarNavigation.js'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const results = path.join(root, 'test-results')
@@ -76,7 +77,7 @@ try {
     async function inventory() {
       const opener = page.getByRole('button', { name: 'Abrir menu de navegação', exact: true })
       if (await opener.isVisible()) await opener.click()
-      await page.locator('.sidebar').getByRole('button', { name: 'Estoque', exact: true }).click()
+      await openSidebarItem(page, 'Estoque')
       await page.getByRole('button', { name: 'Editar Chapa de teste', exact: true }).waitFor()
     }
     await inventory()

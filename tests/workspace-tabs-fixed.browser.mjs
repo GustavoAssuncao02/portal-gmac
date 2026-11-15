@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { mkdir } from 'node:fs/promises'
 import { chromium } from 'playwright'
 import { createWorkflowFixture } from './workflowFixture.js'
+import { openSidebarItem } from './sidebarNavigation.js'
 
 const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Gustavo' }
 const fixture = await createWorkflowFixture({ accountsEnv: env })
@@ -65,7 +66,7 @@ try {
   await page.getByRole('tab', { name: 'Calculadora de pesos e medidas', exact: true }).click()
   await page.evaluate(() => window.scrollTo(0, 500))
   await page.screenshot({ path: 'test-results/workspace-tabs-fixed.png' })
-  await page.getByRole('button', { name: 'Estoque', exact: true }).click()
+  await openSidebarItem(page, 'Estoque')
   await page.locator('.inventory-add-button').click()
   await page.getByRole('dialog', { name: 'Adicionar material', exact: true }).waitFor()
   assert.ok(await bar.evaluate((node) => { const { left, width } = node.getBoundingClientRect(); return document.elementFromPoint(left + width / 2, 20)?.closest('.modal-backdrop') !== null }), 'The modal backdrop covers the bar')

@@ -184,6 +184,20 @@
 /* Planejar OS: one card per stage, with its day, start, duration and the day of its machine on a 24-hour bar. */
 .planning-modal--order { width: min(980px, calc(100vw - 24px)); }
 .planning-order-facts { margin: 0; color: #3d5876; font-size: 13px; }
+/* Bloco do planejamento: the OS line with Ver OS; the same window grows to show the whole OS. */
+.planning-order-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.planning-order-line .planning-order-facts { flex: 1 1 260px; }
+.planning-back { margin-right: auto; }
+.planning-os-modal { position: fixed; inset: 0; width: min(1440px, calc(100vw - 24px)); max-width: none; height: calc(100dvh - 32px); max-height: none; margin: auto; padding: 0; border: 1px solid #cddce9; border-radius: 8px; background: #ffffff; color: #29435e; box-shadow: 0 20px 60px #102b4233; animation: planning-os-grow .18s ease-out; }
+.planning-os-modal[open] { display: flex; flex-direction: column; }
+.planning-os-modal::backdrop { background: #10283e66; }
+.planning-os-modal > header { display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; gap: 18px; padding: 18px 24px; border-bottom: 1px solid #dce6ef; }
+.planning-os-modal > header h2 { margin: 0; color: #0c4c91; font-size: 20px; }
+.planning-os-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 20px 26px 28px; overscroll-behavior: contain; }
+.planning-os-modal > footer { display: flex; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; gap: 10px; padding: 14px 24px; border-top: 1px solid #dce6ef; }
+@keyframes planning-os-grow { from { opacity: .4; transform: scale(.94); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .planning-os-modal { animation: none; } }
+@media (max-width: 760px) { .planning-os-body { padding: 14px 12px 20px; } }
 .planning-stage-rows { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
 .planning-stage-row { display: grid; gap: 10px; padding: 14px; border: 1px solid #dce5ef; border-radius: 8px; background: #fbfcfe; }
 .planning-stage-row--off { background: #ffffff; }

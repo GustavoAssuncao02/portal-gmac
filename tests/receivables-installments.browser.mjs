@@ -76,7 +76,7 @@ try {
 
   // Finishing an OS can also schedule installments.
   await page.locator('.sidebar').getByRole('button', { name: 'Serviços em andamento', exact: true }).click()
-  await page.locator('.admin-os-table tbody tr').filter({ hasText: order.code }).getByRole('button', { name: 'Concluído', exact: true }).click()
+  await page.locator('.admin-os-table tbody tr').filter({ hasText: order.code }).getByRole('button', { name: 'Aguardando NF-e', exact: true }).click()
   const schedule = page.getByRole('dialog', { name: 'Recebimento do serviço', exact: true })
   await schedule.getByRole('button', { name: /^Ainda vai receber/ }).click()
   await schedule.getByRole('radio', { name: 'Recebimento parcelado', exact: true }).check()

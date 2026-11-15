@@ -5,7 +5,9 @@ import { PayableModal } from './PayableModal.jsx'
 import MoneyInput from './MoneyInput.jsx'
 import ProposalSettingsModal from './ProposalSettingsModal.jsx'
 import { payableRequest } from './payablesApi.js'
-import { itemTotal, letterTotal, rateFor, situationNames, tableTotals } from '../server/proposalMath.js'
+import { itemTotal, letterTotal, PRICE_LIST_MODELS, rateFor, situationNames, tableTotals } from '../server/proposalMath.js'
+import { PAYMENT_DAYS_MAX, paymentDaysText } from '../server/clientPaymentTerm.js'
+import { upper } from './displayCase.js'
 import './proposalDocuments.css'
 
 export const proposalModels = [
@@ -57,13 +59,22 @@ function FiscalPicker({ kind, label, values = [], onChange, cnpj, hint }) {
 const fiscalList = (value) => (Array.isArray(value) ? value : value ? [value] : []).filter((entry) => entry?.code)
 const technicianOf = (issuer) => ({ name: issuer?.technician || '', registry: issuer?.technicianRegistry || '', phone: issuer?.technicianPhone || '' })
 
-function LetterForm({ model, draft, setDraft, settings, catalog }) {
+// Where the payment term came from and what happens to it (server/proposalDocuments.js rememberClientPaymentDays).
+function paymentHint(client, days) {
+  if (!client) return 'Cliente sem cadastro: o prazo vale só para este documento.'
+  const name = upper(client.name)
+  if (client.paymentDays) return Number(days) === client.paymentDays ? `Do cadastro de ${name}.` : `O cadastro de ${name} tem ${paymentDaysText(client.paymentDays)}; o valor daqui vale só para este documento.`
+  return days ? `Ao gerar o PDF, o prazo fica salvo no cadastro de ${name}.` : `${name} ainda não tem prazo de pagamento cadastrado.`
+}
+
+function LetterForm({ model, draft, setDraft, settings, catalog, paymentClient }) {
   const issuer = settings.issuers.find((item) => item.id === draft.issuerId)
   const set = (field, value) => setDraft((current) => ({ ...current, [field]: value }))
   const setItem = (index, field, value) => setDraft((current) => ({ ...current, items: current.items.map((item, position) => position === index ? { ...item, [field]: value } : item) }))
   const total = letterTotal({ items: draft.items.map((item) => ({ ...item, unitPrice: Number(item.unitPrice) || 0 })) })
   const registered = (code) => catalog?.companies?.find((company) => company.cnpj === issuer?.cnpj.replace(/\D/g, ''))?.activities?.some((row) => row.code === code)
   const scopeText = draft.scope.join('\n')
+  const missingCode = !fiscalList(draft.fiscal.nbs).length && !fiscalList(draft.fiscal.ncm).length
   return <div className="proposal-doc-form">
     <section className="proposal-doc-section"><h3>Identificação</h3><div className="proposal-doc-grid">
       <label>Empresa emissora<select aria-label="Empresa emissora" value={draft.issuerId} onChange={(event) => { const next = settings.issuers.find((item) => item.id === event.target.value); const keep = JSON.stringify(draft.technician) !== JSON.stringify(technicianOf(issuer)); setDraft((current) => ({ ...current, issuerId: event.target.value, technician: keep ? current.technician : technicianOf(next) })) }}>{settings.issuers.map((item) => <option key={item.id} value={item.id}>{item.label} · {item.cnpj}</option>)}</select></label>
@@ -77,9 +88,11 @@ function LetterForm({ model, draft, setDraft, settings, catalog }) {
     <section className="proposal-doc-section proposal-fiscal"><h3><BadgeCheck size={17} aria-hidden="true" />CNAE – Código de atividade – NCM/NBS</h3>
       <div className="proposal-doc-grid proposal-doc-grid--fiscal">
         <FiscalPicker kind="cnae" label="CNAE (código de atividade)" cnpj={issuer?.cnpj} values={fiscalList(draft.fiscal.cnae).map((entry) => ({ ...entry, registered: entry.registered ?? registered(entry.code) }))} onChange={(values) => set('fiscal', { ...draft.fiscal, cnae: values })} hint="O primeiro CNAE é o principal." />
-        <FiscalPicker kind="nbs" label="NBS (serviço)" values={fiscalList(draft.fiscal.nbs)} onChange={(values) => set('fiscal', { ...draft.fiscal, nbs: values })} hint="Nomenclatura Brasileira de Serviços, exigida na NFS-e." />
+        <FiscalPicker kind="nbs" label="NBS (serviço)" values={fiscalList(draft.fiscal.nbs)} onChange={(values) => set('fiscal', { ...draft.fiscal, nbs: values })} hint="Para serviços (Nomenclatura Brasileira de Serviços)." />
         <FiscalPicker kind="ncm" label="NCM (produto)" values={fiscalList(draft.fiscal.ncm)} onChange={(values) => set('fiscal', { ...draft.fiscal, ncm: values })} hint="Para peças vendidas como produto." />
       </div>
+      {/* The CNAE is mandatory; of NBS and NCM one is enough, both are allowed. Same rule as normalizeDocument. */}
+      <p className={`proposal-fiscal-rule${missingCode ? ' proposal-fiscal-rule--missing' : ''}`}>Obrigatório: o CNAE e <strong>ao menos um</strong> entre NBS (serviço) e NCM (produto). Pode informar os dois.</p>
     </section>
     <section className="proposal-doc-section"><h3>1. Refere-se e 2. Escopo</h3>
       <label>Objeto da proposta<span className="proposal-doc-prefix">Submetemos à apreciação de V.S.ª a presente proposta para</span><input required maxLength={300} value={draft.subject} onChange={(event) => set('subject', event.target.value)} /></label>
@@ -101,7 +114,7 @@ function LetterForm({ model, draft, setDraft, settings, catalog }) {
     </section>
     <section className="proposal-doc-section"><h3>4. Prazos e condições</h3><div className="proposal-doc-grid">
       <label>Prazo de entrega<input maxLength={200} value={draft.deliveryTerm} onChange={(event) => set('deliveryTerm', event.target.value)} placeholder="Ex.: 15 dias úteis" /></label>
-      <label className="proposal-doc-wide">Pagamento<input maxLength={300} value={draft.payment} onChange={(event) => set('payment', event.target.value)} placeholder="Ex.: 45 DDL" /></label>
+      <label className="proposal-doc-wide">Pagamento (dias)<input type="number" min={1} max={PAYMENT_DAYS_MAX} step={1} inputMode="numeric" value={draft.paymentDays ?? ''} onChange={(event) => set('paymentDays', event.target.value)} placeholder="Ex.: 45 (no PDF: 45 dias)" /><small className="payable-hint">{paymentHint(paymentClient, draft.paymentDays)}</small></label>
       <label>Validade (dias)<input type="number" min={1} max={365} value={draft.validityDays} onChange={(event) => set('validityDays', event.target.value)} /></label>
     </div></section>
     <section className="proposal-doc-section"><div className="proposal-doc-heading"><h3>Técnico responsável</h3><button type="button" className="payable-link" onClick={() => set('technician', technicianOf(issuer))}>Usar o padrão da empresa</button></div>
@@ -115,12 +128,18 @@ function LetterForm({ model, draft, setDraft, settings, catalog }) {
   </div>
 }
 
-function TableForm({ model, draft, setDraft, settings, assignments, setAssignments }) {
+// The sheet of a price-list model as the form has it: the price list with the quantities typed.
+function tableDocument(model, draft, settings) {
+  const table = settings.tables[model]
+  const rowsOf = (kind) => (kind === 'labor' ? table.labor : table.materials).map((row) => ({ ...row, ...(draft[kind] || []).find((entry) => entry.id === row.id) }))
+  return { labor: rowsOf('labor'), materials: rowsOf('materials'), freight: model === 'etiqueta' ? { ...draft.freight, places: table.freight } : undefined }
+}
+
+function TableForm({ model, draft, setDraft, settings, assignments, setAssignments, usageTitle = 'Registrado no sistema (previsto na oferta)' }) {
   const table = settings.tables[model]
   const [filled, setFilled] = useState(false)
   const set = (field, value) => setDraft((current) => ({ ...current, [field]: value }))
-  const rowsOf = (kind) => (kind === 'labor' ? table.labor : table.materials).map((row) => ({ ...row, ...draft[kind].find((entry) => entry.id === row.id) }))
-  const document = { labor: rowsOf('labor'), materials: rowsOf('materials'), freight: model === 'etiqueta' ? { ...draft.freight, places: table.freight } : undefined }
+  const document = tableDocument(model, draft, settings)
   const totals = tableTotals(document)
   const update = (kind, id, change) => set(kind, draft[kind].map((row) => row.id === id ? { ...row, ...change } : row))
   // Moving a system record to another line moves its quantity with it.
@@ -150,7 +169,7 @@ function TableForm({ model, draft, setDraft, settings, assignments, setAssignmen
       <label>Nome para contato<input maxLength={80} value={draft.contact} onChange={(event) => set('contact', event.target.value)} /></label>
       <label className="proposal-doc-full">Descrição do serviço<textarea rows={2} required maxLength={600} value={draft.description} onChange={(event) => set('description', event.target.value)} /></label>
     </div></section>
-    {draft.usage?.length > 0 && <section className="proposal-doc-section proposal-usage"><h3>Registrado no sistema (previsto na oferta)</h3>
+    {draft.usage?.length > 0 && <section className="proposal-doc-section proposal-usage"><h3>{usageTitle}</h3>
       <p className="payable-hint">Cada registro foi lançado na linha correspondente da planilha. Troque a linha quando precisar; a escolha fica lembrada para as próximas.</p>
       <ul>{draft.usage.map((item) => { const rowId = item.id in assignments ? assignments[item.id] : item.rowId; return <li key={item.id} className={rowId ? '' : 'proposal-usage--pending'}>
         <span><strong>{item.name}</strong><small>{decimal(item.quantity)} {item.unit} · {item.source}</small></span>
@@ -176,10 +195,12 @@ function TableForm({ model, draft, setDraft, settings, assignments, setAssignmen
   </div>
 }
 
-// Generates the proposal of an offer in one of the commercial team's models.
-export default function ProposalDocumentModal({ offer, option, onClose, onSaved }) {
+// Generates the proposal of an offer in one of the commercial team's models. With `orderCode` it is the quote of an
+// etiqueta OS (server/labelQuotes.js): the form comes with the hours really worked and the material used in the OS, and
+// `initialModel` opens a model right away (the Etiqueta sheet; "Trocar modelo" goes to the others).
+export default function ProposalDocumentModal({ offer, option, onClose, onSaved, orderCode = null, initialModel = null }) {
   const saved = offer.proposal?.document
-  const [model, setModel] = useState(null), [draft, setDraft] = useState(null), [settings, setSettings] = useState(null), [catalog, setCatalog] = useState(null)
+  const [model, setModel] = useState(null), [draft, setDraft] = useState(null), [settings, setSettings] = useState(null), [catalog, setCatalog] = useState(null), [paymentClient, setPaymentClient] = useState(null)
   const [assignments, setAssignments] = useState({}), [error, setError] = useState(''), [busy, setBusy] = useState(false), [loading, setLoading] = useState(false), [settingsOpen, setSettingsOpen] = useState(false)
   const formId = useId()
   // The document charges the OS value of the option: cost plus gross profit, less the discount.
@@ -188,43 +209,54 @@ export default function ProposalDocumentModal({ offer, option, onClose, onSaved 
   async function load(key, fresh = false) {
     setLoading(true); setError(''); setAssignments({})
     try {
-      const query = `/offers/${offer.id}/proposal-draft?model=${key}&value=${value.toFixed(2)}&deadline=${encodeURIComponent(option?.deadline || offer.deadline || '')}${fresh ? '&fresh=1' : ''}`
+      const query = orderCode ? `/orders/${encodeURIComponent(orderCode)}/label-quote-draft?model=${key}${fresh ? '&fresh=1' : ''}` : `/offers/${offer.id}/proposal-draft?model=${key}&value=${value.toFixed(2)}&deadline=${encodeURIComponent(option?.deadline || offer.deadline || '')}${fresh ? '&fresh=1' : ''}`
       const [data, status] = await Promise.all([payableRequest(query), payableRequest('/fiscal/status').catch(() => null)])
       const next = data.draft
       // Units are limited to unit, kg and metre; older proposals with other units reopen as unit.
       if (next.items) next.items = next.items.map((item) => ({ ...item, unit: proposalUnit(item.unit), unitPrice: apiMoney(item.unitPrice) }))
-      setDraft(next); setSettings(data.settings); setCatalog(status); setModel(key)
+      setDraft(next); setSettings(data.settings); setCatalog(status); setPaymentClient(data.paymentClient || null); setModel(key)
     } catch (caught) { setError(caught.message) } finally { setLoading(false) }
   }
 
   async function submit(event) {
     event.preventDefault()
+    // Letter models: the CNAE and at least one of NBS or NCM, checked here so the message comes before the round trip.
+    if (draft.items) {
+      const missing = !fiscalList(draft.fiscal?.cnae).length ? 'Informe o CNAE (código de atividade) da proposta.' : !fiscalList(draft.fiscal?.nbs).length && !fiscalList(draft.fiscal?.ncm).length ? 'Informe ao menos um: NBS (serviço) ou NCM (produto). Pode informar os dois.' : ''
+      if (missing) return setError(missing)
+    }
     setBusy(true); setError('')
     const document = draft.items ? { ...draft, scope: draft.scope.map((line) => line.trim()).filter(Boolean), items: draft.items.map((item) => ({ ...item, unitPrice: Number(item.unitPrice) || 0 })) } : draft
     const learned = Object.entries(assignments).map(([id, rowId]) => ({ name: draft.usage.find((item) => item.id === id)?.name, rowId })).filter((item) => item.name && item.rowId)
     try {
-      const result = await payableRequest(`/offers/${offer.id}/proposal-document`, 'POST', { model, document, option, assignments: learned })
-      await onSaved(result.item, model)
+      const result = orderCode
+        ? await payableRequest(`/orders/${encodeURIComponent(orderCode)}/label-quote-document`, 'POST', { model, document, assignments: learned })
+        : await payableRequest(`/offers/${offer.id}/proposal-document`, 'POST', { model, document, option, assignments: learned })
+      await onSaved(orderCode ? result : result.item, model)
     } catch (caught) { setError(caught.message) } finally { setBusy(false) }
   }
 
-  // Letter models charge what is typed in their items; a table model has its own price list, so it is not compared.
-  const documentTotal = draft?.items ? draft.items.reduce((total, item) => total + itemTotal({ quantity: item.quantity, unitPrice: Number(item.unitPrice) || 0 }), 0) : null
+  useEffect(() => { if (initialModel) load(initialModel) }, [])
+  // Letter models charge what is typed in their items. A price list (Nestlé) charges the contract prices: its total is
+  // shown against the option, as it becomes the Valor da OS of the option once the PDF is generated. The etiqueta quote of
+  // an OS is not compared (its OS had no option).
+  const documentTotal = draft?.items ? draft.items.reduce((total, item) => total + itemTotal({ quantity: item.quantity, unitPrice: Number(item.unitPrice) || 0 }), 0)
+    : draft && settings && PRICE_LIST_MODELS.includes(model) && !orderCode ? tableTotals(tableDocument(model, draft, settings)).total : null
   const current = proposalModels.find((item) => item.key === model)
   const differs = documentTotal != null && value > 0 && Math.abs(documentTotal - value) > 0.005
-  const footer = model ? <>{differs && <p className="payable-hint proposal-total-differs" role="status">O total deste documento ({money(documentTotal)}) é diferente do Valor da OS desta opção ({money(value)}). Use «Recomeçar com dados do sistema» para voltar ao valor calculado; o recebimento da OS segue o total do documento.</p>}<button className="admin-tool-button" type="button" disabled={busy} onClick={() => { setModel(null); setDraft(null) }}><ArrowLeft size={16} />Trocar modelo</button><button className="admin-tool-button" type="button" disabled={busy} onClick={() => load(model, true)}>Recomeçar com dados do sistema</button><button className="admin-tool-button admin-tool-button--primary" form={formId} type="submit" disabled={busy}><FileText size={16} />{busy ? 'Gerando...' : 'Gerar PDF'}</button></> : <button className="admin-tool-button" type="button" onClick={onClose}>Cancelar</button>
+  const footer = model ? <>{differs && <p className="payable-hint proposal-total-differs" role="status">{PRICE_LIST_MODELS.includes(model) && !orderCode ? <>Esta planilha usa os preços do contrato: o total ({money(documentTotal)}) passa a ser o Valor da OS desta opção, no lugar de {money(value)}. Os custos da GMAC continuam os da oferta.</> : <>O total deste documento ({money(documentTotal)}) é diferente do Valor da OS desta opção ({money(value)}). Use «Recomeçar com dados do sistema» para voltar ao valor calculado; o recebimento da OS segue o total do documento.</>}</p>}<button className="admin-tool-button" type="button" disabled={busy} onClick={() => { setModel(null); setDraft(null) }}><ArrowLeft size={16} />Trocar modelo</button><button className="admin-tool-button" type="button" disabled={busy} onClick={() => load(model, true)}>Recomeçar com dados do sistema</button><button className="admin-tool-button admin-tool-button--primary" form={formId} type="submit" disabled={busy}><FileText size={16} />{busy ? 'Gerando...' : 'Gerar PDF'}</button></> : <button className="admin-tool-button" type="button" onClick={onClose}>Cancelar</button>
   // Rendered at the document root so the screen that opens it cannot restyle the form.
   return createPortal(<>
-    <PayableModal title={model ? `Proposta · ${current.title}` : 'Escolha o modelo da proposta'} className="proposal-doc-modal" wide busy={busy} onClose={onClose} footer={footer}>
+    <PayableModal title={model ? `${orderCode ? 'Orçamento da etiqueta' : 'Proposta'} · ${current.title}` : orderCode ? 'Escolha o modelo do orçamento' : 'Escolha o modelo da proposta'} className="proposal-doc-modal" wide busy={busy} onClose={onClose} footer={footer}>
       {!model ? <div className="proposal-model-step">
-        <p>Selecione o modelo do documento que será enviado ao cliente. Os dados do sistema já vêm preenchidos.</p>
+        <p>{orderCode ? 'Selecione o modelo do orçamento. As horas trabalhadas e o material consumido na OS já vêm preenchidos.' : 'Selecione o modelo do documento que será enviado ao cliente. Os dados do sistema já vêm preenchidos.'}</p>
         {saved && <p className="proposal-model-saved">Último documento gerado: <strong>{modelLabel(saved)}</strong> · {money(saved.total)}</p>}
         <div className="proposal-model-grid">{proposalModels.map((item) => <button key={item.key} type="button" className={`proposal-model-card proposal-model-card--${item.key}`} disabled={loading} onClick={() => load(item.key)}><span className="proposal-model-thumb" aria-hidden="true"><i /><i /><i /><i /></span><strong>{item.title}</strong><span>{item.subtitle}</span><small>{item.example}</small></button>)}</div>
         <button type="button" className="payable-link proposal-settings-link" onClick={() => setSettingsOpen(true)}><Settings size={14} aria-hidden="true" />Empresas, tabelas de preço e catálogo fiscal</button>
         {loading && <p className="payable-hint" role="status">Carregando dados do sistema...</p>}
         {error && <p className="admin-tool-error" role="alert">{error}</p>}
       </div> : <form id={formId} onSubmit={submit}><fieldset disabled={busy}>
-        {draft.items ? <LetterForm model={model} draft={draft} setDraft={setDraft} settings={settings} catalog={catalog} /> : <TableForm model={model} draft={draft} setDraft={setDraft} settings={settings} assignments={assignments} setAssignments={setAssignments} />}
+        {draft.items ? <LetterForm model={model} draft={draft} setDraft={setDraft} settings={settings} catalog={catalog} paymentClient={paymentClient} /> : <TableForm model={model} draft={draft} setDraft={setDraft} settings={settings} assignments={assignments} setAssignments={setAssignments} {...(orderCode ? { usageTitle: 'Registrado na OS (horas reais e material consumido)' } : {})} />}
         {error && <p className="admin-tool-error" role="alert">{error}</p>}
       </fieldset></form>}
     </PayableModal>

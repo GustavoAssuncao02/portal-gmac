@@ -10,6 +10,7 @@ const errors = []
 page.on('pageerror', (error) => errors.push(error.message))
 const waitSaved = () => page.waitForFunction(() => !document.querySelector('.offer-proposal-button')?.disabled)
 const handle = (label) => page.getByRole('button', { name: label, exact: true })
+// Group names (sectors of Etapas) show in capital letters, as typed names do everywhere on screen.
 const groups = () => page.locator('.offer-stage-heading h3').allTextContents()
 const stagesIn = (group) => page.locator(`[data-stage-id="${group}"] .offer-stage-item`).evaluateAll((items) => items.map((item) => item.dataset.stageId))
 async function drag(from, to) {
@@ -33,7 +34,7 @@ try {
   for (const name of ['Tornearia', 'Montagem', 'Pintura', 'Corte a plasma']) await page.getByRole('checkbox', { name, exact: true }).check()
   await waitSaved()
   await drag(handle('Reordenar grupo Pintura'), handle('Reordenar grupo Usinagem'))
-  assert.deepEqual(await groups(), ['Pintura', 'Usinagem', 'Caldeiraria'])
+  assert.deepEqual(await groups(), ['PINTURA', 'USINAGEM', 'CALDEIRARIA'])
   await drag(handle('Reordenar etapa Montagem'), handle('Reordenar etapa Tornearia'))
   assert.equal((await stagesIn('Usinagem'))[0], 'assembly')
   // Keyboard sorting uses the same handles and does not change checkbox state.
@@ -52,7 +53,7 @@ try {
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
   await page.keyboard.press('Space')
   await waitSaved()
-  assert.deepEqual(await groups(), ['Pintura', 'Caldeiraria', 'Usinagem'])
+  assert.deepEqual(await groups(), ['PINTURA', 'CALDEIRARIA', 'USINAGEM'])
   for (const name of ['Tornearia', 'Montagem', 'Pintura', 'Corte a plasma']) assert.equal(await page.getByRole('checkbox', { name, exact: true }).isChecked(), true)
   await page.getByRole('checkbox', { name: 'Montagem', exact: true }).uncheck()
   await page.getByRole('checkbox', { name: 'Montagem', exact: true }).check()
@@ -61,7 +62,7 @@ try {
   assert.deepEqual(saved.stages, ['painting', 'plasma-cut', 'assembly', 'turning'])
   await page.reload()
   await handle('Reordenar grupo Pintura').waitFor()
-  assert.deepEqual(await groups(), ['Pintura', 'Caldeiraria', 'Usinagem'])
+  assert.deepEqual(await groups(), ['PINTURA', 'CALDEIRARIA', 'USINAGEM'])
   assert.equal((await stagesIn('Usinagem'))[0], 'assembly')
   await page.locator('.offer-process-settings').screenshot({ path: 'test-results/stage-order-desktop.png' })
   await page.setViewportSize({ width: 390, height: 844 })
@@ -77,7 +78,7 @@ try {
   for (let step = 1; step <= 12; step++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y + (target - y) * step / 12 }] })
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
   await waitSaved()
-  assert.deepEqual(await groups(), ['Pintura', 'Usinagem', 'Caldeiraria'])
+  assert.deepEqual(await groups(), ['PINTURA', 'USINAGEM', 'CALDEIRARIA'])
   await page.locator('.offer-process-settings').screenshot({ path: 'test-results/stage-order-mobile.png' })
   saved = (await fixture.adminRequest('/offers', 'GET', undefined, fixture.admin)).data.items.find((row) => row.id === offer.id).resources
   assert.deepEqual(saved.stages, ['painting', 'assembly', 'turning', 'plasma-cut'])
@@ -86,7 +87,7 @@ try {
   await page.reload()
   await handle('Reordenar grupo Etapas do cadastro anterior').waitFor()
   await drag(handle('Reordenar grupo Etapas do cadastro anterior'), handle('Reordenar grupo Pintura'))
-  assert.deepEqual(await groups(), ['Etapas do cadastro anterior', 'Pintura', 'Usinagem', 'Caldeiraria'])
+  assert.deepEqual(await groups(), ['ETAPAS DO CADASTRO ANTERIOR', 'PINTURA', 'USINAGEM', 'CALDEIRARIA'])
   await drag(handle('Reordenar etapa Soldagem'), handle('Reordenar etapa Corte'))
   saved = (await fixture.adminRequest('/offers', 'GET', undefined, fixture.admin)).data.items.find((row) => row.id === offer.id).resources
   assert.deepEqual(saved.stages, ['welding', 'cutting', 'painting', 'assembly', 'turning', 'plasma-cut'])
@@ -95,7 +96,7 @@ try {
   assert.deepEqual(saved.stages, ['painting', 'welding', 'cutting', 'assembly', 'turning', 'plasma-cut'])
   await page.reload()
   await handle('Reordenar grupo Pintura').waitFor()
-  assert.deepEqual(await groups(), ['Pintura', 'Etapas do cadastro anterior', 'Usinagem', 'Caldeiraria'])
+  assert.deepEqual(await groups(), ['PINTURA', 'ETAPAS DO CADASTRO ANTERIOR', 'USINAGEM', 'CALDEIRARIA'])
   assert.deepEqual(errors, [])
   console.log('Stage ordering passed: mouse, keyboard, touch, selected substeps, legacy groups, reload and mobile layout.')
 } finally { await browser.close(); await fixture.close() }

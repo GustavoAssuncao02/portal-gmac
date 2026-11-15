@@ -62,7 +62,7 @@ try {
       assert.deepEqual(await sortBy('Conclusão'), [newCode, oldCode], 'most recent completion first')
       assert.equal(await page.locator('.admin-os-table thead th', { hasText: 'Conclusão' }).getAttribute('aria-sort'), 'descending')
       assert.deepEqual(await sortBy('Conclusão'), [oldCode, newCode], 'a second click inverts')
-      assert.deepEqual(await sortBy('Pedido de compra'), [oldCode, newCode])
+      assert.deepEqual(await sortBy('Anexos administrativos'), [oldCode, newCode])
       assert.deepEqual(await sortBy('OS / Serviço'), [newCode, oldCode])
       assert.deepEqual(await sortBy('Colaboradores'), [oldCode, newCode], 'text from A to Z')
       assert.equal(await page.locator('.admin-os-table thead th', { hasText: 'Colaboradores' }).getAttribute('aria-sort'), 'ascending')

@@ -23,7 +23,7 @@ export default function StockPurchaseFinance({ purchase, onClose }) {
   }
   // While the form is open, a supplier registered elsewhere (another tab, another person) enters its list.
   useEffect(() => { if (mode) return pollWhileVisible(() => readPayables(setData).catch(() => {}), 30000, ['finance']) }, [mode])
-  if (mode) return <PayableForm treasury={mode === 'treasury'} single prefill={{ value: totalCents ? decimal(totalCents) : '', description: `Compra de material: ${purchase.name}${purchase.detail ? ` · ${purchase.detail}` : ''} (${amount})` }} suppliers={data.suppliers} classifications={data.classifications} orders={data.orders || []} items={data.items} onClose={onClose} onSaved={async () => onClose()} />
+  if (mode) return <PayableForm treasury={mode === 'treasury'} single prefill={{ ...purchase.link, value: totalCents ? decimal(totalCents) : '', description: `Compra de material: ${purchase.name}${purchase.detail ? ` · ${purchase.detail}` : ''} (${amount})` }} suppliers={data.suppliers} classifications={data.classifications} orders={data.orders || []} items={data.items} onClose={onClose} onSaved={async () => onClose()} />
   return <PayableModal title="Lançar esta compra no financeiro?" busy={busy} onClose={onClose} footer={<button type="button" className="admin-tool-button" disabled={busy} onClick={onClose}>Não lançar agora</button>}>
     <p className="finance-choice-summary"><strong>{purchase.name}</strong>{purchase.detail ? ` · ${purchase.detail}` : ''} entrou no estoque: {amount}{totalCents ? <> × {money(Math.round(unitPrice * 100))} = <strong>{money(totalCents)}</strong></> : ''}.</p>
     <div className="finance-choice">

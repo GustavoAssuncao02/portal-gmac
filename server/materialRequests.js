@@ -42,11 +42,14 @@ export async function saveRequestedMaterial(id, adminId, save, { commit, rollbac
     const pending = Number(Math.max(0, remainingQuantity - supplied).toFixed(3))
     const receipt = { id: receiptId, receivedAt: new Date().toISOString(), receivedBy: adminId, receivedByName: adminName || null, inventoryId: result.materialId ?? result.id, quantity: result.receivedQuantity, allocatedQuantity: Number(allocation.allocatedQuantity), orderCode: order?.code ?? null, result }
     const consumed = Number(material.inventoryConsumedQuantity ?? (Number(material.quantity) - remainingQuantity))
+    // The real cost of the OS material: what it already had, plus this purchase at the price paid.
+    const consumedValue = material.inventoryConsumedCost != null ? Number(material.inventoryConsumedCost) : consumed * (Number(material.unitPrice) || 0)
+    const cost = Number((consumedValue + supplied * Number(allocation.allocatedUnitPrice ?? material.unitPrice ?? 0)).toFixed(4))
     for (const entry of materials) {
       entry.inventoryId = receipt.inventoryId
       entry.purchaseQuantity = pending
       entry.stockStatus = pending > 0 ? 'partial' : 'available'
-      if (order) { entry.inventoryConsumedQuantity = Number((consumed + supplied).toFixed(3)); entry.stockAvailable = entry.inventoryConsumedQuantity }
+      if (order) { entry.inventoryConsumedQuantity = Number((consumed + supplied).toFixed(3)); entry.inventoryConsumedCost = cost; entry.stockAvailable = entry.inventoryConsumedQuantity }
       else entry.stockAvailable = Number(entry.stockAvailable || 0) + supplied
       entry.requestReceipts = [...(entry.requestReceipts || (entry.requestReceipt ? [entry.requestReceipt] : [])), receipt]
       entry.requestReceipt = receipt
@@ -91,7 +94,7 @@ export default function createMaterialRequestsRouter(requireAdmin, pool, account
     try {
       let inventory
       if (body.inventoryId != null && pool) {
-        const [[row]] = await pool.execute('SELECT id, name, detail, unit, unit_price AS unitPrice FROM inventory_materials WHERE id = ?', [body.inventoryId])
+        const [[row]] = await pool.execute('SELECT id, name, unit, unit_price AS unitPrice FROM inventory_materials WHERE id = ?', [body.inventoryId])
         if (!row) fail(404, 'Material não encontrado no estoque.')
         inventory = row
       }
@@ -100,7 +103,7 @@ export default function createMaterialRequestsRouter(requireAdmin, pool, account
       if (!validQuantityFor(quantity, unit)) fail(400, 'Material contado por unidade aceita só quantidades inteiras.')
       const item = await mutateStore((store) => {
         store.manualMaterialRequests ||= []
-        const item = { id: `manual-${randomUUID()}`, code: nextMaterialRequestCode(store), manual: true, name: inventory?.name || body.name.trim(), detail: body.detail?.trim() || inventory?.detail || '', inventoryId: inventory?.id ?? (body.inventoryId != null ? Number(body.inventoryId) : null), unit, quantity: Number(quantity.toFixed(3)), purchaseQuantity: Number(quantity.toFixed(3)), unitPrice: Number(inventory?.unitPrice || 0), requestedAt: new Date().toISOString(), requestedBy: request.adminId, requestedByName: request.adminName || null }
+        const item = { id: `manual-${randomUUID()}`, code: nextMaterialRequestCode(store), manual: true, name: inventory?.name || body.name.trim(), detail: body.detail?.trim() || '', inventoryId: inventory?.id ?? (body.inventoryId != null ? Number(body.inventoryId) : null), unit, quantity: Number(quantity.toFixed(3)), purchaseQuantity: Number(quantity.toFixed(3)), unitPrice: Number(inventory?.unitPrice || 0), requestedAt: new Date().toISOString(), requestedBy: request.adminId, requestedByName: request.adminName || null }
         store.manualMaterialRequests.unshift(item)
         return item
       })

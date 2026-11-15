@@ -3,8 +3,8 @@
 export const ticketModules = [
   ['login', 'Login'],
   ['dashboard', 'Dashboard'],
-  ['stock', 'Estoque'],
-  ['material-requests', 'Pedidos de material'],
+  ['operational', 'Gestão Operacional'],
+  ['admin-stock', 'Estoque Administrativo'],
   ['calculator', 'Calculadora'],
   ['registrations', 'Cadastros'],
   ['operation', 'Operação'],
@@ -16,6 +16,7 @@ export const ticketModules = [
 ]
 // The modules that are groups in the menu ask for the screen involved (the sub-module), in the order of the menu.
 export const ticketSubmodules = {
+  operational: [['machines', 'Máquinas'], ['services', 'Serviços'], ['stages', 'Etapas'], ['stock', 'Estoque'], ['material-requests', 'Pedidos de material']],
   registrations: [['suppliers', 'Fornecedores'], ['admins', 'Administradores'], ['employees', 'Funcionários'], ['sectors', 'Setores'], ['clients', 'Clientes'], ['requesters', 'Solicitantes'], ['buyers', 'Compradores'], ['banks', 'Bancos'], ['pause-reasons', 'Razões de pausas']],
   operation: [['services-in-progress', 'Serviços em andamento'], ['completed-services', 'Serviços concluídos'], ['offers', 'Ofertas e serviços'], ['planning', 'Planejamento']],
   finance: [['payables', 'Contas a Pagar'], ['receivables', 'Contas a Receber'], ['treasury', 'Tesouraria'], ['cash-flow', 'Fluxo de caixa'], ['batch', 'Baixa em Lote'], ['bank', 'Conciliação bancária'], ['bi', 'Business Intelligence'], ['dre', 'DRE'], ['dre-adjustments', 'Ajustes da DRE'], ['account-groups', 'Grupos de contas'], ['classifications', 'Classificações']],
@@ -23,12 +24,23 @@ export const ticketSubmodules = {
 export const ticketUrgencies = [['low', 'Baixo'], ['medium', 'Médio'], ['high', 'Alto']]
 export const ticketStatuses = [['open', 'Aberto'], ['closed', 'Fechado']]
 
+// Estoque and Pedidos de material were modules of their own until the menu grouped them in Gestão Operacional
+// (2026-11-13): their tickets are shown there, with the screen as the sub-module.
+const movedModules = { stock: ['operational', 'stock'], 'material-requests': ['operational', 'material-requests'] }
+export function ticketPlace(module, submodule) {
+  const [group, screen] = movedModules[module] || [module, submodule]
+  return screen ? { module: group, submodule: screen } : { module: group }
+}
+
 const labelOf = (list, key) => list.find(([value]) => value === key)?.[1] || key
-export const moduleLabel = (key) => labelOf(ticketModules, key)
+export const moduleLabel = (key) => labelOf(ticketModules, ticketPlace(key).module)
 export const submodulesOf = (module) => ticketSubmodules[module] || []
 export const submoduleLabel = (module, key) => labelOf(submodulesOf(module), key)
 // "Gestão Financeira › Contas a Pagar", or only the module when it has no sub-module.
-export const moduleTitle = (module, submodule) => submodule ? `${moduleLabel(module)} › ${submoduleLabel(module, submodule)}` : moduleLabel(module)
+export function moduleTitle(module, submodule) {
+  const place = ticketPlace(module, submodule)
+  return place.submodule ? `${moduleLabel(place.module)} › ${submoduleLabel(place.module, place.submodule)}` : moduleLabel(place.module)
+}
 export const urgencyLabel = (key) => labelOf(ticketUrgencies, key)
 export const statusLabel = (key) => labelOf(ticketStatuses, key)
 

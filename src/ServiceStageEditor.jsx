@@ -12,7 +12,7 @@ function SortableStageItem({ id, label, disabled, group = false, selected = fals
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, isDragging } = useSortable({ id, disabled, transition: null })
   const handle = <button type="button" ref={setActivatorNodeRef} className="offer-stage-drag" {...attributes} {...listeners} disabled={disabled} aria-label={`Reordenar ${group ? 'grupo' : 'etapa'} ${label}`} title={`Reordenar ${label}`}><GripVertical size={16} /></button>
   return <div ref={setNodeRef} data-stage-id={id} className={`${group ? 'offer-stage-group' : 'offer-stage-item'}${selected ? ' offer-stage-item--selected' : ''}${isDragging ? ' offer-stage-dragging' : ''}`} style={{ transform: CSS.Transform.toString(transform) }}>
-    {group ? <div className="offer-stage-heading">{handle}<h3>{label}</h3>{children[0]}</div> : handle}{group ? children.slice(1) : children}
+    {group ? <div className="offer-stage-heading">{handle}<h3>{upper(label)}</h3>{children[0]}</div> : handle}{group ? children.slice(1) : children}
   </div>
 }
 
@@ -49,7 +49,7 @@ function StageResourceSelect({ code, label, value, options: all, disabled, onCha
     onChange(event.target.value ? { type, id } : null)
   }}>
     <option value="">Máquina / serviço</option>
-    {!known && <option value={selected}>{value.name} ({[...all.machines.map((item) => `machine:${item.id}`), ...all.laborServices.map((item) => `labor-service:${item.id}`)].includes(selected) ? 'fora das opções da etapa' : 'fora do cadastro'})</option>}
+    {!known && <option value={selected}>{upper(value.name)} ({[...all.machines.map((item) => `machine:${item.id}`), ...all.laborServices.map((item) => `labor-service:${item.id}`)].includes(selected) ? 'fora das opções da etapa' : 'fora do cadastro'})</option>}
     {/* Machines come by sector: the same name (Bancada) can exist in more than one, and the group tells them apart. */}
     {bySector(options.machines).map(([sector, group]) => <optgroup key={sector} label={`Máquinas · ${sector}`}>{group.map((item) => <option key={item.id} value={`machine:${item.id}`}>{upper(item.name)}{item.maintenance ? ' (em manutenção)' : ''}</option>)}</optgroup>)}
     {options.laborServices.length > 0 && <optgroup label="Serviços (hora homem)">{options.laborServices.map((item) => <option key={item.id} value={`labor-service:${item.id}`}>{upper(item.name)}</option>)}</optgroup>}

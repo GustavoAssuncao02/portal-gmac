@@ -1,5 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { CircleCheck, CircleDot, Clock3, Download, Eye, FilterX, Info, Lock, Mail, MessageCircle, Paperclip, RotateCcw, Search, Send } from 'lucide-react'
+import { CircleCheck, CircleDot, Clock3, Download, Eye, FilterX, Hourglass, Inbox, Info, Lock, Mail, MessageCircle, Paperclip, RotateCcw, Search, Send } from 'lucide-react'
 import AdminWorkspace from './AdminWorkspace.jsx'
 import { PayableModal, FilePicker, FilePreview, previewable } from './PayableModal.jsx'
 import { payableRequest, uploadFiles, downloadFile } from './payablesApi.js'
@@ -93,6 +93,42 @@ function slicePath(start, end) {
 }
 
 // A pie with its legend: every slice keeps its color whatever the filters, and the legend gives the counts and shares.
+// Response times of the tickets on screen (with the filters). The first answer is the first developer comment or the
+// closing, whichever came first (a reply of whoever opened it does not count); the solution is the closing.
+const firstAnswerAt = (ticket) => {
+  const times = [...(ticket.comments || []).filter((comment) => comment.byDeveloper !== false).map((comment) => comment.at), ...(ticket.history || []).filter((entry) => entry.type === 'closed').map((entry) => entry.at)].map(Date.parse).filter(Number.isFinite)
+  return times.length ? Math.min(...times) : null
+}
+function durationLabel(ms) {
+  const minutes = Math.max(0, Math.round(ms / 60000))
+  if (minutes < 60) return `${minutes} min`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours} h${minutes % 60 ? ` ${minutes % 60} min` : ''}`
+  const days = Math.floor(hours / 24)
+  return `${days} ${days === 1 ? 'dia' : 'dias'}${hours % 24 ? ` ${hours % 24} h` : ''}`
+}
+const average = (values) => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null
+const ticketsWord = (count, what) => `${count} ${count === 1 ? `ticket ${what}` : `tickets ${what}s`}`
+function TicketStats({ tickets }) {
+  const answered = tickets.map((ticket) => { const at = firstAnswerAt(ticket); return at == null ? null : at - Date.parse(ticket.createdAt) }).filter((value) => value != null && Number.isFinite(value))
+  const solved = tickets.filter((ticket) => ticket.status === 'closed' && ticket.closedAt).map((ticket) => Date.parse(ticket.closedAt) - Date.parse(ticket.createdAt)).filter(Number.isFinite)
+  const waiting = tickets.filter((ticket) => ticket.status === 'open' && firstAnswerAt(ticket) == null)
+  const oldest = waiting.length ? Math.min(...waiting.map((ticket) => Date.parse(ticket.createdAt))) : null
+  const open = tickets.filter((ticket) => ticket.status === 'open'), urgent = open.filter((ticket) => ticket.urgency === 'high').length
+  const cards = [
+    { key: 'open', icon: Inbox, label: 'Em aberto', value: String(open.length), note: open.length ? (urgent ? `${urgent} com urgência Alta.` : 'Nenhum com urgência Alta.') : 'Nenhum ticket aberto.', alert: urgent > 0 },
+    { key: 'answer', icon: Clock3, label: 'Tempo médio da 1ª resposta', value: answered.length ? durationLabel(average(answered)) : '—', note: answered.length ? `em ${ticketsWord(answered.length, 'respondido')}` : 'Nenhum ticket respondido ainda.' },
+    { key: 'solution', icon: CircleCheck, label: 'Tempo médio de solução', value: solved.length ? durationLabel(average(solved)) : '—', note: solved.length ? `em ${ticketsWord(solved.length, 'fechado')}` : 'Nenhum ticket fechado ainda.' },
+    { key: 'waiting', icon: Hourglass, label: 'Sem resposta', value: String(waiting.length), note: waiting.length ? `O mais antigo espera há ${durationLabel(Date.now() - oldest)}.` : 'Todos os tickets abertos já foram respondidos.', alert: waiting.length > 0 },
+  ]
+  return <div className="ticket-stats" role="group" aria-label="Tempos de atendimento">{cards.map(({ key, icon: Icon, label, value, note, alert }) => <div key={key} className={`ticket-stat${alert ? ' ticket-stat--alert' : ''}`}>
+    <span className="ticket-stat-icon" aria-hidden="true"><Icon size={19} /></span>
+    <span className="ticket-stat-label">{label}</span>
+    <strong>{value}</strong>
+    <small>{note}</small>
+  </div>)}</div>
+}
+
 function TicketPie({ title, description, rows }) {
   const [active, setActive] = useState(null)
   const total = rows.reduce((sum, row) => sum + row.count, 0)
@@ -330,6 +366,7 @@ export default function SupportTicketsScreen(props) {
             <button className="admin-tool-button" type="button" disabled={!filtering} onClick={() => setFilters(noFilters)}><FilterX size={16} aria-hidden="true" />Limpar filtros</button>
           </div>
           <div className="ticket-charts">
+            <TicketStats tickets={visible} />
             <TicketPie title="Módulos com mais problemas" description="Tickets por módulo do sistema, com os filtros aplicados." rows={moduleRows(visible, slots)} />
             <TicketPie title="Tickets por urgência" description="Quantos tickets de cada grau de urgência, com os filtros aplicados." rows={urgencyRows} />
             <TicketMonthly tickets={visible} from={filters.from} to={filters.to} />

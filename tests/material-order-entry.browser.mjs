@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { mkdir } from 'node:fs/promises'
 import { chromium } from 'playwright'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
+import { openSidebarItem } from './sidebarNavigation.js'
 
 const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Gustavo' }
 const fixture = await createWorkflowFixture({ accountsEnv: env })
@@ -52,7 +53,7 @@ try {
     await page.getByRole('button', { name: 'Entrar', exact: true }).click()
     await page.locator('.admin-home-main').waitFor()
     if (width < 768) await page.getByRole('button', { name: 'Abrir menu de navega\u00e7\u00e3o', exact: true }).click()
-    await page.locator('.sidebar').getByRole('button', { name: 'Pedidos de material', exact: true }).click()
+    await openSidebarItem(page, 'Pedidos de material')
     const table = page.locator('.material-orders-table')
     await table.getByRole('button', { name: existing.name, exact: true }).waitFor()
     assert.deepEqual(await table.locator('th').allTextContents(), ['Código','Material solicitado', 'Especifica\u00e7\u00e3o', 'Quantidade a pedir', 'Quantidade necess\u00e1ria', 'OS / Oferta relacionada', 'Data', 'A\u00e7\u00f5es', 'Histórico'])
@@ -64,7 +65,7 @@ try {
     assert.equal(await quantity.inputValue(), '10', 'Prefill the shortage, not the 170 kg total or the current balance')
     assert.equal(await quantity.evaluate((input) => input.readOnly), false)
     assert.equal(await modal.getByPlaceholder('Digite para buscar no estoque', { exact: true }).inputValue(), existing.name)
-    assert.equal(await modal.getByLabel('Especifica\u00e7\u00e3o', { exact: true }).inputValue(), existing.detail)
+    assert.equal(await modal.getByLabel('Especifica\u00e7\u00e3o', { exact: true }).count(), 0, 'a stock material has no specification')
     assert.equal(await modal.getByLabel('Valor por kg', { exact: true }).inputValue(), '12.8')
     assert.equal(writes.length, 0)
     await page.screenshot({ path: `test-results/material-order-entry-modal-${width}.png`, fullPage: true })
@@ -96,7 +97,6 @@ try {
     modal = page.getByRole('dialog', { name: 'Adicionar material', exact: true })
     assert.equal(await modal.getByLabel(/^Quantidade dispon\u00edvel/).inputValue(), '5')
     await modal.getByPlaceholder('Digite para buscar no estoque', { exact: true }).fill('Titanio recebido')
-    await modal.getByLabel('Especifica\u00e7\u00e3o', { exact: true }).fill('Chapa 12mm')
     await modal.getByLabel(/^Quantidade dispon\u00edvel/).fill('6')
     await modal.getByRole('button', { name: 'Adicionar material', exact: true }).click()
     await modal.waitFor({ state: 'hidden' })
@@ -116,7 +116,7 @@ try {
     assert.equal(await page.getByRole('button', { name: 'Material pendente', exact: true }).count(), 0)
     assert.ok(writes.at(-1).url.endsWith('/api/inventory'))
     assert.equal(writes.at(-1).body.name, 'Titanio recebido')
-    assert.equal(writes.at(-1).body.detail, 'Chapa 12mm')
+    assert.equal(Object.hasOwn(writes.at(-1).body, 'detail'), false, 'the request specification stays on the request, not in stock')
     assert.equal(writes.at(-1).body.quantity, 6)
     assert.deepEqual(errors, [])
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false)

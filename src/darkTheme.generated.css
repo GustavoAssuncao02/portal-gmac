@@ -667,6 +667,14 @@
 :root[data-theme="dark"] .operator-entry--overview .operator-entry-card {
     box-shadow: 0 -4px 22px #06111d14, 0 12px 30px #06111d24
 }
+:root[data-theme="dark"] .operator-idle-notice {
+    border: 1px solid #36516f;
+    background: #203c59;
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .operator-entry-card .operator-idle-notice {
+    color: #e1ebf6
+}
 :root[data-theme="dark"] .operator-plan {
     border: 1px solid #36516f;
     background: #162b43
@@ -1186,6 +1194,9 @@
 }
 :root[data-theme="dark"] .os-cost-list span {
     color: #c1cfde
+}
+:root[data-theme="dark"] .os-cost-list small {
+    color: #a9cada
 }
 :root[data-theme="dark"] .os-purchase-add {
     border: 1px solid #4778ae;
@@ -1821,6 +1832,16 @@
 :root[data-theme="dark"] .account-summary dd {
     color: #e1ebf6
 }
+:root[data-theme="dark"] .account-job-title {
+    border-top: 1px solid #36516f
+}
+:root[data-theme="dark"] .account-job-title label {
+    color: #b7c2cc
+}
+:root[data-theme="dark"] .account-job-title input {
+    border: 1px solid #36516f;
+    color: #e1ebf6
+}
 :root[data-theme="dark"] .account-settings-modal h3 {
     color: #e1ebf6
 }
@@ -2256,20 +2277,6 @@
 :root[data-theme="dark"] .payable-status-filters button[aria-pressed=true] small {
     color: #e1ebf6
 }
-:root[data-theme="dark"] .payable-more-menu {
-    border: 1px solid #36516f;
-    background: #162b43;
-    box-shadow: 0 10px 30px #06111d26
-}
-:root[data-theme="dark"] .payable-more-menu button {
-    color: #e1ebf6
-}
-:root[data-theme="dark"] .payable-more-menu button:is(:hover,:focus-visible) {
-    background: #203c59
-}
-:root[data-theme="dark"] .payable-more-menu .payable-danger {
-    color: #e1939e
-}
 :root[data-theme="dark"] .payable-preview .payable-modal-body {
     background: #203c59
 }
@@ -2641,6 +2648,12 @@
 :root[data-theme="dark"] .payable-modal .proposal-fiscal h3 {
     color: #ecbb89
 }
+:root[data-theme="dark"] .proposal-fiscal-rule {
+    color: #d9bf9b
+}
+:root[data-theme="dark"] .proposal-fiscal-rule--missing {
+    color: #ec9089
+}
 :root[data-theme="dark"] .fiscal-picker-search svg {
     color: #c1cfde
 }
@@ -2910,6 +2923,62 @@
 }
 :root[data-theme="dark"] .proposal-email-history li small {
     color: #c1cfde
+}
+:root[data-theme="dark"] .label-quote-section h3 {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .label-quote-table td small {
+    color: #c1cfde
+}
+:root[data-theme="dark"] .label-quote-table td small.label-quote-pending {
+    color: #ecb389
+}
+:root[data-theme="dark"] .label-quote-quantity input {
+    border: 1px solid #36516f
+}
+:root[data-theme="dark"] .label-quote-quantity span {
+    color: #c1cfde
+}
+:root[data-theme="dark"] .label-quote-save .payable-hint {
+    color: #ecb389
+}
+:root[data-theme="dark"] .label-quote-state {
+    border-left: 3px solid #36516f;
+    background: #203c2c
+}
+:root[data-theme="dark"] .label-quote-state--pending {
+    border-left-color: #ae7e47;
+    background: #3c2f20;
+    color: #eca289
+}
+:root[data-theme="dark"] .label-quote-emails {
+    color: #b5c1cf
+}
+:root[data-theme="dark"] .email-templates-intro {
+    color: #b5c1cf
+}
+:root[data-theme="dark"] .email-template-badge {
+    background: #203c59;
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .email-template-fields {
+    border: 1px solid #36516f;
+    background: #203c59
+}
+:root[data-theme="dark"] .email-template-fields strong {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .email-template-fields li {
+    color: #b5c1cf
+}
+:root[data-theme="dark"] .email-template-field {
+    border: 1px solid #36516f;
+    background: #162b43;
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .email-template-field:hover, :root[data-theme="dark"] .email-template-field:focus-visible {
+    border-color: #ae7647;
+    color: #ecb689
 }
 :root[data-theme="dark"] .stages-intro {
     color: #b2c2d2
@@ -3674,6 +3743,21 @@
 :root[data-theme="dark"] .planning-order-facts {
     color: #aec1d5
 }
+:root[data-theme="dark"] .planning-os-modal {
+    border: 1px solid #36516f;
+    background: #162b43;
+    color: #e1ebf6;
+    box-shadow: 0 20px 60px #06111d33
+}
+:root[data-theme="dark"] .planning-os-modal > header {
+    border-bottom: 1px solid #36516f
+}
+:root[data-theme="dark"] .planning-os-modal > header h2 {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .planning-os-modal > footer {
+    border-top: 1px solid #36516f
+}
 :root[data-theme="dark"] .planning-stage-row {
     border: 1px solid #36516f;
     background: #203c59
@@ -3816,6 +3900,30 @@
 }
 :root[data-theme="dark"] .ticket-charts {
     border-top: 1px solid #36516f
+}
+:root[data-theme="dark"] .ticket-stat {
+    border: 1px solid #36516f;
+    background: #162b43
+}
+:root[data-theme="dark"] .ticket-stat-icon {
+    background: #203c59;
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .ticket-stat-label {
+    color: #b5c2ce
+}
+:root[data-theme="dark"] .ticket-stat strong {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .ticket-stat small {
+    color: #c1cfde
+}
+:root[data-theme="dark"] .ticket-stat--alert .ticket-stat-icon {
+    background: #3c3020;
+    color: #ecbf89
+}
+:root[data-theme="dark"] .ticket-stat--alert strong {
+    color: #ecbf89
 }
 :root[data-theme="dark"] .ticket-chart h3 {
     color: #e1ebf6
@@ -5026,6 +5134,31 @@
 }
 :root[data-theme="dark"] .material-appearance button:focus-visible {
     outline: 2px solid #477aae
+}
+:root[data-theme="dark"] .material-icon-filter button small {
+    color: #b4c2d0
+}
+:root[data-theme="dark"] .material-icon-filter button[aria-pressed='true'] small {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .material-icon-filter button:focus-visible {
+    outline: 2px solid #477aae
+}
+:root[data-theme="dark"] .inventory-exit-material {
+    border: 1px solid #36516f;
+    background: #203c59
+}
+:root[data-theme="dark"] .inventory-exit-material strong {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .inventory-exit-material small {
+    color: #b7c2cd
+}
+:root[data-theme="dark"] .inventory-exit-modal small.inventory-exit-over {
+    color: #e4909a
+}
+:root[data-theme="dark"] .inventory-history-by {
+    color: #b4c2d0
 }
 :root[data-theme="dark"] .proposal-shell {
     background: #203c59
@@ -6723,6 +6856,22 @@
     color: #e1ebf6;
     background: #203c59
 }
+:root[data-theme="dark"] .weight-length {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .weight-length-input input {
+    color: #c1cfde;
+    background: #112239
+}
+:root[data-theme="dark"] .weight-length-input input:focus {
+    outline: 1px solid #4778ae
+}
+:root[data-theme="dark"] .weight-length-input em {
+    color: #c1cfde
+}
+:root[data-theme="dark"] .weight-result--length small {
+    color: #c1cfde
+}
 :root[data-theme="dark"] .calculator-contact-prompt {
     color: #c1cfde
 }
@@ -6983,6 +7132,27 @@
 :root[data-theme="dark"] .offer-creating-badge small {
     color: #adc1d6
 }
+:root[data-theme="dark"] .offer-table-actions .offer-creating-badge--open {
+    border-color: #ae8047;
+    background: #3c3020;
+    color: #ecbf89
+}
+:root[data-theme="dark"] .offer-table-actions .offer-creating-badge--open:hover {
+    background: #3c3020
+}
+:root[data-theme="dark"] .offer-creating-badge--open span, :root[data-theme="dark"] .offer-creating-badge--open small {
+    color: #ecbf89
+}
+:root[data-theme="dark"] .offer-form-grid label.offer-open-check {
+    border: 1px solid #36516f;
+    background: #203c59
+}
+:root[data-theme="dark"] .offer-form-grid .offer-open-check input {
+    accent-color: #80b7f0
+}
+:root[data-theme="dark"] .offer-open-check small {
+    color: #b3c0d0
+}
 :root[data-theme="dark"] .offer-details-creating {
     border: 1px solid #36516f;
     background: #203c59;
@@ -7170,6 +7340,12 @@
     :root[data-theme="dark"] .weight-result {
         border-left: 3px solid #4778ae;
         background: #203c59
+    }
+}
+@media screen and (max-width: 760px) {
+    :root[data-theme="dark"] .weight-length-input input {
+        border: 1px solid #36516f;
+        background: #162b43
     }
 }
 @media screen and (max-width: 760px) {

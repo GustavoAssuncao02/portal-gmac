@@ -12,6 +12,7 @@ import { notificationSettings } from './accounts.js'
 import { assertNotReconciled, reconciledTransaction } from './bankStatements.js'
 import { normalizeText } from './ofx.js'
 import { osValueOf } from './proposalMath.js'
+import { labelQuoteRequired } from './labelQuoteRules.js'
 import { operationStates } from './reportData.js'
 import { settlementBank, bankFilterNote } from './banks.js'
 import { classificationList, entryClassification } from './accountPlan.js'
@@ -21,7 +22,6 @@ const clean = (value, limit = 1000) => String(value ?? '').trim().slice(0, limit
 const money = (value) => (value / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 export const receiptMethods = { pix: 'Pix', boleto: 'Boleto', transfer: 'Transferência', card: 'Cartão', cash: 'Dinheiro' }
 const statusLabel = { pending: 'Pendente', overdue: 'Vencido', received: 'Recebido' }
-const actionLabel = { created: 'Conta criada', edited: 'Conta editada', received: 'Recebimento baixado', reversed: 'Recebimento estornado', deleted: 'Conta excluída', status_changed: 'Status alterado', attachment_added: 'Anexo adicionado', attachment_removed: 'Anexo removido' }
 const directory = path.join(dataDirectory, 'receivable-files')
 const init = (store) => { store.receivables ||= []; store.receivableEvents ||= []; store.orders ||= []; store.receivableNotifications ||= []; store.receivableUploads ||= [] }
 export const receivableStatus = (row, today = todayBahia()) => row.receipt ? 'received' : row.dueDate < today ? 'overdue' : 'pending'
@@ -215,7 +215,7 @@ const issOf = (row) => row.receipt ? row.receipt.issCents || 0 : row.issCents ||
 const netOf = (row) => row.valueCents - issOf(row)
 function report(rows, filters = {}, individual = false, store = {}) {
   const columns = ['ID', 'Cliente', 'CPF/CNPJ', 'Descrição', 'Classificação', 'Origem', 'Documento', 'Parcela', 'Emissão', 'Valor bruto (R$)', 'ISS retido (R$)', 'Valor líquido (R$)', 'Vencimento', 'Status', 'Recebimento', 'Forma', 'Banco', 'Juros (R$)', 'Desconto (R$)', 'Recebido (R$)', 'Observação']
-  return { title: individual ? `Conta ${rows[0]?.id || ''}` : 'Contas a receber', eyebrow: 'Financeiro', generatedAt: new Date().toISOString(), start: filters.start, end: filters.end, summary: [['Contas', rows.length], ['Valor bruto', money(rows.reduce((sum, row) => sum + row.valueCents, 0))], ['Valor líquido', money(rows.reduce((sum, row) => sum + netOf(row), 0))]], notes: [`Situação: ${{ all: 'Todas', ...statusLabel }[filters.status] || (filters.bankId ? 'Recebidas' : 'Pendentes e vencidas')}`, ...bankFilterNote(store, filters.bankId), ...(filters.search ? [`Busca: ${filters.search}`] : [])], sections: [{ name: 'Contas a receber', columns, rows: rows.map((row) => { const r = row.receipt; return [row.id, row.customerName, row.customerDocument, row.description, row.classificationName || '', row.orderCode || 'Manual', row.documentNumber, row.groupId ? `${row.installmentNumber} de ${row.installmentCount}` : '', row.issueDate, row.valueCents / 100, issOf(row) / 100, netOf(row) / 100, row.dueDate, statusLabel[receivableStatus(row)], r?.date, receiptMethods[r?.method] || '', r?.bankName || '', (r?.interestCents || 0) / 100, (r?.discountCents || 0) / 100, r ? r.finalCents / 100 : '', r?.note] }) }] }
+  return { title: individual ? `Conta ${rows[0]?.id || ''}` : 'Contas a receber', eyebrow: 'Financeiro', generatedAt: new Date().toISOString(), start: filters.start, end: filters.end, summary: [['Contas', rows.length], ['Valor bruto', money(rows.reduce((sum, row) => sum + row.valueCents, 0))], ['Valor líquido', money(rows.reduce((sum, row) => sum + netOf(row), 0))]], notes: individual ? [] : [`Situação: ${{ all: 'Todas', ...statusLabel }[filters.status] || (filters.bankId ? 'Recebidas' : 'Pendentes e vencidas')}`, ...bankFilterNote(store, filters.bankId), ...(filters.search ? [`Busca: ${filters.search}`] : [])], sections: [{ name: 'Contas a receber', columns, rows: rows.map((row) => { const r = row.receipt; return [row.id, row.customerName, row.customerDocument, row.description, row.classificationName || '', row.orderCode || 'Manual', row.documentNumber, row.groupId ? `${row.installmentNumber} de ${row.installmentCount}` : '', row.issueDate, row.valueCents / 100, issOf(row) / 100, netOf(row) / 100, row.dueDate, statusLabel[receivableStatus(row)], r?.date, receiptMethods[r?.method] || '', r?.bankName || '', (r?.interestCents || 0) / 100, (r?.discountCents || 0) / 100, r ? r.finalCents / 100 : '', r?.note] }) }] }
 }
 
 // The number of an invoice as it may have been typed: without dots and leading zeros; an NFS-e number (2026000000451)
@@ -286,7 +286,7 @@ export default function createReceivablesRouter(accounts, requireAdmin, pool = n
     const existing = linkedReceivables(store, order.code).sort((a, b) => (a.installmentNumber || 1) - (b.installmentNumber || 1))
     // `deleteBlock` tells why the accounts cannot be removed (when reopening the OS, for instance).
     const deleteBlock = existing.map((row) => deletionBlock(store, row)).find(Boolean)?.message || null
-    res.json({ order: { code: order.code, company: order.company, cnpj: String(order.cnpj || '').replace(/\D/g, ''), service: order.service, completed: await operationStatus(order) === 'completed', ...orderValue(order) }, item: existing.length ? view(existing[0], store) : null, items: existing.map((row) => view(row, store)), deleteBlock, classifications: classificationList(store).filter((item) => !item.inactive && !item.groupInactive && item.nature !== 'expense') })
+    res.json({ order: { code: order.code, company: order.company, cnpj: String(order.cnpj || '').replace(/\D/g, ''), service: order.service, completed: await operationStatus(order) === 'completed', labelQuotePending: Boolean(order.labelQuote?.pending), ...orderValue(order) }, item: existing.length ? view(existing[0], store) : null, items: existing.map((row) => view(row, store)), deleteBlock, classifications: classificationList(store).filter((item) => !item.inactive && !item.groupInactive && item.nature !== 'expense') })
   }))
   router.get('/receivables/:id', handle(async (req, res) => {
     const store = await readStore(); init(store); const row = find(store, req.params.id), group = groupOf(store, row)
@@ -303,6 +303,7 @@ export default function createReceivablesRouter(accounts, requireAdmin, pool = n
       let common = draft, origin = 'manual', order = null
       if (body.orderCode) {
         order = store.orders.find((row) => row.code === body.orderCode)
+        if (order?.labelQuote?.pending) fail(labelQuoteRequired, 409)
         if (!order) fail('OS não encontrada.', 404)
         if (await operationStatus(order) !== 'completed') fail('A OS precisa estar concluída para programar o recebimento.', 409)
         const existing = store.receivables.find((row) => row.orderCode === order.code && !row.inactive)
@@ -531,7 +532,6 @@ export default function createReceivablesRouter(accounts, requireAdmin, pool = n
     if (req.body.ids !== undefined && !Array.isArray(req.body.ids)) fail('Seleção inválida.')
     const rows = req.body.id ? [find(store, req.body.id)] : filterReceivables(store.receivables, req.body.filters).filter((row) => !req.body.ids || req.body.ids.includes(row.id))
     const data = report(rows.map((row) => ({ ...row, classificationName: classificationNameOf(store, row) })), req.body.filters, Boolean(req.body.id), store)
-    if (req.body.id) data.sections.push({ name: 'Histórico', columns: ['Data/hora (Bahia)', 'Usuário', 'Ação', 'Motivo'], rows: store.receivableEvents.filter((e) => e.accountId === req.body.id).map((e) => [new Date(e.at).toLocaleString('pt-BR', { timeZone: 'America/Bahia' }), e.userName, actionLabel[e.type] || e.type, e.reason || '']) })
     const output = req.body.format === 'pdf' ? await exportPdf(data) : await exportWorkbook(data)
     res.setHeader('Content-Type', req.body.format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     res.setHeader('Content-Disposition', `attachment; filename="gmac-contas-a-receber.${req.body.format}"`)

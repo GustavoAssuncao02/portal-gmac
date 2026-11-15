@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url'
 import ExcelJS from 'exceljs'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
 import { enterOperatorCode, startWork } from './operatorEntry.js'
+import { sidebarGroupOf } from './sidebarNavigation.js'
 
 const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Gustavo' }
 const modulePath = process.env.PLAYWRIGHT_MODULE
@@ -15,7 +16,7 @@ const errors = []
 page.on('pageerror', (error) => errors.push(error.message))
 async function navigate(label) {
   const item = page.locator('.sidebar').getByRole('button', { name: label, exact: true })
-  if (!await item.isVisible()) await page.locator('.sidebar').getByRole('button', { name: ['Fornecedores', 'Administradores', 'Funcionários', 'Clientes'].includes(label) ? 'Cadastros' : ['Serviços em andamento', 'Serviços concluídos', 'Ofertas e serviços'].includes(label) ? 'Operação' : 'Gestão Financeira', exact: true }).click()
+  if (!await item.isVisible()) await page.locator('.sidebar').getByRole('button', { name: sidebarGroupOf(label), exact: true }).click()
   await item.click()
 }
 const waitSaved = () => page.waitForFunction(() => !document.querySelector('.offer-proposal-button')?.disabled)
@@ -142,6 +143,9 @@ try {
   await serviceDescription.blur()
   await waitSaved()
   await page.locator('.offer-details-description').filter({ hasText: 'Acabamento conforme desenho. Sem rebarbas.' }).waitFor()
+  // The offer data shows in capital letters; the store keeps what was typed (checked just below).
+  assert.equal(await page.locator('.offer-details-description').textContent(), 'ACABAMENTO CONFORME DESENHO. SEM REBARBAS.')
+  assert.equal(await serviceDescription.evaluate((field) => getComputedStyle(field).textTransform), 'uppercase')
   const savedOffer = (await fixture.adminRequest('/offers', 'GET', undefined, fixture.admin)).data.items.find((item) => item.id === offer.id)
   const settings = savedOffer.resources
   assert.equal(settings.paintColor, 'Azul epoxi')

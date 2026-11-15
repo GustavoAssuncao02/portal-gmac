@@ -6,7 +6,9 @@ import createInventoryImportRouter, { importedInventory } from '../server/invent
 test('inventory import preserves valid balances/history and rejects malformed local data', () => {
   const item = { name: ' Aluminio ', detail: 'Chapa', quantity: '7.5', minimum: 2, unitPrice: 20, history: [{ type: 'entry', date: '2026-10-03T10:00:00Z', quantity: 7.5, balance: 7.5, unitPrice: 20 }] }
   const [result] = importedInventory({ items: [item] })
-  assert.equal(result.name, 'Aluminio')
+  // Stock has no specification (2026-11-14): an old one goes into the name, so items that differed only by it stay apart.
+  assert.equal(result.name, 'Aluminio Chapa')
+  assert.equal(Object.hasOwn(result, 'detail'), false)
   assert.equal(result.quantity, 7.5)
   assert.equal(result.history[0].type, 'entry')
   assert.equal(result.history[0].date.getTime(), Date.parse(item.history[0].date))
@@ -20,7 +22,7 @@ test('authenticated imports are serialized, skip existing materials, and never r
     async execute(sql, values) {
       calls.push({ sql, values })
       if (sql.includes('GET_LOCK')) return [[{ acquired: 1 }]]
-      if (sql.startsWith('SELECT name')) return [[{ name: 'Aluminio', detail: 'Chapa' }]]
+      if (sql.startsWith('SELECT name')) return [[{ name: 'Aluminio Chapa' }]]
       return [{ insertId: 21 }]
     },
     async beginTransaction() {}, async commit() {}, async rollback() {}, release() {},

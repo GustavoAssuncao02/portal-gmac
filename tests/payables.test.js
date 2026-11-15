@@ -132,7 +132,7 @@ test('payables enforce payment locks, duplicates, installments, recurrence, audi
       const response = await fetch(`${f.url}/api/payables/export`, { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ format, id: recur.id }) })
       assert.equal(response.status, 200); const buffer = Buffer.from(await response.arrayBuffer())
       if (format === 'pdf') assert.equal(buffer.subarray(0, 4).toString(), '%PDF')
-      else { const workbook = new ExcelJS.Workbook(); await workbook.xlsx.load(buffer); assert.equal(workbook.worksheets[0].getCell('A2').value, recur.id); assert.ok(workbook.worksheets.length >= 3) }
+      else { const workbook = new ExcelJS.Workbook(); await workbook.xlsx.load(buffer); assert.equal(workbook.worksheets[0].getCell('A2').value, recur.id); assert.ok(!workbook.worksheets.some((sheet) => ['Histórico', 'Anexos e comprovantes'].includes(sheet.name)), 'the individual export is the account only') }
     }
     const exported = await fetch(`${f.url}/api/payables/export`, { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ format: 'xlsx', filters: { status: 'inactive', search: open.id } }) })
     const workbook = new ExcelJS.Workbook(); await workbook.xlsx.load(Buffer.from(await exported.arrayBuffer())); assert.equal(workbook.worksheets[0].rowCount, 2); assert.ok(workbook.worksheets[0].getCell('C2').value.endsWith('(D)'))

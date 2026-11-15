@@ -2574,12 +2574,12 @@ button {
 }
 
 .inventory-table {
-  min-width: 860px;
+  min-width: 720px;
 }
 
 .inventory-row {
   display: grid;
-  grid-template-columns: minmax(150px, 1.1fr) minmax(190px, 1.5fr) 105px 105px 105px 120px 110px;
+  grid-template-columns: minmax(200px, 2fr) 105px 105px 120px 120px 110px;
   align-items: center;
   gap: 13px;
   min-height: 58px;
@@ -3155,6 +3155,33 @@ button {
   .material-photo-actions button { min-height: 44px; font-size: 13px; }
   .material-appearance legend { font-size: 14px; }
 }
+
+/* Stock filter (Estoque and Estoque Administrativo): the same tiles as the icon picker, with how many materials each has. */
+.material-icon-filter { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); margin: 0 0 16px; }
+.material-icon-filter button { position: relative; height: 62px; cursor: pointer; }
+.material-icon-filter button span { font-size: 10px; text-align: center; }
+.material-icon-filter button small { position: absolute; top: 3px; right: 5px; color: #7891aa; font-size: 9px; font-weight: 700; }
+.material-icon-filter button[aria-pressed='true'] small { color: #0c4c91; }
+.material-icon-filter button.material-icon-filter-empty:not([aria-pressed='true']) { opacity: 0.5; }
+.material-icon-filter button:focus-visible { outline: 2px solid #1b62aa; outline-offset: 2px; }
+@media (max-width: 760px) {
+  /* Phones: one row that scrolls sideways, so the list stays right below. */
+  .material-icon-filter { display: flex; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+  .material-icon-filter button { flex: 0 0 82px; height: 62px; }
+  .material-icon-filter button span { font-size: 11px; }
+}
+
+/* Estoque Administrativo: a "baixa" button joins the row actions, and its modal. */
+.inventory-shell--admin .inventory-row { grid-template-columns: minmax(200px, 2fr) 105px 105px 120px 120px 146px; }
+.inventory-row-actions .inventory-exit:disabled { opacity: 0.45; cursor: not-allowed; }
+.inventory-row-actions .inventory-exit .icon { width: 17px; height: 17px; }
+.inventory-exit-material { display: flex; align-items: center; gap: 12px; margin: 4px 0 16px; padding: 12px; border: 1px solid #dce6f0; border-radius: 6px; background: #f7fbff; }
+.inventory-exit-material .material-visual { width: 44px; height: 44px; flex: 0 0 44px; }
+.inventory-exit-material div { display: grid; gap: 3px; min-width: 0; }
+.inventory-exit-material strong { color: #173f67; overflow-wrap: anywhere; }
+.inventory-exit-material small { color: #698097; }
+.inventory-exit-modal small.inventory-exit-over { color: #b42c3c; font-weight: 700; }
+.inventory-history-by { display: block; margin-top: 2px; color: #7891aa; font-size: 11px; }
 
 .proposal-shell {
   background: #f8fbff;
@@ -6224,7 +6251,8 @@ button {
 
 .offers-board-toolbar {
   display: grid;
-  grid-template-columns: 447px 178px minmax(0, 1fr);
+  /* The search went up to the header, at the right, as in the services panels. */
+  grid-template-columns: 178px minmax(0, 1fr);
   gap: 37px;
   align-items: end;
   padding: 33px 30px 33px;
@@ -6469,7 +6497,7 @@ button {
   }
 
   .offers-board-toolbar {
-    grid-template-columns: 300px 135px minmax(0, 1fr);
+    grid-template-columns: 135px minmax(0, 1fr);
     gap: 17px;
     padding: 22px 18px;
   }
@@ -7242,6 +7270,8 @@ button {
 .admin-os-table td button { border: 1px solid #0c4c91; border-radius: 6px; padding: 7px 5px; background: #fff; color: #0c4c91; cursor: pointer; white-space: nowrap; font-size: 10px; }
 .admin-os-status { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; border-radius: 5px; padding: 5px; background: #edf1f5; color: #68798a; white-space: normal; }
 .admin-os-status::before { content: '●'; font-size: 10px; }
+/* "Aguardando NF-e" is longer than the column: it wraps in two lines instead of running over Ver OS. */
+.admin-os-table td button.admin-os-status { min-width: 0; white-space: normal; text-align: left; line-height: 1.2; }
 .admin-os-status--deadline-on-time { background: #e8f6ec; color: #188449; }
 .admin-os-status--deadline-soon { background: #fff4dc; color: #a56c00; }
 .admin-os-status--deadline-at-deadline { background: #fff0de; color: #b85b08; }
@@ -7372,6 +7402,16 @@ button {
 .weight-result strong { min-height: 34px; padding: 8px 9px; border: 0; border-radius: 0; color: #555; background: #ececec; font-size: 14px; }
 .calculator-clear { height: 35px; margin-top: 12px; border: 2px solid #171717; border-radius: 7px; color: #202020; background: #fff; }
 .calculator-clear:hover { border-color: #0c4c91; color: #0c4c91; background: #f1f6fb; }
+/* "Peso por metro" with the length beside it: 1.000 mm by default, any other length shows the weight of that piece. */
+.weight-result--length { display: grid; grid-template-columns: minmax(0, 1fr) 96px; gap: 7px 8px; align-items: end; }
+.weight-result-value,
+.weight-length { display: flex; min-width: 0; flex-direction: column; justify-content: flex-end; gap: 7px; }
+.weight-length { color: #0c4c91; cursor: text; }
+.weight-length-input { position: relative; display: block; }
+.weight-length-input input { width: 100%; height: 34px; padding: 0 30px 0 9px; border: 0; border-radius: 0; outline: 0; color: #333; background: #ececec; font: inherit; font-size: 14px; }
+.weight-length-input input:focus { outline: 1px solid #0c4c91; }
+.weight-length-input em { position: absolute; top: 50%; right: 9px; color: #66717e; font-size: 12px; font-style: normal; transform: translateY(-50%); pointer-events: none; }
+.weight-result--length small { grid-column: 1 / -1; color: #5b6774; font-size: 12px; }
 .calculator-contact-prompt { margin: 34px 0 20px; color: #202020; text-align: right; font-size: 14px; }
 
 @media (max-width: 1100px) and (min-width: 761px) {
@@ -7523,9 +7563,9 @@ button {
 :root[data-theme="dark"] .offer-entry-mode { background: transparent; border-color: rgba(255, 255, 255, .18); }
 :root[data-theme="dark"] .offer-entry-mode legend, :root[data-theme="dark"] .offer-entry-mode p { color: inherit; }
 :root[data-theme="dark"] .os-quantity-notice { background: rgba(242, 183, 5, .12); border-color: rgba(242, 183, 5, .4); color: inherit; }
-/* Names of machines, services, stages and stock materials: typed and kept as written, shown in capital letters (displayCase.js). */
-input.upper-input { text-transform: uppercase; }
-input.upper-input::placeholder { text-transform: none; }
+/* Names of machines, services, stages, stock materials and offer data: typed and kept as written, shown in capital letters (displayCase.js). */
+input.upper-input, textarea.upper-input { text-transform: uppercase; }
+input.upper-input::placeholder, textarea.upper-input::placeholder { text-transform: none; }
 /* Detalhes da oferta: editar as informações do serviço (OfferInfoEditModal.jsx). */
 .offer-information-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 25px; }
 .offer-information-heading .offer-details-section-title { margin-bottom: 0; }
@@ -7545,6 +7585,14 @@ input.upper-input::placeholder { text-transform: none; }
 .offer-creating-badge strong { display: inline-flex; align-items: center; gap: 6px; font-size: 15px; }
 .offer-creating-badge span { max-width: 100%; overflow: hidden; color: #1d385a; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .offer-creating-badge small { color: #47698f; font-size: 12px; font-weight: 600; }
+/* "Deixar oferta em aberto e notificar": the offer waits on the list for someone to take it (orange instead of blue). */
+.offer-table-actions .offer-creating-badge--open { border-color: #e08a1e; background: #fff4e6; color: #a35a00; }
+.offer-table-actions .offer-creating-badge--open:hover { background: #ffe9cc; }
+.offer-creating-badge--open span, .offer-creating-badge--open small { color: #7a4a10; }
+.offer-form-grid label.offer-open-check { flex-direction: row; align-items: flex-start; gap: 10px; padding: 12px 14px; border: 1px solid #d4deea; border-radius: 8px; background: #f7fafd; cursor: pointer; }
+.offer-form-grid .offer-open-check input { flex: none; width: 18px; height: 18px; margin: 1px 0 0; padding: 0; accent-color: #0c4c91; }
+.offer-open-check span { display: grid; gap: 3px; }
+.offer-open-check small { color: #5a7391; font-size: 12px; font-weight: 400; }
 .offer-details-creating { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid #9cc5ee; border-radius: 999px; background: #e8f3ff; color: #1a5ea0; font-size: 13px; font-weight: 700; }
 .offer-details-creating .icon { width: 15px; height: 15px; }
 .offer-discard-button { display: inline-flex; height: 52px; align-items: center; justify-content: center; gap: 8px; padding: 0 20px; border: 1px solid #ed515a; border-radius: 8px; background: #ffffff; color: #e63540; font: inherit; font-size: 16px; font-weight: 700; cursor: pointer; }
@@ -7573,10 +7621,10 @@ input.upper-input::placeholder { text-transform: none; }
 
 @media (min-width: 761px) {
   @container offers-board (max-width: 77.5rem) {
-    .offers-board .offers-board-toolbar { grid-template-columns: minmax(0, 1fr) 190px; gap: 14px 16px; }
+    .offers-board .offers-board-toolbar { grid-template-columns: 190px minmax(0, 1fr); gap: 14px 16px; }
     .offers-board .offers-board-toolbar .offers-search { width: 100%; }
     .offers-board .offers-board-toolbar .offers-date input { width: 100%; }
-    .offers-board .offers-board-toolbar .offer-filters { grid-column: 1 / -1; flex-wrap: wrap; justify-content: flex-start; }
+    .offers-board .offers-board-toolbar .offer-filters { flex-wrap: wrap; justify-content: flex-start; }
     .offers-board .offers-board-toolbar .manual-offer-button { margin-left: auto; }
     .offers-board .offers-table { width: 100%; min-width: 0; }
     .offers-board .offers-table-header { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 0; padding: 10px 12px; }

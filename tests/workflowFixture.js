@@ -16,7 +16,7 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   const directory = await mkdtemp(path.join(results, 'workflow-'))
   // The copied modules keep their data next to them; a DATA_DIR from the shell would point them at real data.
   delete process.env.DATA_DIR
-  for (const name of ['entryMode.js', 'registryHistory.js', 'materialStock.js', 'invoiceImport.js', 'loginThrottle.js', 'liveUpdates.js','planning.js','planningRules.js', 'byName.js', 'offers.js', 'stageLabor.js', 'proposalEmails.js', 'stageCatalog.js', 'orderHistory.js', 'pieces.js', 'access.js', 'orderMaterials.js', 'pendingMaterials.js', 'operations.js', 'orderEditing.js', 'operatorAuth.js', 'employeeAccess.js', 'employeeActivity.js', 'serviceStages.js', 'machines.js', 'laborServices.js', 'accounts.js', 'reports.js', 'reportData.js', 'documentExports.js', 'payables.js', 'payableRules.js', 'receivables.js', 'bankStatements.js', 'ofx.js', 'materialRequests.js', 'notificationRules.js', 'notificationEvents.js', 'operationSessions.js', 'operationEventTime.js', 'operationManualEvents.js', 'materialRequestCodes.js', 'notifications.js', 'fiscalCatalog.js', 'dataDirectory.js', 'proposalDocuments.js', 'clientDocument.js', 'proposalDefaults.js', 'proposalPdf.js', 'proposalBrand.js', 'proposalMath.js', 'moneyWords.js', 'store.js', 'materialUnits.js', 'banks.js', 'operatorAccount.js', 'registries.js', 'requesters.js','serviceLocation.js', 'materialRequestSources.js', 'inventory.js', 'inventoryAppearance.js', 'materialIcons.js', 'uploads.js', 'machineUsage.js', 'accountPlan.js', 'accountPlanRules.js', 'dre.js', 'dreRules.js', 'dreExport.js', 'passwordReset.js', 'supportTickets.js', 'ticketRules.js', 'sitePreRegistration.js', 'offerRequests.js']) {
+  for (const name of ['adminInventory.js', 'labelQuotes.js', 'labelQuoteRules.js', 'clientPaymentTerm.js', 'emailTemplates.js', 'emailSignature.js', 'entryMode.js', 'registryHistory.js', 'materialStock.js', 'invoiceImport.js', 'loginThrottle.js', 'liveUpdates.js','planning.js','planningRules.js', 'byName.js', 'offers.js', 'stageLabor.js', 'proposalEmails.js', 'stageCatalog.js', 'orderHistory.js', 'pieces.js', 'access.js', 'orderMaterials.js', 'pendingMaterials.js', 'operations.js', 'orderEditing.js', 'operatorAuth.js', 'employeeAccess.js', 'employeeActivity.js', 'serviceStages.js', 'machines.js', 'laborServices.js', 'accounts.js', 'reports.js', 'reportData.js', 'documentExports.js', 'payables.js', 'payableRules.js', 'receivables.js', 'bankStatements.js', 'ofx.js', 'materialRequests.js', 'notificationRules.js', 'notificationEvents.js', 'operationSessions.js', 'operationEventTime.js', 'operationManualEvents.js', 'materialRequestCodes.js', 'notifications.js', 'fiscalCatalog.js', 'dataDirectory.js', 'proposalDocuments.js', 'clientDocument.js', 'proposalDefaults.js', 'proposalPdf.js', 'proposalBrand.js', 'proposalMath.js', 'moneyWords.js', 'store.js', 'materialUnits.js', 'banks.js', 'operatorAccount.js', 'registries.js', 'requesters.js','serviceLocation.js', 'materialRequestSources.js', 'inventory.js', 'inventoryAppearance.js', 'materialIcons.js', 'uploads.js', 'machineUsage.js', 'accountPlan.js', 'accountPlanRules.js', 'dre.js', 'dreRules.js', 'dreExport.js', 'passwordReset.js', 'supportTickets.js', 'ticketRules.js', 'sitePreRegistration.js', 'offerRequests.js']) {
     await copyFile(path.join(root, 'server', name), path.join(directory, name))
   }
   // PDFs use the bundled logo and fonts.
@@ -48,6 +48,9 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   const { default: proposalEmailsRouter } = await import(pathToFileURL(path.join(directory, 'proposalEmails.js')))
   const { default: planningRouter } = await import(pathToFileURL(path.join(directory, 'planning.js')))
   const { default: inventoryRouter } = await import(pathToFileURL(path.join(directory, 'inventory.js')))
+  const { default: adminInventoryRouter, ensureAdminInventory } = await import(pathToFileURL(path.join(directory, 'adminInventory.js')))
+  const { default: labelQuotesRouter } = await import(pathToFileURL(path.join(directory, 'labelQuotes.js')))
+  const { default: emailTemplatesRouter } = await import(pathToFileURL(path.join(directory, 'emailTemplates.js')))
   const { default: accountPlanRouter } = await import(pathToFileURL(path.join(directory, 'accountPlan.js')))
   const { default: dreRouter } = await import(pathToFileURL(path.join(directory, 'dre.js')))
   const { default: passwordResetRouter } = await import(pathToFileURL(path.join(directory, 'passwordReset.js')))
@@ -55,6 +58,7 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   // The stock screens use the real SQL routes, on the tests' own MySQL pool or on the fixture database (simulated pools only answer execute).
   const stockPool = typeof inventoryPool?.query === 'function' ? inventoryPool : storeDatabase.pool
   for (const statement of await inventorySchema()) await stockPool.query(statement)
+  await ensureAdminInventory(stockPool)
   const accounts = createAccountService(pool, accountsEnv || {})
   const app = express()
   // Same compression, cache and security headers as the published portal.
@@ -153,6 +157,8 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   })
   app.use('/api', createOffersRouter(inventoryPool, requireAdmin, accounts))
   app.use('/api', operationsRouter(pool))
+  app.use('/api', labelQuotesRouter({ pool, inventoryPool, requireAdmin, accounts }))
+  app.use('/api', emailTemplatesRouter(requireAdmin))
   app.use('/api', createAccountsRouter(accounts))
   app.use('/api', machinesRouter(requireAdmin, pool))
   app.use('/api', laborServicesRouter(requireAdmin, pool))
@@ -208,10 +214,11 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   app.use('/api', bankStatementsRouter(accounts, requireAdmin))
   // Tests never reach the Anthropic API; they pass a fake analysis.
   app.use('/api', fiscalRouter(requireAdmin))
-  app.use('/api', proposalDocumentsRouter(requireAdmin))
+  app.use('/api', proposalDocumentsRouter(requireAdmin, accounts))
   app.use('/api', notificationsRouter({ requireAdmin, payables, receivables, loadInventory: notificationInventory }))
   app.use('/api', materialRequestsRouter(requireAdmin, inventoryPool, accounts))
   app.use('/api', inventoryRouter(stockPool, requireAdmin))
+  app.use('/api', adminInventoryRouter(stockPool, requireAdmin))
   app.post('/api/auth/login', async (request, response, next) => {
     if (!accountsEnv) return response.status(503).json({ message: 'O banco de dados ainda não está configurado.' })
     try {
@@ -294,4 +301,4 @@ export async function createTestDatabase(prefix) {
   }
 }
 
-export const offerDraft = { cnpj: '12345678000190', company: 'Teste de fluxo', deadline: '2026-12-20', service: 'Peca de teste', quantity: 10, description: 'Verificacao isolada do fluxo de materiais', labelNumber: 'TESTE' }
+export const offerDraft = { cnpj: '12345678000190', company: 'Teste de fluxo', deadline: '2026-12-20', service: 'Peca de teste', quantity: 10, description: 'Verificacao isolada do fluxo de materiais', labelNumber: '' }

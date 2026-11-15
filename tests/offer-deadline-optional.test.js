@@ -33,7 +33,10 @@ test('an offer without the requested deadline goes on normally, but the proposal
   assert.equal(generated.status, 400)
   assert.equal(generated.data.message, 'Informe o prazo solicitado pelo cliente antes de gerar o PDF da proposta.')
   assert.equal((await f.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', serviceValue: 100, deadline: '' } })).status, 400, 'the older route asks for it too')
-  assert.equal((await f.adminRequest(`/offers/${offer.id}/accept`, 'POST')).status, 409, 'without the PDF there is no OS')
+  // An etiqueta opens its OS without the PDF (label-quotes.test.js), but never without the deadline.
+  const accept = await f.adminRequest(`/offers/${offer.id}/accept`, 'POST')
+  assert.equal(accept.status, 400)
+  assert.match(accept.data.message, /prazo solicitado/)
 
   // The date asked on the proposal screen goes to the offer and to the options with no delivery term.
   assert.equal((await f.adminRequest(`/offers/${offer.id}/deadline`, 'PUT', { deadline: '' })).status, 400)
