@@ -75,7 +75,7 @@ function cachePolicy(file) {
   if (file.startsWith('assets/')) return `public, max-age=${365 * DAY}, immutable`
   // Entry points must be confirmed on every visit, so a new build or new login media shows up at once. version.json is
   // what an open page compares with its own version to ask for a reload after a deploy.
-  if (file === 'index.html' || file === 'login-media/manifest.json' || file === 'version.json') return 'no-cache'
+  if (file === 'index.html' || file === 'manifest.webmanifest' || file === 'login-media/manifest.json' || file === 'version.json') return 'no-cache'
   if (file.startsWith('fonts/')) return `public, max-age=${30 * DAY}`
   // Logos and login media keep their names when replaced: one day fresh, then shown while a new copy is fetched.
   return `public, max-age=${DAY}, stale-while-revalidate=${7 * DAY}`

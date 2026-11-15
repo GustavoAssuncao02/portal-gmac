@@ -19,6 +19,7 @@ export const releaseNotes = [
       'Planejamento: OS completa aberta pelo bloco',
       'Ticket: tempos de resposta',
       'Tablet da produção: saída automática após 10 minutos sem uso, tempo de cada peça',
+      'Tablet da produção: botão "Tela cheia", portal instalável como app em tela cheia ("Adicionar à tela inicial") e tela mais compacta, com mais OS visíveis',
       'Calculadora de pesos e medidas: peso pelo comprimento da peça',
     ],
   },

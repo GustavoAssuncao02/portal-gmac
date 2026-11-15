@@ -409,3 +409,47 @@
   .operator-app .employee-activity-modal { max-height: calc((100dvh - 40px) / 1.4); }
   .operator-app .employee-activity-content { max-height: calc(55dvh / 1.4); }
 }
+/* "Tela cheia": under the screen name in the sidebar. */
+.operator-app .operator-fullscreen { display: flex; align-items: center; gap: 7px; width: 100%; min-height: 44px; margin-top: 10px; padding: 6px 8px; border: 1px solid #c9d9ea; border-radius: 7px; background: #f4f8fc; color: #1d4f86; font-size: 12px; font-weight: 700; text-align: left; cursor: pointer; }
+.operator-fullscreen[aria-pressed="true"] { border-color: #164c8c; background: #eaf2fc; }
+/* Tablet of the factory (1280x800 panel at 1.27x: 1004px wide, 460px to 628px tall): a narrow rail instead of the
+   sidebar, and each OS of the panel in three short lines instead of a card as tall as the screen. */
+@media (min-width: 761px) and (max-width: 1150px) {
+  .operator-sidebar { flex-basis: 86px; }
+  .operator-logo { height: 68px; }
+  .operator-logo img { width: 60px; max-height: 56px; }
+  .operator-sidebar nav { padding: 10px 6px; }
+  .operator-nav-item { flex-direction: column; justify-content: center; gap: 3px; padding: 6px 4px; font-size: 11px; text-align: center; }
+  .operator-app .operator-fullscreen { flex-direction: column; justify-content: center; gap: 3px; padding: 6px 4px; font-size: 11px; text-align: center; }
+  .operator-sidebar-bottom { flex-direction: column; justify-content: center; gap: 2px; padding: 8px 4px; }
+  .operator-sidebar-bottom div { display: none; }
+  .operator-sidebar-bottom button { margin-left: 0; }
+  .operator-main { padding: 12px 12px 18px; }
+  .operator-entry--overview { gap: 10px; padding: 12px 12px 10px; }
+  .operator-overview { gap: 10px; }
+  .operator-overview-header h1 { font-size: 20px; }
+  .operator-overview .admin-os-table tbody tr { grid-template-columns: repeat(6, minmax(0, 1fr)); grid-template-areas: "os os os client client status" "operator stage pieces active remaining remaining" "progress progress progress progress progress progress"; gap: 8px 14px; padding: 12px 14px; }
+  .operator-overview .admin-os-table :is(th, td) { padding: 0; }
+  .operator-overview .admin-os-table td:nth-child(1) { grid-area: os; }
+  .operator-overview .admin-os-table td:nth-child(2) { grid-area: client; }
+  .operator-overview .admin-os-table td:nth-child(3) { grid-area: operator; }
+  .operator-overview .admin-os-table td:nth-child(4) { grid-area: stage; }
+  .operator-overview .admin-os-table td:nth-child(5) { grid-area: pieces; }
+  .operator-overview .admin-os-table td:nth-child(6) { grid-area: progress; }
+  .operator-overview .admin-os-table td:nth-child(7) { grid-area: active; }
+  .operator-overview .admin-os-table td:nth-child(8) { grid-area: remaining; }
+  .operator-overview .admin-os-table td:nth-child(9) { grid-area: status; align-items: flex-end; justify-content: flex-start; }
+  .operator-overview .admin-os-table td:nth-child(6)::before { display: none; }
+  .operator-overview .admin-os-table td:first-child strong { font-size: 14px; }
+  .operator-entry--overview .operator-entry-card { padding: 10px 14px; }
+  .operator-entry--overview .operator-entry-card > button { min-height: 44px; }
+  .operator-header { gap: 8px; margin-bottom: 10px; }
+  .operator-header h1 { font-size: 20px; }
+  .operator-project-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .operator-project-group { grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .operator-project-group > h2, .operator-project-list > .operator-empty { grid-column: 1 / -1; }
+}
+@media (max-width: 540px) {
+  .operator-sidebar nav { display: flex; align-items: center; gap: 6px; }
+  .operator-app .operator-fullscreen { width: auto; margin-top: 0; white-space: nowrap; }
+}
