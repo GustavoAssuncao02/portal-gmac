@@ -1451,7 +1451,7 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
   useMobileModal(manualOpen, '.offer-manual-modal', () => setManualOpen(false))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const emptyForm = { cnpj: '', company: '', requester: '', buyer: '', deadline: '', service: '', quantity: '', description: '', labelNumber: '', attachment: null, open: false }
+  const emptyForm = { cnpj: '', company: '', requester: '', buyer: '', deadline: '', service: '', quantity: '', description: '', labelNumber: '', attachments: [], open: false }
   const [manualForm, setManualForm] = useState(emptyForm)
   // "Deixar oferta em aberto e notificar" comes checked for some accounts (OPEN_OFFER_DEFAULT_CPFS on the server).
   const [openDefault, setOpenDefault] = useState(false)
@@ -1495,6 +1495,11 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
   function updateManualForm(field, value) {
     setManualForm((current) => ({ ...current, [field]: value }))
   }
+  // Several files at once, or in more than one pick; the same file picked twice stays once.
+  function addManualFiles(list) {
+    const picked = [...(list || [])]
+    setManualForm((current) => ({ ...current, attachments: [...current.attachments, ...picked.filter((file) => !current.attachments.some((other) => other.name === file.name && other.size === file.size))] }))
+  }
 
   // A document typed by hand also finds the registered client, filling the company while it is still empty.
   function changeManualDocument(value) {
@@ -1509,12 +1514,17 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
     setPageNotice('')
     let created = false
     try {
-      const { attachment, ...fields } = manualForm
+      const { attachments, ...fields } = manualForm
       const { item, requesterCreated, buyerCreated } = await apiRequest('/api/offers', jsonOptions('POST', fields))
       created = true
       const contacts = requesterCreated || buyerCreated ? (requesterCreated && buyerCreated ? 'Solicitante e comprador cadastrados automaticamente' : `${requesterCreated ? 'Solicitante' : 'Comprador'} cadastrado automaticamente`) : ''
       if (contacts) setRequesterNotice(contacts)
-      if (attachment) await uploadOfferAttachment(item.id, attachment)
+      // One file per request, as the details screen sends them; a file that fails does not stop the others.
+      const failed = []
+      for (const file of attachments) {
+        try { await uploadOfferAttachment(item.id, file) } catch (caught) { failed.push(`${file.name} (${caught.message})`) }
+      }
+      if (failed.length) throw new Error(`${failed.join(', ')}. Abra a oferta e anexe ${failed.length === 1 ? 'esse arquivo' : 'esses arquivos'} de novo`)
       try { await applyPieceSuggestion(item) } catch (caught) { setPageNotice(`A oferta ${item.code} foi criada, mas não foi possível preencher com o histórico da peça (${caught.message}). Abra a oferta e use "Preencher com o histórico".`) }
       await onRefresh()
       setManualForm(emptyForm)
@@ -1618,7 +1628,10 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
             <label>Quantidade *<input type="number" min="1" step="1" value={manualForm.quantity} onChange={(event) => updateManualForm('quantity', event.target.value)} required /></label>
             <label>Número da etiqueta<input value={manualForm.labelNumber} onChange={(event) => updateManualForm('labelNumber', event.target.value)} placeholder="Opcional" /></label>
             <label className="offer-form-field--full">Descrição do serviço *<textarea value={manualForm.description} onChange={(event) => updateManualForm('description', event.target.value)} rows="4" required /></label>
-            <label className="offer-form-field--full offer-attachment-field">Anexo<span className="offer-file-picker"><input type="file" onChange={(event) => updateManualForm('attachment', event.target.files?.[0] || null)} /><span>Escolher arquivo</span><strong>{manualForm.attachment?.name || 'Nenhum arquivo selecionado'}</strong></span></label>
+            <div className="offer-form-field--full offer-attachment-field">
+              <label>Anexos<span className="offer-file-picker"><input type="file" multiple onChange={(event) => { addManualFiles(event.target.files); event.target.value = '' }} /><span>Escolher arquivos</span><strong>{manualForm.attachments.length ? `${manualForm.attachments.length} ${manualForm.attachments.length === 1 ? 'arquivo selecionado' : 'arquivos selecionados'}` : 'Nenhum arquivo selecionado'}</strong></span></label>
+              {manualForm.attachments.length > 0 && <ul className="offer-file-list" aria-label="Anexos selecionados">{manualForm.attachments.map((file, index) => <li key={`${file.name}-${file.size}`}><span>{file.name}</span><button type="button" title="Tirar este anexo" aria-label={`Tirar o anexo ${file.name}`} onClick={() => updateManualForm('attachments', manualForm.attachments.filter((_, position) => position !== index))}><X size={14} aria-hidden="true" /></button></li>)}</ul>}
+            </div>
             <label className="offer-form-field--full offer-open-check"><input type="checkbox" checked={manualForm.open} onChange={(event) => updateManualForm('open', event.target.checked)} /><span><strong>Deixar oferta em aberto e notificar</strong><small>A oferta fica na lista sem ninguém criando, como as do site: quem abrir primeiro assume. Os demais recebem um aviso no sino.</small></span></label>
           </div>{error && <p className="workflow-error" role="alert">{error}</p>}<div className="offer-modal-actions"><button className="offer-modal-cancel" type="button" onClick={() => setManualOpen(false)}>Cancelar</button><button className="manual-offer-button" type="submit" disabled={saving}>{saving ? 'Salvando...' : 'Adicionar solicitação'}</button></div></form>
         </section>

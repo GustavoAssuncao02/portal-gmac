@@ -160,7 +160,7 @@ export default function OrderEditModal({ order, confirmCompleted, onSave, onUplo
           {tab === 'resources' && <>
             <EntryModeChoice value={perPiece ? 'piece' : 'total'} onChange={(mode) => { if (mode !== (perPiece ? 'piece' : 'total')) setDraft((current) => ({ ...current, order: { ...current.order, resources: switchEntryMode(current.order.resources, mode, pieces) } })) }} />
             <div className="os-edit-section-heading"><h3>Materiais</h3><button className="os-button" type="button" onClick={() => resource('materials', [...resources.materials, { id: newId(), name: '', detail: '', unit: 'kg', quantity: 1, ...(perPiece ? { quantityPerPiece: 1 } : {}), unitPrice: 0 }])}><Plus size={16} />Adicionar material</button></div>
-            {resources.materials.map((item) => <div className="os-edit-resource-row" key={item.id}>
+            {resources.materials.map((item) => <div className="os-edit-resource-row os-edit-resource-row--material" key={item.id}>
               <label className="os-edit-field">Material<input value={item.name} maxLength={160} onChange={(event) => row('materials', item.id, 'name', event.target.value)} required /></label>
               <label className="os-edit-field">Especificação<input value={item.detail || ''} maxLength={500} onChange={(event) => row('materials', item.id, 'detail', event.target.value)} /></label>
               {/* A material linked to the stock keeps the unit of its registration. */}

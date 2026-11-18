@@ -3920,6 +3920,17 @@
     color: #bec2c5;
     background: #232425
 }
+:root[data-theme="dark"][data-tone="black"] .offer-file-list li {
+    border: 1px solid #303133;
+    color: #ebebec;
+    background: #1a1b1c
+}
+:root[data-theme="dark"][data-tone="black"] .offer-file-list button {
+    color: #bec1c5
+}
+:root[data-theme="dark"][data-tone="black"] .offer-file-list button:hover {
+    background: #301c1a
+}
 :root[data-theme="dark"][data-tone="black"] .offer-modal-cancel {
     border: 1px solid #303133;
     color: #bec1c5;

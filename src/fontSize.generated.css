@@ -774,6 +774,7 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .offer-form-grid label { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .offer-form-grid input, :root:is([data-font-size="small"], [data-font-size="large"]) .offer-form-grid textarea { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .offer-file-picker { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .offer-file-list li { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .offer-modal-actions button, :root:is([data-font-size="small"], [data-font-size="large"]) .offer-confirm-actions button { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .offer-confirm-icon { font-size: calc(25px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .offer-confirm-modal h2 { font-size: calc(22px * var(--account-font-scale)); }

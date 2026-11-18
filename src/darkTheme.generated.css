@@ -4547,6 +4547,18 @@
     color: #a9c4da;
     background: #203c59
 }
+:root[data-theme="dark"] .offer-file-list li {
+    border: 1px solid #36516f;
+    color: #e1ebf6;
+    background: #162b43
+}
+:root[data-theme="dark"] .offer-file-list button {
+    color: #b4c1cf
+}
+:root[data-theme="dark"] .offer-file-list button:hover {
+    color: #ec9089;
+    background: #3c2320
+}
 :root[data-theme="dark"] .offer-modal-cancel {
     border: 1px solid #36516f;
     color: #a9c1da;

@@ -36,6 +36,12 @@
 .os-edit-section-heading:not(:first-child) { margin-top: 28px; }
 .os-edit-section-heading h3 { margin: 0; }
 .os-edit-resource-row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.4fr) minmax(0, .8fr) minmax(0, .8fr) 34px; align-items: end; gap: 10px; border-bottom: 1px solid #e0e8ef; padding-bottom: 16px; margin-bottom: 16px; }
+/* A material has one field more than the labor (Unidade): its own columns, so Valor does not fall in the button's column. */
+.os-edit-resource-row--material { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.3fr) minmax(0, .9fr) minmax(0, .8fr) minmax(0, .8fr) 34px; }
+@media (max-width: 900px) {
+  .os-edit-resource-row--material { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .os-edit-resource-row--material > button { justify-self: end; }
+}
 .os-edit-process { margin: 0; padding: 0; border: 0; }
 .os-edit-process > .os-edit-grid { margin-top: 20px; }
 .os-edit-checkbox { display: flex; align-items: center; gap: 8px; margin-top: 18px; font-size: 13px; }
