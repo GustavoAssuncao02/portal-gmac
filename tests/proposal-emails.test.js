@@ -20,7 +20,8 @@ test('the proposal e-mail goes, once the PDF exists, to the client and the buyer
   t.after(() => fixture.close())
   const client = (await fixture.adminRequest('/clients', 'POST', { name: 'Nestlé', documentType: 'cnpj', document: '60.409.075/0001-52', email: 'Compras@Nestle.com' })).data.item
   await fixture.adminRequest('/buyers', 'POST', { name: 'Carla Souza', clientId: client.id, email: 'carla@nestle.com' })
-  const offer = await offerWithProposal(fixture, { cnpj: '60.409.075/0001-52', company: 'Nestlé', buyer: 'Carla Souza' })
+  await fixture.adminRequest('/requesters', 'POST', { name: 'Márcio Bomfim', clientId: client.id, email: 'marcio@nestle.com' })
+  const offer = await offerWithProposal(fixture, { cnpj: '60.409.075/0001-52', company: 'Nestlé', buyer: 'Carla Souza', requester: 'Márcio Bomfim' })
 
   // Before the PDF there is nothing to send.
   assert.equal((await fixture.adminRequest(`/offers/${offer.id}/proposal-email`)).status, 409)
@@ -28,11 +29,11 @@ test('the proposal e-mail goes, once the PDF exists, to the client and the buyer
   assert.equal((await fixture.request(`/offers/${offer.id}/proposal-email`)).status, 401, 'administrators only')
   assert.equal((await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', deadline: offerDraft.deadline, serviceValue: 100 } })).status, 200)
 
-  // The draft: client and buyer e-mails, a subject with the proposal, a friendly message for the buyer and the signature.
+  // The draft: client, requester and buyer e-mails, a subject with the proposal, a friendly message for the buyer and the signature.
   const { draft, proposal, configured } = (await fixture.adminRequest(`/offers/${offer.id}/proposal-email`)).data
   assert.equal(configured, true)
   assert.equal(draft.from, 'comercial@gmacmetalurgica.com.br')
-  assert.deepEqual(draft.to, ['compras@nestle.com', 'carla@nestle.com'])
+  assert.deepEqual(draft.to, ['compras@nestle.com', 'marcio@nestle.com', 'carla@nestle.com'])
   assert.match(draft.subject, new RegExp(`Proposta comercial nº ${offer.code}`))
   assert.match(draft.message, /^Olá, Carla!/)
   // The signature: who sends (no role filled in yet), the issuer and the company's contacts; the HTML one carries the logo.

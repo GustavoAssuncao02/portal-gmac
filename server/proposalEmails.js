@@ -53,10 +53,12 @@ const unique = (list) => list.map((item) => String(item || '').trim().toLowerCas
 // The e-mail of an offer in each template; an etiqueta comes with "Medição de etiqueta", the others with "Proposta comercial".
 export function proposalEmailDraft({ store, offer, client, senderName, jobTitle = '', from, templateId }) {
   const buyer = (store.buyers || []).find((row) => row.id === offer.buyerId)
+  // The requester registered for the offer (Cadastros › Solicitantes) also receives it, like the client and the buyer.
+  const requester = (store.requesters || []).find((row) => row.id === offer.requesterId)
   const issuer = issuerOf(store, offer)
   const values = templateValues(store, offer)
   // A oferta do site não tem solicitante cadastrado: o e-mail informado no formulário entra como destinatário sugerido.
-  const contacts = [offer.siteContact?.email, client?.email, buyer?.email]
+  const contacts = [offer.siteContact?.email, client?.email, requester?.email, buyer?.email]
   const templates = emailTemplates(store).map((template) => ({ id: template.id, name: template.name, builtin: Boolean(template.builtin), subject: fillTemplate(template.subject, values), message: fillTemplate(template.message, values), to: unique(template.to || []), cc: unique(template.cc || []) }))
   const chosen = templates.find((template) => template.id === templateId) || templates.find((template) => template.id === (offer.labelQuote ? 'label' : 'proposal')) || templates[0]
   return {

@@ -5,6 +5,7 @@ export const releaseNotes = [
     date: '2026-11-18',
     notes: [
       'Proposta da Nestlé: o Nº da solicitação vem preenchido em sequência automática (a próxima é 2022952) e pode ser trocado; a última emitida pode ser ajustada em Modelos de proposta › Textos padrão',
+      'E-mail da proposta: correção, o e-mail do solicitante cadastrado agora vem nos destinatários',
     ],
   },
   {
