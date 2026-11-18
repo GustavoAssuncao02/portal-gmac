@@ -46,7 +46,7 @@ export default function ProposalSettingsModal({ onClose }) {
     try {
       const number = (value) => value === '' || value == null ? null : Number(value)
       const tables = Object.fromEntries(Object.entries(settings.tables).map(([key, table]) => [key, { ...table, labor: table.labor.map((row) => ({ ...row, normal: number(row.normal), night: number(row.night), holiday: number(row.holiday) })), materials: table.materials.map((row) => ({ ...row, price: number(row.price) })), ...(table.freight ? { freight: table.freight.map((place) => ({ ...place, value: number(place.value) })) } : {}) }]))
-      const result = await payableRequest('/proposal-settings', 'PUT', { issuers: settings.issuers, tables, important: settings.important, observation: settings.observation, validityDays: Number(settings.validityDays), lastQuoteNumber: Number(settings.lastQuoteNumber) })
+      const result = await payableRequest('/proposal-settings', 'PUT', { issuers: settings.issuers, tables, important: settings.important, observation: settings.observation, validityDays: Number(settings.validityDays), lastQuoteNumber: Number(settings.lastQuoteNumber), lastNestleNumber: Number(settings.lastNestleNumber) })
       setSettings(result.settings); setMessage('Configurações salvas.')
     } catch (caught) { setError(caught.message) } finally { setBusy(false) }
   }
@@ -65,6 +65,7 @@ export default function ProposalSettingsModal({ onClose }) {
         <label className="proposal-doc-full">Observação da Nestlé e da etiqueta<input value={settings.observation} onChange={(event) => update({ observation: event.target.value })} /></label>
         <label>Validade padrão (dias)<input type="number" min={1} max={365} value={settings.validityDays} onChange={(event) => update({ validityDays: event.target.value })} /></label>
         <label>Última cotação emitida<input type="number" min={0} value={settings.lastQuoteNumber} onChange={(event) => update({ lastQuoteNumber: event.target.value })} /><small className="payable-hint">A próxima proposta usa o número seguinte.</small></label>
+        <label>Última solicitação Nestlé emitida<input type="number" min={0} value={settings.lastNestleNumber} onChange={(event) => update({ lastNestleNumber: event.target.value })} /><small className="payable-hint">A próxima planilha da Nestlé vem com o número seguinte (pode ser trocado no formulário).</small></label>
       </div></section>}
     </fieldset></form>}
     {tab === 'catalog' && <section className="proposal-doc-section proposal-catalog">

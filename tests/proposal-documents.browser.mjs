@@ -114,11 +114,11 @@ try {
   await settings.getByRole('button', { name: 'Fechar', exact: true }).click()
   await page.getByRole('dialog', { name: 'Escolha o modelo da proposta', exact: true }).getByRole('button', { name: 'Cancelar', exact: true }).click()
 
-  // Nestlé FS-3055: issued by GMAC Metalúrgica, with the request number of the offer.
+  // Nestlé FS-3055: issued by GMAC Metalúrgica, with the next number of the Nestlé sequence (2022951 was the last one).
   await page.getByRole('button', { name: 'Gerar proposta em PDF', exact: true }).click()
   await page.getByRole('button', { name: /^Nestlé/ }).click()
   const nestle = page.getByRole('dialog', { name: 'Proposta · Nestlé (FS-3055)', exact: true })
-  assert.equal(await nestle.getByLabel('Nº da solicitação', { exact: true }).inputValue(), '5319')
+  assert.equal(await nestle.getByLabel('Nº da solicitação', { exact: true }).inputValue(), '2022952')
   assert.equal(await nestle.getByLabel('Empresa emissora', { exact: true }).locator('option:checked').innerText(), 'GMAC Metalúrgica · 09.608.093/0001-06')
   assert.equal(await nestle.getByLabel('Quantidade de Barra Metalica Aco Sae1020 1M', { exact: true }).inputValue(), '4')
   await page.screenshot({ path: 'test-results/proposal-nestle-form.png' })

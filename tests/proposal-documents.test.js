@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import path from 'node:path'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
 import { moneyInWords } from '../server/moneyWords.js'
-import { matchRow } from '../server/proposalDocuments.js'
+import { claimNestleNumber, matchRow, nextNestleNumber, proposalSettings, remember } from '../server/proposalDocuments.js'
 import { etiquetaLabor, etiquetaMaterials, nestleLabor, nestleMaterials } from '../server/proposalDefaults.js'
 import { syncFiscalCatalog, searchFiscal, nextWeeklyRun, normalizeNbs, readFiscalCatalog, fiscalSources } from '../server/fiscalCatalog.js'
 
@@ -27,6 +27,37 @@ test('system machines, services and materials are matched to the price list line
   assert.equal(matchRow('Centro de usinagem 5 eixos', nestleLabor), 'fs-l11')
   assert.equal(matchRow('Nylon tarugo', nestleMaterials), 'fs-m21')
   assert.equal(matchRow('Prensa hidráulica', etiquetaLabor, { 'prensa hidraulica': 'et-l11' }), 'et-l11', 'Assignments made by the user are remembered')
+})
+
+test('Nestlé request numbers follow their own sequence, editable, without repeating another proposal', () => {
+  const nestleOffer = (id, number) => ({ id, proposal: { document: { model: 'nestle', number } } })
+  const store = { offers: [{ id: 'a', proposal: { document: { model: 'model-a', quoteNumber: '13600' } } }] }
+  assert.equal(proposalSettings(store).lastNestleNumber, 2022951)
+  assert.equal(nextNestleNumber(store), '2022952')
+  // Generating with the suggested number moves the sequence on.
+  const first = { model: 'nestle', number: '2022952' }
+  claimNestleNumber(store, first, 'b')
+  remember(store, 'nestle', first)
+  store.offers.push(nestleOffer('b', first.number))
+  assert.equal(nextNestleNumber(store), '2022953')
+  // Someone else generated 2022953 while this form was open: it takes the next free one.
+  store.offers.push(nestleOffer('c', '2022953'))
+  const late = { model: 'nestle', number: '2022953' }
+  claimNestleNumber(store, late, 'd')
+  assert.equal(late.number, '2022954')
+  // A number typed by hand is kept, also a lower one, and the same offer may keep its own number.
+  const typed = { model: 'nestle', number: '2022900' }
+  claimNestleNumber(store, typed, 'e')
+  assert.equal(typed.number, '2022900')
+  const again = { model: 'nestle', number: '2022952' }
+  claimNestleNumber(store, again, 'b')
+  assert.equal(again.number, '2022952')
+  // Text that is not a number is left alone and does not touch the sequence.
+  const text = { model: 'nestle', number: 'SC-77' }
+  claimNestleNumber(store, text, 'f')
+  remember(store, 'nestle', text)
+  assert.equal(text.number, 'SC-77')
+  assert.equal(store.proposalSettings.lastNestleNumber, 2022952)
 })
 
 test('weekly fiscal catalog: Sunday midnight in Bahia, failures keep the previous lists', async () => {
@@ -158,12 +189,12 @@ test('proposal models: drafts from the system, fiscal codes, Nestlé and etiquet
     const talisca = (await f.adminRequest('/offers', 'POST', { ...offerDraft, company: 'Nestlé Brasil Ltda', service: 'Talisca', description: 'Fabricação de talisca lado direito e lado esquerdo, conforme desenho', quantity: 1, labelNumber: '2022906' })).data.item
     await f.adminRequest(`/offers/${talisca.id}/resources`, 'PUT', { materials: [{ id: 'm', name: 'Aço Inox 316L', quantity: 4, unitPrice: 30 }], laborEntries: [], stages: ['machining-center', 'cut-bend'], stageTimes: { 'machining-center': 300, 'cut-bend': 180 }, stageResources: { 'machining-center': { type: 'machine', id: 'centro5' }, 'cut-bend': { type: 'labor-service', id: 'cald' } } })
     const nestle = (await request(`/offers/${talisca.id}/proposal-draft?model=nestle`)).data.draft
-    assert.deepEqual([nestle.issuerId, nestle.number, nestle.labor.find((row) => row.id === 'fs-l11').quantity, nestle.labor.find((row) => row.id === 'fs-l14').quantity, nestle.materials.find((row) => row.id === 'fs-m2').quantity], ['metalurgica', '2022906', 5, 3, 4])
+    assert.deepEqual([nestle.issuerId, nestle.number, nestle.labor.find((row) => row.id === 'fs-l11').quantity, nestle.labor.find((row) => row.id === 'fs-l14').quantity, nestle.materials.find((row) => row.id === 'fs-m2').quantity], ['metalurgica', '2022952', 5, 3, 4])
     const sheet = await request(`/offers/${talisca.id}/proposal-document`, 'POST', { model: 'nestle', document: { ...nestle, requester: 'Ionei' } })
     assert.equal(sheet.status, 200, JSON.stringify(sheet.data))
     assert.equal(sheet.data.item.proposal.document.total, 1373.95, 'Same total as FS-3055 n. 2022906 (R$ 1.374)')
     const nestlePdf = await fetch(`${f.url}/api/offers/${talisca.id}/proposal.pdf`, { headers: f.admin })
-    assert.equal(nestlePdf.status, 200); assert.match(nestlePdf.headers.get('content-disposition'), /FS-3055-2022906\.pdf/)
+    assert.equal(nestlePdf.status, 200); assert.match(nestlePdf.headers.get('content-disposition'), /FS-3055-2022952\.pdf/)
     const order = (await f.adminRequest(`/offers/${talisca.id}/accept`, 'POST')).data.item
     assert.equal((await request(`/receivables/order/${order.code}`)).data.order.valueCents, 137395)
   } finally { await f.close() }

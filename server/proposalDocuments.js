@@ -48,6 +48,8 @@ export function proposalSettings(store) {
     observation: saved.observation ?? defaultObservation,
     validityDays: saved.validityDays || 10,
     lastQuoteNumber: Number(saved.lastQuoteNumber) || 13482,
+    // Nº da solicitação of the Nestlé sheet (FS-3055): 2022951 was the last one issued before the sequence was automatic.
+    lastNestleNumber: Number(saved.lastNestleNumber) || 2022951,
     defaultIssuer: { 'model-a': 'usinagem', 'model-b': 'usinagem', nestle: 'metalurgica', etiqueta: 'usinagem', ...(saved.defaultIssuer || {}) },
     aliases: { nestle: {}, etiqueta: {}, ...(saved.aliases || {}) },
   }
@@ -112,7 +114,9 @@ export function validateSettings(input, current) {
   if (important.length > 12) fail('Use no máximo 12 parágrafos em "Importante".')
   const lastQuoteNumber = input.lastQuoteNumber == null ? current.lastQuoteNumber : Number(input.lastQuoteNumber)
   if (!Number.isInteger(lastQuoteNumber) || lastQuoteNumber < 0) fail('Número da última cotação inválido.')
-  return { issuers, tables, important, observation: text(input.observation ?? current.observation, 200, 'observação'), validityDays: Math.min(365, Math.max(1, Number(input.validityDays ?? current.validityDays) || 10)), lastQuoteNumber, defaultIssuer: current.defaultIssuer, aliases: current.aliases }
+  const lastNestleNumber = input.lastNestleNumber == null ? current.lastNestleNumber : Number(input.lastNestleNumber)
+  if (!Number.isInteger(lastNestleNumber) || lastNestleNumber < 0) fail('Número da última solicitação da Nestlé inválido.')
+  return { issuers, tables, important, observation: text(input.observation ?? current.observation, 200, 'observação'), validityDays: Math.min(365, Math.max(1, Number(input.validityDays ?? current.validityDays) || 10)), lastQuoteNumber, lastNestleNumber, defaultIssuer: current.defaultIssuer, aliases: current.aliases }
 }
 
 // ---------- Matching what the system recorded (machines, labor services, materials) to the customer's price list.
@@ -186,6 +190,21 @@ export function claimQuoteNumber(store, document) {
   if (Number(document.quoteNumber) < Number(next)) document.quoteNumber = next
 }
 
+// Nestlé sheets follow their own sequence (Nº da solicitação): the form comes with the number after the last one issued,
+// and the user may type another one.
+const nestleNumbers = (store, exceptOfferId = null) => store.offers
+  .filter((item) => item.id !== exceptOfferId && item.proposal?.document?.model === 'nestle')
+  .map((item) => String(item.proposal.document.number || '').trim()).filter((number) => /^\d{1,15}$/.test(number)).map(Number)
+export function nextNestleNumber(store, settings = proposalSettings(store)) {
+  return String(Math.max(settings.lastNestleNumber, ...nestleNumbers(store)) + 1)
+}
+// A number another proposal already has (someone generated one while this form was open) moves to the next free one.
+// Any other number typed by hand is kept, also a lower one; the same offer may keep its own number.
+export function claimNestleNumber(store, document, offerId) {
+  if (document.model !== 'nestle' || !/^\d{1,15}$/.test(String(document.number || '').trim())) return
+  if (nestleNumbers(store, offerId).includes(Number(document.number))) document.number = nextNestleNumber(store)
+}
+
 // `client`: the registered client of the offer (Cadastros › Clientes); its payment term fills the letter models.
 export async function buildDraft({ model, store, offer, value, deadline, client = null }) {
   if (!documentModels.includes(model)) fail('Modelo de proposta inválido.')
@@ -212,7 +231,7 @@ export async function buildDraft({ model, store, offer, value, deadline, client 
   const usage = systemUsage(offer).map((item) => ({ ...item, rowId: matchRow(item.name, item.kind === 'labor' ? table.labor : table.materials, settings.aliases[model]) }))
   const totalOf = (rowId) => round2(usage.filter((item) => item.rowId === rowId).reduce((total, item) => total + item.quantity, 0))
   return {
-    ...base, number: source?.labelNumber || '', labelNumber: source?.labelNumber || '', componentName: source?.service || '', description: source?.description || '', quantity: source?.quantity || 1, quantityUnit: 'Un',
+    ...base, number: model === 'nestle' ? nextNestleNumber(store, settings) : source?.labelNumber || '', labelNumber: source?.labelNumber || '', componentName: source?.service || '', description: source?.description || '', quantity: source?.quantity || 1, quantityUnit: 'Un',
     requester: String(source?.requester || '').slice(0, 80), responsible: '', equipment: '', component: '', contact: issuer.contact,
     labor: table.labor.map((row) => ({ id: row.id, quantity: totalOf(row.id) || null, situation: 'normal' })),
     materials: table.materials.map((row) => ({ id: row.id, quantity: totalOf(row.id) || null })),
@@ -319,6 +338,7 @@ export function fromSaved(document, settings) {
 export function remember(store, model, document, assignments) {
   const saved = store.proposalSettings ||= {}
   if (document.quoteNumber && Number.isInteger(Number(document.quoteNumber))) saved.lastQuoteNumber = Math.max(Number(saved.lastQuoteNumber) || 13482, Number(document.quoteNumber))
+  if (model === 'nestle' && /^\d{1,15}$/.test(String(document.number || '').trim())) saved.lastNestleNumber = Math.max(Number(saved.lastNestleNumber) || 2022951, Number(document.number))
   if (tableModels.includes(model) && Array.isArray(assignments)) {
     const settings = proposalSettings(store)
     const rows = [...settings.tables[model].labor, ...settings.tables[model].materials]
@@ -396,7 +416,7 @@ export default function createProposalDocumentsRouter(requireAdmin, accounts = n
     const client = await clientOfOffer(accounts, offer)
     const fresh = await buildDraft({ model, store, offer, value: request.query.value, deadline: request.query.deadline, client })
     // Reopening the saved document keeps what was typed, but a new PDF takes the next quote number.
-    const draft = offer.proposal?.document?.model === model && !request.query.fresh ? { ...fromSaved(offer.proposal.document, proposalSettings(store)), ...(fresh.quoteNumber ? { quoteNumber: fresh.quoteNumber } : {}), usage: fresh.usage } : fresh
+    const draft = offer.proposal?.document?.model === model && !request.query.fresh ? { ...fromSaved(offer.proposal.document, proposalSettings(store)), ...(fresh.quoteNumber ? { quoteNumber: fresh.quoteNumber } : {}), ...(model === 'nestle' ? { number: fresh.number } : {}), usage: fresh.usage } : fresh
     response.set('Cache-Control', 'no-store').json({ draft, settings: proposalSettings(store), paymentClient: paymentClientView(client) })
   }))
 
@@ -419,6 +439,7 @@ export default function createProposalDocumentsRouter(requireAdmin, accounts = n
       if (item.status === 'creating') fail(stillCreating, 409)
       if (!isDay(item.deadline)) fail(deadlineRequired)
       claimQuoteNumber(store, document)
+      claimNestleNumber(store, document, item.id)
       // An option with no delivery term takes the requested deadline: it is the "Prazo acordado" of the OS.
       const chosen = option && typeof option === 'object' ? option : {}
       const agreed = chosen.deadline == null || String(chosen.deadline).trim() === '' ? { ...chosen, deadline: item.deadline } : chosen

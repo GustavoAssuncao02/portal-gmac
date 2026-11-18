@@ -1,6 +1,6 @@
 import express from 'express'
 import { readStore, mutateStore } from './offers.js'
-import { buildDraft, claimQuoteNumber, clientOfOffer, documentProposal, fromSaved, normalizeDocument, paymentClientView, proposalSettings, remember, rememberClientPaymentDays } from './proposalDocuments.js'
+import { buildDraft, claimNestleNumber, claimQuoteNumber, clientOfOffer, documentProposal, fromSaved, normalizeDocument, paymentClientView, proposalSettings, remember, rememberClientPaymentDays } from './proposalDocuments.js'
 import { actorOf } from './registryHistory.js'
 import { renderProposalDocument } from './proposalPdf.js'
 import { osValueOf, round2 } from './proposalMath.js'
@@ -167,7 +167,7 @@ export default function createLabelQuotesRouter({ pool, inventoryPool = pool, re
     const fresh = await buildDraft({ model, store, offer: source, client, value: order.labelQuote.pending ? 0 : osValueOf(order.proposal), deadline: order.proposal?.deadline || order.deadline })
     if (fresh.usage) fresh.usage = fresh.usage.map((item) => ({ ...item, source: item.kind === 'labor' ? 'Horas reais da OS' : 'Consumido na OS' }))
     const saved = order.labelQuote.pending ? null : order.proposal?.document
-    const draft = saved?.model === model && !request.query.fresh ? { ...fromSaved(saved, proposalSettings(store)), ...(fresh.quoteNumber ? { quoteNumber: fresh.quoteNumber } : {}), usage: fresh.usage } : fresh
+    const draft = saved?.model === model && !request.query.fresh ? { ...fromSaved(saved, proposalSettings(store)), ...(fresh.quoteNumber ? { quoteNumber: fresh.quoteNumber } : {}), ...(model === 'nestle' ? { number: fresh.number } : {}), usage: fresh.usage } : fresh
     response.set('Cache-Control', 'no-store').json({ draft, settings: proposalSettings(store), paymentClient: paymentClientView(client) })
   }))
 
@@ -182,6 +182,7 @@ export default function createLabelQuotesRouter({ pool, inventoryPool = pool, re
       const order = labelOrder(store, request.params.code)
       const offer = store.offers.find((item) => item.id === order.offerId)
       claimQuoteNumber(store, document)
+      claimNestleNumber(store, document, order.offerId)
       const proposal = { ...documentProposal({ item: order, option: { key: 'A', title: 'Etiqueta', deadline: order.proposal?.deadline || order.deadline }, document, model, stages: order.resources?.stages || [], generatedBy: request.adminName || null }), strictProcess: order.proposal?.strictProcess ?? true }
       const version = { model, number: document.quoteNumber || document.labelNumber || document.number || '', total: document.total, generatedAt: proposal.generatedAt, generatedByName: request.adminName || 'Administrador' }
       order.proposal = proposal

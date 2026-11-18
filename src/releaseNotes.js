@@ -1,6 +1,13 @@
 // Each commit to main is a new version: add an entry at the top, with what changed in plain words for whoever uses the portal.
 export const releaseNotes = [
   {
+    version: '1.0.18',
+    date: '2026-11-18',
+    notes: [
+      'Proposta da Nestlé: o Nº da solicitação vem preenchido em sequência automática (a próxima é 2022952) e pode ser trocado; a última emitida pode ser ajustada em Modelos de proposta › Textos padrão',
+    ],
+  },
+  {
     version: '1.0.17',
     date: '2026-11-15',
     notes: [
