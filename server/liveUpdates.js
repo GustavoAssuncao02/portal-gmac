@@ -18,7 +18,7 @@ const HEARTBEAT_MS = 25000
 const notificationNames = /^(operationalNotifications|payableNotifications|receivableNotifications|adminNotificationPreferences|notificationInventory\w*)$/
 const financeNames = /^(payable|receivable|bank|dre|account(Groups|PlanVersion)|classification|supplier)/
 // The history of Cadastros is read only when its "i" is opened: recording it does not refresh the open screens.
-const quietNames = /^(adminAppearancePreferences|migrations|registryEvents)$/
+const quietNames = /^(adminAppearancePreferences|adminHomeLayouts|migrations|registryEvents)$/
 export function topicOfName(name) {
   if (quietNames.test(name)) return null
   if (notificationNames.test(name)) return 'notifications'

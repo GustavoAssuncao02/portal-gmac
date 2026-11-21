@@ -16,6 +16,22 @@ export function payableOverview(rows, now = Date.now()) {
   })
 }
 
+// Same four cards for what the customers owe: still open (not received, not cancelled), late, due today, next 7 days.
+export function receivableOverview(rows, now = Date.now()) {
+  const today = todayBahia(new Date(now))
+  const shiftDay = (days) => new Date(Date.parse(`${today}T12:00:00Z`) + days * DAY).toISOString().slice(0, 10)
+  const open = rows.filter((row) => !row.receipt && !row.inactive)
+  return [
+    { key: 'open', label: 'Total a receber', match: () => true },
+    { key: 'overdue', label: 'Recebimentos vencidos', match: (row) => row.dueDate < today },
+    { key: 'today', label: 'Vencem hoje', match: (row) => row.dueDate === today },
+    { key: 'upcoming', label: 'Próximos 7 dias', match: (row) => row.dueDate >= shiftDay(1) && row.dueDate <= shiftDay(7) },
+  ].map(({ match, ...item }) => {
+    const selected = open.filter(match)
+    return { ...item, count: selected.length, valueCents: selected.reduce((sum, row) => sum + row.valueCents, 0) }
+  })
+}
+
 export function adminOverview(orders, offers, inventory, now = Date.now()) {
   const openOrders = orders.filter((order) => order.operation?.status !== 'completed').map((order) => {
     const deadline = order.proposal?.deadline || order.deadline

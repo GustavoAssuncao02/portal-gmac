@@ -243,6 +243,12 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .home-heading h1 { font-size: calc(28px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .home-heading p { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .home-button { font-size: inherit; font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-card-heading h2 { font-size: calc(15px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-card-heading > div > span { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-card-empty { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-card-stale { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-card-more { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-metric { font-size: inherit; }
 :root:is([data-font-size="small"], [data-font-size="large"]) .home-metric > div > span { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .home-metric strong { font-size: calc(27px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .home-payable { font-size: inherit; }
@@ -271,8 +277,57 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .home-stock-footer small { font-size: calc(9px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .home-calculator { font-size: inherit; }
 :root:is([data-font-size="small"], [data-font-size="large"]) .home-calculator > span { font-size: calc(16px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-shortcut-card { font-size: inherit; }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-shortcut-card strong { font-size: calc(16px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-shortcut-card small { font-size: calc(11px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .home-attention-item { font-size: inherit; font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .home-attention-item strong { font-size: calc(20px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-bars li > :is(button, div) { font-size: inherit; }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-bars-label { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-bars-label strong { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-stat > span { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-stat > strong { font-size: calc(18px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-stat > small { font-size: calc(10px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-rows li > :is(button, div) { font-size: inherit; }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-rows-main strong { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-rows-main small { font-size: calc(10px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-rows-value { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-rows-value small { font-size: calc(10px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-shortcuts button { font-size: inherit; font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-week-day { font-size: calc(10px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-week-day small { font-size: calc(9px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-chart-legend { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-month-chart strong { font-size: calc(10px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-month-chart > div > span { font-size: calc(10px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-gauge strong { font-size: calc(22px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-gauge small { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-notes { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-theme-options button { font-size: inherit; font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-calc label, :root:is([data-font-size="small"], [data-font-size="large"]) .home-convert label { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-calc :is(select, input), :root:is([data-font-size="small"], [data-font-size="large"]) .home-convert :is(select, input) { font-size: inherit; font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-calc-result { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-calc-result strong { font-size: calc(20px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-convert-result { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-convert-result strong { font-size: calc(15px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-edit-banner { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-notice { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-widget-name { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-widget-tool { font-size: inherit; font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-widget-sizes button { font-size: inherit; font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-add-tile { font-size: inherit; }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-add-tile strong { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-add-tile small { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-drag-ghost strong { font-size: calc(14px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-drag-ghost small { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-empty-layout { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-empty-layout strong { font-size: calc(16px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-catalog-intro { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .payable-modal .home-catalog-search input { font-size: inherit; font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-catalog-modules button { font-size: inherit; font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-catalog-modules button small { font-size: calc(10px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-catalog-copy strong { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-catalog-copy small { font-size: calc(10px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-catalog-copy > span { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .home-footer { font-size: calc(10px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .home-error, :root:is([data-font-size="small"], [data-font-size="large"]) .home-inventory-error { font-size: calc(12px * var(--account-font-scale)); }
 @media (max-width: 1200px) {:root:is([data-font-size="small"], [data-font-size="large"]) .home-calculator > span { font-size: calc(15px * var(--account-font-scale)); } }

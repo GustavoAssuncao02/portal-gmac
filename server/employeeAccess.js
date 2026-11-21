@@ -24,7 +24,7 @@ export async function employeeRecords(pool) {
 }
 
 // Preferences and read marks are not work: they do not stop an employee from being deleted.
-const notActivity = new Set(['employees', 'adminAppearancePreferences', 'adminNotificationPreferences', 'operationalNotifications', 'payableNotifications', 'receivableNotifications'])
+const notActivity = new Set(['employees', 'adminAppearancePreferences', 'adminHomeLayouts', 'adminNotificationPreferences', 'operationalNotifications', 'payableNotifications', 'receivableNotifications'])
 // Ids of the employees that already left a mark: work recorded in an OS, or, for administrative employees, their account
 // (employee-<id>) as the author of any record (bills, receivables, material requests, OS changes).
 export async function employeesWithActivity(pool) {

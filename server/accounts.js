@@ -11,6 +11,7 @@ import { actorOf, recordRegistryChange } from './registryHistory.js'
 import { preRegisteredClientIds } from './sitePreRegistration.js'
 import { blockedMessage, createLoginThrottle } from './loginThrottle.js'
 import { paymentDaysValue } from './clientPaymentTerm.js'
+import { normalizeHomeLayout, validHomeLayout } from './homeWidgets.js'
 
 const sessions = new Map()
 const safe = ({ id, name, birthDate, cpf, email, createdAt, role }) => ({ id, name, birthDate, cpf, email, createdAt, role: role || 'admin' })
@@ -23,6 +24,11 @@ export function notificationSettings(store, userId) {
 export function appearanceSettings(store, userId) {
   const preference = store.adminAppearancePreferences?.find((item) => String(item.userId) === String(userId))
   return { theme: ['dark', 'black'].includes(preference?.theme) ? preference.theme : 'light', fontSize: ['small', 'large'].includes(preference?.fontSize) ? preference.fontSize : 'default', fontFamily: ['system', 'verdana', 'tahoma', 'inter', 'roboto', 'open-sans', 'montserrat', 'source-sans-3'].includes(preference?.fontFamily) ? preference.fontFamily : 'default' }
+}
+// Início personalizado: the layout saved by the account, or the default one while it has none (see homeWidgets.js).
+export function homeLayoutSettings(store, userId, role) {
+  const saved = store.adminHomeLayouts?.find((item) => String(item.userId) === String(userId))
+  return { layout: normalizeHomeLayout(saved ? saved.layout : null, role), customized: Boolean(saved) }
 }
 // Administrator logins last 12 hours and survive a restart of the API: each one is a row of admin_sessions, which keeps
 // only a hash of the token. This process keeps a copy of the open ones (`sessions`, by hash) to check every request
@@ -306,9 +312,11 @@ export function createAccountService(pool, env = process.env) {
       store[kind].splice(index, 1)
       if (current) recordRegistryChange(store, { registry: kind, recordId: id, type: 'deleted', actor: audit.actor, before: registryView(kind, current) })
       if (kind === 'admins' && store.adminNotificationPreferences) store.adminNotificationPreferences = store.adminNotificationPreferences.filter((item) => String(item.userId) !== String(id))
+      if (kind === 'admins' && store.adminHomeLayouts) store.adminHomeLayouts = store.adminHomeLayouts.filter((item) => String(item.userId) !== String(id))
     })
     if (pool && kind === 'admins') await mutateStore((store) => {
       if (store.adminNotificationPreferences) store.adminNotificationPreferences = store.adminNotificationPreferences.filter((item) => String(item.userId) !== String(id))
+      if (store.adminHomeLayouts) store.adminHomeLayouts = store.adminHomeLayouts.filter((item) => String(item.userId) !== String(id))
     })
     if (kind === 'admins') await revokeAccountSessions(id)
     if (pool && current) await recordHistory({ registry: kind, recordId: id, type: 'deleted', actor: audit.actor, before: registryView(kind, current) })
@@ -355,7 +363,22 @@ export function createAccountService(pool, env = process.env) {
       return appearanceSettings(store, id)
     })
   }
-  return { admins, clients, account, accountByCpf, authenticate, updateAccount, setPassword, getNotificationSettings, updateNotificationSettings, getAppearanceSettings, updateAppearanceSettings, save, remove }
+  async function getHomeLayout(id, role) {
+    if (!await account(id)) fail(404, 'Conta não encontrada.')
+    return homeLayoutSettings(await readStore(), id, role)
+  }
+  // `layout: null` goes back to the default home screen (Restaurar padrão).
+  async function updateHomeLayout(id, role, fields) {
+    const layout = fields?.layout
+    if (layout !== null && !validHomeLayout(layout, role)) fail(400, 'Layout do Início inválido. Atualize a página e tente novamente.')
+    if (!await account(id)) fail(404, 'Conta não encontrada.')
+    return mutateStore((store) => {
+      store.adminHomeLayouts = (store.adminHomeLayouts || []).filter((item) => String(item.userId) !== String(id))
+      if (layout !== null) store.adminHomeLayouts.push({ userId: id, layout: layout.map(({ id: widget, w, h }) => ({ id: widget, w, h })), updatedAt: new Date().toISOString() })
+      return homeLayoutSettings(store, id, role)
+    })
+  }
+  return { admins, clients, account, accountByCpf, authenticate, updateAccount, setPassword, getNotificationSettings, updateNotificationSettings, getAppearanceSettings, updateAppearanceSettings, getHomeLayout, updateHomeLayout, save, remove }
 }
 
 export function createAccountsRouter(service) {
@@ -386,6 +409,12 @@ export function createAccountsRouter(service) {
   })
   router.patch('/account/appearance', async (request, response, next) => {
     try { response.json({ settings: await service.updateAppearanceSettings(request.adminId, request.body) }) } catch (error) { next(error) }
+  })
+  router.get('/account/home-layout', async (request, response, next) => {
+    try { response.set('Cache-Control', 'no-store').json(await service.getHomeLayout(request.adminId, request.adminRole)) } catch (error) { next(error) }
+  })
+  router.put('/account/home-layout', async (request, response, next) => {
+    try { response.json(await service.updateHomeLayout(request.adminId, request.adminRole, request.body)) } catch (error) { next(error) }
   })
   // The current password asked in Configurações is a password check too: a session left open (or stolen) could try
   // passwords there. 5 wrong ones per hour for the account, as on the login; saving with the right one clears the count.

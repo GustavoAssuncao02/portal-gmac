@@ -1,76 +1,132 @@
-import { useEffect, useState } from 'react'
-import { ArrowUpRight, Calculator, CalendarClock, CalendarDays, CirclePlay, ClipboardList, CreditCard, FileText, Package, RefreshCw, ShoppingCart, TriangleAlert } from 'lucide-react'
-import { adminFirstName, adminOverview, payableOverview } from './adminOverview.js'
-import { money } from './payablesApi.js'
-import { pollWhileVisible } from './polling.js'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { DndContext, DragOverlay, KeyboardSensor, MeasuringStrategy, MouseSensor, TouchSensor, closestCenter, pointerWithin, useSensor, useSensors } from '@dnd-kit/core'
+import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable } from '@dnd-kit/sortable'
+import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, FileText, GripVertical, MoveVertical, Pencil, Plus, RefreshCw, RotateCcw, Search, Trash2, X } from 'lucide-react'
+import { adminFirstName, adminOverview } from './adminOverview.js'
+import { defaultHomeLayout, homeModules, homeWidget, homeWidgets, widgetAllowed } from '../server/homeWidgets.js'
+import { todayBahia } from '../server/payableRules.js'
+import { useHomeLayout } from './homeLayout.js'
+import { sourceLoaders, useHomeSources } from './homeSources.js'
+import { widgetViews } from './HomeWidgets.jsx'
+import { PayableModal } from './PayableModal.jsx'
+import './payables.css'
 import './adminHome.css'
-import { formatQuantity } from '../server/materialUnits.js'
-import { SortableRows, SortHeader } from './RegistryList.jsx'
 
-const number = (value) => Number(value || 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 })
-const operationLabels = { waiting: 'Aguardando', running: 'Em execução', paused: 'Pausado', stage_done: 'Etapa concluída', finalizing: 'Finalizando' }
-const displayDate = (value) => value ? new Date(value).toLocaleDateString('pt-BR', { timeZone: /^\d{4}-\d{2}-\d{2}$/.test(value) ? 'UTC' : 'America/Bahia' }) : 'Não informado'
+const widthNames = { 1: ['1/4', 'Um quarto da linha'], 2: ['1/2', 'Metade da linha'], 3: ['3/4', 'Três quartos da linha'], 4: ['Inteira', 'A linha inteira'] }
+const moduleName = Object.fromEntries(homeModules)
+const sameLayout = (left, right) => JSON.stringify(left) === JSON.stringify(right)
+// The items do not slide while dragging: the list itself changes order as the pointer passes over another widget.
+const noShift = () => null
+// With the mouse or a finger the widget under the pointer is the target; with the keyboard, the nearest one.
+const collision = (args) => args.pointerCoordinates ? pointerWithin(args) : closestCenter(args)
 
-const homeIcons = { expand: ArrowUpRight, calculator: Calculator, machines: CirclePlay, services: ClipboardList, offers: FileText, stock: Package, reports: RefreshCw, orders: ShoppingCart, info: TriangleAlert, open: CreditCard, overdue: TriangleAlert, today: CalendarDays, upcoming: CalendarClock }
-function Icon({ name }) {
-  const Component = homeIcons[name]
-  return <Component className="icon" aria-hidden="true" strokeWidth={1.7} />
+const moveArrows = { left: { Icon: ChevronLeft, label: 'para a esquerda' }, right: { Icon: ChevronRight, label: 'para a direita' }, up: { Icon: ChevronUp, label: 'para cima' }, down: { Icon: ChevronDown, label: 'para baixo' } }
+// The arrows point where the widget really goes: to the side when its neighbor in the list is on the same row, up or down
+// when the neighbor is on another row (a full-width widget, or any widget on a narrow screen).
+function arrowDirections(grid) {
+  const nodes = [...grid.querySelectorAll(':scope > [data-widget]')]
+  const tops = nodes.map((node) => node.getBoundingClientRect().top)
+  const sameRow = (left, right) => Math.abs(tops[left] - tops[right]) < 4
+  return Object.fromEntries(nodes.map((node, index) => [node.dataset.widget, {
+    before: index > 0 && sameRow(index, index - 1) ? 'left' : 'up',
+    after: index < nodes.length - 1 && sameRow(index, index + 1) ? 'right' : 'down',
+  }]))
+}
+
+function WidgetSlot({ entry, index, count, editing, arrows = { before: 'up', after: 'down' }, onChange, onRemove, onMove, children }) {
+  const item = homeWidget(entry.id)
+  const { setNodeRef, setActivatorNodeRef, attributes, listeners, isDragging } = useSortable({ id: entry.id, disabled: !editing })
+  const content = useRef(null)
+  // While editing, the widget is a block to arrange: its buttons and fields stop responding (and leave the Tab order).
+  useEffect(() => { if (content.current) content.current.inert = editing }, [editing])
+  const className = `home-widget home-widget--w${entry.w} home-widget--h${entry.h}${editing ? ' home-widget--editing' : ''}${isDragging ? ' home-widget--dragging' : ''}`
+  return <div ref={setNodeRef} className={className} data-widget={entry.id} onMouseDown={editing ? listeners?.onMouseDown : undefined} onTouchStart={editing ? listeners?.onTouchStart : undefined}>
+    {editing && <div className="home-widget-toolbar">
+      <button ref={setActivatorNodeRef} className="home-widget-grip" type="button" {...attributes} onKeyDown={listeners?.onKeyDown} aria-label={`Mover ${item.title}: espaço para pegar, setas para levar, espaço para soltar`} title="Arraste para trocar de lugar"><GripVertical className="icon" aria-hidden="true" /></button>
+      <span className="home-widget-name" title={item.title}>{item.title}</span>
+      <span className="home-widget-tools">
+        {[[-1, arrows.before, index === 0], [1, arrows.after, index === count - 1]].map(([step, direction, disabled]) => {
+          const { Icon, label } = moveArrows[direction]
+          return <button type="button" key={step} className="home-widget-tool" disabled={disabled} onClick={() => onMove(step)} aria-label={`Levar ${item.title} ${label}`} title={`Levar ${label}`}><Icon className="icon" aria-hidden="true" /></button>
+        })}
+        {item.widths.length > 1 && <span className="home-widget-sizes" role="group" aria-label={`Largura de ${item.title}`}>{item.widths.map((width) => <button type="button" key={width} aria-pressed={entry.w === width} title={`Largura: ${widthNames[width][1].toLowerCase()}`} onClick={() => onChange({ w: width })}>{widthNames[width][0]}</button>)}</span>}
+        {item.tall && <button type="button" className="home-widget-tool home-widget-tool--text" aria-pressed={entry.h === 2} onClick={() => onChange({ h: entry.h === 2 ? 1 : 2 })} title={entry.h === 2 ? 'Voltar para a altura normal' : 'Altura dupla: mostra mais itens'}><MoveVertical className="icon" aria-hidden="true" />Alto</button>}
+        <button type="button" className="home-widget-tool home-widget-remove" onClick={onRemove} aria-label={`Remover ${item.title}`} title="Remover do Início"><X className="icon" aria-hidden="true" /></button>
+      </span>
+    </div>}
+    <div className="home-widget-content" ref={content}>{children}</div>
+  </div>
+}
+
+function WidgetCatalog({ role, layout, onAdd, onRemove, onClose }) {
+  const [module, setModule] = useState('all')
+  const [search, setSearch] = useState('')
+  const placed = new Set(layout.map((entry) => entry.id))
+  const available = homeWidgets.filter((item) => widgetAllowed(item, role))
+  const plain = (value) => String(value).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+  const query = plain(search.trim())
+  const shown = available.filter((item) => (module === 'all' || item.module === module) && (!query || plain(`${item.title} ${item.description} ${moduleName[item.module]}`).includes(query)))
+  const modules = homeModules.filter(([key]) => available.some((item) => item.module === key))
+  return <PayableModal title="Adicionar widgets" className="home-catalog-modal" onClose={onClose} footer={<button className="admin-tool-button admin-tool-button--primary" type="button" onClick={onClose}>Concluir</button>}>
+    <p className="home-catalog-intro">Escolha o que aparece no seu Início. Os widgets entram no fim da tela; depois é só arrastar para o lugar certo.</p>
+    <div className="home-catalog-tools">
+      <label className="home-catalog-search"><Search className="icon" aria-hidden="true" /><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar widget" aria-label="Buscar widget" /></label>
+      <div className="home-catalog-modules" role="group" aria-label="Módulo do sistema">{[['all', 'Todos'], ...modules].map(([key, label]) => <button type="button" key={key} aria-pressed={module === key} onClick={() => setModule(key)}>{label}<small>{key === 'all' ? available.length : available.filter((item) => item.module === key).length}</small></button>)}</div>
+    </div>
+    <ul className="home-catalog-list">{shown.map((item) => {
+      const Icon = widgetViews[item.id].icon || FileText
+      const added = placed.has(item.id)
+      return <li key={item.id} className={added ? 'home-catalog-item home-catalog-item--added' : 'home-catalog-item'}>
+        <span className="home-catalog-icon"><Icon className="icon" aria-hidden="true" strokeWidth={1.7} /></span>
+        <span className="home-catalog-copy"><strong>{item.title}</strong><small>{moduleName[item.module]}{item.finance ? ' · Financeiro' : ''}</small><span>{item.description}</span></span>
+        {added ? <button type="button" className="admin-tool-button home-catalog-action" onClick={() => onRemove(item.id)} aria-label={`Remover ${item.title}`}><Check className="icon" aria-hidden="true" />No Início</button>
+          : <button type="button" className="admin-tool-button admin-tool-button--primary home-catalog-action" onClick={() => onAdd(item)} aria-label={`Adicionar ${item.title}`}><Plus className="icon" aria-hidden="true" />Adicionar</button>}
+      </li>
+    })}</ul>
+    {!shown.length && <p className="home-card-empty">Nenhum widget encontrado.</p>}
+  </PayableModal>
 }
 
 export default function AdminHome({ user, orders, offers, workflowError, workflowLoading, onRefresh, onNavigate, onSelectOrder, onOpenPayables, loadPayables, loadInventory, Sidebar, WorkspaceTabs, navigationProps }) {
-  const [inventory, setInventory] = useState([])
-  const [inventoryLoading, setInventoryLoading] = useState(true)
-  const [inventoryError, setInventoryError] = useState('')
+  const role = user?.role
+  const home = useHomeLayout(user)
+  // `draft`: the layout being edited (null when not editing). Nothing reaches the server until "Salvar".
+  const [draft, setDraft] = useState(null)
+  const editing = draft !== null
+  const layout = editing ? draft : home.layout
+  const [catalogOpen, setCatalogOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [editError, setEditError] = useState('')
+  const [notice, setNotice] = useState('')
   const [refreshing, setRefreshing] = useState(false)
   const [retry, setRetry] = useState(0)
   const [now, setNow] = useState(Date.now())
-  const [payables, setPayables] = useState(null)
-  const [payablesLoading, setPayablesLoading] = useState(true)
-  const [payablesError, setPayablesError] = useState('')
-  useEffect(() => {
-    if (!loadPayables) return undefined
-    const controller = new AbortController()
-    let fetching = false
-    async function load() {
-      if (fetching) return
-      fetching = true
-      try {
-        const result = await loadPayables(controller.signal)
-        if (!controller.signal.aborted) { setPayables(result.items); setPayablesError(''); setNow(Date.now()) }
-      } catch {
-        if (!controller.signal.aborted) setPayablesError('Não foi possível atualizar os resumos de contas a pagar.')
-      } finally {
-        fetching = false
-        if (!controller.signal.aborted) setPayablesLoading(false)
-      }
-    }
-    load()
-    const stopPolling = pollWhileVisible(load, 30000, ['data', 'finance'])
-    return () => { controller.abort(); stopPolling() }
-  }, [retry, loadPayables])
-  useEffect(() => {
-    const controller = new AbortController()
-    let fetching = false
-    async function load() {
-      if (fetching) return
-      fetching = true
-      try {
-        const result = await loadInventory(controller.signal)
-        if (!controller.signal.aborted) { setInventory(result.items); setInventoryError('') }
-      } catch (error) {
-        if (!controller.signal.aborted) setInventoryError('Não foi possível atualizar o estoque. Exibindo os últimos dados disponíveis.')
-      } finally {
-        fetching = false
-        if (!controller.signal.aborted) setInventoryLoading(false)
-      }
-    }
-    load()
-    const stopPolling = pollWhileVisible(() => { setNow(Date.now()); load() }, 60000, ['data', 'finance'])
-    return () => { controller.abort(); stopPolling() }
-  }, [retry, loadInventory])
-  const summary = adminOverview(orders, offers, inventory, now)
-  const payableSummary = payableOverview(payables || [], now)
+  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 60000); return () => window.clearInterval(timer) }, [])
+  useEffect(() => { if (!notice) return undefined; const timer = window.setTimeout(() => setNotice(''), 4000); return () => window.clearTimeout(timer) }, [notice])
+  const loaders = useMemo(() => sourceLoaders({ loadPayables, loadInventory }), [loadPayables, loadInventory])
+  const needed = useMemo(() => new Set(layout.flatMap((entry) => widgetViews[entry.id]?.sources || [])), [layout])
+  const sources = useHomeSources(loaders, needed, retry)
+  const summary = adminOverview(orders, offers, sources.inventory.data || [], now)
   const today = new Date(now).toLocaleDateString('pt-BR', { timeZone: 'America/Bahia', day: 'numeric', month: 'long', year: 'numeric' })
+  const ctx = { user, staff: role === 'staff', orders, offers, summary, sources, workflowLoading, workflowError, now, today: todayBahia(new Date(now)), onNavigate, onSelectOrder, onOpenPayables, retry: () => setRetry((value) => value + 1) }
+
+  const sensors = useSensors(useSensor(MouseSensor, { activationConstraint: { distance: 6 } }), useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }))
+  const [activeId, setActiveId] = useState(null)
+  const before = useRef(null), lastOver = useRef(null)
+  function dragStart({ active }) { setActiveId(active.id); before.current = draft; lastOver.current = active.id }
+  // Passing over a widget takes its place at once. The same widget does not swap again until the pointer has left it,
+  // so a large widget that moved under the pointer does not bounce back and forth.
+  function dragOver({ active, over }) {
+    if (!over || over.id === lastOver.current) return
+    lastOver.current = over.id
+    if (over.id === active.id) return
+    setDraft((current) => {
+      const from = current.findIndex((entry) => entry.id === active.id), to = current.findIndex((entry) => entry.id === over.id)
+      return from < 0 || to < 0 || from === to ? current : arrayMove(current, from, to)
+    })
+  }
+  function dragEnd() { setActiveId(null); before.current = null }
+  function dragCancel() { setActiveId(null); if (before.current) setDraft(before.current); before.current = null }
 
   async function refresh() {
     if (refreshing) return
@@ -80,38 +136,74 @@ export default function AdminHome({ user, orders, offers, workflowError, workflo
     try { await onRefresh() } catch { /* Workflow errors are displayed by the parent. */ }
     finally { setRefreshing(false) }
   }
-  const pending = [
-    { icon: 'orders', label: 'Pedidos de material', count: summary.purchaseRequests, action: () => onNavigate('Pedidos'), tone: 'blue' },
-    { icon: 'services', label: 'OS concluídas aguardando confirmação', count: summary.unacknowledged, action: () => onNavigate('Serviços em andamento'), tone: 'green' },
-  ]
-  return <div className="dashboard-shell admin-home-shell">
+  function startEditing() { setDraft(home.layout.map((entry) => ({ ...entry }))); setEditError(''); setNotice('') }
+  function cancelEditing() { if (saving) return; setDraft(null); setCatalogOpen(false); setEditError('') }
+  const change = (id, fields) => setDraft((current) => current.map((entry) => entry.id === id ? { ...entry, ...fields } : entry))
+  const remove = (id) => setDraft((current) => current.filter((entry) => entry.id !== id))
+  const move = (id, step) => setDraft((current) => { const from = current.findIndex((entry) => entry.id === id), to = from + step; return to < 0 || to >= current.length ? current : arrayMove(current, from, to) })
+  const add = (item) => setDraft((current) => current.some((entry) => entry.id === item.id) ? current : [...current, { id: item.id, w: item.w, h: item.h }])
+  async function save() {
+    if (saving) return
+    setSaving(true); setEditError('')
+    try {
+      // The default layout is saved as "nothing customized": a later improvement of the default reaches this account too.
+      await home.save(sameLayout(draft, defaultHomeLayout(role)) ? null : draft)
+      setDraft(null); setCatalogOpen(false); setNotice('Início salvo. Ele aparece assim em qualquer computador em que você entrar.')
+    } catch (caught) { setEditError(caught.message) }
+    finally { setSaving(false) }
+  }
+  // Measured after each change of the layout and whenever the grid changes size (window, menu, font).
+  const gridRef = useRef(null)
+  const [arrows, setArrows] = useState({})
+  useLayoutEffect(() => {
+    const grid = gridRef.current
+    if (!editing || !grid) return undefined
+    const measure = () => { const next = arrowDirections(grid); setArrows((current) => sameLayout(current, next) ? current : next) }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(grid)
+    return () => observer.disconnect()
+  }, [editing, draft])
+  const changed = editing && !sameLayout(draft, home.layout)
+  const activeItem = activeId ? homeWidget(activeId) : null
+  const ActiveIcon = activeItem ? widgetViews[activeItem.id]?.icon : null
+
+  return <div className={`dashboard-shell admin-home-shell${editing ? ' admin-home-shell--editing' : ''}`}>
     <Sidebar {...navigationProps} onNavigate={onNavigate} />
     <main className="admin-home-main">
       <WorkspaceTabs {...navigationProps} onNavigate={onNavigate} />
-      <header className="home-heading"><div><span className="home-eyebrow">GMAC Metalúrgica <span>/</span> Início</span><h1>Bem-vindo, {adminFirstName(user?.name)}</h1><p>{today}</p></div><div className="home-heading-actions"><button className="home-button" type="button" onClick={refresh} disabled={refreshing} title="Atualizar resumos"><Icon name="reports" />{refreshing ? 'Atualizando...' : 'Atualizar'}</button><button className="home-button home-button--primary" type="button" onClick={() => onNavigate('Ofertas e serviços')}><Icon name="offers" />Ofertas e serviços</button></div></header>
+      <header className="home-heading"><div><span className="home-eyebrow">GMAC Metalúrgica <span>/</span> Início</span><h1>Bem-vindo, {adminFirstName(user?.name)}</h1><p>{today}</p></div>
+        <div className="home-heading-actions">{editing ? <>
+          <button className="home-button" type="button" onClick={() => setCatalogOpen(true)} disabled={saving}><Plus className="icon" aria-hidden="true" />Adicionar widget</button>
+          <button className="home-button" type="button" onClick={() => setDraft(defaultHomeLayout(role))} disabled={saving || sameLayout(draft, defaultHomeLayout(role))} title="Voltar para o Início padrão do portal"><RotateCcw className="icon" aria-hidden="true" />Restaurar padrão</button>
+          <button className="home-button home-button--danger" type="button" onClick={() => setDraft([])} disabled={saving || !draft.length} title="Tirar todos os widgets do Início (Cancelar desfaz)"><Trash2 className="icon" aria-hidden="true" />Remover todos</button>
+          <button className="home-button" type="button" onClick={cancelEditing} disabled={saving}><X className="icon" aria-hidden="true" />Cancelar</button>
+          <button className="home-button home-button--primary" type="button" onClick={save} disabled={saving || !changed}><Check className="icon" aria-hidden="true" />{saving ? 'Salvando...' : 'Salvar'}</button>
+        </> : <>
+          <button className="home-button" type="button" onClick={refresh} disabled={refreshing} title="Atualizar resumos"><RefreshCw className="icon" aria-hidden="true" strokeWidth={1.7} />{refreshing ? 'Atualizando...' : 'Atualizar'}</button>
+          <button className="home-button" type="button" onClick={startEditing} title="Escolher, arrumar e redimensionar os widgets do seu Início"><Pencil className="icon" aria-hidden="true" strokeWidth={1.7} />Editar início</button>
+          <button className="home-button home-button--primary" type="button" onClick={() => onNavigate('Ofertas e serviços')}><FileText className="icon" aria-hidden="true" strokeWidth={1.7} />Ofertas e serviços</button>
+        </>}</div>
+      </header>
+      {editing && <p className="home-edit-banner" role="status"><Pencil className="icon" aria-hidden="true" /><span><strong>Editando o seu Início.</strong> Arraste os widgets para trocar de lugar (no celular, toque e segure), escolha a largura, deixe alto ou remova. Só você vê estas mudanças.</span></p>}
+      {editError && <p className="home-error" role="alert">{editError}</p>}
+      {notice && <p className="home-notice" role="status">{notice}</p>}
       {workflowError && <p className="home-error" role="alert">{workflowError}</p>}
-      <section className="home-metrics" aria-label="Resumo da operação">{[
-        ['OS em aberto', summary.openOrders.length, 'services', 'blue'], ['Em execução', summary.running, 'machines', 'green'], ['OS atrasadas', summary.late, 'info', 'red'], ['Ofertas em análise', summary.reviewing, 'offers', 'amber'],
-      ].map(([label, value, icon, tone]) => <div className={`home-metric home-metric--${tone}`} key={label}><span className="home-metric-icon"><Icon name={icon} /></span><div><span>{label}</span><strong>{workflowLoading ? '—' : number(value)}</strong></div></div>)}</section>
-      {loadPayables && <section className="home-payables" aria-labelledby="home-payables-title">
-        <div className="home-section-heading"><h2 id="home-payables-title">Contas a pagar</h2><button className="home-text-button" type="button" onClick={() => onOpenPayables({})}>Ver contas<Icon name="expand" /></button></div>
-        <div className="home-payables-metrics">{payableSummary.map((item) => <button className={`home-payable home-payable--${item.key}`} key={item.key} type="button" disabled={payablesLoading} onClick={() => onOpenPayables(item.filters)}>
-          <span className="home-payable-heading"><Icon name={item.key} /><span>{item.label}</span><Icon name="expand" /></span>
-          <strong>{payables === null ? '—' : money(item.valueCents)}</strong><small>{payablesLoading ? 'Carregando...' : payables === null ? 'Indisponível' : `${number(item.count)} ${item.count === 1 ? 'conta' : 'contas'}${payablesError ? ' · Dados não atualizados' : ''}`}</small>
-        </button>)}</div>
-        {payablesError && <p className="home-error home-payables-error" role="alert">{payablesError}<button className="home-text-button" type="button" onClick={() => setRetry((value) => value + 1)}>Tentar novamente<Icon name="reports" /></button></p>}
-      </section>}
-      <div className="home-workspace"><section className="home-orders" aria-labelledby="home-orders-title"><div className="home-section-heading"><div><h2 id="home-orders-title">OS em aberto</h2><span>{workflowLoading ? 'Carregando...' : `${summary.openOrders.length} ${summary.openOrders.length === 1 ? 'ordem de serviço' : 'ordens de serviço'}`}</span></div><button className="home-text-button" type="button" onClick={() => onNavigate('Serviços em andamento')}>Ver todas<Icon name="expand" /></button></div>
-        <div className="home-orders-scroll"><SortableRows rows={summary.openOrders.slice(0, 6)} columns={[{ key: "OS / Projeto", label: "OS / Projeto", value: (order) => order.service }, { key: "Prazo de entrega", label: "Prazo de entrega", value: (order) => order.deliveryTimestamp, numeric: true }, { key: "Tempo restante", label: "Tempo restante", value: (order) => order.deliveryTimestamp, numeric: true }, { key: "Status", label: "Status", value: (order) => order.due.label }]}>{(sorted) => <table><thead><tr><SortHeader column={sorted.columns[0]} list={sorted} /><SortHeader column={sorted.columns[1]} list={sorted} /><SortHeader column={sorted.columns[2]} list={sorted} /><SortHeader column={sorted.columns[3]} list={sorted} /></tr></thead><tbody>{!workflowLoading && sorted.rows.map((order) => <tr key={order.code}><td data-label="OS / Projeto"><button className="home-order-link" type="button" onClick={() => onSelectOrder(order.code)}><strong>{order.service}</strong><span>{order.code} <span aria-hidden="true">·</span> {order.company}</span></button></td><td data-label="Prazo de entrega">{Number.isFinite(order.deliveryTimestamp) ? displayDate(order.deliveryDeadline) : 'Não informado'}</td><td data-label="Tempo restante" className={order.due.key === 'late' ? 'home-overdue' : ''}>{order.due.remaining}</td><td data-label="Status"><span className={`home-due home-due--${order.due.key}`}>{order.due.label}</span><small className="home-operation-state">{operationLabels[order.operation?.status] || 'Aguardando'}</small></td></tr>)}</tbody></table>}</SortableRows></div>
-        {workflowLoading ? <p className="home-empty" role="status">Carregando ordens de serviço...</p> : !summary.openOrders.length && <p className="home-empty">{workflowError ? 'Ordens de serviço indisponíveis no momento.' : 'Nenhuma OS em aberto.'}</p>}
-        {summary.openOrders.length > 6 && <button className="home-more-orders" type="button" onClick={() => onNavigate('Serviços em andamento')}>Ver mais {number(summary.openOrders.length - 6)} ordens de serviço<Icon name="expand" /></button>}
-      </section>
-      <aside className="home-side"><button className="home-stock-widget" type="button" onClick={() => onNavigate('Estoque')} aria-label="Abrir estoque baixo"><span className="home-stock-title"><span className="home-stock-icon"><Icon name="stock" /></span><span><strong>Estoque baixo</strong><small>{inventoryLoading ? 'Carregando...' : `${summary.lowStock.length} ${summary.lowStock.length === 1 ? 'material' : 'materiais'}`}</small></span><Icon name="expand" /></span><span className="home-stock-list">{!inventoryLoading && (summary.lowStock.length ? summary.lowStock.slice(0, 3).map((item) => <span className="home-stock-item" key={item.id}><span><strong>{item.name}</strong><small>Mínimo: {formatQuantity(item.minimum, item.unit)}</small></span><b className={Number(item.quantity) <= 0 ? 'home-stock-zero' : ''}>{formatQuantity(item.quantity, item.unit)}</b></span>) : <span className="home-stock-empty">Nenhum material abaixo do mínimo.</span>)}</span><span className="home-stock-footer"><span>Ver estoque</span><small>{inventoryError ? 'Dados não atualizados' : 'Disponibilidade atual'}</small></span></button>
-        {inventoryError && <p className="home-inventory-error" role="alert">{inventoryError}</p>}
-        <button className="home-calculator" type="button" onClick={() => onNavigate('Calculadora de pesos e medidas')}><Icon name="calculator" /><span>Calculadora de<br />pesos e medidas</span><Icon name="expand" /></button>
-      </aside></div>
-      <section className="home-attention" aria-labelledby="home-attention-title"><div className="home-section-heading"><h2 id="home-attention-title">Atenção da gestão</h2></div><div className="home-attention-items">{pending.map((item) => <button className={`home-attention-item home-attention-item--${item.tone}`} type="button" onClick={item.action} key={item.label}><Icon name={item.icon} /><span>{item.label}</span><strong>{workflowLoading ? '—' : number(item.count)}</strong><Icon name="expand" /></button>)}</div></section>
+      <DndContext sensors={sensors} collisionDetection={collision} measuring={{ droppable: { strategy: MeasuringStrategy.Always } }} onDragStart={dragStart} onDragOver={dragOver} onDragEnd={dragEnd} onDragCancel={dragCancel}>
+        <SortableContext items={layout.map((entry) => entry.id)} strategy={noShift}>
+          <div ref={gridRef} className={`home-grid${editing ? ' home-grid--editing' : ''}`}>
+            {layout.map((entry, index) => {
+              const View = widgetViews[entry.id].Component
+              return <WidgetSlot key={entry.id} entry={entry} index={index} count={layout.length} editing={editing} arrows={arrows[entry.id]} onChange={(fields) => change(entry.id, fields)} onRemove={() => remove(entry.id)} onMove={(step) => move(entry.id, step)}><View ctx={ctx} size={entry} /></WidgetSlot>
+            })}
+            {editing && <button className="home-add-tile" type="button" onClick={() => setCatalogOpen(true)}><Plus className="icon" aria-hidden="true" /><strong>Adicionar widget</strong><small>Operação, financeiro, estoque, cadastros e mais</small></button>}
+          </div>
+        </SortableContext>
+        <DragOverlay dropAnimation={null}>{activeItem && <div className="home-drag-ghost">{ActiveIcon && <ActiveIcon className="icon" aria-hidden="true" />}<strong>{activeItem.title}</strong><small>Solte onde quiser</small></div>}</DragOverlay>
+      </DndContext>
+      {!layout.length && !editing && <div className="home-empty-layout"><strong>Seu Início está vazio.</strong><span>Clique em "Editar início" para escolher os widgets que você quer ver aqui.</span><button className="home-button home-button--primary" type="button" onClick={startEditing}><Pencil className="icon" aria-hidden="true" />Editar início</button></div>}
       <footer className="home-footer"><span><span className="home-live-dot" />Visão da operação</span><span>{workflowLoading ? 'Carregando dados' : workflowError ? 'Atualização indisponível' : `Consultado às ${new Date(now).toLocaleTimeString('pt-BR', { timeZone: 'America/Bahia', hour: '2-digit', minute: '2-digit' })}`}</span></footer>
+      {catalogOpen && editing && <WidgetCatalog role={role} layout={draft} onAdd={add} onRemove={remove} onClose={() => setCatalogOpen(false)} />}
     </main>
   </div>
 }

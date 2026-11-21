@@ -1,6 +1,13 @@
 // Each commit to main is a new version: add an entry at the top, with what changed in plain words for whoever uses the portal.
 export const releaseNotes = [
   {
+    version: '1.0.19',
+    date: '2026-11-21',
+    notes: [
+      'Início: nova tela personalizável, cada usuário escolhe, arruma e redimensiona os seus widgets',
+    ],
+  },
+  {
     version: '1.0.18',
     date: '2026-11-18',
     notes: [
