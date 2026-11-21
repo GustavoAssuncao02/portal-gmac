@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { DndContext, DragOverlay, KeyboardSensor, MeasuringStrategy, MouseSensor, TouchSensor, closestCenter, pointerWithin, useSensor, useSensors } from '@dnd-kit/core'
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable } from '@dnd-kit/sortable'
 import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, FileText, GripVertical, MoveVertical, Pencil, Plus, RefreshCw, RotateCcw, Search, Trash2, X } from 'lucide-react'
@@ -50,7 +50,7 @@ function WidgetSlot({ entry, index, count, editing, arrows = { before: 'up', aft
           return <button type="button" key={step} className="home-widget-tool" disabled={disabled} onClick={() => onMove(step)} aria-label={`Levar ${item.title} ${label}`} title={`Levar ${label}`}><Icon className="icon" aria-hidden="true" /></button>
         })}
         {item.widths.length > 1 && <span className="home-widget-sizes" role="group" aria-label={`Largura de ${item.title}`}>{item.widths.map((width) => <button type="button" key={width} aria-pressed={entry.w === width} title={`Largura: ${widthNames[width][1].toLowerCase()}`} onClick={() => onChange({ w: width })}>{widthNames[width][0]}</button>)}</span>}
-        {item.tall && <button type="button" className="home-widget-tool home-widget-tool--text" aria-pressed={entry.h === 2} onClick={() => onChange({ h: entry.h === 2 ? 1 : 2 })} title={entry.h === 2 ? 'Voltar para a altura normal' : 'Altura dupla: mostra mais itens'}><MoveVertical className="icon" aria-hidden="true" />Alto</button>}
+        {item.tall && <button type="button" className="home-widget-tool home-widget-tool--text" aria-pressed={entry.h === 2} onClick={() => onChange({ h: entry.h === 2 ? 1 : 2 })} title={entry.h === 2 ? 'Voltar para a altura normal' : 'Altura dupla: mostra mais itens'}><MoveVertical className="icon" aria-hidden="true" /><span>Alto</span></button>}
         <button type="button" className="home-widget-tool home-widget-remove" onClick={onRemove} aria-label={`Remover ${item.title}`} title="Remover do Início"><X className="icon" aria-hidden="true" /></button>
       </span>
     </div>}
@@ -79,8 +79,8 @@ function WidgetCatalog({ role, layout, onAdd, onRemove, onClose }) {
       return <li key={item.id} className={added ? 'home-catalog-item home-catalog-item--added' : 'home-catalog-item'}>
         <span className="home-catalog-icon"><Icon className="icon" aria-hidden="true" strokeWidth={1.7} /></span>
         <span className="home-catalog-copy"><strong>{item.title}</strong><small>{moduleName[item.module]}{item.finance ? ' · Financeiro' : ''}</small><span>{item.description}</span></span>
-        {added ? <button type="button" className="admin-tool-button home-catalog-action" onClick={() => onRemove(item.id)} aria-label={`Remover ${item.title}`}><Check className="icon" aria-hidden="true" />No Início</button>
-          : <button type="button" className="admin-tool-button admin-tool-button--primary home-catalog-action" onClick={() => onAdd(item)} aria-label={`Adicionar ${item.title}`}><Plus className="icon" aria-hidden="true" />Adicionar</button>}
+        {added ? <button key="added" type="button" className="admin-tool-button home-catalog-action" onClick={() => onRemove(item.id)} aria-label={`Remover ${item.title}`}><Check className="icon" aria-hidden="true" /><span>No Início</span></button>
+          : <button key="add" type="button" className="admin-tool-button admin-tool-button--primary home-catalog-action" onClick={() => onAdd(item)} aria-label={`Adicionar ${item.title}`}><Plus className="icon" aria-hidden="true" /><span>Adicionar</span></button>}
       </li>
     })}</ul>
     {!shown.length && <p className="home-card-empty">Nenhum widget encontrado.</p>}
@@ -173,17 +173,17 @@ export default function AdminHome({ user, orders, offers, workflowError, workflo
     <main className="admin-home-main">
       <WorkspaceTabs {...navigationProps} onNavigate={onNavigate} />
       <header className="home-heading"><div><span className="home-eyebrow">GMAC Metalúrgica <span>/</span> Início</span><h1>Bem-vindo, {adminFirstName(user?.name)}</h1><p>{today}</p></div>
-        <div className="home-heading-actions">{editing ? <>
-          <button className="home-button" type="button" onClick={() => setCatalogOpen(true)} disabled={saving}><Plus className="icon" aria-hidden="true" />Adicionar widget</button>
-          <button className="home-button" type="button" onClick={() => setDraft(defaultHomeLayout(role))} disabled={saving || sameLayout(draft, defaultHomeLayout(role))} title="Voltar para o Início padrão do portal"><RotateCcw className="icon" aria-hidden="true" />Restaurar padrão</button>
-          <button className="home-button home-button--danger" type="button" onClick={() => setDraft([])} disabled={saving || !draft.length} title="Tirar todos os widgets do Início (Cancelar desfaz)"><Trash2 className="icon" aria-hidden="true" />Remover todos</button>
-          <button className="home-button" type="button" onClick={cancelEditing} disabled={saving}><X className="icon" aria-hidden="true" />Cancelar</button>
-          <button className="home-button home-button--primary" type="button" onClick={save} disabled={saving || !changed}><Check className="icon" aria-hidden="true" />{saving ? 'Salvando...' : 'Salvar'}</button>
-        </> : <>
-          <button className="home-button" type="button" onClick={refresh} disabled={refreshing} title="Atualizar resumos"><RefreshCw className="icon" aria-hidden="true" strokeWidth={1.7} />{refreshing ? 'Atualizando...' : 'Atualizar'}</button>
-          <button className="home-button" type="button" onClick={startEditing} title="Escolher, arrumar e redimensionar os widgets do seu Início"><Pencil className="icon" aria-hidden="true" strokeWidth={1.7} />Editar início</button>
-          <button className="home-button home-button--primary" type="button" onClick={() => onNavigate('Ofertas e serviços')}><FileText className="icon" aria-hidden="true" strokeWidth={1.7} />Ofertas e serviços</button>
-        </>}</div>
+        <div className="home-heading-actions">{editing ? <Fragment key="edit">
+          <button className="home-button" type="button" onClick={() => setCatalogOpen(true)} disabled={saving}><Plus className="icon" aria-hidden="true" /><span>Adicionar widget</span></button>
+          <button className="home-button" type="button" onClick={() => setDraft(defaultHomeLayout(role))} disabled={saving || sameLayout(draft, defaultHomeLayout(role))} title="Voltar para o Início padrão do portal"><RotateCcw className="icon" aria-hidden="true" /><span>Restaurar padrão</span></button>
+          <button className="home-button home-button--danger" type="button" onClick={() => setDraft([])} disabled={saving || !draft.length} title="Tirar todos os widgets do Início (Cancelar desfaz)"><Trash2 className="icon" aria-hidden="true" /><span>Remover todos</span></button>
+          <button className="home-button" type="button" onClick={cancelEditing} disabled={saving}><X className="icon" aria-hidden="true" /><span>Cancelar</span></button>
+          <button className="home-button home-button--primary" type="button" onClick={save} disabled={saving || !changed}><Check className="icon" aria-hidden="true" /><span>{saving ? 'Salvando...' : 'Salvar'}</span></button>
+        </Fragment> : <Fragment key="view">
+          <button className="home-button" type="button" onClick={refresh} disabled={refreshing} title="Atualizar resumos"><RefreshCw className="icon" aria-hidden="true" strokeWidth={1.7} /><span>{refreshing ? 'Atualizando...' : 'Atualizar'}</span></button>
+          <button className="home-button" type="button" onClick={startEditing} title="Escolher, arrumar e redimensionar os widgets do seu Início"><Pencil className="icon" aria-hidden="true" strokeWidth={1.7} /><span>Editar início</span></button>
+          <button className="home-button home-button--primary" type="button" onClick={() => onNavigate('Ofertas e serviços')}><FileText className="icon" aria-hidden="true" strokeWidth={1.7} /><span>Ofertas e serviços</span></button>
+        </Fragment>}</div>
       </header>
       {editing && <p className="home-edit-banner" role="status"><Pencil className="icon" aria-hidden="true" /><span><strong>Editando o seu Início.</strong> Arraste os widgets para trocar de lugar (no celular, toque e segure), escolha a largura, deixe alto ou remova. Só você vê estas mudanças.</span></p>}
       {editError && <p className="home-error" role="alert">{editError}</p>}
@@ -201,7 +201,7 @@ export default function AdminHome({ user, orders, offers, workflowError, workflo
         </SortableContext>
         <DragOverlay dropAnimation={null}>{activeItem && <div className="home-drag-ghost">{ActiveIcon && <ActiveIcon className="icon" aria-hidden="true" />}<strong>{activeItem.title}</strong><small>Solte onde quiser</small></div>}</DragOverlay>
       </DndContext>
-      {!layout.length && !editing && <div className="home-empty-layout"><strong>Seu Início está vazio.</strong><span>Clique em "Editar início" para escolher os widgets que você quer ver aqui.</span><button className="home-button home-button--primary" type="button" onClick={startEditing}><Pencil className="icon" aria-hidden="true" />Editar início</button></div>}
+      {!layout.length && !editing && <div className="home-empty-layout"><strong>Seu Início está vazio.</strong><span>Clique em "Editar início" para escolher os widgets que você quer ver aqui.</span><button className="home-button home-button--primary" type="button" onClick={startEditing}><Pencil className="icon" aria-hidden="true" /><span>Editar início</span></button></div>}
       <footer className="home-footer"><span><span className="home-live-dot" />Visão da operação</span><span>{workflowLoading ? 'Carregando dados' : workflowError ? 'Atualização indisponível' : `Consultado às ${new Date(now).toLocaleTimeString('pt-BR', { timeZone: 'America/Bahia', hour: '2-digit', minute: '2-digit' })}`}</span></footer>
       {catalogOpen && editing && <WidgetCatalog role={role} layout={draft} onAdd={add} onRemove={remove} onClose={() => setCatalogOpen(false)} />}
     </main>
