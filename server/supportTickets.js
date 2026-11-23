@@ -41,44 +41,87 @@ function ticketView(ticket, viewer) {
   return { ...rest, ...ticketPlace(ticket.module, ticket.submodule), own, comments, attachments: files ? ticket.attachments || [] : [], attachmentCount: (ticket.attachments || []).length, attachmentsLocked: !files && (ticket.attachments || []).length > 0, ...(viewer.developer ? { email: email || null } : {}) }
 }
 
-function ticketMail(ticket, recipients) {
+// The e-mails of the tickets are read first on the phone, where only the subject and the start of the text show: the
+// subject begins with what happened and the urgency (the same colors of the Ticket screen), the text begins with the
+// subject of the ticket and, in a reply, the reply itself; who wrote comes after.
+const urgencyMarks = {
+  high: { dot: '🔴', word: 'alta', color: '#c5221f', background: '#fce8e6' },
+  medium: { dot: '🟠', word: 'média', color: '#b45309', background: '#fff4e5' },
+  low: { dot: '🔵', word: 'baixa', color: '#1a5ea0', background: '#e8f1fc' },
+}
+const urgencyMark = (key) => urgencyMarks[key] || urgencyMarks.low
+const urgencyText = (key) => `${urgencyMark(key).dot} Urgência ${urgencyMark(key).word}`
+const kinds = {
+  opened: { label: 'Novo ticket', color: '#1f7a45', background: '#e6f4ec' },
+  reply: { label: 'Nova resposta', color: '#0c4c91', background: '#e8f1fc' },
+  support: { label: 'Resposta do suporte', color: '#5b3a9e', background: '#f0ebfa' },
+}
+const shortText = (value, limit = 160) => { const text = String(value ?? '').replace(/\s+/g, ' ').trim(); return text.length > limit ? `${text.slice(0, limit - 1)}…` : text }
+
+function ticketEmail({ kind, ticket, preview, facts, messageLabel, message, greeting = '', closing }) {
+  const type = kinds[kind], urgency = urgencyMark(ticket.urgency)
+  const text = [preview, '', greeting, `${type.label} · ${ticket.id}`, ticket.title, '', ...facts.map(([label, value]) => `${label}: ${value}`), '', `${messageLabel}:`, message, '', closing].filter((line, index, all) => line !== '' || all[index - 1] !== '').join('\n').trim()
+  const cell = 'font-family:Arial,Helvetica,sans-serif'
+  const pill = (label, color, background) => `<span style="display:inline-block;padding:4px 10px;border-radius:999px;background:${background};color:${color};font-size:12px;font-weight:bold;letter-spacing:.3px">${label}</span>`
+  const html = `<div style="display:none;max-height:0;overflow:hidden;mso-hide:all">${escapeHtml(preview)}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f6fa;padding:20px 0"><tr><td align="center">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border:1px solid #dbe3ec;border-radius:10px">
+<tr><td style="${cell};padding:18px 22px 6px">${pill(type.label.toUpperCase(), type.color, type.background)}&nbsp;${pill(`${urgency.dot} Urgência ${urgency.word}`, urgency.color, urgency.background)}</td></tr>
+${greeting ? `<tr><td style="${cell};padding:10px 22px 0;color:#33475b;font-size:14px">${escapeHtml(greeting)}</td></tr>` : ''}
+<tr><td style="${cell};padding:10px 22px 4px;color:#5b6f86;font-size:13px;font-weight:bold">${escapeHtml(ticket.id)}</td></tr>
+<tr><td style="${cell};padding:0 22px 14px;color:#12345a;font-size:20px;font-weight:bold;line-height:1.3">${escapeHtml(ticket.title)}</td></tr>
+<tr><td style="padding:0 22px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #e3e9f0">${facts.map(([label, value]) => `<tr><td style="${cell};padding:7px 12px 7px 0;color:#5b6f86;font-size:13px;width:130px;vertical-align:top">${escapeHtml(label)}</td><td style="${cell};padding:7px 0;color:#1d2f44;font-size:13px;font-weight:bold">${escapeHtml(value)}</td></tr>`).join('')}</table></td></tr>
+<tr><td style="${cell};padding:16px 22px 6px;color:#5b6f86;font-size:12px;font-weight:bold;letter-spacing:.4px">${escapeHtml(messageLabel.toUpperCase())}</td></tr>
+<tr><td style="padding:0 22px 4px"><div style="${cell};white-space:pre-wrap;padding:12px 14px;border-left:4px solid ${type.color};background:#f6f9fc;color:#1d2f44;font-size:14px;line-height:1.5">${escapeHtml(message)}</div></td></tr>
+<tr><td style="${cell};padding:14px 22px 20px;color:#5b6f86;font-size:12px">${escapeHtml(closing)}</td></tr>
+</table></td></tr></table>`
+  return { text, html }
+}
+
+export function ticketMail(ticket, recipients) {
   const files = ticket.attachments || []
-  const rows = [['Ticket', ticket.id], ['Urgência', urgencyLabel(ticket.urgency)], ['Módulo', moduleTitle(ticket.module, ticket.submodule)], ['Aberto por', ticket.createdByName], ['Data e hora', `${bahiaTime(ticket.createdAt)} (horário da Bahia)`], ['Título', ticket.title]]
   const fileLine = files.length ? `${files.length} ${files.length === 1 ? 'anexo' : 'anexos'}: ${files.map((file) => file.name).join(', ')}` : 'Sem anexos'
+  const module = moduleTitle(ticket.module, ticket.submodule)
   return {
     to: recipients.join(', '),
-    subject: `Portal GMAC: novo ticket ${ticket.id} (urgência: ${urgencyLabel(ticket.urgency)}) · ${ticket.title}`,
-    text: `Um novo ticket de suporte foi aberto no Portal GMAC.\n\n${rows.map(([label, value]) => `${label}: ${value}`).join('\n')}\n\nDescrição:\n${ticket.description}\n\n${fileLine}. Os anexos abrem no portal, no menu Ticket.`,
-    html: `<p>Um novo ticket de suporte foi aberto no Portal GMAC.</p><table cellpadding="4" style="border-collapse:collapse">${rows.map(([label, value]) => `<tr><th align="left" style="padding-right:12px">${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`).join('')}</table><p><strong>Descrição</strong></p><p style="white-space:pre-wrap">${escapeHtml(ticket.description)}</p><p>${escapeHtml(fileLine)}. Os anexos abrem no portal, no menu Ticket.</p>`,
+    subject: `Novo ticket · ${urgencyText(ticket.urgency)} · ${ticket.id} · ${ticket.title}`,
+    ...ticketEmail({
+      kind: 'opened', ticket,
+      preview: `${ticket.title} · ${module} · aberto por ${ticket.createdByName}`,
+      facts: [['Módulo', module], ['Aberto por', ticket.createdByName], ['Data e hora', `${bahiaTime(ticket.createdAt)} (horário da Bahia)`], ['Anexos', fileLine]],
+      messageLabel: 'Descrição', message: ticket.description,
+      closing: 'Os anexos e a conversa ficam no Portal GMAC, no menu Ticket.',
+    }),
   }
 }
 
 // A reply of whoever opened the ticket, e-mailed to the developers (the same list of a new ticket).
-function replyMail(ticket, comment, recipients) {
-  const intro = `${comment.userName} respondeu no ticket ${ticket.id} em ${bahiaTime(comment.at)} (horário da Bahia).`
+export function replyMail(ticket, comment, recipients) {
   return {
     to: recipients.join(', '),
-    subject: `Portal GMAC: nova resposta no ticket ${ticket.id} · ${ticket.title}`,
-    text: `${intro}
-
-Ticket: ${ticket.id} · ${ticket.title}
-
-Resposta:
-${comment.text}
-
-Veja a conversa completa no Portal GMAC, no menu Ticket.`,
-    html: `<p>${escapeHtml(intro)}</p><p><strong>Ticket:</strong> ${escapeHtml(ticket.id)} · ${escapeHtml(ticket.title)}</p><p><strong>Resposta</strong></p><p style="white-space:pre-wrap;padding:10px 14px;border-left:3px solid #0c4c91;background:#f3f7fb">${escapeHtml(comment.text)}</p><p>Veja a conversa completa no Portal GMAC, no menu Ticket.</p>`,
+    subject: `Resposta · ${urgencyText(ticket.urgency)} · ${ticket.id} · ${ticket.title}`,
+    ...ticketEmail({
+      kind: 'reply', ticket,
+      preview: `${ticket.title} · ${comment.userName} respondeu: “${shortText(comment.text)}”`,
+      facts: [['Módulo', moduleTitle(ticket.module, ticket.submodule)], ['Respondido por', comment.userName], ['Data e hora', `${bahiaTime(comment.at)} (horário da Bahia)`]],
+      messageLabel: 'Resposta', message: comment.text,
+      closing: 'Veja a conversa completa no Portal GMAC, no menu Ticket.',
+    }),
   }
 }
 
 // A developer's comment, e-mailed to whoever opened the ticket.
-function commentMail(ticket, comment, author) {
-  const intro = `${comment.userName} comentou no seu ticket ${ticket.id} em ${bahiaTime(comment.at)} (horário da Bahia).`
+export function commentMail(ticket, comment, author) {
   return {
     to: author.email,
-    subject: `Portal GMAC: novo comentário no ticket ${ticket.id} · ${ticket.title}`,
-    text: `Olá, ${author.name}.\n\n${intro}\n\nTicket: ${ticket.id} · ${ticket.title}\n\nComentário:\n${comment.text}\n\nVeja a conversa completa no Portal GMAC, no menu Ticket.`,
-    html: `<p>Olá, ${escapeHtml(author.name)}.</p><p>${escapeHtml(intro)}</p><p><strong>Ticket:</strong> ${escapeHtml(ticket.id)} · ${escapeHtml(ticket.title)}</p><p><strong>Comentário</strong></p><p style="white-space:pre-wrap;padding:10px 14px;border-left:3px solid #0c4c91;background:#f3f7fb">${escapeHtml(comment.text)}</p><p>Veja a conversa completa no Portal GMAC, no menu Ticket.</p>`,
+    subject: `Resposta do suporte · ${ticket.id} · ${ticket.title}`,
+    ...ticketEmail({
+      kind: 'support', ticket, greeting: `Olá, ${author.name}.`,
+      preview: `${ticket.title} · ${comment.userName} comentou no seu ticket: “${shortText(comment.text)}”`,
+      facts: [['Módulo', moduleTitle(ticket.module, ticket.submodule)], ['Comentado por', comment.userName], ['Data e hora', `${bahiaTime(comment.at)} (horário da Bahia)`]],
+      messageLabel: 'Comentário', message: comment.text,
+      closing: 'Para responder, abra o Portal GMAC, no menu Ticket.',
+    }),
   }
 }
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import ClientNameInput from './ClientNameInput.jsx'
-import RequesterNameInput from './RequesterNameInput.jsx'
+import RequesterNameInput, { RequesterListInput } from './RequesterNameInput.jsx'
+import { offerRequesterNames, requesterSeparator } from '../server/offerRequesters.js'
 import PieceNameInput from './PieceNameInput.jsx'
 import { contactKinds } from './RequestersScreen.jsx'
 import { payableRequest } from './payablesApi.js'
@@ -10,7 +11,7 @@ import { documentDigits, maskClientDocument } from '../server/clientDocument.js'
 // deadline, quantity and label without creating the offer again (PUT /api/offers/:id). What goes printed on the proposal
 // discards a generated one: the screen says so before saving.
 const printed = ['cnpj', 'company', 'requester', 'buyer', 'service', 'labelNumber', 'deadline', 'quantity']
-const formOf = (offer) => ({ cnpj: maskClientDocument(offer.cnpj || ''), company: offer.company || '', requester: offer.requester || '', buyer: offer.buyer || '', service: offer.service || '', requestedAt: String(offer.requestedAt || '').slice(0, 10), deadline: offer.deadline || '', quantity: String(offer.quantity ?? ''), labelNumber: offer.labelNumber || '', notes: offer.notes || '' })
+const formOf = (offer) => ({ cnpj: maskClientDocument(offer.cnpj || ''), company: offer.company || '', requesters: offerRequesterNames(offer).length ? offerRequesterNames(offer) : [''], buyer: offer.buyer || '', service: offer.service || '', requestedAt: String(offer.requestedAt || '').slice(0, 10), deadline: offer.deadline || '', quantity: offer.quantityPending ? '' : String(offer.quantity ?? ''), quantityPending: Boolean(offer.quantityPending), labelNumber: offer.labelNumber || '', notes: offer.notes || '' })
 
 export default function OfferInfoEditModal({ offer, onClose, onSaved }) {
   const [form, setForm] = useState(() => formOf(offer)), [busy, setBusy] = useState(false), [error, setError] = useState('')
@@ -29,13 +30,17 @@ export default function OfferInfoEditModal({ offer, onClose, onSaved }) {
   }
   const client = documentDigits(form.cnpj) ? clients.find((item) => documentDigits(item.document) === documentDigits(form.cnpj)) : null
   const original = formOf(offer)
-  const changesProposal = Boolean(offer.proposal) && printed.some((key) => (key === 'cnpj' ? documentDigits(form.cnpj) !== documentDigits(original.cnpj) : String(form[key]).trim() !== String(original[key]).trim()))
-  const resized = offer.resources?.entryMode === 'piece' && Number(form.quantity) > 0 && Number(form.quantity) !== Number(offer.quantity)
+  // Several requesters go printed joined by ", ", as the server saves them.
+  const printedValue = (values, key) => (key === 'requester' ? values.requesters.map((name) => name.trim()).filter(Boolean).join(requesterSeparator) : String(values[key]).trim())
+  const changesProposal = Boolean(offer.proposal) && printed.some((key) => (key === 'cnpj' ? documentDigits(form.cnpj) !== documentDigits(original.cnpj) : printedValue(form, key) !== printedValue(original, key)))
+  const resized = !form.quantityPending && offer.resources?.entryMode === 'piece' && Number(form.quantity) > 0 && Number(form.quantity) !== Number(offer.quantity)
+  // "Sem quantidade definida" can be chosen (or kept) only while the offer has no proposal yet.
+  const canLeavePending = Boolean(offer.quantityPending) || (!offer.proposal && !offer.proposalDraft)
   async function save(event) {
     event.preventDefault()
     setBusy(true); setError('')
     try {
-      const result = await payableRequest(`/offers/${offer.id}`, 'PUT', { ...form, quantity: Number(form.quantity) })
+      const result = await payableRequest(`/offers/${offer.id}`, 'PUT', { ...form, quantity: form.quantityPending ? null : Number(form.quantity) })
       await onSaved(result, { resized })
     } catch (caught) { setError(caught.message); setBusy(false) }
   }
@@ -45,13 +50,16 @@ export default function OfferInfoEditModal({ offer, onClose, onSaved }) {
       <form onSubmit={save}><fieldset className="offer-info-edit-fields" disabled={busy}><div className="offer-form-grid">
         <label>CNPJ/CPF *<input value={form.cnpj} onChange={(event) => changeDocument(event.target.value)} inputMode="numeric" placeholder="CNPJ ou CPF do cliente" required /></label>
         <label>Empresa *<ClientNameInput label="Empresa *" value={form.company} documentValue={form.cnpj} clients={clients} onChange={(value) => update('company', value)} onSelect={(chosen) => setForm((current) => ({ ...current, company: chosen.name, cnpj: maskClientDocument(chosen.document) }))} required /></label>
-        <label>Solicitante<RequesterNameInput label="Solicitante" value={form.requester} client={client} requesters={requesters} onChange={(value) => update('requester', value)} /></label>
+        <RequesterListInput values={form.requesters} client={client} requesters={requesters} onChange={(value) => update('requesters', value)} />
         <label>Comprador<RequesterNameInput label="Comprador" kind={contactKinds.buyers} who="quem compra o serviço" value={form.buyer} client={client} requesters={buyers} onChange={(value) => update('buyer', value)} /></label>
         <label>Peça/Serviço *<PieceNameInput label="Peça/Serviço *" value={form.service} onChange={(value) => update('service', value)} pieces={pieces} historyHint={false} required /></label>
         <label>Data da solicitação *<input type="date" value={form.requestedAt} onChange={(event) => update('requestedAt', event.target.value)} required /></label>
         {/* Optional until the proposal PDF, which asks for it; after the PDF it can be changed but not left empty. */}
         <label>{offer.proposal ? 'Prazo solicitado *' : 'Prazo solicitado'}<input type="date" value={form.deadline} onChange={(event) => update('deadline', event.target.value)} required={Boolean(offer.proposal)} /></label>
-        <label>Quantidade *<input type="number" min="1" step="1" value={form.quantity} onChange={(event) => update('quantity', event.target.value)} required /></label>
+        <div className="offer-quantity-cell">
+          <label>{form.quantityPending ? 'Quantidade' : 'Quantidade *'}<input type="number" min="1" step="1" value={form.quantityPending ? '' : form.quantity} onChange={(event) => update('quantity', event.target.value)} disabled={form.quantityPending} placeholder={form.quantityPending ? 'A definir' : undefined} required={!form.quantityPending} /></label>
+          {canLeavePending && <label className="offer-quantity-pending"><input type="checkbox" checked={form.quantityPending} onChange={(event) => update('quantityPending', event.target.checked)} />Sem quantidade definida</label>}
+        </div>
         <label>Número da etiqueta<input value={form.labelNumber} onChange={(event) => update('labelNumber', event.target.value)} placeholder="Opcional" /></label>
         {/* Observação interna (ofertas do site): não sai no PDF da proposta, então mudá-la não descarta a proposta. */}
         <label className="offer-form-field--full">Observação<textarea rows={3} maxLength={2000} value={form.notes} onChange={(event) => update('notes', event.target.value)} placeholder="Interna: não sai na proposta" /></label>

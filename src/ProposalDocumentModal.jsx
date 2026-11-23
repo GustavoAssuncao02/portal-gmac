@@ -82,7 +82,7 @@ function LetterForm({ model, draft, setDraft, settings, catalog, paymentClient }
       <label>Nº da cotação<input required maxLength={20} value={draft.quoteNumber} onChange={(event) => set('quoteNumber', event.target.value)} /></label>
       <label className="proposal-doc-wide">Cliente (À)<input required maxLength={160} value={draft.customer} onChange={(event) => set('customer', event.target.value)} /></label>
       <label>CNPJ/CPF do cliente<input maxLength={20} value={draft.customerDocument || ''} onChange={(event) => set('customerDocument', event.target.value)} /></label>
-      <label>Solicitante<input maxLength={80} value={draft.requester} onChange={(event) => set('requester', event.target.value)} /></label>
+      <label>Solicitante<input maxLength={300} value={draft.requester} onChange={(event) => set('requester', event.target.value)} /></label>
       <label>Comprador<input maxLength={80} value={draft.attention} onChange={(event) => set('attention', event.target.value)} /></label>
     </div></section>
     <section className="proposal-doc-section proposal-fiscal"><h3><BadgeCheck size={17} aria-hidden="true" />CNAE – Código de atividade – NCM/NBS</h3>
@@ -164,7 +164,7 @@ function TableForm({ model, draft, setDraft, settings, assignments, setAssignmen
         <label>Equipamento<input maxLength={120} value={draft.equipment} onChange={(event) => set('equipment', event.target.value)} /></label>
         <label>Componente<input maxLength={120} value={draft.component} onChange={(event) => set('component', event.target.value)} /></label>
         <label>Responsável<input maxLength={80} value={draft.responsible} onChange={(event) => set('responsible', event.target.value)} /></label></>}
-      <label>{model === 'nestle' ? 'Solicitante' : 'Requisitante'}<input maxLength={80} value={draft.requester} onChange={(event) => set('requester', event.target.value)} /></label>
+      <label>{model === 'nestle' ? 'Solicitante' : 'Requisitante'}<input maxLength={300} value={draft.requester} onChange={(event) => set('requester', event.target.value)} /></label>
       <label>Quantidade<span className="proposal-doc-inline"><QuantityInput label="Quantidade de peças" value={draft.quantity} onChange={(value) => set('quantity', value)} />{model === 'nestle' && <input aria-label="Unidade" maxLength={10} value={draft.quantityUnit} onChange={(event) => set('quantityUnit', event.target.value)} />}</span></label>
       <label>Nome para contato<input maxLength={80} value={draft.contact} onChange={(event) => set('contact', event.target.value)} /></label>
       <label className="proposal-doc-full">Descrição do serviço<textarea rows={2} required maxLength={600} value={draft.description} onChange={(event) => set('description', event.target.value)} /></label>

@@ -3,6 +3,7 @@ import { PayableModal } from './PayableModal.jsx'
 import { declineReasons, osValueOf } from '../server/proposalMath.js'
 import { formatQuantity } from '../server/materialUnits.js'
 import { labelQuoteOffer } from '../server/labelQuoteRules.js'
+import { upper } from './displayCase.js'
 
 // The customer said no to the proposal sent. The offer is closed as declined and the option counts in its acceptance rate.
 export default function DeclineProposalModal({ offer, onConfirm, onClose }) {
@@ -33,6 +34,21 @@ export function UndoDeclineModal({ offer, onConfirm, onClose }) {
   return <PayableModal title="Tem certeza que deseja desfazer a recusa?" busy={busy} onClose={onClose} footer={<><button className="admin-tool-button" type="button" disabled={busy} onClick={onClose}>Cancelar</button><button className="admin-tool-button admin-tool-button--primary" type="button" disabled={busy} onClick={confirm}>Sim, desfazer</button></>}>
     <p><strong>{offer.code} · {offer.service} · Proposta {offer.proposalDecline?.key || offer.proposal?.key}</strong></p>
     <p>A oferta volta para "Proposta gerada" e poderá ser aceita ou recusada de novo. A recusa deixa de contar na taxa de aceite{offer.proposalDecline?.reason ? ` (motivo registrado: ${offer.proposalDecline.reason})` : ''}.</p>
+    {error && <p className="admin-tool-error" role="alert">{error}</p>}
+  </PayableModal>
+}
+
+// TCK-0006: undoes a "Recusar" clicked by mistake (an offer refused before any proposal): it goes back to "Em análise".
+export function UndoRejectModal({ offer, onConfirm, onClose }) {
+  const [busy, setBusy] = useState(false), [error, setError] = useState('')
+  async function confirm() {
+    setBusy(true); setError('')
+    try { await onConfirm(); onClose() } catch (caught) { setError(caught.message) } finally { setBusy(false) }
+  }
+  const back = offer.origin === 'Site' && !offer.creationFinishedAt ? 'Criando oferta' : 'Em análise'
+  return <PayableModal title={`Desfazer a recusa da ${offer.code}?`} busy={busy} onClose={onClose} footer={<><button className="admin-tool-button" type="button" disabled={busy} onClick={onClose}>Cancelar</button><button className="admin-tool-button admin-tool-button--primary" type="button" disabled={busy} onClick={confirm}>{busy ? 'Desfazendo...' : 'Sim, desfazer'}</button></>}>
+    <p><strong>{offer.code} · {upper(offer.service)}</strong></p>
+    <p>A oferta sai de "Recusadas" e volta para "{back}", com tudo o que já tinha: anexos, materiais, mão de obra e a proposta salva. A recusa desfeita fica registrada na oferta.</p>
     {error && <p className="admin-tool-error" role="alert">{error}</p>}
   </PayableModal>
 }

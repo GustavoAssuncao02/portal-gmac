@@ -357,7 +357,10 @@
 /* "Modo de exibição", the same button as in the administrators' services panel. */
 .operator-display-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 12px 20px; }
 .operator-display-controls time { color: #5f7891; font-size: 14px; font-variant-numeric: tabular-nums; }
-.operator-display-button { display: inline-flex; align-items: center; gap: 9px; min-height: 42px; padding: 10px 14px; border: 1px solid #b9d0e4; border-radius: 5px; color: #0c4c91; background: #f1f6fb; font: inherit; font-size: 13px; cursor: pointer; }
+.operator-display-button { display: inline-flex; align-items: center; gap: 9px; min-height: 44px; padding: 10px 14px; border: 1px solid #b9d0e4; border-radius: 5px; color: #0c4c91; background: #f1f6fb; font: inherit; font-size: 13px; cursor: pointer; }
+/* Títulos que ordenam a lista: o toque no tablet precisa de 44px. O padding cresce só a área de toque (o botão não tem
+   fundo nem borda) e a margem negativa devolve o espaço: o título fica igual e cabe no padding (14px + borda) da célula. */
+.operator-app .admin-os-table th .sort-header-button { padding-block: 15px; margin-block: -15px; }
 /* On the television the list covers the whole page (sidebar and entry hidden under it). */
 .operator-overview--display { position: fixed; inset: 0; z-index: 80; align-content: start; padding: 24px 28px; overflow: auto; background: #f8fbfe; }
 .operator-overview--display .operator-overview-header h1 { font-size: 26px; }

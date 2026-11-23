@@ -20,8 +20,8 @@ async function createOrder(service, stages) {
 }
 
 try {
-  const order = await createOrder('Soldagem e acabamento da estrutura', ['cutting', 'machining', 'welding', 'painting', 'assembly', 'boiler'])
-  await createOrder('Projeto com soldagem e pintura', ['welding', 'painting'])
+  const order = await createOrder('Soldagem e acabamento da estrutura', ['cut-bend', 'milling', 'grinding', 'painting', 'assembly', 'structural-assembly'])
+  await createOrder('Projeto com soldagem e pintura', ['grinding', 'painting'])
   const employee = (await fixture.adminRequest('/employees', 'POST', { name: 'Carla Teste', birthDate: '1990-01-01', cpf: '00000000001', email: 'teste@example.invalid', identification: '001' }, fixture.admin)).data.item
   // Materials still pending must be acknowledged before the work starts.
   const pending = await fixture.request(`/operations/orders/${order.code}/start`, 'POST', { employeeId: employee.id }, { Authorization: `Bearer ${fixture.operatorToken}` })

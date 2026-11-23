@@ -20,7 +20,7 @@ import { proposalMargins, PROPOSAL_MARGIN_GAP, declineReasons } from './proposal
 import { requireAdminOrOperator } from './access.js'
 import { documentDigits, documentKind, isClientDocument } from './clientDocument.js'
 import { materialsStock } from './materialStock.js'
-import { clientRequesters, registerOfferContact } from './requesters.js'
+import { clientRequesters, offerRequesterInput, registerOfferContact, registerOfferRequesters } from './requesters.js'
 import { actorOf, recordRegistryChange } from './registryHistory.js'
 import { isPreRegisteredClient } from './sitePreRegistration.js'
 import { currentServiceLocation, serviceLocationLabel, validServiceLocation } from './serviceLocation.js'
@@ -54,6 +54,10 @@ export const stillCreating = 'Esta oferta ainda está sendo criada: conclua os d
 // The requested deadline is optional while the offer is created and analysed, but the proposal PDF is only generated with
 // it: the OS comes from the accepted proposal, so every OS has a deadline (services panel, tablet, planning, Editar OS).
 export const deadlineRequired = 'Informe o prazo solicitado pelo cliente antes de gerar o PDF da proposta.'
+// "Sem quantidade definida" (TCK-0005): the request arrives and someone goes to the client to count the pieces. The offer
+// keeps quantity 1 only as a placeholder (quantityPending), the screens show "A definir", and the quantity is asked before
+// the proposal options (PUT /offers/:id/quantity). Nothing that prints or opens an OS goes on without it.
+export const quantityRequired = 'Informe a quantidade de peças da oferta antes de gerar a proposta.'
 // A day that exists (2026-02-30 does not: Date would roll it into March).
 export const isDay = (value) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value ?? ''))) return false
@@ -118,32 +122,35 @@ router.get('/orders', async (_request, response) => {
 })
 
 router.post('/offers', async (request, response) => {
-  const { cnpj, company, service, quantity, description, labelNumber, requester, buyer } = request.body ?? {}
+  const { cnpj, company, service, quantity, description, labelNumber, buyer } = request.body ?? {}
   // "Deixar oferta em aberto e notificar": someone registers it and the people in charge take it over later.
   const open = request.body?.open === true
   // The requested deadline may be left for later; it is asked when the proposal PDF is generated.
   const deadline = String(request.body?.deadline ?? '').trim()
-  if (!isClientDocument(cnpj) || !clean(company) || !clean(service) || !Number.isInteger(Number(quantity)) || Number(quantity) < 1 || !clean(description)) {
+  const quantityPending = request.body?.quantityPending === true
+  if (!isClientDocument(cnpj) || !clean(company) || !clean(service) || (!quantityPending && (!Number.isInteger(Number(quantity)) || Number(quantity) < 1)) || !clean(description)) {
     return response.status(400).json({ message: 'Preencha CNPJ (14 dígitos) ou CPF (11), empresa, peça/serviço, quantidade e descrição.' })
   }
   if (deadline && !isDay(deadline)) return response.status(400).json({ message: 'Prazo solicitado inválido: escolha uma data ou deixe em branco.' })
   try {
-    let requesterCreated = false, buyerCreated = false
+    // Up to 5 requesters; each new one is registered in the client like a single one was.
+    const requesterNames = offerRequesterInput(request.body)
+    let requestersCreated = 0, buyerCreated = false
     const offer = await mutateStore((store) => {
-      const link = registerOfferContact(store, 'requesters', request.offerClient, requester, actorOf(request))
+      const requesters = registerOfferRequesters(store, request.offerClient, requesterNames, actorOf(request))
       const buyerLink = registerOfferContact(store, 'buyers', request.offerClient, buyer, actorOf(request))
-      requesterCreated = link.created
+      requestersCreated = requesters.created
       buyerCreated = buyerLink.created
       // A manual offer starts as "Criando oferta": only "Fazer proposta" in its details (POST /offers/:id/finish) puts it
       // in analysis. The person who is creating it (editingBy) and since when are shown on the list.
       const at = new Date().toISOString(), author = { id: request.adminId ?? null, name: request.adminName || 'Administrador' }
-      const item = { id: randomUUID(), code: nextCode('OF', [...store.offers, ...(store.discardedOffers || [])]), createdAt: at, createdBy: author.id, createdByName: author.name, ...(open ? { openForTeam: true } : { editingBy: { ...author, at } }), cnpj: clean(cnpj, 18), company: clean(company, 160), requester: link.name, requesterId: link.id, buyer: buyerLink.name, buyerId: buyerLink.id, deadline, service: clean(service, 160), quantity: Number(quantity), description: clean(description, 5000), labelNumber: clean(labelNumber, 80), requestedAt: at, origin: 'Inserida Manualmente', status: 'creating', attachments: [], resources: { materials: [], laborEntries: [] }, proposal: null, orderCode: null }
+      const item = { id: randomUUID(), code: nextCode('OF', [...store.offers, ...(store.discardedOffers || [])]), createdAt: at, createdBy: author.id, createdByName: author.name, ...(open ? { openForTeam: true } : { editingBy: { ...author, at } }), cnpj: clean(cnpj, 18), company: clean(company, 160), ...requesters.fields, buyer: buyerLink.name, buyerId: buyerLink.id, deadline, service: clean(service, 160), quantity: quantityPending ? 1 : Number(quantity), ...(quantityPending ? { quantityPending: true } : {}), description: clean(description, 5000), labelNumber: clean(labelNumber, 80), requestedAt: at, origin: 'Inserida Manualmente', status: 'creating', attachments: [], resources: { materials: [], laborEntries: [] }, proposal: null, orderCode: null }
       store.offers.unshift(item)
       // An open offer has nobody creating it: it waits on the list, like the offers of the site, and the others are told.
       if (open) addNotification(store, { type: 'open-offer', offerId: item.id, authorId: author.id, title: 'Nova oferta em aberto', description: `${item.code} · ${item.company} · inserida por ${author.name}` })
       return item
     })
-    response.status(201).json({ item: offer, requesterCreated, buyerCreated })
+    response.status(201).json({ item: offer, requesterCreated: requestersCreated > 0, requestersCreated, buyerCreated })
   } catch (error) { handleError(response, error) }
 })
 
@@ -265,6 +272,7 @@ router.post('/offers/:id/proposal', async (request, response) => {
     const offer = (await readStore()).offers.find((item) => item.id === request.params.id)
     if (!offer || offer.orderCode || offer.status === 'rejected') return response.status(404).json({ message: 'Oferta não encontrada, já aceita ou recusada.' })
     if (offer.status === 'creating') return response.status(409).json({ message: stillCreating })
+    if (offer.quantityPending) return response.status(409).json({ message: quantityRequired })
     if (!isDay(offer.deadline)) return response.status(400).json({ message: deadlineRequired })
     const settings = serviceSettings(offer)
     if (!settings.stages.length) return response.status(400).json({ message: 'Defina as etapas nos detalhes da oferta antes de gerar a proposta.' })
@@ -359,6 +367,16 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
     } catch (error) { handleError(response, error) }
   })
   configured.put(['/offers/:id/resources', '/offers/:id/proposal-draft'], requireAdmin)
+  // Per piece, the totals of the materials and the stage times follow the quantity (and so does what is left to buy).
+  const resizePerPiece = (store, item, quantity, inventory) => {
+    if (item.resources?.entryMode !== 'piece') return
+    const sized = withEntryMode(item.resources, quantity)
+    const stages = item.resources.stages || []
+    const resources = { ...item.resources, materials: inventory ? materialsStock(sized.materials || [], inventory) : sized.materials || [], stageTimes: cleanStageTimes(sized.stageTimes, stages), stageTimesPerPiece: sized.stageTimesPerPiece }
+    resources.laborEntries = stageLaborEntries(resources, store, (item.resources.laborEntries || []).filter((entry) => !entry.stageCode))
+    item.resources = resources
+  }
+  const stockOf = async (offer) => (pool && offer?.resources?.entryMode === 'piece' && offer.resources.materials?.length ? (await pool.query('SELECT id, name, unit, quantity_kg AS quantity FROM inventory_materials'))[0] : null)
   // Informações do serviço of an offer not yet accepted: client (CPF/CNPJ and name), requester, buyer, piece, request date,
   // requested deadline, quantity and label. Everything but the request date goes printed on the proposal, so changing it
   // discards a generated proposal, as a change of resources does; the saved options (proposalDraft) stay and the proposal
@@ -367,19 +385,21 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
   configured.put('/offers/:id', requireAdmin, async (request, response) => {
     const body = request.body ?? {}
     const fields = { cnpj: clean(body.cnpj, 18), company: clean(body.company, 160), service: clean(body.service, 160), labelNumber: clean(body.labelNumber, 80), deadline: String(body.deadline ?? '').trim(), quantity: Number(body.quantity) }
+    // "Sem quantidade definida" kept (or chosen now): the placeholder quantity stays as it is.
+    const quantityPending = body.quantityPending === true
     const requestedDay = String(body.requestedAt || '')
-    if (!isClientDocument(fields.cnpj) || !fields.company || !fields.service || !isDay(requestedDay) || !Number.isInteger(fields.quantity) || fields.quantity < 1 || fields.quantity > 1000000000) {
+    if (!isClientDocument(fields.cnpj) || !fields.company || !fields.service || !isDay(requestedDay) || (!quantityPending && (!Number.isInteger(fields.quantity) || fields.quantity < 1 || fields.quantity > 1000000000))) {
       return response.status(400).json({ message: 'Preencha CNPJ (14 dígitos) ou CPF (11), empresa, peça/serviço, data da solicitação e quantidade.' })
     }
     if (fields.deadline && !isDay(fields.deadline)) return response.status(400).json({ message: 'Prazo solicitado inválido: escolha uma data ou deixe em branco.' })
     try {
+      const requesterNames = offerRequesterInput(body)
       const document = documentDigits(fields.cnpj)
       const client = accounts && document ? (await accounts.clients()).find((item) => documentDigits(item.document) === document) || null : null
       // Per piece, the totals of the materials change with the quantity and so does what is left to buy.
       const current = (await readStore()).offers.find((entry) => entry.id === request.params.id)
-      const resize = current && Number(current.quantity) !== fields.quantity && current.resources?.entryMode === 'piece'
-      let inventory = null
-      if (resize && pool && current.resources?.materials?.length) [inventory] = await pool.query('SELECT id, name, unit, quantity_kg AS quantity FROM inventory_materials')
+      if (quantityPending) fields.quantity = Number(current?.quantity) || 1
+      const inventory = current && Number(current.quantity) !== fields.quantity ? await stockOf(current) : null
       let proposalDiscarded = false
       const offer = await mutateStore((store) => {
         const item = store.offers.find((entry) => entry.id === request.params.id)
@@ -388,26 +408,26 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
         if (item.status === 'rejected') throw Object.assign(new Error('Oferta recusada não pode ser editada: desfaça a recusa antes.'), { status: 409 })
         // Once the PDF exists the deadline can be changed (which discards it, as below) but not left empty.
         if (!fields.deadline && item.proposal) throw Object.assign(new Error('Com o PDF da proposta gerado, o prazo solicitado não pode ficar em branco: troque a data se precisar.'), { status: 400 })
-        const requester = registerOfferContact(store, 'requesters', client, body.requester, actorOf(request))
+        if (quantityPending && (item.proposal || item.proposalDraft)) throw Object.assign(new Error('Esta oferta já tem proposta: a quantidade não pode voltar para "a definir".'), { status: 400 })
+        // A screen of the previous version (a tab not reloaded yet) sends the names joined in one field: unchanged, the list
+        // stays as it is instead of becoming one requester called "Ana, Bruno".
+        const unchangedOldScreen = !Array.isArray(body.requesters) && item.requesters?.length > 1 && String(body.requester ?? '').trim() === item.requester
+        const requesters = registerOfferRequesters(store, client, unchangedOldScreen ? item.requesters.map((entry) => entry.name) : requesterNames, actorOf(request))
         const buyer = registerOfferContact(store, 'buyers', client, body.buyer, actorOf(request))
-        const next = { ...fields, requester: requester.name, requesterId: requester.id, buyer: buyer.name, buyerId: buyer.id }
+        const next = { ...fields, ...requesters.fields, buyer: buyer.name, buyerId: buyer.id }
         // The same document typed with another mask keeps the one already saved.
         if (documentDigits(item.cnpj) === document) next.cnpj = item.cnpj
         const printed = ['cnpj', 'company', 'requester', 'buyer', 'service', 'labelNumber', 'deadline', 'quantity']
         const changed = printed.some((key) => String(item[key] ?? '') !== String(next[key] ?? ''))
         const quantityChanged = Number(item.quantity) !== fields.quantity
         Object.assign(item, next)
+        if (quantityPending) item.quantityPending = true
+        else delete item.quantityPending
         // Observação (interna, das ofertas do site): não sai no PDF da proposta, então mudá-la não descarta a proposta.
         if (body.notes !== undefined) item.notes = clean(body.notes, 2000)
         // The list and the details show the day of the request (UTC): a new day keeps it at noon of that day.
         if (requestedDay !== String(item.requestedAt || '').slice(0, 10)) item.requestedAt = `${requestedDay}T12:00:00.000Z`
-        if (quantityChanged && item.resources?.entryMode === 'piece') {
-          const sized = withEntryMode(item.resources, fields.quantity)
-          const stages = item.resources.stages || []
-          const resources = { ...item.resources, materials: inventory ? materialsStock(sized.materials || [], inventory) : sized.materials || [], stageTimes: cleanStageTimes(sized.stageTimes, stages), stageTimesPerPiece: sized.stageTimesPerPiece }
-          resources.laborEntries = stageLaborEntries(resources, store, (item.resources.laborEntries || []).filter((entry) => !entry.stageCode))
-          item.resources = resources
-        }
+        if (quantityChanged) resizePerPiece(store, item, fields.quantity, inventory)
         if (changed && item.proposal) {
           item.proposal = null
           item.status = 'review'
@@ -417,6 +437,29 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
         return item
       })
       response.json({ item: offer, proposalDiscarded })
+    } catch (error) { handleError(response, error) }
+  })
+  // "Sem quantidade definida": the quantity counted at the client, asked before the proposal options (or the OS of an
+  // etiqueta). Per piece, materials and stage times follow it. The offer leaves "A definir" for good.
+  configured.put('/offers/:id/quantity', requireAdmin, async (request, response) => {
+    const quantity = Number(request.body?.quantity)
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 1000000000) return response.status(400).json({ message: 'Informe a quantidade de peças (número inteiro, a partir de 1).' })
+    try {
+      const inventory = await stockOf((await readStore()).offers.find((entry) => entry.id === request.params.id))
+      const offer = await mutateStore((store) => {
+        const item = store.offers.find((entry) => entry.id === request.params.id)
+        if (!item) throw Object.assign(new Error('Oferta não encontrada.'), { status: 404 })
+        if (item.orderCode || item.status === 'rejected') throw Object.assign(new Error('Esta oferta já foi aceita ou recusada.'), { status: 409 })
+        if (!item.quantityPending) throw Object.assign(new Error('A quantidade desta oferta já foi definida: corrija em Informações do serviço.'), { status: 409 })
+        if (Number(item.quantity) !== quantity) resizePerPiece(store, item, quantity, inventory)
+        item.quantity = quantity
+        delete item.quantityPending
+        item.quantityDefinedAt = new Date().toISOString()
+        item.quantityDefinedByName = request.adminName || 'Administrador'
+        item.updatedAt = item.quantityDefinedAt
+        return item
+      })
+      response.json({ item: offer })
     } catch (error) { handleError(response, error) }
   })
   // Asked on the proposal screen when the PDF is generated for an offer created without the requested deadline. The
@@ -464,6 +507,7 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
         const item = store.offers.find((entry) => entry.id === request.params.id)
         if (!item) throw Object.assign(new Error('Oferta não encontrada.'), { status: 404 })
         if (item.status !== 'creating') return item
+        if (item.quantityPending) throw Object.assign(new Error(quantityRequired), { status: 409 })
         const { stages } = serviceSettings(item)
         if (!stages.length) throw Object.assign(new Error('Selecione pelo menos uma etapa do serviço antes de fazer a proposta.'), { status: 400 })
         const problem = stagePlanProblem(stages, item.resources)
@@ -679,6 +723,24 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
       response.json({ item: offer })
     } catch (error) { handleError(response, error) }
   })
+  // TCK-0006: undoes a "Recusar" clicked by mistake. The offer goes back to "Em análise" with everything it had (draft,
+  // e-mails, attachments, resources); a site offer refused while still being created goes back to "Criando oferta".
+  // The refusal undone stays on the offer in rejectionHistory, like declineHistory.
+  configured.post('/offers/:id/unreject', requireAdmin, async (request, response) => {
+    try {
+      const offer = await mutateStore((store) => {
+        const item = store.offers.find((entry) => entry.id === request.params.id)
+        if (!item) throw Object.assign(new Error('Oferta não encontrada.'), { status: 404 })
+        if (item.status !== 'rejected' || item.proposalDecline || item.orderCode) throw Object.assign(new Error('Esta oferta não tem uma recusa para desfazer.'), { status: 409 })
+        item.rejectionHistory = [...(item.rejectionHistory || []), { rejectedAt: item.rejectedAt || null, rejectedBy: item.rejectedBy ?? null, undoneAt: new Date().toISOString(), undoneBy: request.adminId ?? null, undoneByName: request.adminName || 'Administrador' }]
+        item.status = item.origin === 'Site' && !item.creationFinishedAt ? 'creating' : 'review'
+        delete item.rejectedAt
+        delete item.rejectedBy
+        return item
+      })
+      response.json({ item: offer })
+    } catch (error) { handleError(response, error) }
+  })
   configured.post('/offers/:id/accept', requireAdmin, async (request, response) => {
     let connection
     try {
@@ -689,6 +751,7 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
         const label = Boolean(String(item?.labelNumber ?? '').trim()) && !item?.proposal
         if (!item?.proposal && !label) return null
         if (label && item.status === 'creating') throw Object.assign(new Error(stillCreating), { status: 409 })
+        if (item.quantityPending) throw Object.assign(new Error('Informe a quantidade de peças da oferta antes de abrir a OS.'), { status: 409 })
         if (label && !isDay(item.deadline)) throw Object.assign(new Error('Informe o prazo solicitado pelo cliente (em Informações do serviço) antes de abrir a OS da etiqueta.'), { status: 400 })
         const existing = item.orderCode && store.orders.find((entry) => entry.offerId === item.id)
         if (existing?.inventoryConsumption) return existing

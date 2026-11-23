@@ -94,7 +94,10 @@ test('everybody sees every ticket; attachments open for administrators and the a
     for (let tries = 0; tries < 50 && !fixture.ticketMail.length; tries += 1) await new Promise((resolve) => setTimeout(resolve, 40))
     assert.equal(fixture.ticketMail.length, 1)
     assert.equal(fixture.ticketMail[0].to, 'by.cmlla0107@gmail.com, Gustavo_Assuncao02@outlook.com')
-    assert.match(fixture.ticketMail[0].subject, /TCK-0001 \(urgência: Alto\)/)
+    // On the phone only the subject and the first line show: what happened, the urgency and the subject of the ticket first.
+    assert.match(fixture.ticketMail[0].subject, /^Novo ticket · 🔴 Urgência alta · TCK-0001 · /)
+    assert.equal(fixture.ticketMail[0].text.split('\n')[0].startsWith(created.data.item.title), true, fixture.ticketMail[0].text)
+    assert.match(fixture.ticketMail[0].html, /NOVO TICKET[\s\S]*Urgência alta/)
     assert.match(fixture.ticketMail[0].text, /Funcionário 5/)
     assert.match(fixture.ticketMail[0].text, /Módulo: Gestão Financeira › Contas a Pagar/)
     let email = null
@@ -133,8 +136,8 @@ test('everybody sees every ticket; attachments open for administrators and the a
     for (let tries = 0; tries < 50 && fixture.ticketMail.length === mailsBefore; tries += 1) await wait(40)
     const commentMail = fixture.ticketMail.at(-1)
     assert.equal(commentMail.to, 'funcionario5@example.invalid', 'the e-mail goes to whoever opened the ticket')
-    assert.match(commentMail.subject, /novo comentário no ticket TCK-0001/)
-    assert.match(commentMail.text, /Funcionário 4 comentou no seu ticket TCK-0001/)
+    assert.match(commentMail.subject, /^Resposta do suporte · TCK-0001 · /)
+    assert.match(commentMail.text.split('\n')[0], /Funcionário 4 comentou no seu ticket: “A correção entra na próxima atualização\.”/)
     assert.match(commentMail.text, /A correção entra na próxima atualização\./)
     assert.ok((await notices(mine)).some((item) => item.type === 'ticket-comment' && item.ticketId === 'TCK-0001'), 'the author is told in the bell')
     assert.ok(!(await notices(dev)).some((item) => item.type === 'ticket-comment'), 'the developer is not told of their own comment')

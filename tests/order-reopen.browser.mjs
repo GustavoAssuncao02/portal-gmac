@@ -18,7 +18,7 @@ try {
   const dueDate = shiftMonth(todayBahia(), 1)
   async function finished(service) {
     const offer = (await fixture.adminRequest('/offers', 'POST', { ...offerDraft, service })).data.item
-    await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], stages: ['cutting'], kind: 'service' })
+    await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], stages: ['cut-bend'], kind: 'service' })
     await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', title: 'Teste', deadline: offerDraft.deadline, serviceValue: 1000 } })
     const order = (await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')).data.item
     const current = (await fixture.request('/operations/orders', 'GET', undefined, fixture.admin)).data.items.find((item) => item.code === order.code)

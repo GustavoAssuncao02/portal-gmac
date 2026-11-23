@@ -12,7 +12,7 @@ page.on('pageerror', (error) => errors.push(error.message))
 
 async function createOrder(service) {
   const offer = (await fixture.adminRequest('/offers', 'POST', { ...offerDraft, service })).data.item
-  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], stages: ['cutting'], kind: 'service' })
+  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], stages: ['cut-bend'], kind: 'service' })
   await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', title: 'Teste', deadline: offerDraft.deadline, serviceValue: 100 } })
   return (await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')).data.item
 }
@@ -48,7 +48,7 @@ try {
   assert.equal((await fixture.request(`${route}/stages/${started.data.operation.stages[0].key}`, 'POST', { ...session, quantity: finished.quantity }, headers)).status, 200)
   assert.equal((await fixture.request(`${route}/complete`, 'POST', session, headers)).status, 200)
   await page.clock.fastForward(10000)
-  await completedRow.getByRole('button', { name: 'Conclu\u00eddo', exact: true }).waitFor()
+  await completedRow.getByRole('button', { name: 'Aguardando NF-e', exact: true }).waitFor()
   assert.equal(await rows.count(), 2)
   assert.equal(await completedRow.locator('.admin-os-remaining').innerText(), '\u2014')
   await page.clock.fastForward(30000)
@@ -56,18 +56,18 @@ try {
   assert.ok(!(await fixture.request('/operations/orders', 'GET', undefined, fixture.admin)).data.items.find((item) => item.code === finished.code).operation.completionAcknowledgedAt)
   await page.reload()
   await login(page)
-  await completedRow.getByRole('button', { name: 'Conclu\u00eddo', exact: true }).waitFor()
+  await completedRow.getByRole('button', { name: 'Aguardando NF-e', exact: true }).waitFor()
   assert.equal(await rows.count(), 2)
   await page.screenshot({ path: 'test-results/service-completion-pending-desktop.png', fullPage: true })
   await page.setViewportSize({ width: 390, height: 844 })
-  await completedRow.getByRole('button', { name: 'Conclu\u00eddo', exact: true }).scrollIntoViewIfNeeded()
+  await completedRow.getByRole('button', { name: 'Aguardando NF-e', exact: true }).scrollIntoViewIfNeeded()
   await page.screenshot({ path: 'test-results/service-completion-pending-mobile.png', fullPage: true })
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
   await page.setViewportSize({ width: 1600, height: 950 })
   await page.locator('.deadline-filters').getByRole('button', { name: 'Conclu\u00eddos' }).click()
   assert.equal(await rows.count(), 1)
   await page.route('**/acknowledge-completion', (route) => route.fulfill({ status: 503, json: { message: 'Falha simulada ao confirmar.' } }), { times: 1 })
-  await completedRow.getByRole('button', { name: 'Conclu\u00eddo', exact: true }).click()
+  await completedRow.getByRole('button', { name: 'Aguardando NF-e', exact: true }).click()
   const schedule = page.getByRole('dialog', { name: 'Recebimento do serviço', exact: true })
   // The OS can be archived without posting the receivable.
   await schedule.getByRole('button', { name: 'Concluir sem lançar', exact: true }).waitFor()

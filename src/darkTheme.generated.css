@@ -4939,6 +4939,39 @@
 :root[data-theme="dark"] .offer-form-grid label {
     color: #e1ebf6
 }
+:root[data-theme="dark"] .offer-form-grid label.offer-quantity-pending {
+    color: #b3c0d0
+}
+:root[data-theme="dark"] .offer-form-grid .offer-quantity-pending input {
+    accent-color: #80b7f0
+}
+:root[data-theme="dark"] .offer-form-grid input:disabled {
+    color: #c1cfde;
+    background: #203c59
+}
+:root[data-theme="dark"] .offer-quantity-field input {
+    border: 1px solid #36516f;
+    color: #e1ebf6;
+    background: #162b43
+}
+:root[data-theme="dark"] .offer-form-grid .offer-requesters-field {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .offer-requester-remove {
+    border: 1px solid #36516f;
+    color: #b6c1cd;
+    background: #162b43
+}
+:root[data-theme="dark"] .offer-requester-remove:hover {
+    border-color: #ae5147;
+    color: #e6978e
+}
+:root[data-theme="dark"] .offer-requester-add {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .offer-requester-add small {
+    color: #c1cfde
+}
 :root[data-theme="dark"] .offer-form-grid input, :root[data-theme="dark"] .offer-form-grid textarea {
     border: 1px solid #36516f;
     color: #e1ebf6;

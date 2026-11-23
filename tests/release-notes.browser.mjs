@@ -26,7 +26,8 @@ try {
     assert.equal(await dialog.locator('.release-notes > li').count(), releaseNotes.length)
     assert.equal(await dialog.locator('h3').first().textContent(), `Versão ${currentVersion}`)
     assert.equal(await dialog.locator('.release-notes-current').count(), 1)
-    for (const note of releaseNotes.flatMap((entry) => entry.notes)) await dialog.getByText(note, { exact: true }).waitFor()
+    // The same "Melhorias gerais" line comes in several versions: each text is looked for once.
+    for (const note of new Set(releaseNotes.flatMap((entry) => entry.notes))) await dialog.getByText(note, { exact: true }).first().waitFor()
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, 'no horizontal page scroll')
     await page.keyboard.press('Escape')
     await dialog.waitFor({ state: 'detached' })

@@ -2,6 +2,8 @@ import { useId, useState } from 'react'
 import { normalizeSearch } from './offerResources.js'
 import { samePiece } from './PieceNameInput.jsx'
 import { contactKinds } from './RequestersScreen.jsx'
+import { Plus, X } from 'lucide-react'
+import { maxOfferRequesters, requestersLabel } from '../server/offerRequesters.js'
 
 // Same behavior as the client search, limited to the requesters of the chosen client. A name that is not on the list is
 // still accepted: when the client is registered, the requester is registered with the offer. The buyer field is the same,
@@ -29,5 +31,21 @@ export default function RequesterNameInput({ value, onChange, client, requesters
         : <div className="material-suggestion-empty"><strong>{own.length ? `${kind.Singular} não cadastrado` : `Nenhum ${kind.singular} de ${client.name}`}</strong><span>{value.trim() ? 'Será cadastrado automaticamente ao adicionar.' : `Digite o nome de ${who}.`}</span></div>}
     </div>}
     {value.trim() && <small className="piece-autocomplete-hint" id={hintId}>{hint}</small>}
+  </div>
+}
+
+// "Solicitante" of an offer: up to 5 people (server/offerRequesters.js). One field at first; "Adicionar solicitante" adds
+// another and the X removes it. A name already chosen in another field is not suggested again.
+export function RequesterListInput({ values, onChange, client, requesters }) {
+  const list = values.length ? values : ['']
+  const set = (index, value) => onChange(list.map((item, position) => (position === index ? value : item)))
+  return <div className="offer-requesters-field" role="group" aria-label="Solicitantes">
+    <span>{requestersLabel(list.length)}</span>
+    {list.map((value, index) => <div className="offer-requester-row" key={index}>
+      <RequesterNameInput label={index ? `Solicitante ${index + 1}` : 'Solicitante'} value={value} client={client} onChange={(next) => set(index, next)}
+        requesters={requesters.filter((requester) => !list.some((other, position) => position !== index && samePiece(other, requester.name)))} />
+      {list.length > 1 && <button className="offer-requester-remove" type="button" onClick={() => onChange(list.filter((_, position) => position !== index))} aria-label={`Remover solicitante ${index + 1}`} title="Remover solicitante"><X size={15} aria-hidden="true" /></button>}
+    </div>)}
+    {list.length < maxOfferRequesters && <button className="offer-requester-add" type="button" onClick={() => onChange([...list, ''])}><Plus size={14} aria-hidden="true" />Adicionar solicitante <small>({list.length}/{maxOfferRequesters})</small></button>}
   </div>
 }

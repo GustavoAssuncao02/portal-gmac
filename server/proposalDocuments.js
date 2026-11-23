@@ -1,6 +1,6 @@
 import express from 'express'
 import { randomUUID } from 'node:crypto'
-import { readStore, mutateStore, stillCreating, deadlineRequired, isDay } from './offers.js'
+import { readStore, mutateStore, stillCreating, deadlineRequired, quantityRequired, isDay } from './offers.js'
 import { adminIdentity } from './accounts.js'
 import { readFiscalCatalog, plain } from './fiscalCatalog.js'
 import { defaultIssuers, nestleLabor, nestleMaterials, etiquetaLabor, etiquetaMaterials } from './proposalDefaults.js'
@@ -56,6 +56,8 @@ export function proposalSettings(store) {
 }
 
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), { status }) }
+// Up to 5 requesters of the offer come joined by ", " (server/offerRequesters.js).
+const requesterLimit = 300
 const text = (value, limit, label, { required = false } = {}) => {
   if (value != null && typeof value !== 'string' && typeof value !== 'number') fail(`${label} inválido.`)
   const result = String(value ?? '').trim()
@@ -219,7 +221,7 @@ export async function buildDraft({ model, store, offer, value, deadline, client 
     const total = Number(value) > 0 ? round2(value) : 0
     const quantityValue = Number(source?.quantity) > 0 ? Number(source.quantity) : 1
     return {
-      ...base, quoteNumber: nextQuoteNumber(store, settings), customer: source?.company || '', customerDocument: formatDocument(source?.cnpj), requester: String(source?.requester || '').slice(0, 80), attention: String(source?.buyer || '').slice(0, 80), subject: String(source?.service || '').trim(),
+      ...base, quoteNumber: nextQuoteNumber(store, settings), customer: source?.company || '', customerDocument: formatDocument(source?.cnpj), requester: String(source?.requester || '').slice(0, requesterLimit), attention: String(source?.buyer || '').slice(0, 80), subject: String(source?.service || '').trim(),
       scope: String(source?.description || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
       items: [{ description: source?.service || 'Serviço', quantity: quantityValue, unit: 'Un', unitPrice: round2(total / quantityValue) }],
       deliveryTerm: /^\d{4}-\d{2}-\d{2}$/.test(String(deadline || '').trim()) ? String(deadline).trim().split('-').reverse().join('/') : String(deadline || '').trim(), paymentDays: client?.paymentDays || null, validityDays: settings.validityDays, important: settings.important,
@@ -232,7 +234,7 @@ export async function buildDraft({ model, store, offer, value, deadline, client 
   const totalOf = (rowId) => round2(usage.filter((item) => item.rowId === rowId).reduce((total, item) => total + item.quantity, 0))
   return {
     ...base, number: model === 'nestle' ? nextNestleNumber(store, settings) : source?.labelNumber || '', labelNumber: source?.labelNumber || '', componentName: source?.service || '', description: source?.description || '', quantity: source?.quantity || 1, quantityUnit: 'Un',
-    requester: String(source?.requester || '').slice(0, 80), responsible: '', equipment: '', component: '', contact: issuer.contact,
+    requester: String(source?.requester || '').slice(0, requesterLimit), responsible: '', equipment: '', component: '', contact: issuer.contact,
     labor: table.labor.map((row) => ({ id: row.id, quantity: totalOf(row.id) || null, situation: 'normal' })),
     materials: table.materials.map((row) => ({ id: row.id, quantity: totalOf(row.id) || null })),
     ...(model === 'etiqueta' ? { freight: { place: table.freight.at(-1)?.name || '', charge: false } } : {}),
@@ -262,7 +264,7 @@ export async function normalizeDocument(model, input, store) {
       ...common,
       labor: pick(table.labor, input.labor, 'labor'), materials: pick(table.materials, input.materials, 'material'), laborRows: table.laborRows, materialRows: table.materialRows,
       description: text(input.description, 600, 'a descrição do serviço', { required: true }), quantity: quantity(input.quantity, 'quantidade da peça') || 1, quantityUnit: text(input.quantityUnit || 'Un', 10, 'a unidade'),
-      requester: text(input.requester, 80, 'o solicitante'), contact: text(input.contact ?? issuer.contact, 80, 'o contato'), observation: text(input.observation ?? settings.observation, 200, 'a observação'),
+      requester: text(input.requester, requesterLimit, 'o solicitante'), contact: text(input.contact ?? issuer.contact, 80, 'o contato'), observation: text(input.observation ?? settings.observation, 200, 'a observação'),
     }
     if (model === 'nestle') document.number = text(input.number, 40, 'o número da solicitação', { required: true })
     else {
@@ -312,7 +314,7 @@ export async function normalizeDocument(model, input, store) {
   if (items.length > 30) fail('A composição aceita no máximo 30 itens.')
   const document = {
     ...common, city: issuer.city, quoteNumber: text(input.quoteNumber, 20, 'o número da cotação', { required: true }), customer: text(input.customer, 160, 'o cliente', { required: true }), customerDocument: text(input.customerDocument, 20, 'o CNPJ do cliente'),
-    requester: text(input.requester, 80, 'o solicitante'), attention: text(input.attention, 80, 'o comprador'), subject: text(input.subject, 300, 'o objeto da proposta', { required: true }),
+    requester: text(input.requester, requesterLimit, 'o solicitante'), attention: text(input.attention, 80, 'o comprador'), subject: text(input.subject, 300, 'o objeto da proposta', { required: true }),
     scope, items, deliveryTerm: text(input.deliveryTerm, 200, 'o prazo de entrega'), paymentDays: paymentDaysValue(input.paymentDays),
     validityDays: Math.min(365, Math.max(1, Number(input.validityDays) || settings.validityDays)), important: settings.important, fiscal: { cnae, nbs, ncm },
     technician: input.technician && typeof input.technician === 'object' ? { name: text(input.technician.name, 120, 'o técnico responsável'), registry: text(input.technician.registry, 60, 'o registro do técnico'), phone: text(input.technician.phone, 40, 'o contato do técnico') } : issuerTechnician(issuer),
@@ -426,6 +428,7 @@ export default function createProposalDocumentsRouter(requireAdmin, accounts = n
     const offer = before.offers.find((item) => item.id === request.params.id)
     if (!offer || offer.orderCode || offer.status === 'rejected') fail('Oferta não encontrada, já aceita ou recusada.', 404)
     if (offer.status === 'creating') fail(stillCreating, 409)
+    if (offer.quantityPending) fail(quantityRequired, 409)
     if (!isDay(offer.deadline)) fail(deadlineRequired)
     const stages = offer.resources?.stages ?? offer.proposal?.stages ?? []
     if (!stages.length) fail('Defina as etapas nos detalhes da oferta antes de gerar a proposta.')

@@ -827,6 +827,11 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .offer-modal-header p { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .offer-modal-close { font-size: calc(27px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .offer-form-grid label { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .offer-form-grid label.offer-quantity-pending { font-size: calc(12.5px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .offer-quantity-field { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .offer-quantity-field input { font-size: calc(14px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .offer-form-grid .offer-requesters-field { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .offer-requester-add { font-size: calc(12.5px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .offer-form-grid input, :root:is([data-font-size="small"], [data-font-size="large"]) .offer-form-grid textarea { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .offer-file-picker { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .offer-file-list li { font-size: calc(12px * var(--account-font-scale)); }

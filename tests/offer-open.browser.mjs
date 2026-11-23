@@ -48,7 +48,16 @@ try {
   assert.equal(await page.locator('.offer-filter--new').filter({ hasText: 'Em aberto' }).locator('strong').innerText(), '1')
   await page.screenshot({ path: 'test-results/offer-open-list.png' })
 
-  // Whoever clicks first takes it, without the "editar mesmo assim" question.
+  // Whoever inserted it opens the details (to check it or attach a file) without taking it: it stays open for the team.
+  await badge.click()
+  await page.locator('.offer-details-creating').getByText('Em aberto · Aguardando responsável').waitFor()
+  assert.equal((await fixture.adminRequest('/offers')).data.items.find((item) => item.id === offer.id).editingBy, undefined)
+  await page.getByRole('button', { name: 'Voltar para ofertas', exact: true }).click()
+  await badge.waitFor()
+
+  // Anybody else who clicks first takes it, without the "editar mesmo assim" question.
+  await fixture.mutateStore((store) => { const item = store.offers.find((entry) => entry.id === offer.id); item.createdBy = 'outro-auxiliar'; item.createdByName = 'Outro auxiliar' })
+  await page.reload()
   await badge.click()
   await page.locator('.offer-details-creating').getByText('Criando oferta · Gustavo').waitFor()
   assert.equal((await fixture.adminRequest('/offers')).data.items.find((item) => item.id === offer.id).editingBy?.name, 'Gustavo')
@@ -58,7 +67,7 @@ try {
   await page.getByRole('button', { name: 'Inserir Oferta Manualmente', exact: true }).click()
   assert.equal(await page.getByRole('dialog', { name: 'Inserir oferta manualmente' }).getByRole('checkbox', { name: /Deixar oferta em aberto/ }).isChecked(), true)
   assert.deepEqual(errors, [])
-  console.log('Open offer passed: default by CPF, list badge, notice and take-over on first click.')
+  console.log('Open offer passed: default by CPF, list badge, notice, author opens without taking it, take-over on first click of someone else.')
 } finally {
   delete process.env.OPEN_OFFER_DEFAULT_CPFS
   await browser.close()

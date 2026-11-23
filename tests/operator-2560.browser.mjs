@@ -39,7 +39,7 @@ try {
   }
   // The three screens work on the same stage at once: it is planned on a labor service, which is shared.
   const shared = { type: 'labor-service', id: (await fixture.adminRequest('/labor-services')).data.items[0].id }
-  for (const [service, stages] of [['Eixo de transmissão usinado', ['cutting', 'turning', 'machining', 'welding', 'painting', 'assembly']], ['Suporte soldado para esteira', ['welding', 'painting']]]) {
+  for (const [service, stages] of [['Eixo de transmissão usinado', ['cut-bend', 'turning', 'milling', 'grinding', 'painting', 'assembly']], ['Suporte soldado para esteira', ['grinding', 'painting']]]) {
     const offer = (await fixture.adminRequest('/offers', 'POST', { ...offerDraft, service, company: 'Metalúrgica Cliente Exemplo Ltda' })).data.item
     await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], kind: 'service', stages, stageResources: stagePlans(stages, shared) })
     await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', deadline: offerDraft.deadline, serviceValue: 100 } })

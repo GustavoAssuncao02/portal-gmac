@@ -1481,6 +1481,120 @@ button {
   font-weight: 700;
 }
 
+/* "Sem quantidade definida": the box under Quantidade; the field shows "A definir" while it is checked. */
+.offer-form-grid .offer-quantity-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.offer-form-grid label.offer-quantity-pending {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  color: #5a7391;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.offer-form-grid .offer-quantity-pending input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+  accent-color: #0c4c91;
+}
+
+.offer-form-grid input:disabled {
+  color: #6b7d92;
+  background: #f1f5f9;
+  cursor: not-allowed;
+}
+
+.offer-quantity-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 12px 0 4px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.offer-quantity-field input {
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid #d4deea;
+  border-radius: 7px;
+  color: #17385e;
+  background: #ffffff;
+  font-size: 14px;
+}
+
+/* Solicitantes of an offer (up to 5): same look as the other fields, one row per person. */
+.offer-form-grid .offer-requesters-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+  color: #193f6a;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.offer-requester-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.offer-requester-row > .client-autocomplete {
+  flex: 1;
+  min-width: 0;
+}
+
+.offer-requester-remove {
+  display: grid;
+  flex: 0 0 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid #d4deea;
+  border-radius: 7px;
+  color: #5b6f86;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.offer-requester-remove:hover {
+  border-color: #c0392b;
+  color: #c0392b;
+}
+
+.offer-requester-add {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 0;
+  border: 0;
+  color: #0c4c91;
+  background: transparent;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.offer-requester-add small {
+  color: #6b7d92;
+  font-weight: 600;
+}
+
+.offer-requester-add:hover {
+  text-decoration: underline;
+}
+
 .offer-form-grid input,
 .offer-form-grid textarea {
   width: 100%;

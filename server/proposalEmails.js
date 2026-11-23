@@ -11,6 +11,7 @@ import { documentDigits } from './clientDocument.js'
 import { actorOf, recordRegistryChange } from './registryHistory.js'
 import { accountJobTitle, emailTemplates, fillTemplate } from './emailTemplates.js'
 import { signatureAttachments, signatureHtml, signatureText } from './emailSignature.js'
+import { offerRequesters } from './offerRequesters.js'
 
 // "Enviar E-mail" on the proposal screen: once the proposal PDF is generated, it goes from the commercial account of the
 // portal (MAIL_FROM, the same SMTP of the site quotes) to the client and the buyer registered for the offer. The text comes
@@ -45,7 +46,7 @@ function issuerOf(store, offer) {
 export function templateValues(store, offer) {
   const issuer = issuerOf(store, offer)
   const document = offer.proposal?.document
-  const name = firstName(offer.buyer) || firstName(offer.requester)
+  const name = firstName(offer.buyer) || firstName(offerRequesters(offer)[0]?.name)
   return { saudacao: name ? `Olá, ${name}!` : 'Olá!', nome: name, numero: document?.quoteNumber || document?.number || document?.labelNumber || offer.code, etiqueta: offer.labelNumber || document?.labelNumber || '', servico: offer.service, cliente: offer.company, quantidade: `${offer.quantity} ${Number(offer.quantity) === 1 ? 'unidade' : 'unidades'}`, empresa: issuer.label, oferta: offer.code, os: offer.orderCode || '' }
 }
 const unique = (list) => list.map((item) => String(item || '').trim().toLowerCase()).filter((item, index, all) => item && emailPattern.test(item) && all.indexOf(item) === index)
@@ -53,12 +54,13 @@ const unique = (list) => list.map((item) => String(item || '').trim().toLowerCas
 // The e-mail of an offer in each template; an etiqueta comes with "Medição de etiqueta", the others with "Proposta comercial".
 export function proposalEmailDraft({ store, offer, client, senderName, jobTitle = '', from, templateId }) {
   const buyer = (store.buyers || []).find((row) => row.id === offer.buyerId)
-  // The requester registered for the offer (Cadastros › Solicitantes) also receives it, like the client and the buyer.
-  const requester = (store.requesters || []).find((row) => row.id === offer.requesterId)
+  // The requesters registered for the offer (Cadastros › Solicitantes, up to 5) also receive it, like the client and the buyer.
+  const requesterIds = new Set(offerRequesters(offer).map((item) => item.id).filter((id) => id != null))
+  const requesterEmails = (store.requesters || []).filter((row) => requesterIds.has(row.id)).map((row) => row.email)
   const issuer = issuerOf(store, offer)
   const values = templateValues(store, offer)
   // A oferta do site não tem solicitante cadastrado: o e-mail informado no formulário entra como destinatário sugerido.
-  const contacts = [offer.siteContact?.email, client?.email, requester?.email, buyer?.email]
+  const contacts = [offer.siteContact?.email, client?.email, ...requesterEmails, buyer?.email]
   const templates = emailTemplates(store).map((template) => ({ id: template.id, name: template.name, builtin: Boolean(template.builtin), subject: fillTemplate(template.subject, values), message: fillTemplate(template.message, values), to: unique(template.to || []), cc: unique(template.cc || []) }))
   const chosen = templates.find((template) => template.id === templateId) || templates.find((template) => template.id === (offer.labelQuote ? 'label' : 'proposal')) || templates[0]
   return {

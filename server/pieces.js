@@ -104,7 +104,7 @@ const newest = (rows) => [...rows].sort((left, right) => String(right.createdAt 
 // The last time the piece was made: the newest OS, or else the newest offer that already has resources. An offer still
 // being created (status 'creating') is half typed and is not a history yet.
 export function lastPieceSource(offers, orders, key, excludeOfferId) {
-  return newest(orders.filter((row) => sameKey(key)(row) && row.offerId !== excludeOfferId)) || newest(offers.filter((row) => sameKey(key)(row) && row.id !== excludeOfferId && row.status !== 'creating' && (row.resources?.materials?.length || row.resources?.stages?.length)))
+  return newest(orders.filter((row) => sameKey(key)(row) && row.offerId !== excludeOfferId)) || newest(offers.filter((row) => sameKey(key)(row) && row.id !== excludeOfferId && row.status !== 'creating' && !row.quantityPending && (row.resources?.materials?.length || row.resources?.stages?.length)))
 }
 
 // Names already used, for the suggestions while typing; the newest spelling of each piece is shown.

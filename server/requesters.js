@@ -2,6 +2,7 @@ import express from 'express'
 import { randomUUID } from 'node:crypto'
 import { readStore, mutateStore } from './offers.js'
 import { actorOf, recordRegistryChange } from './registryHistory.js'
+import { maxOfferRequesters, requesterSeparator } from './offerRequesters.js'
 
 // Cadastros > Solicitantes: the people who ask for the services on behalf of a client (Nestlé asks, but who at Nestlé?).
 // Cadastros > Compradores: the people who buy them (the client's purchasing department), kept the same way.
@@ -49,6 +50,29 @@ export function registerOfferContact(store, kind, client, value, actor = null) {
   store[kind].push(row)
   recordRegistryChange(store, { registry: kind, recordId: row.id, type: 'created', actor, after: contactView(row, [client]), note: 'Cadastrado automaticamente ao registrar uma oferta.' })
   return { name, id: row.id, created: true }
+}
+
+// The requesters of an offer (POST/PUT /offers): `requesters` (list) or, from older screens and the tests, `requester`.
+// Blank lines are dropped and a name repeated (any case) counts once; more than maxOfferRequesters is refused.
+export function offerRequesterInput(body = {}) {
+  const given = Array.isArray(body.requesters) ? body.requesters : [body.requester]
+  const names = []
+  for (const value of given) {
+    const name = clean(value)
+    if (name && !names.some((other) => sameText(other, name))) names.push(name)
+  }
+  if (names.length > maxOfferRequesters) fail(400, `Informe no máximo ${maxOfferRequesters} solicitantes.`)
+  return names
+}
+
+// Each requester of the offer joins the client's registry like a single one did (registerOfferContact). Returns the
+// fields of the offer and how many were registered now.
+export function registerOfferRequesters(store, client, names, actor = null) {
+  const links = names.map((name) => registerOfferContact(store, 'requesters', client, name, actor))
+  return {
+    fields: { requester: links.map((link) => link.name).join(requesterSeparator), requesterId: links[0]?.id ?? null, requesters: links.map(({ name, id }) => ({ name, id })) },
+    created: links.filter((link) => link.created).length,
+  }
 }
 
 // Requesters and buyers linked to a client: the client cannot be deleted while it has them.

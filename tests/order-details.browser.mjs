@@ -32,9 +32,9 @@ async function viewOrder(service) {
 try {
   const order = await createOrder('Estrutura metalica principal', {
     materials: [{ id: 'material-1', name: 'Alumínio 6061', detail: 'Chapa 10 mm', quantity: 10, unitPrice: 20 }],
-    laborEntries: [{ id: 'labor-1', type: 'machine', resource: 'Maquina de solda', hours: 20, hourlyRate: 20 }], stages: ['welding', 'painting'], kind: 'service',
+    laborEntries: [{ id: 'labor-1', type: 'machine', resource: 'Maquina de solda', hours: 20, hourlyRate: 20 }], stages: ['grinding', 'painting'], kind: 'service',
   })
-  const legacy = await createOrder('Projeto sem operacoes', { materials: [], laborEntries: [], stages: ['cutting'], kind: 'product' })
+  const legacy = await createOrder('Projeto sem operacoes', { materials: [], laborEntries: [], stages: ['cut-bend'], kind: 'product' })
   await fixture.mutateStore((store) => { store.orders.find((item) => item.code === legacy.code).proposal.stages = [] })
   const employee = (await fixture.adminRequest('/employees', 'POST', { name: 'Ana Teste', birthDate: '1990-01-01', cpf: '00000000001', email: 'ana@example.invalid', identification: '001' }, fixture.admin)).data.item
   const headers = { Authorization: `Bearer ${fixture.operatorToken}` }
@@ -75,8 +75,8 @@ try {
   assert.equal(await value('Tipo'), 'Serviço')
   assert.equal(await value('Tempo de máquina'), '20 horas')
   assert.equal(await value('Tempo de serviço'), '20 horas')
-  assert.deepEqual(await article.locator('.os-proposal-stages li').allTextContents(), ['1Soldagem', '2Pintura'])
-  assert.match(await article.locator('.os-resource-table').first().innerText(), /Alumínio 6061.*Chapa 10 mm.*10 kg.*200,00/s)
+  assert.deepEqual(await article.locator('.os-proposal-stages li').allTextContents(), ['1ESMIRILHAMENTO', '2PINTURA'])
+  assert.match(await article.locator('.os-resource-table').first().innerText(), /Alumínio 6061.*Chapa 10 mm.*10 kg.*200,00/si)
   const pdfButton = article.getByRole('button', { name: 'Baixar PDF da proposta', exact: true })
   assert.ok(await pdfButton.evaluate((element) => getComputedStyle(element).backgroundColor !== 'rgba(0, 0, 0, 0)' && getComputedStyle(element).textDecorationLine === 'none'))
   const downloadPromise = page.waitForEvent('download')
@@ -96,7 +96,7 @@ try {
   // The four production operations and the creation of the OS (the history of the OS is complete).
   await dialog.getByRole('status').getByText('5 operações registradas', { exact: true }).waitFor()
   assert.match(await dialog.innerText(), /OS criada/)
-  assert.match(await dialog.innerText(), /Soldagem: \+3 peça\(s\), 3\/10 no total/)
+  assert.match(await dialog.innerText(), /Esmirilhamento: \+3 peças/i)
   assert.match(await dialog.innerText(), /Descanso/)
   await page.screenshot({ path: 'test-results/order-history-desktop.png' })
   await page.keyboard.press('Escape')
@@ -185,7 +185,7 @@ try {
   await dialog.waitFor({ state: 'detached' })
   await article.getByLabel('Etapas na ordem de produção', { exact: true }).fill('Corte, Pintura')
   await article.getByRole('button', { name: 'Salvar etapas', exact: true }).click()
-  await article.locator('.os-stage-list strong').getByText('Pintura', { exact: true }).waitFor()
+  await article.locator('.os-stage-list strong').getByText(/^pintura$/i).waitFor()
   await article.getByRole('button', { name: 'Histórico de operações', exact: true }).click()
   await dialog.getByRole('status').getByText('2 operações registradas', { exact: true }).waitFor()
   assert.match(await dialog.innerText(), /Etapas configuradas.*Corte, Pintura/s)

@@ -12,7 +12,7 @@ page.on('dialog', async (dialog) => { errors.push(dialog.type()); await dialog.d
 
 try {
   const offer = (await fixture.adminRequest('/offers', 'POST', { ...offerDraft, service: 'Eixo em serviço externo' })).data.item
-  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], stages: ['cutting'], kind: 'service' })
+  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], stages: ['cut-bend'], kind: 'service' })
   await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', title: 'Proposta A', deadline: offerDraft.deadline, serviceValue: 100 } })
   const order = (await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')).data.item
   await fixture.adminRequest('/employees', 'POST', { name: 'Aloisio Teste', cpf: '00000000001', identification: '001', birthDate: '1990-01-01', email: 'aloisio@example.invalid' })
@@ -42,7 +42,7 @@ try {
   assert.equal(await field('Operação').evaluate((element) => element.tagName), 'SELECT')
   await field('Data e hora').fill('2026-10-01T08:00')
   await field('Responsável').selectOption({ label: 'Aloisio Teste' })
-  await field('Etapa').selectOption({ label: stage.name })
+  await field('Etapa').selectOption(stage.key)
   await save.click()
   await form.waitFor({ state: 'detached' })
   const start = row('Início')

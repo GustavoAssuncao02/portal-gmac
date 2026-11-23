@@ -12,7 +12,7 @@ page.on('dialog', async (dialog) => { errors.push(dialog.type()); await dialog.d
 
 try {
   const offer = (await fixture.adminRequest('/offers', 'POST', { ...offerDraft, service: 'Eixo com pausa esquecida' })).data.item
-  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], stages: ['cutting'], kind: 'service' })
+  await fixture.adminRequest(`/offers/${offer.id}/resources`, 'PUT', { materials: [], laborEntries: [], stages: ['cut-bend'], kind: 'service' })
   await fixture.adminRequest(`/offers/${offer.id}/proposal`, 'POST', { layout: 'classic', proposal: { key: 'A', title: 'Proposta A', deadline: offerDraft.deadline, serviceValue: 100 } })
   const order = (await fixture.adminRequest(`/offers/${offer.id}/accept`, 'POST')).data.item
   const employee = (await fixture.adminRequest('/employees', 'POST', { name: 'Ana Teste', cpf: '00000000001', identification: '001', birthDate: '1990-01-01', email: 'ana@example.invalid' }, fixture.admin)).data.item

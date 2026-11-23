@@ -62,6 +62,42 @@ function put(doc, value, x0, x1, top, { font, size, color = '#000000', align = '
   const x = (align === 'right' ? x1 - pad - width : align === 'center' ? (x0 + x1 - width) / 2 : x0 + pad) + dx
   doc.text(text, x, top + (size - current) * 0.6, { lineBreak: false, underline })
 }
+// A cell that may hold several names (the requesters, up to 5): one line while it stays readable at 7 pt; otherwise two
+// lines centered on the same spot, broken between names when it can, and smaller only as much as needed.
+function putFit(doc, value, x0, x1, top, height, style, { lift = 0 } = {}) {
+  const text = String(value ?? '').trim()
+  if (!text) return
+  const { font, size, color = '#000000', align = 'left', pad = 2, dx = 0 } = style
+  const room = x1 - x0 - pad * 2
+  doc.font(font)
+  if (doc.fontSize(Math.min(size, 7)).widthOfString(text) <= room) return put(doc, text, x0, x1, top, style)
+  const center = top + size / 2
+  const wrap = () => {
+    const lines = []
+    for (const part of text.split(/(?<=,)\s+/)) {
+      for (const word of doc.widthOfString(part) <= room ? [part] : part.split(/\s+/)) {
+        const joined = lines.length ? `${lines.at(-1)} ${word}` : word
+        if (lines.length && doc.widthOfString(joined) <= room) lines[lines.length - 1] = joined
+        else lines.push(word)
+      }
+    }
+    return lines
+  }
+  for (let current = size; current >= 4.5; current -= 0.25) {
+    doc.fontSize(current)
+    const lines = wrap(), gap = current * 1.12
+    if (lines.length > 2 || lines.some((line) => doc.widthOfString(line) > room) || current + gap > height) continue
+    doc.fillColor(color)
+    const first = center - (current + gap * (lines.length - 1)) / 2 - lift
+    lines.forEach((line, index) => {
+      const width = doc.widthOfString(line)
+      const x = (align === 'right' ? x1 - pad - width : align === 'center' ? (x0 + x1 - width) / 2 : x0 + pad) + dx
+      doc.text(line, x, first + index * gap, { lineBreak: false })
+    })
+    return
+  }
+  put(doc, text, x0, x1, top, style)
+}
 const fill = (doc, x0, y0, x1, y1, color) => doc.save().rect(x0, y0, x1 - x0, y1 - y0).fill(color).restore()
 const hLine = (doc, x0, x1, y, width = 0.7, color = '#000000') => doc.save().rect(x0, y, x1 - x0, width).fill(color).restore()
 const vLine = (doc, x, y0, y1, width = 0.7, color = '#000000') => doc.save().rect(x, y0, width, y1 - y0).fill(color).restore()
@@ -123,7 +159,7 @@ export async function renderNestle(document) {
   doc.fillColor('#000000').text(document.description || '', 412.75 - descriptionWidth / 2, Math.max(66, 87.3 - descriptionHeight / 2), { width: descriptionWidth, align: 'center', height: 44, ellipsis: true })
   put(doc, `Quantidade: ${String(document.quantity ?? '').padStart(2, '0')} ${document.quantityUnit || 'Un'}`, 105.9, 720.4, 115.9, { ...head, align: 'center', pad: 0 })
   put(doc, `Nº: ${document.number || ''}`, 655, 769.0, 115.9, { ...head, pad: 2.2 })
-  put(doc, `Solicitante: ${document.requester || ''}`, 607.7, 769.0, 137.4, { ...head, pad: 2.2 })
+  putFit(doc, `Solicitante: ${document.requester || ''}`, 607.7, 769.0, 137.4, 19, { ...head, pad: 2.2 }, { lift: 2.5 }) // two lines stay on the yellow
 
   put(doc, 'DADOS DA EMPRESA', 251.1, 600, 154.9, { font: f.arialBold, size: 8, pad: 1.6 })
   fill(doc, 251.1, 166.8, 769.0, 264.9, '#ffff00')
@@ -279,7 +315,8 @@ export async function renderEtiqueta(document) {
     for (const [x0, x1, text, isLabel] of cells) {
       if (isLabel) fill(doc, x0 + 0.7, y0 + 0.7, x1, y1, ET.grey)
       box(doc, x0, y0, x1, y1)
-      put(doc, text, x0, x1, y0 + 5.9 + (isLabel && text === 'Nome do componente' ? -0.4 : 0), isLabel ? { ...label, underline: true } : value)
+      if (!isLabel && text === document.requester) putFit(doc, text, x0, x1, y0 + 5.9, y1 - y0 - 2, value)
+      else put(doc, text, x0, x1, y0 + 5.9 + (isLabel && text === 'Nome do componente' ? -0.4 : 0), isLabel ? { ...label, underline: true } : value)
     }
   }
   fill(doc, 23.5, 201.6, 93.3, 253.2, ET.grey)
@@ -591,10 +628,11 @@ export async function renderLetter(document) {
   const leftLine = (label, value) => {
     if (!value) return
     doc.font(f.calibri).fontSize(10.5).fillColor(INK.muted).text(`${label} `, LETTER.left, left, { continued: true, width: 285 }).font(f.calibriBold).fillColor(INK.text).text(value)
-    left += 15
+    // Several requesters may take more than one line: the next line starts below them.
+    left = Math.max(left + 15, doc.y + 2.2)
   }
   leftLine(`${documentKind(document.customerDocument)}:`, document.customerDocument)
-  leftLine('Solicitante:', document.requester)
+  leftLine(String(document.requester || '').includes(', ') ? 'Solicitantes:' : 'Solicitante:', document.requester)
   leftLine('Comprador:', document.attention)
   const cardLines = [
     [[`${document.city || issuer.city}, ${longDate(document.date)}`, f.calibri]],

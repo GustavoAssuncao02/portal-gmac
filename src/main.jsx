@@ -7,7 +7,8 @@ import PasswordHistoryModal from './PasswordHistoryModal.jsx'
 import OrderDetails from './OrderDetails.jsx'
 import RejectOfferModal from './RejectOfferModal.jsx'
 import { CreatingOfferBadge, TakeOverOfferModal, DiscardOfferModal, isCreating } from './CreatingOffer.jsx'
-import DeclineProposalModal, { UndoDeclineModal, AcceptOfferModal, UndoAcceptModal } from './DeclineProposalModal.jsx'
+import OfferQuantityModal, { quantityPending, quantityText } from './OfferQuantityModal.jsx'
+import DeclineProposalModal, { UndoDeclineModal, UndoRejectModal, AcceptOfferModal, UndoAcceptModal } from './DeclineProposalModal.jsx'
 import RejectMaterialRequestModal from './RejectMaterialRequestModal.jsx'
 import { MaterialRequestModal, MaterialRequestHistoryModal } from './MaterialRequestModals.jsx'
 import PendingMaterialsModal from './PendingMaterialsModal.jsx'
@@ -26,7 +27,8 @@ import { bySector, parseSectors, sectorsOf } from './machineSectors.js'
 import ServicePanelRow, { collaboratorNames, panelDeadline, panelDuration } from './ServicePanelRow.jsx'
 import PieceNameInput from './PieceNameInput.jsx'
 import ClientNameInput from './ClientNameInput.jsx'
-import RequesterNameInput from './RequesterNameInput.jsx'
+import RequesterNameInput, { RequesterListInput } from './RequesterNameInput.jsx'
+import { offerRequesterNames, requestersLabel } from '../server/offerRequesters.js'
 import ProposalEmailModal, { ProposalEmailHistory } from './ProposalEmailModal.jsx'
 import StagesScreen from './StagesScreen.jsx'
 import { documentDigits, documentKind, maskClientDocument } from '../server/clientDocument.js'
@@ -1340,7 +1342,7 @@ const offerColumns = [
   { key: 'service', label: 'Peça / Serviço', value: (offer) => offer.service },
   { key: 'company', label: 'Cliente', value: (offer) => offer.company },
   { key: 'label', label: 'Etiqueta', value: (offer) => offer.labelNumber },
-  { key: 'quantity', label: 'Quantidade', value: (offer) => Number(offer.quantity), numeric: true },
+  { key: 'quantity', label: 'Quantidade', value: (offer) => (quantityPending(offer) ? 0 : Number(offer.quantity)), numeric: true },
   { key: 'requestedAt', label: 'Data de solicitação', value: (offer) => offer.requestedAt, numeric: true },
   { key: 'deadline', label: 'Prazo solicitado', value: (offer) => offer.deadline, numeric: true },
   { key: 'status', label: 'Status', value: (offer) => offer.status },
@@ -1354,13 +1356,14 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
   const [rejectingOffer, setRejectingOffer] = useState(null)
   const [decliningOffer, setDecliningOffer] = useState(null)
   const [undoingOffer, setUndoingOffer] = useState(null)
+  const [unrejectingOffer, setUnrejectingOffer] = useState(null)
   const [acceptingOffer, setAcceptingOffer] = useState(null)
   const [unacceptingOffer, setUnacceptingOffer] = useState(null)
   const [takingOverOffer, setTakingOverOffer] = useState(null)
   useMobileModal(manualOpen, '.offer-manual-modal', () => setManualOpen(false))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const emptyForm = { cnpj: '', company: '', requester: '', buyer: '', deadline: '', service: '', quantity: '', description: '', labelNumber: '', attachments: [], open: false }
+  const emptyForm = { cnpj: '', company: '', requesters: [''], buyer: '', deadline: '', service: '', quantity: '', quantityPending: false, description: '', labelNumber: '', attachments: [], open: false }
   const [manualForm, setManualForm] = useState(emptyForm)
   // "Deixar oferta em aberto e notificar" comes checked for some accounts (OPEN_OFFER_DEFAULT_CPFS on the server).
   const [openDefault, setOpenDefault] = useState(false)
@@ -1424,9 +1427,10 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
     let created = false
     try {
       const { attachments, ...fields } = manualForm
-      const { item, requesterCreated, buyerCreated } = await apiRequest('/api/offers', jsonOptions('POST', fields))
+      const { item, requestersCreated = 0, buyerCreated } = await apiRequest('/api/offers', jsonOptions('POST', fields))
       created = true
-      const contacts = requesterCreated || buyerCreated ? (requesterCreated && buyerCreated ? 'Solicitante e comprador cadastrados automaticamente' : `${requesterCreated ? 'Solicitante' : 'Comprador'} cadastrado automaticamente`) : ''
+      const requesterText = requestersCreated > 1 ? `${requestersCreated} solicitantes` : 'Solicitante'
+      const contacts = requestersCreated || buyerCreated ? (requestersCreated && buyerCreated ? `${requesterText} e comprador cadastrados automaticamente` : requestersCreated > 1 ? `${requesterText} cadastrados automaticamente` : `${requestersCreated ? 'Solicitante' : 'Comprador'} cadastrado automaticamente`) : ''
       if (contacts) setRequesterNotice(contacts)
       // One file per request, as the details screen sends them; a file that fails does not stop the others.
       const failed = []
@@ -1461,8 +1465,11 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
 
   // Who is creating the offer opens it; anybody else is asked first and, confirming, becomes the one creating it.
   // A site offer nobody assumed opens straight away: whoever opens it becomes the one in charge, without the question.
+  // An open offer opened by whoever inserted it (to check it or attach a file) stays open for the people in charge.
   async function openCreatingOffer(offer) {
-    if (offer.editingBy?.id != null && user?.id != null && String(offer.editingBy.id) === String(user.id)) return onSelectOffer(offer.id)
+    const mine = (id) => id != null && user?.id != null && String(id) === String(user.id)
+    if (mine(offer.editingBy?.id)) return onSelectOffer(offer.id)
+    if (offer.openForTeam && !offer.editingBy && mine(offer.createdBy)) return onSelectOffer(offer.id)
     if ((offer.origin === 'Site' || offer.openForTeam) && !offer.editingBy) {
       try {
         await apiRequest(`/api/offers/${encodeURIComponent(offer.id)}/take-over`, jsonOptions('POST', {}))
@@ -1506,11 +1513,11 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
             <div className="offers-table-row offers-table-header">{offerColumns.map((column) => <SortHeader key={column.key} as="span" column={column} list={offerList} />)}<span>Ações</span></div>
             {offerList.rows.map((offer) => <div className="offers-table-row" key={offer.id}>
               <div className="offer-piece"><strong>{offer.service}</strong><span>{offer.code}</span>{offer.labelNumber && <span className="offer-piece-label">Etiqueta {offer.labelNumber}</span>}</div>
-              <span data-label="Cliente">{offer.company}</span><span data-label="Etiqueta">{offer.labelNumber || "—"}</span><span data-label="Quantidade">{offer.quantity} un</span><span data-label="Solicitação">{displayDate(offer.requestedAt)}</span><span data-label="Prazo">{displayDate(offer.deadline)}</span>
+              <span data-label="Cliente">{offer.company}</span><span data-label="Etiqueta">{offer.labelNumber || "—"}</span><span data-label="Quantidade">{quantityText(offer, 'un')}</span><span data-label="Solicitação">{displayDate(offer.requestedAt)}</span><span data-label="Prazo">{displayDate(offer.deadline)}</span>
               <div className="offer-status-cell"><div className={`offer-table-status offer-table-status--${savedProposal(offer) ? 'saved' : offer.status}`}><strong>{savedProposal(offer) ? 'Proposta salva' : isCreating(offer) ? (offer.openForTeam && !offer.editingBy ? 'Em aberto' : 'Criando oferta') : offer.status === 'review' ? 'Em análise' : offer.status === 'proposed' ? 'Proposta gerada' : offer.status === 'rejected' ? offer.proposalDecline ? `Proposta ${offer.proposalDecline.key} recusada` : 'Recusada' : 'Aceita'}</strong>{savedProposal(offer) && <span>Opção {offer.proposalDraft.selectedKey}</span>}{offer.orderCode && <span>{offer.orderCode}</span>}{offer.labelQuote?.pending && <span>{labelQuotePendingText}</span>}{offer.proposalDecline?.reason && <span>{offer.proposalDecline.reason}</span>}</div>{offer.status === 'proposed' && offer.proposal?.generatedAt && <ProposalSentSince at={offer.proposalEmails?.[0]?.sentAt || offer.proposal.generatedAt} />}</div>
               <span data-label="Origem">{offer.origin}</span>
               <div className={`offer-table-actions${isCreating(offer) ? ' offer-table-actions--creating' : ''}`}>
-                {isCreating(offer) ? <><CreatingOfferBadge offer={offer} onOpen={() => openCreatingOffer(offer)} />{offer.origin === 'Site' && <button className="offer-reject-button" type="button" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setRejectingOffer(offer) }}><X size={15} aria-hidden="true" />Recusar</button>}</> : offer.status === 'rejected' ? offer.proposalDecline ? <button className="offer-review-button" type="button" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setUndoingOffer(offer) }}>Desfazer recusa</button> : <span>Recusada</span> : offer.status === 'accepted'
+                {isCreating(offer) ? <><CreatingOfferBadge offer={offer} onOpen={() => openCreatingOffer(offer)} />{offer.origin === 'Site' && <button className="offer-reject-button" type="button" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setRejectingOffer(offer) }}><X size={15} aria-hidden="true" />Recusar</button>}</> : offer.status === 'rejected' ? offer.proposalDecline ? <button className="offer-review-button" type="button" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setUndoingOffer(offer) }}>Desfazer recusa</button> : <button className="offer-review-button" type="button" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setUnrejectingOffer(offer) }}>Desfazer recusa</button> : offer.status === 'accepted'
                   ? <><button className="offer-review-button" type="button" onClick={() => onSelectOrder(offer.orderCode)}>Ver OS</button><button className="offer-reject-button" type="button" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setUnacceptingOffer(offer) }}>Desfazer aceite</button></>
                   : <>{savedProposal(offer) ? <button className="offer-review-button" type="button" onClick={() => window.dispatchEvent(new CustomEvent('gmac-proposal-open', { detail: offer.id }))}>Proposta salva</button> : <button className="offer-review-button" type="button" onClick={() => onSelectOffer(offer.id)}>{offer.status === 'review' ? 'Em análise' : 'Ver proposta'}</button>}{offer.status === 'review' && offer.origin === 'Inserida Manualmente' && !offer.orderCode && <button className="offer-reject-button" type="button" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setRejectingOffer(offer) }}><X size={15} aria-hidden="true" />Recusar</button>}{offer.proposal && <button className="offer-accept-button" type="button" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setAcceptingOffer(offer) }}>✓ Aceitar Oferta</button>}{offer.status === 'review' && labelQuoteOffer(offer) && <button className="offer-accept-button" type="button" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setAcceptingOffer(offer) }}>✓ Abrir OS da etiqueta</button>}{offer.proposal && !offer.orderCode && <button className="offer-reject-button" type="button" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setDecliningOffer(offer) }}><X size={15} aria-hidden="true" />Cliente recusou</button>}</>}
               </div>
@@ -1523,6 +1530,7 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
       {acceptingOffer && <AcceptOfferModal offer={acceptingOffer} onConfirm={async () => { await apiRequest(`/api/offers/${acceptingOffer.id}/accept`, { method: 'POST' }); await onRefresh() }} onClose={() => setAcceptingOffer(null)} />}
       {unacceptingOffer && <UndoAcceptModal offer={unacceptingOffer} orderCode={unacceptingOffer.orderCode} onConfirm={async () => { await apiRequest(`/api/offers/${encodeURIComponent(unacceptingOffer.id)}/unaccept`, jsonOptions('POST', {})); await onRefresh() }} onClose={() => setUnacceptingOffer(null)} />}
       {takingOverOffer && <TakeOverOfferModal offer={takingOverOffer} onConfirm={async () => { await apiRequest(`/api/offers/${encodeURIComponent(takingOverOffer.id)}/take-over`, jsonOptions('POST', {})); await onRefresh(); onSelectOffer(takingOverOffer.id) }} onClose={() => setTakingOverOffer(null)} />}
+      {unrejectingOffer && <UndoRejectModal offer={unrejectingOffer} onConfirm={async () => { await apiRequest(`/api/offers/${encodeURIComponent(unrejectingOffer.id)}/unreject`, jsonOptions('POST', {})); await onRefresh() }} onClose={() => setUnrejectingOffer(null)} />}
       {undoingOffer && <UndoDeclineModal offer={undoingOffer} onConfirm={async () => { await apiRequest(`/api/offers/${encodeURIComponent(undoingOffer.id)}/undecline`, jsonOptions('POST', {})); await onRefresh() }} onClose={() => setUndoingOffer(null)} />}
       {manualOpen && <div className="modal-backdrop offer-modal-layer" onMouseDown={(event) => { if (event.target === event.currentTarget) setManualOpen(false) }}>
         <section className="offer-manual-modal" role="dialog" aria-modal="true" aria-labelledby="manual-offer-title" onMouseDown={(event) => event.stopPropagation()}>
@@ -1530,11 +1538,15 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
           <form onSubmit={addOffer}><div className="offer-form-grid">
             <label>CNPJ/CPF *<input value={manualForm.cnpj} onChange={(event) => changeManualDocument(event.target.value)} inputMode="numeric" placeholder="CNPJ ou CPF do cliente" required /></label>
             <label>Empresa *<ClientNameInput label="Empresa *" value={manualForm.company} documentValue={manualForm.cnpj} clients={clients} onChange={(value) => updateManualForm('company', value)} onSelect={(client) => setManualForm((current) => ({ ...current, company: client.name, cnpj: maskClientDocument(client.document) }))} required /></label>
-            <label>Solicitante<RequesterNameInput label="Solicitante" value={manualForm.requester} client={manualClient} requesters={requesters} onChange={(value) => updateManualForm('requester', value)} /></label>
+            <RequesterListInput values={manualForm.requesters} client={manualClient} requesters={requesters} onChange={(value) => updateManualForm('requesters', value)} />
             <label>Comprador<RequesterNameInput label="Comprador" kind={contactKinds.buyers} who="quem compra o serviço" value={manualForm.buyer} client={manualClient} requesters={buyers} onChange={(value) => updateManualForm('buyer', value)} /></label>
             <label>Peça/Serviço *<PieceNameInput label="Peça/Serviço *" value={manualForm.service} onChange={(value) => updateManualForm('service', value)} pieces={pieces} required /></label>
             <label>Prazo solicitado<input type="date" value={manualForm.deadline} onChange={(event) => updateManualForm('deadline', event.target.value)} /></label>
-            <label>Quantidade *<input type="number" min="1" step="1" value={manualForm.quantity} onChange={(event) => updateManualForm('quantity', event.target.value)} required /></label>
+            {/* "Sem quantidade definida": somebody goes to the client to count the pieces; it is asked before the proposal. */}
+            <div className="offer-quantity-cell">
+              <label>{manualForm.quantityPending ? 'Quantidade' : 'Quantidade *'}<input type="number" min="1" step="1" value={manualForm.quantityPending ? '' : manualForm.quantity} onChange={(event) => updateManualForm('quantity', event.target.value)} disabled={manualForm.quantityPending} placeholder={manualForm.quantityPending ? 'A definir' : undefined} required={!manualForm.quantityPending} /></label>
+              <label className="offer-quantity-pending"><input type="checkbox" checked={manualForm.quantityPending} onChange={(event) => updateManualForm('quantityPending', event.target.checked)} />Sem quantidade definida</label>
+            </div>
             <label>Número da etiqueta<input value={manualForm.labelNumber} onChange={(event) => updateManualForm('labelNumber', event.target.value)} placeholder="Opcional" /></label>
             <label className="offer-form-field--full">Descrição do serviço *<textarea value={manualForm.description} onChange={(event) => updateManualForm('description', event.target.value)} rows="4" required /></label>
             <div className="offer-form-field--full offer-attachment-field">
@@ -1580,7 +1592,7 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
   const [entryMode, setEntryMode] = useState(() => currentEntryMode(offer?.resources))
   const [stageTimesPerPiece, setStageTimesPerPiece] = useState(offer?.resources?.stageTimesPerPiece || {})
   const [editingInfo, setEditingInfo] = useState(false), [infoNotice, setInfoNotice] = useState(''), [resourcesVersion, setResourcesVersion] = useState(0)
-  const [discarding, setDiscarding] = useState(false), [openingLabel, setOpeningLabel] = useState(false)
+  const [discarding, setDiscarding] = useState(false), [openingLabel, setOpeningLabel] = useState(false), [askingQuantity, setAskingQuantity] = useState(false)
   useEffect(() => {
     if (!infoNotice) return undefined
     const timer = setTimeout(() => setInfoNotice(''), 6000)
@@ -1876,6 +1888,19 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
       return
     }
     if (!(await saveResources())) return
+    // Inserted "Sem quantidade definida": the quantity comes first (the dialog then goes on from here).
+    if (quantityPending(offer)) return setAskingQuantity(true)
+    await proceedToProposal()
+  }
+
+  async function confirmQuantity(quantity) {
+    await apiRequest(`/api/offers/${encodeURIComponent(offer.id)}/quantity`, jsonOptions('PUT', { quantity }))
+    await onRefresh()
+    setAskingQuantity(false)
+    await proceedToProposal()
+  }
+
+  async function proceedToProposal() {
     // An offer being created goes to analysis here: from now on it is on the list for everybody.
     if (isCreating(offer)) {
       try {
@@ -1903,13 +1928,15 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
       <Sidebar collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} />
       <main className="offer-details-main">
         <WorkspaceTabs tabs={tabs} activeNav={activeNav} onNavigate={onNavigate} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} />
-        <div className="offer-details-header"><button className="offer-back-button" type="button" onClick={() => onNavigate('Ofertas e serviços')} aria-label="Voltar para ofertas"><ArrowLeft size={24} aria-hidden="true" /></button><h1>Detalhes da oferta {offer.code}</h1>{isCreating(offer) && <span className="offer-details-creating" title="Só depois de clicar em Fazer proposta a oferta fica disponível na lista para todos"><Icon name="edit" />Criando oferta{offer.editingBy?.name ? ` · ${offer.editingBy.name}` : ''}</span>}</div>
+        <div className="offer-details-header"><button className="offer-back-button" type="button" onClick={() => onNavigate('Ofertas e serviços')} aria-label="Voltar para ofertas"><ArrowLeft size={24} aria-hidden="true" /></button><h1>Detalhes da oferta {offer.code}</h1>{isCreating(offer) && (offer.openForTeam && !offer.editingBy
+          ? <span className="offer-details-creating" title="Oferta em aberto: quem abrir primeiro pela lista assume a oferta"><Icon name="edit" />Em aberto · Aguardando responsável</span>
+          : <span className="offer-details-creating" title="Só depois de clicar em Fazer proposta a oferta fica disponível na lista para todos"><Icon name="edit" />Criando oferta{offer.editingBy?.name ? ` · ${offer.editingBy.name}` : ''}</span>)}</div>
         <div className="offer-details-grid">
-          <section className="offer-information-card"><div className="offer-information-heading"><span className="offer-details-section-title">Informações do serviço</span>{offer.orderCode ? <small>Oferta aceita: corrija pela {offer.orderCode}</small> : offer.status !== 'rejected' && <button className="offer-information-edit" type="button" onClick={() => setEditingInfo(true)}><Pencil size={14} aria-hidden="true" />Editar</button>}</div><h2>{upper(offer.service)}</h2><p className="offer-details-description">{upper(offer.description)}</p><div className="offer-detail-facts"><div><span>▥</span><small>Cliente solicitante</small><strong>{upper(offer.company)}</strong><em>{documentKind(offer.cnpj)}: {offer.cnpj}</em>{offer.requester && <em>Solicitante: {upper(offer.requester)}</em>}{offer.buyer && <em>Comprador: {upper(offer.buyer)}</em>}</div><div><span>▣</span><small>Data da solicitação</small><strong>{displayDate(offer.requestedAt)}</strong></div><div><span>◇</span><small>Quantidade solicitada</small><strong>{offer.quantity} unidades</strong></div><div><span>◷</span><small>Prazo solicitado pelo cliente</small><strong>{offer.deadline ? displayDate(offer.deadline) : 'Não informado'}</strong></div></div><PieceLeadTime offer={offer} /><div className="offer-detail-text"><h3>Número da etiqueta</h3><p>{upper(offer.labelNumber) || 'Não informado'}</p></div>{offer.notes && <div className="offer-detail-text"><h3>Observação</h3><p className="offer-detail-notes">{upper(offer.notes)}</p></div>}<div className="offer-detail-text"><h3>Anexos da solicitação</h3>{offer.attachments?.length ? <ul>{offer.attachments.map((attachment) => <li key={attachment.id}><DownloadLink url={attachmentUrl(offer.id, attachment.id)} name={attachment.name}>{attachment.name}</DownloadLink></li>)}</ul> : <p>Nenhum anexo adicionado.</p>}</div>{offer.proposal && <div className="offer-detail-text"><h3>Proposta gerada</h3><p><DownloadLink url={`/api/offers/${offer.id}/proposal.pdf`} name={`proposta-${offer.code}.pdf`}>Baixar PDF da proposta</DownloadLink></p></div>}{(offer.proposal || offer.proposalEmails?.length > 0) && <ProposalEmailHistory offer={offer} />}</section>
+          <section className="offer-information-card"><div className="offer-information-heading"><span className="offer-details-section-title">Informações do serviço</span>{offer.orderCode ? <small>Oferta aceita: corrija pela {offer.orderCode}</small> : offer.status !== 'rejected' && <button className="offer-information-edit" type="button" onClick={() => setEditingInfo(true)}><Pencil size={14} aria-hidden="true" />Editar</button>}</div><h2>{upper(offer.service)}</h2><p className="offer-details-description">{upper(offer.description)}</p><div className="offer-detail-facts"><div><span>▥</span><small>Cliente solicitante</small><strong>{upper(offer.company)}</strong><em>{documentKind(offer.cnpj)}: {offer.cnpj}</em>{offer.requester && <em>{requestersLabel(offerRequesterNames(offer).length)}: {upper(offer.requester)}</em>}{offer.buyer && <em>Comprador: {upper(offer.buyer)}</em>}</div><div><span>▣</span><small>Data da solicitação</small><strong>{displayDate(offer.requestedAt)}</strong></div><div><span>◇</span><small>Quantidade solicitada</small><strong>{quantityText(offer)}</strong></div><div><span>◷</span><small>Prazo solicitado pelo cliente</small><strong>{offer.deadline ? displayDate(offer.deadline) : 'Não informado'}</strong></div></div><PieceLeadTime offer={offer} /><div className="offer-detail-text"><h3>Número da etiqueta</h3><p>{upper(offer.labelNumber) || 'Não informado'}</p></div>{offer.notes && <div className="offer-detail-text"><h3>Observação</h3><p className="offer-detail-notes">{upper(offer.notes)}</p></div>}<div className="offer-detail-text"><h3>Anexos da solicitação</h3>{offer.attachments?.length ? <ul>{offer.attachments.map((attachment) => <li key={attachment.id}><DownloadLink url={attachmentUrl(offer.id, attachment.id)} name={attachment.name}>{attachment.name}</DownloadLink></li>)}</ul> : <p>Nenhum anexo adicionado.</p>}</div>{offer.proposal && <div className="offer-detail-text"><h3>Proposta gerada</h3><p><DownloadLink url={`/api/offers/${offer.id}/proposal.pdf`} name={`proposta-${offer.code}.pdf`}>Baixar PDF da proposta</DownloadLink></p></div>}{(offer.proposal || offer.proposalEmails?.length > 0) && <ProposalEmailHistory offer={offer} />}</section>
           <section className="offer-materials-card offer-resources-card">
             <fieldset className="offer-resource-fields" disabled={Boolean(offer.orderCode)}>
             <EntryModeChoice value={entryMode} onChange={changeEntryMode} />
-            <div className="offer-resource-heading"><div><span className="offer-details-section-title">Materiais necessários</span><p>{perPiece ? `Informe a quantidade de uma peça, em quilos (kg), em metros (m), em unidades (un) ou em conjuntos (cj). O total é calculado para as ${offer.quantity} ${Number(offer.quantity) === 1 ? 'peça' : 'peças'} do pedido.` : 'Adicione os materiais e informe a quantidade, em quilos (kg), em metros (m), em unidades (un) ou em conjuntos (cj).'}</p></div><button className="offer-add-resource-button" type="button" onClick={() => { if (editingMaterialId == null && materialFormOpen) return closeMaterialForm(); closeMaterialForm(); setMaterialFormOpen(true) }}><Icon name="plus" />Adicionar material</button></div>
+            <div className="offer-resource-heading"><div><span className="offer-details-section-title">Materiais necessários</span><p>{perPiece ? `Informe a quantidade de uma peça, em quilos (kg), em metros (m), em unidades (un) ou em conjuntos (cj). ${quantityPending(offer) ? 'Quantidade a definir: o total fica para 1 peça e é recalculado quando a quantidade for informada.' : `O total é calculado para as ${offer.quantity} ${Number(offer.quantity) === 1 ? 'peça' : 'peças'} do pedido.`}` : 'Adicione os materiais e informe a quantidade, em quilos (kg), em metros (m), em unidades (un) ou em conjuntos (cj).'}</p></div><button className="offer-add-resource-button" type="button" onClick={() => { if (editingMaterialId == null && materialFormOpen) return closeMaterialForm(); closeMaterialForm(); setMaterialFormOpen(true) }}><Icon name="plus" />Adicionar material</button></div>
             {materialFormOpen && <form className="offer-inline-form" onSubmit={addMaterial} aria-label={editingMaterialId != null ? 'Editar material' : 'Adicionar material'}>
               <label>Material *<div className="material-autocomplete"><div className="material-autocomplete-input">
                 <input className="upper-input" value={materialForm.name} autoComplete="off" role="combobox" aria-expanded={materialSuggestionsOpen} aria-controls="offer-material-suggestions" onFocus={() => setMaterialSuggestionsOpen(true)} onBlur={(event) => { if (!event.currentTarget.closest('.material-autocomplete')?.contains(event.relatedTarget)) setMaterialSuggestionsOpen(false) }} onChange={(event) => { selectInventoryMaterial(event.target.value); setMaterialSuggestionsOpen(true) }} onKeyDown={(event) => { if (event.key === 'Escape') setMaterialSuggestionsOpen(false); if (event.key === 'ArrowDown' && matchingInventory.length) { event.preventDefault(); document.getElementById('offer-material-suggestions')?.querySelector('button')?.focus() } }} placeholder="Digite para buscar no estoque" required /><span>⌄</span>
@@ -1947,6 +1974,7 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
       {editingInfo && <OfferInfoEditModal offer={offer} onClose={() => setEditingInfo(false)} onSaved={async (result, { resized }) => { await onRefresh(); if (resized) setResourcesVersion((value) => value + 1); setEditingInfo(false); setInfoNotice(result.proposalDiscarded ? 'Informações atualizadas. A proposta foi descartada: gere de novo com os dados corrigidos.' : 'Informações atualizadas.') }} />}
       {infoNotice && <p className="app-toast" role="status"><CircleCheck size={16} aria-hidden="true" />{infoNotice}</p>}
       {discarding && <DiscardOfferModal offer={offer} onConfirm={discardOffer} onClose={() => setDiscarding(false)} />}
+      {askingQuantity && <OfferQuantityModal offer={offer} onConfirm={confirmQuantity} onClose={() => setAskingQuantity(false)} />}
     </div>
   )
 }
@@ -2136,7 +2164,7 @@ function ProposalBuilder({ collapsed, onToggle, activeNav, onNavigate, onLogout,
       <main className="proposal-main">
         <WorkspaceTabs tabs={tabs} activeNav={activeNav} onNavigate={onNavigate} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} />
         <div className="proposal-header"><div><button className="proposal-back-button" type="button" onClick={() => onNavigate('Detalhes da oferta')} aria-label="Voltar para detalhes"><ArrowLeft size={24} aria-hidden="true" /></button><div><h1>Fazer proposta</h1><p>Escolha uma das quatro opções e ajuste os valores para esta solicitação.</p></div></div></div>
-        <section className="proposal-service-summary"><div className="proposal-service-image">▰</div><div className="proposal-service-client"><h2>{offer.service}</h2><span>Cliente solicitante</span><strong>{offer.company}</strong><small>{documentKind(offer.cnpj)}: {offer.cnpj}</small>{offer.requester && <small>Solicitante: {offer.requester}</small>}<small>Etiqueta: {offer.labelNumber || 'não informada'}</small></div><div className="proposal-service-fact"><span>▣</span><div><small>Prazo solicitado</small><strong>{offer.deadline ? displayDate(offer.deadline) : 'Não informado'}</strong></div><span>◇</span><div><small>Quantidade</small><strong>{offer.quantity} unidades</strong></div></div><div className="proposal-service-summary-copy"><strong>Resumo do serviço</strong><p>{offer.description}</p></div><div className="proposal-material-summary"><span>Materiais informados</span><strong>{formatMoney(materialCost)}</strong><button type="button" onClick={() => onNavigate('Detalhes da oferta')}>Ver detalhamento <span>›</span></button></div></section>
+        <section className="proposal-service-summary"><div className="proposal-service-image">▰</div><div className="proposal-service-client"><h2>{offer.service}</h2><span>Cliente solicitante</span><strong>{offer.company}</strong><small>{documentKind(offer.cnpj)}: {offer.cnpj}</small>{offer.requester && <small>{requestersLabel(offerRequesterNames(offer).length)}: {offer.requester}</small>}<small>Etiqueta: {offer.labelNumber || 'não informada'}</small></div><div className="proposal-service-fact"><span>▣</span><div><small>Prazo solicitado</small><strong>{offer.deadline ? displayDate(offer.deadline) : 'Não informado'}</strong></div><span>◇</span><div><small>Quantidade</small><strong>{quantityText(offer)}</strong></div></div><div className="proposal-service-summary-copy"><strong>Resumo do serviço</strong><p>{offer.description}</p></div><div className="proposal-material-summary"><span>Materiais informados</span><strong>{formatMoney(materialCost)}</strong><button type="button" onClick={() => onNavigate('Detalhes da oferta')}>Ver detalhamento <span>›</span></button></div></section>
         {error && <p ref={errorRef} className="workflow-error" role="alert">{error}</p>}
         <h2 className="proposal-section-heading">Escolha uma das propostas abaixo ou personalize os valores</h2>
         <div className="proposal-card-grid">{visibleProposals.map((proposal) => <article className={`proposal-card proposal-card--${proposal.tone} ${selectedKey === proposal.key ? 'proposal-card--selected' : ''}`} key={proposal.key} onClick={() => { setSelectedKey(proposal.key); if (proposal.key !== selectedKey) { setGenerated(false); setUnsaved(true) } }}><div className="proposal-card-heading"><div><span className="proposal-card-label">PROPOSTA {proposal.key}</span><div className="proposal-card-intro"><span className="proposal-card-icon">{proposal.icon}</span><div><strong>{proposal.title}</strong><p>{proposal.description}</p></div></div></div><span className="proposal-card-tag">{proposal.tag}</span></div><div className="proposal-card-content"><div className="proposal-card-column"><div><span>◇</span><label>Materiais</label><strong>{formatMoney(proposal.materials)}</strong></div><div><span>♧</span><label>Mão de obra</label><strong>{formatMoney(proposal.labor)}</strong></div><div><span>＄</span><label>Valor do serviço</label><strong>{formatMoney(proposal.serviceValue)}</strong></div><div><span>▥</span><label>% de lucro bruto</label>{renderEditable(proposal, 'margin', `${Number(proposal.margin).toFixed(1).replace('.', ',')}%`, 'number')}</div>{marginStats && (() => { const stat = marginStats.find((item) => item.key === proposal.key); return stat && <small className="proposal-margin-hint">{stat.accepted ? `Média de ${stat.accepted} ${stat.accepted === 1 ? 'proposta aceita' : 'propostas aceitas'}` : 'Ainda sem propostas aceitas'}{stat.rate != null ? ` · ${stat.rate}% de aceite (${stat.won} de ${stat.won + stat.declined})` : ''}</small> })()}<div><span>◇</span><label>Desconto</label>{renderEditable(proposal, 'discount', `${Number(proposal.discount).toFixed(1).replace('.', ',')}%`, 'number')}</div></div><div className="proposal-card-column"><div><span>◷</span><label>Prazo de entrega</label>{renderEditable(proposal, 'deadline', proposal.deadline)}</div><div><span>⚙</span><label>Tempo de máquina</label><strong>{proposal.machine}</strong></div><div><span>◷</span><label>Tempo de serviço</label><strong>{proposal.serviceTime}</strong></div><div><span>◔</span><label>Horas totais</label><strong>{proposal.totalTime}</strong></div></div></div><div className="proposal-price"><strong>Valor da OS<small>valor cobrado do cliente</small></strong><b>{formatMoney(proposal.osValue)}</b></div><div className="proposal-profit"><strong>Lucro bruto esperado</strong><b>{formatMoney(proposal.profit)}</b></div></article>)}</div>
@@ -2149,6 +2177,8 @@ function ProposalBuilder({ collapsed, onToggle, activeNav, onNavigate, onLogout,
       {undoing && <UndoDeclineModal offer={offer} onConfirm={async () => { await apiRequest(`/api/offers/${encodeURIComponent(offer.id)}/undecline`, jsonOptions('POST', {})); await onRefresh() }} onClose={() => setUndoing(false)} />}
       {declining && <DeclineProposalModal offer={offer} onConfirm={async (decline) => { await apiRequest(`/api/offers/${encodeURIComponent(offer.id)}/decline`, jsonOptions('POST', decline)); await onRefresh() }} onClose={() => setDeclining(false)} />}
       {deadlineAsked && <RequestedDeadlineModal offer={offer} onConfirm={saveRequestedDeadline} onClose={() => setDeadlineAsked(false)} />}
+      {/* Reached by another way (a tab, the list) with the quantity still "A definir": asked here too; cancelling goes back. */}
+      {quantityPending(offer) && <OfferQuantityModal offer={offer} onConfirm={async (quantity) => { await apiRequest(`/api/offers/${encodeURIComponent(offer.id)}/quantity`, jsonOptions('PUT', { quantity })); await onRefresh() }} onClose={() => onNavigate('Detalhes da oferta')} />}
       {layoutOpen && <ProposalDocumentModal offer={offer} option={selectedProposal} onClose={() => setLayoutOpen(false)} onSaved={proposalSaved} />}
       {emailOpen && <ProposalEmailModal offer={offer} onClose={() => setEmailOpen(false)} onSent={proposalEmailSent} />}
       {emailNotice && <p className="app-toast" role="status"><CircleCheck size={16} aria-hidden="true" />{emailNotice}</p>}
