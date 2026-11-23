@@ -19,6 +19,7 @@
 7. Teste o fluxo completo afetado, não apenas o build ou a aparência de um botão.
 8. Não faça commit, push ou publicação sem solicitação explícita. Não sobrescreva alterações de outras pessoas.
 9. Nunca inclua senhas, tokens, credenciais ou dados pessoais reais em documentação, exemplos ou commits.
+10. Não envie caminho de arquivos, envie links clicaveis para facilitar para o usuário
 
 ## 2. Visão geral
 
