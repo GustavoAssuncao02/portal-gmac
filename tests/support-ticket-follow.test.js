@@ -51,9 +51,9 @@ test('the bell of a ticket: whoever follows it is told of each message and of cl
     assert.equal(followMail.text.split('\n')[0], 'Proposta sem logo · Funcionário 4 comentou no ticket que você acompanha: “Vou verificar o logo.”')
     assert.match(followMail.text, /Olá, Funcionário 6\./)
     let delivered = []
-    for (let tries = 0; tries < 50 && !delivered[0]?.sentAt; tries += 1) { delivered = (await seen(dev)).comments.at(-1).followerEmails; if (!delivered[0]?.sentAt) await wait(40) }
+    for (let tries = 0; tries < 50 && !delivered[0]?.sentAt; tries += 1) { delivered = (await seen(dev)).comments.at(-1).personEmails; if (!delivered[0]?.sentAt) await wait(40) }
     assert.deepEqual(delivered.map((entry) => [entry.userName, Boolean(entry.sentAt)]), [['Funcionário 6', true]], 'the developers see how the e-mail to whoever follows went')
-    assert.equal('followerEmails' in (await seen(watcher)).comments.at(-1), false, 'only developers see it')
+    assert.equal('personEmails' in (await seen(watcher)).comments.at(-1), false, 'only developers see it')
 
     // Whoever opened it sends only a file (a new print): a message without text is accepted when it brings files.
     assert.equal((await mine(`/support-tickets/${ticket.id}/comments`, 'POST', { text: '  ', fileIds: [] })).status, 400)
@@ -92,14 +92,23 @@ test('the bell of a ticket: whoever follows it is told of each message and of cl
     const area = storedFileInventory({ supportTickets: tickets }, '/data').find((item) => item.label === 'Tickets de suporte')
     assert.deepEqual(area.files.map((file) => [file.name, file.where]), [['novo print.png', 'TCK-0001 (conversa)'], ['correção.png', 'TCK-0001 (conversa)']])
 
-    // Closing: whoever follows is told in the bell. Unmarking the bell stops the notices.
+    // Closing: whoever follows (and whoever opened it) is told in the bell and by e-mail. Unmarking the bell stops it.
     assert.equal((await dev(`/support-tickets/${ticket.id}/status`, 'POST', { status: 'closed', note: 'Logo corrigido.' })).status, 200)
     assert.ok((await notices(watcher)).some((item) => item.type === 'ticket-status' && item.title === 'Ticket TCK-0001 fechado'))
+    const closedMail = (await mailTo('funcionario6@example.invalid', 3)).find((mail) => mail.subject.startsWith('Ticket fechado'))
+    assert.match(closedMail.subject, /^Ticket fechado · 🔴 Urgência alta · TCK-0001 · Proposta sem logo$/)
+    assert.equal(closedMail.text.split('\n')[0], 'Proposta sem logo · Funcionário 4 fechou o ticket que você acompanha: “Logo corrigido.”')
+    assert.match(closedMail.text, /porque acompanha este ticket/)
+    let told = []
+    for (let tries = 0; tries < 50 && told.filter((entry) => entry.sentAt).length < 2; tries += 1) { told = (await seen(dev)).history.at(-1).emails; if (told.filter((entry) => entry.sentAt).length < 2) await wait(40) }
+    assert.deepEqual(told.map((entry) => [entry.userName, Boolean(entry.sentAt)]), [['Funcionário 5', true], ['Funcionário 6', true]], 'whoever opened it and whoever follows it get the e-mail; the developers see how it went')
+    assert.ok(fixture.ticketMail.some((mail) => mail.to === 'funcionario5@example.invalid' && mail.subject.startsWith('Ticket fechado')))
+    assert.equal('emails' in (await seen(watcher)).history.at(-1), false, 'only developers see it')
     const unfollowed = await watcher(`/support-tickets/${ticket.id}/follow`, 'POST', { following: false })
     assert.deepEqual([unfollowed.data.item.following, unfollowed.data.item.followers], [false, []])
     const after = (await dev(`/support-tickets/${ticket.id}/comments`, 'POST', { text: 'Registro final.' })).data.item.comments.at(-1)
     assert.ok(!(await notices(watcher)).some((item) => item.commentId === after.id), 'no more notices after unmarking the bell')
-    assert.deepEqual(after.followerEmails, [], 'nobody else to e-mail')
+    assert.deepEqual(after.personEmails, [], 'nobody else to e-mail')
   } finally {
     await fixture.close()
   }

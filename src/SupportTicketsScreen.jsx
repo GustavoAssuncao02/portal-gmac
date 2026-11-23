@@ -235,18 +235,18 @@ function relativeTime(at, now) {
   return days === 1 ? 'há 1 dia' : `há ${days} dias`
 }
 const emailNote = (email, who, label = 'E-mail') => email?.sentAt ? `${label} enviado para ${who} em ${dateTime(email.sentAt)}.` : email?.failedAt || email?.skippedAt ? `${label} não enviado: ${email.reason}` : `Enviando ${label.toLowerCase()} para ${who}...`
-// How the e-mails of one message went to whoever follows the ticket (shown to the developers).
-function followersEmailNote(list) {
+// How the e-mails sent one by one (to whoever opened the ticket, to whoever follows it) went: shown to the developers.
+function peopleEmailNote(list) {
   const sent = list.filter((entry) => entry.sentAt).map((entry) => entry.userName)
   const missed = list.filter((entry) => !entry.sentAt && (entry.failedAt || entry.skippedAt)).map((entry) => `${entry.userName} (${entry.reason})`)
   const waiting = list.filter((entry) => !entry.sentAt && !entry.failedAt && !entry.skippedAt).map((entry) => entry.userName)
-  return ['Quem acompanha:', sent.length ? `e-mail enviado para ${sent.join(', ')}.` : '', missed.length ? `não enviado para ${missed.join(', ')}.` : '', waiting.length ? `enviando para ${waiting.join(', ')}...` : ''].filter(Boolean).join(' ')
+  return ['Avisos por e-mail:', sent.length ? `e-mail enviado para ${sent.join(', ')}.` : '', missed.length ? `não enviado para ${missed.join(', ')}.` : '', waiting.length ? `enviando para ${waiting.join(', ')}...` : ''].filter(Boolean).join(' ')
 }
 const threadActions = { opened: 'abriu o ticket', closed: 'fechou o ticket', reopened: 'reabriu o ticket', reply: 'respondeu' }
 const threadIcons = { opened: CircleDot, closed: CircleCheck, reopened: RotateCcw }
 
-// The bell of a ticket: marked, its holder is told of what happens in the ticket (in the bell of the portal and, for each
-// new message, by e-mail), like whoever opened it, who is always told and has no bell to mark.
+// The bell of a ticket: marked, its holder is told of what happens in the ticket (messages, closing and reopening, in the
+// bell of the portal and by e-mail), like whoever opened it, who is always told and has no bell to mark.
 function FollowButton({ ticket, compact = false, onChanged, onError }) {
   const [busy, setBusy] = useState(false)
   if (ticket.own) return compact ? <span className="ticket-follow ticket-follow--compact ticket-follow--own" title="Você abriu este ticket e já recebe os avisos dele"><BellRing size={16} aria-label="Você abriu este ticket e já recebe os avisos dele" /></span> : null
@@ -272,13 +272,14 @@ function TicketThread({ ticket, viewer, onPreview, onError }) {
   const now = Date.now()
   const entries = [
     { key: 'opened', kind: 'opened', at: ticket.createdAt, userName: ticket.createdByName },
-    // A comment is a developer's (all the old ones are); whoever opened the ticket answers with a reply.
-    ...(ticket.comments || []).map((comment) => ({ ...comment, key: comment.id, kind: comment.byDeveloper === false ? 'reply' : 'comment' })),
-    ...(ticket.history || []).filter((entry) => entry.type !== 'opened').map((entry, index) => ({ key: `history-${index}`, kind: entry.type, at: entry.at, userName: entry.userName, text: entry.note })),
+    // A comment is a developer's (all the old ones are); whoever opened the ticket answers with a reply, and anybody else
+    // comments in the same way (2026-11-23).
+    ...(ticket.comments || []).map((comment) => ({ ...comment, key: comment.id, kind: comment.byDeveloper === false ? 'reply' : 'comment', byAuthor: String(comment.userId) === String(ticket.createdBy) })),
+    ...(ticket.history || []).filter((entry) => entry.type !== 'opened').map((entry, index) => ({ key: `history-${index}`, kind: entry.type, at: entry.at, userName: entry.userName, text: entry.note, personEmails: entry.emails })),
   ].sort((left, right) => Date.parse(left.at) - Date.parse(right.at))
   return <ol className="ticket-thread">{entries.map((entry) => {
     const Icon = threadIcons[entry.kind], message = entry.kind === 'comment' || entry.kind === 'reply'
-    const action = message && !entry.text && entry.attachmentCount ? `enviou ${filesWord(entry.attachmentCount)}` : threadActions[entry.kind]
+    const action = message && !entry.text && entry.attachmentCount ? `enviou ${filesWord(entry.attachmentCount)}` : entry.kind === 'reply' && !entry.byAuthor ? 'comentou' : threadActions[entry.kind]
     return <li key={entry.key} className={`ticket-thread-item ticket-thread-item--${entry.kind}${entry.kind === 'reply' ? ' ticket-thread-item--comment' : ''}`}>
       <span className="ticket-thread-avatar" aria-hidden="true">{Icon ? <Icon size={16} /> : initialsOf(entry.userName)}</span>
       <div className="ticket-thread-body">
@@ -288,7 +289,7 @@ function TicketThread({ ticket, viewer, onPreview, onError }) {
         {message && entry.attachments?.length > 0 && <TicketFileList ticket={ticket} files={entry.attachments} onPreview={onPreview} onError={onError} className="ticket-thread-files" />}
         {message && entry.attachmentsLocked && <p className="ticket-locked ticket-thread-files"><Lock size={14} aria-hidden="true" /><span>{filesWord(entry.attachmentCount)}. {lockedNote}</span></p>}
         {viewer.developer && message && <small className="ticket-thread-email"><Mail size={12} aria-hidden="true" /><span>{entry.kind === 'reply' ? emailNote(entry.email, 'os desenvolvedores') : emailNote(entry.email, ticket.createdByName)}</span></small>}
-        {viewer.developer && message && entry.followerEmails?.length > 0 && <small className="ticket-thread-email"><BellRing size={12} aria-hidden="true" /><span>{followersEmailNote(entry.followerEmails)}</span></small>}
+        {viewer.developer && entry.personEmails?.length > 0 && <small className="ticket-thread-email"><BellRing size={12} aria-hidden="true" /><span>{peopleEmailNote(entry.personEmails)}</span></small>}
       </div>
     </li>
   })}</ol>
@@ -296,7 +297,7 @@ function TicketThread({ ticket, viewer, onPreview, onError }) {
 
 function TicketDetail({ ticket, viewer, onClose, onChanged }) {
   const [note, setNote] = useState(''), [files, setFiles] = useState([]), [busy, setBusy] = useState(''), [error, setError] = useState(''), [preview, setPreview] = useState(null)
-  const closing = ticket.status === 'open', replying = !viewer.developer && ticket.own
+  const closing = ticket.status === 'open'
   // A message (comment or reply) may carry new files; closing and reopening keep the files chosen for the next message.
   async function send(kind) {
     setBusy(kind); setError('')
@@ -317,7 +318,7 @@ function TicketDetail({ ticket, viewer, onClose, onChanged }) {
   return <PayableModal title={`${ticket.id} · ${ticket.title}`} wide busy={Boolean(busy)} onClose={onClose} className="ticket-detail-modal" footer={<button className="admin-tool-button" type="button" disabled={Boolean(busy)} onClick={onClose}>Fechar janela</button>}>
     <div className="ticket-follow-bar">
       {ticket.own ? <p className="ticket-follow-own"><BellRing size={16} aria-hidden="true" /><span>Você abriu este ticket e recebe os avisos do que acontecer nele.</span></p>
-        : <><FollowButton ticket={ticket} onChanged={onChanged} onError={setError} /><small className="payable-hint">{ticket.following ? 'Você recebe no sino as novidades deste ticket e, por e-mail, cada nova mensagem.' : 'Marque o sininho para receber no sino as novidades deste ticket e, por e-mail, cada nova mensagem.'}</small></>}
+        : <><FollowButton ticket={ticket} onChanged={onChanged} onError={setError} /><small className="payable-hint">{ticket.following ? 'Você recebe no sino e por e-mail as novidades deste ticket: mensagens, fechamento e reabertura.' : 'Marque o sininho para receber no sino e por e-mail as novidades deste ticket: mensagens, fechamento e reabertura.'}</small></>}
       {followers.length > 0 && <small className="ticket-followers"><Bell size={12} aria-hidden="true" /><span>{ticket.following ? 'Também acompanham' : 'Acompanham'}: {followers.join(', ')}</span></small>}
     </div>
     <dl className="ticket-detail-meta">
@@ -344,12 +345,15 @@ function TicketDetail({ ticket, viewer, onClose, onChanged }) {
         <button className="admin-tool-button" type="button" disabled={Boolean(busy) || (closing && !note.trim())} onClick={() => send('status')}>{closing ? <CircleCheck size={16} aria-hidden="true" /> : <RotateCcw size={16} aria-hidden="true" />}<span>{busy === 'status' ? 'Salvando...' : closing ? 'Fechar ticket' : 'Reabrir ticket'}</span></button>
       </div>
       <p className="payable-muted ticket-email-status"><Send size={13} aria-hidden="true" />{emailNote(ticket.email, 'os desenvolvedores', 'E-mail de abertura')}</p>
-    </section> : replying ? <section className="ticket-detail-block ticket-developer ticket-reply"><h3>Responder</h3>
-      <label className="ticket-field">Sua resposta<textarea aria-label="Sua resposta" rows={3} maxLength={COMMENT_MAX} disabled={Boolean(busy)} placeholder={closing ? 'Ex.: deu certo, obrigado.' : 'Ex.: o problema voltou a acontecer.'} value={note} onChange={(event) => setNote(event.target.value)} /></label>
+    </section> : <section className="ticket-detail-block ticket-developer ticket-reply"><h3>{ticket.own ? 'Responder' : 'Comentar'}</h3>
+      {/* Whoever opened the ticket replies; anybody else comments (2026-11-23), also on a closed ticket. */}
+      <label className="ticket-field">{ticket.own ? 'Sua resposta' : 'Seu comentário'}<textarea aria-label={ticket.own ? 'Sua resposta' : 'Seu comentário'} rows={3} maxLength={COMMENT_MAX} disabled={Boolean(busy)} placeholder={!ticket.own ? 'Ex.: comigo também acontece, na tela de...' : closing ? 'Ex.: deu certo, obrigado.' : 'Ex.: o problema voltou a acontecer.'} value={note} onChange={(event) => setNote(event.target.value)} /></label>
       {filePicker}
-      <small className="payable-hint">{closing ? 'Os desenvolvedores recebem um aviso no sistema e por e-mail. Quem fecha o ticket são eles, quando o problema estiver resolvido.' : 'Este ticket está fechado, mas você ainda pode responder e enviar anexos. Os desenvolvedores recebem um aviso no sistema e por e-mail e, se for preciso, reabrem o ticket.'}</small>
-      <div className="ticket-form-actions"><button className="admin-tool-button admin-tool-button--primary" type="button" disabled={Boolean(busy) || !canSend} onClick={() => send('reply')}><Send size={16} aria-hidden="true" /><span>{busy === 'reply' ? 'Enviando...' : 'Responder'}</span></button></div>
-    </section> : <p className="payable-muted">Somente quem abriu o ticket e os desenvolvedores do sistema respondem nele; o status, só os desenvolvedores alteram. Para receber os avisos deste ticket, marque o sininho no alto.</p>}
+      <small className="payable-hint">{ticket.own
+        ? closing ? 'Os desenvolvedores recebem um aviso no sistema e por e-mail. Quem fecha o ticket são eles, quando o problema estiver resolvido.' : 'Este ticket está fechado, mas você ainda pode responder e enviar anexos. Os desenvolvedores recebem um aviso no sistema e por e-mail e, se for preciso, reabrem o ticket.'
+        : `Os desenvolvedores e ${ticket.createdByName}, que abriu o ticket, recebem um aviso no sistema e por e-mail.${closing ? '' : ' O ticket está fechado; se for preciso, os desenvolvedores o reabrem.'}${ticket.following ? '' : ' Para receber as respostas, marque o sininho no alto.'}`}</small>
+      <div className="ticket-form-actions"><button className="admin-tool-button admin-tool-button--primary" type="button" disabled={Boolean(busy) || !canSend} onClick={() => send('reply')}>{ticket.own ? <Send size={16} aria-hidden="true" /> : <MessageCircle size={16} aria-hidden="true" />}<span>{busy === 'reply' ? 'Enviando...' : ticket.own ? 'Responder' : 'Comentar'}</span></button></div>
+    </section>}
     {error && <p className="admin-tool-error" role="alert">{error}</p>}
     {preview && <FilePreview url={`/api/support-tickets/${ticket.id}/files/${preview.id}`} file={preview} onClose={() => setPreview(null)} />}
   </PayableModal>
@@ -435,7 +439,7 @@ export default function SupportTicketsScreen(props) {
             <thead><tr>{sorted.columns.map((column) => <SortHeader key={column.key} column={column} list={sorted} />)}</tr></thead>
             <tbody>{sorted.rows.map((ticket) => <tr key={ticket.id} onClick={() => setOpenId(ticket.id)}>
               <td data-label="Ticket"><button className="ticket-open-button" type="button" onClick={(event) => { event.stopPropagation(); setOpenId(ticket.id) }}>{ticket.id}</button></td>
-              <td data-label="Título" className="ticket-title-cell">{ticket.title}{ticket.comments?.length > 0 && <small className="ticket-comment-count" title={`${ticket.comments.length} ${ticket.comments.length === 1 ? 'comentário' : 'comentários'} do desenvolvedor`}><MessageCircle size={12} aria-hidden="true" />{ticket.comments.length}</small>}</td>
+              <td data-label="Título" className="ticket-title-cell">{ticket.title}{ticket.comments?.length > 0 && <small className="ticket-comment-count" title={`${ticket.comments.length} ${ticket.comments.length === 1 ? 'mensagem' : 'mensagens'} na conversa`}><MessageCircle size={12} aria-hidden="true" />{ticket.comments.length}</small>}</td>
               <td data-label="Módulo"><span className="ticket-module-cell">{moduleLabel(ticket.module)}{ticket.submodule && <small>{submoduleLabel(ticket.module, ticket.submodule)}</small>}</span></td>
               <td data-label="Urgência"><UrgencyBadge value={ticket.urgency} /></td>
               <td data-label="Status"><StatusBadge value={ticket.status} /></td>

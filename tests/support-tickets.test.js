@@ -123,18 +123,24 @@ test('everybody sees every ticket; attachments open for administrators and the a
     assert.equal(reopened.data.item.resolution, undefined)
     assert.deepEqual(reopened.data.item.history.map((entry) => entry.type), ['opened', 'closed', 'reopened'])
     assert.deepEqual((await notices(mine)).map((item) => item.title).sort(), ['Ticket TCK-0001 fechado', 'Ticket TCK-0001 reaberto'])
+    // ...and by e-mail (2026-11-23), with how it was solved.
+    for (let tries = 0; tries < 50 && fixture.ticketMail.filter((mail) => mail.to === 'funcionario5@example.invalid').length < 2; tries += 1) await wait(40)
+    const statusMails = fixture.ticketMail.filter((mail) => mail.to === 'funcionario5@example.invalid')
+    assert.deepEqual(statusMails.map((mail) => mail.subject.split(' · ')[0]).sort(), ['Ticket fechado', 'Ticket reaberto'])
+    const closedMail = statusMails.find((mail) => mail.subject.startsWith('Ticket fechado'))
+    assert.match(closedMail.text, /Como foi resolvido:\nCorrigido na versão 1\.0\.14\./)
+    assert.equal(closedMail.text.split('\n')[0], 'Erro ao salvar a baixa · Funcionário 4 fechou o seu ticket: “Corrigido na versão 1.0.14.”')
     assert.deepEqual((await notices(dev)).map((item) => item.type), ['ticket-opened'], 'the developer is not told of their own change')
 
     // Comments: developers write them and whoever opened the ticket is told in the bell and by e-mail; whoever opened it
-    // answers back while it is open (support-ticket-replies.test.js); nobody else writes on it.
-    assert.equal((await admin(`/support-tickets/${first.id}/comments`, 'POST', { text: 'Olá' })).status, 403)
+    // answers back and anybody else comments (support-ticket-replies.test.js).
     assert.equal((await dev(`/support-tickets/${first.id}/comments`, 'POST', { text: '   ' })).status, 400)
-    const mailsBefore = fixture.ticketMail.length
     const commented = await dev(`/support-tickets/${first.id}/comments`, 'POST', { text: 'A correção entra na próxima atualização.' })
     assert.equal(commented.status, 201)
     assert.deepEqual(commented.data.item.comments.map((item) => [item.text, item.userName]), [['A correção entra na próxima atualização.', 'Funcionário 4']])
-    for (let tries = 0; tries < 50 && fixture.ticketMail.length === mailsBefore; tries += 1) await wait(40)
-    const commentMail = fixture.ticketMail.at(-1)
+    const supportMail = () => fixture.ticketMail.find((mail) => mail.subject.startsWith('Resposta do suporte'))
+    for (let tries = 0; tries < 50 && !supportMail(); tries += 1) await wait(40)
+    const commentMail = supportMail()
     assert.equal(commentMail.to, 'funcionario5@example.invalid', 'the e-mail goes to whoever opened the ticket')
     assert.match(commentMail.subject, /^Resposta do suporte · TCK-0001 · /)
     assert.match(commentMail.text.split('\n')[0], /Funcionário 4 comentou no seu ticket: “A correção entra na próxima atualização\.”/)

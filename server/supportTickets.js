@@ -13,7 +13,7 @@ import { COMMENT_MAX, DESCRIPTION_MAX, RESOLUTION_MAX, TITLE_MAX, moduleLabel, m
 // Everybody sees every ticket; the attachments (evidence of the problem) open for administrators and, for an
 // administrative employee, only on the tickets they opened. Only the developers, the accounts of these CPFs, close and
 // reopen a ticket; an account registered later with one of them becomes a developer without any change here. Anyone may
-// follow a ticket (the bell) to be told of what happens in it, like whoever opened it.
+// comment on a ticket and follow it (the bell) to be told of what happens in it, like whoever opened it.
 export const developerCpfs = ['02427847550', '14303355640']
 // A new ticket is also e-mailed to the developers (SUPPORT_TICKET_EMAILS, separated by commas, replaces the list).
 export const ticketEmailRecipients = ['by.cmlla0107@gmail.com', 'Gustavo_Assuncao02@outlook.com']
@@ -52,19 +52,22 @@ function claimUploads(store, fileIds, userId) {
 
 // What one viewer receives of a ticket: the files only when they may open them; otherwise how many there are. The
 // files of a message of the conversation follow the same rule, and whoever sent them always opens them. How the e-mails
-// went (of the ticket and of each comment, also to whoever follows it) is shown to the developers only.
+// went (of the ticket, of each message and of each closing or reopening, also to each person told one by one) is shown
+// to the developers only.
 function ticketView(ticket, viewer) {
   const own = sameId(ticket.createdBy, viewer.id)
   const files = viewer.role !== 'staff' || own
   const { email, followers = [], ...rest } = ticket
-  const comments = (ticket.comments || []).map(({ email: delivery, followerEmails, attachments = [], ...comment }) => {
+  // `followerEmails` is the name of the list in the messages of the first day (2026-11-23), before it had the author too.
+  const comments = (ticket.comments || []).map(({ email: delivery, personEmails, followerEmails, attachments = [], ...comment }) => {
     const open = files || sameId(comment.userId, viewer.id)
-    return { ...comment, attachments: open ? attachments : [], attachmentCount: attachments.length, attachmentsLocked: !open && attachments.length > 0, ...(viewer.developer ? { email: delivery || null, followerEmails: followerEmails || [] } : {}) }
+    return { ...comment, attachments: open ? attachments : [], attachmentCount: attachments.length, attachmentsLocked: !open && attachments.length > 0, ...(viewer.developer ? { email: delivery || null, personEmails: personEmails || followerEmails || [] } : {}) }
   })
+  const history = (ticket.history || []).map(({ emails, ...entry }) => viewer.developer ? { ...entry, emails: emails || [] } : entry)
   const opening = (ticket.attachments || []).length
   const lockedCount = (files ? 0 : opening) + comments.reduce((sum, comment) => sum + (comment.attachmentsLocked ? comment.attachmentCount : 0), 0)
   // Tickets of modules that became screens of a group (Estoque → Gestão Operacional) come in the group, like new ones.
-  return { ...rest, ...ticketPlace(ticket.module, ticket.submodule), own, following: followers.some((entry) => sameId(entry.userId, viewer.id)), followers: followers.map(({ userId, userName }) => ({ userId, userName })), comments, attachments: files ? ticket.attachments || [] : [], attachmentCount: opening + comments.reduce((sum, comment) => sum + comment.attachmentCount, 0), attachmentsLocked: lockedCount > 0, lockedCount, ...(viewer.developer ? { email: email || null } : {}) }
+  return { ...rest, ...ticketPlace(ticket.module, ticket.submodule), own, history, following: followers.some((entry) => sameId(entry.userId, viewer.id)), followers: followers.map(({ userId, userName }) => ({ userId, userName })), comments, attachments: files ? ticket.attachments || [] : [], attachmentCount: opening + comments.reduce((sum, comment) => sum + comment.attachmentCount, 0), attachmentsLocked: lockedCount > 0, lockedCount, ...(viewer.developer ? { email: email || null } : {}) }
 }
 
 // The e-mails of the tickets are read first on the phone, where only the subject and the start of the text show: the
@@ -80,8 +83,21 @@ const urgencyText = (key) => `${urgencyMark(key).dot} Urgência ${urgencyMark(ke
 const kinds = {
   opened: { label: 'Novo ticket', color: '#1f7a45', background: '#e6f4ec' },
   reply: { label: 'Nova resposta', color: '#0c4c91', background: '#e8f1fc' },
+  comment: { label: 'Novo comentário', color: '#0f6e6e', background: '#e3f4f4' },
   support: { label: 'Resposta do suporte', color: '#5b3a9e', background: '#f0ebfa' },
+  closed: { label: 'Ticket fechado', color: '#1f7a45', background: '#e6f4ec' },
+  reopened: { label: 'Ticket reaberto', color: '#0c4c91', background: '#e8f1fc' },
 }
+// Who wrote a message: a developer, whoever opened the ticket, or anybody else of the portal (2026-11-23: everybody
+// comments). The words of the e-mail follow.
+const nonDeveloperWriter = (ticket, comment) => comment.userId == null || sameId(comment.userId, ticket.createdBy) ? 'author' : 'other'
+const writerOf = (ticket, comment) => comment.byDeveloper !== false ? 'developer' : nonDeveloperWriter(ticket, comment)
+const writers = {
+  developer: { kind: 'support', subject: 'Resposta do suporte', verb: 'comentou', who: 'Comentado por', label: 'Comentário' },
+  author: { kind: 'reply', subject: 'Resposta', verb: 'respondeu', who: 'Respondido por', label: 'Resposta' },
+  other: { kind: 'comment', subject: 'Comentário', verb: 'comentou', who: 'Comentado por', label: 'Comentário' },
+}
+const followingClosing = 'Você recebe este e-mail porque acompanha este ticket. Para deixar de receber, desmarque o sininho do ticket no Portal GMAC, no menu Ticket.'
 const shortText = (value, limit = 160) => { const text = String(value ?? '').replace(/\s+/g, ' ').trim(); return text.length > limit ? `${text.slice(0, limit - 1)}…` : text }
 const filesCount = (files) => `${files.length} ${files.length === 1 ? 'anexo' : 'anexos'}`
 const filesLine = (files = []) => files.length ? `${filesCount(files)}: ${files.map((file) => file.name).join(', ')}` : 'Sem anexos'
@@ -126,16 +142,18 @@ export function ticketMail(ticket, recipients) {
   }
 }
 
-// A reply of whoever opened the ticket, e-mailed to the developers (the same list of a new ticket).
+// A reply of whoever opened the ticket, or a comment of anybody else who is not a developer, e-mailed to the developers
+// (the same list of a new ticket).
 export function replyMail(ticket, comment, recipients) {
+  const writer = writers[nonDeveloperWriter(ticket, comment)]
   return {
     to: recipients.join(', '),
-    subject: `Resposta · ${urgencyText(ticket.urgency)} · ${ticket.id} · ${ticket.title}`,
+    subject: `${writer.subject} · ${urgencyText(ticket.urgency)} · ${ticket.id} · ${ticket.title}`,
     ...ticketEmail({
-      kind: 'reply', ticket,
-      preview: `${ticket.title} · ${comment.userName} respondeu: ${messagePreview(comment)}`,
-      facts: messageFacts(ticket, comment, 'Respondido por'),
-      messageLabel: 'Resposta', message: messageText(comment),
+      kind: writer.kind, ticket,
+      preview: `${ticket.title} · ${comment.userName} ${writer.verb}: ${messagePreview(comment)}`,
+      facts: messageFacts(ticket, comment, writer.who),
+      messageLabel: writer.label, message: messageText(comment),
       closing: 'Veja a conversa completa no Portal GMAC, no menu Ticket.',
     }),
   }
@@ -156,19 +174,36 @@ export function commentMail(ticket, comment, author) {
   }
 }
 
-// Each new message of the conversation (a developer's comment or a reply of whoever opened it), e-mailed to whoever
-// follows the ticket (the bell of the Ticket screen).
-export function followerMail(ticket, comment, follower) {
-  const support = comment.byDeveloper !== false
+// Each new message of the conversation, e-mailed to one person: whoever follows the ticket (the bell of the Ticket
+// screen) or, for a comment of somebody who is not a developer, whoever opened it (`own`).
+export function followerMail(ticket, comment, person, { own = false } = {}) {
+  const writer = writers[writerOf(ticket, comment)]
   return {
-    to: follower.email,
-    subject: `${support ? 'Resposta do suporte' : 'Resposta'} · ${urgencyText(ticket.urgency)} · ${ticket.id} · ${ticket.title}`,
+    to: person.email,
+    subject: `${writer.subject} · ${urgencyText(ticket.urgency)} · ${ticket.id} · ${ticket.title}`,
     ...ticketEmail({
-      kind: support ? 'support' : 'reply', ticket, greeting: `Olá, ${follower.name}.`,
-      preview: `${ticket.title} · ${comment.userName} ${support ? 'comentou' : 'respondeu'} no ticket que você acompanha: ${messagePreview(comment)}`,
-      facts: messageFacts(ticket, comment, support ? 'Comentado por' : 'Respondido por'),
-      messageLabel: support ? 'Comentário' : 'Resposta', message: messageText(comment),
-      closing: 'Você recebe este e-mail porque acompanha este ticket. Para deixar de receber, desmarque o sininho do ticket no Portal GMAC, no menu Ticket.',
+      kind: writer.kind, ticket, greeting: `Olá, ${person.name}.`,
+      preview: `${ticket.title} · ${comment.userName} ${writer.verb} ${own ? 'no seu ticket' : 'no ticket que você acompanha'}: ${messagePreview(comment)}`,
+      facts: messageFacts(ticket, comment, writer.who),
+      messageLabel: writer.label, message: messageText(comment),
+      closing: own ? 'Para responder, abra o Portal GMAC, no menu Ticket.' : followingClosing,
+    }),
+  }
+}
+
+// A ticket closed (with how the problem was solved) or reopened, e-mailed to whoever opened it (`own`) and to whoever
+// follows it.
+export function statusMail(ticket, change, person, { own = false } = {}) {
+  const closed = change.type === 'closed'
+  return {
+    to: person.email,
+    subject: `${closed ? 'Ticket fechado' : 'Ticket reaberto'} · ${urgencyText(ticket.urgency)} · ${ticket.id} · ${ticket.title}`,
+    ...ticketEmail({
+      kind: closed ? 'closed' : 'reopened', ticket, greeting: `Olá, ${person.name}.`,
+      preview: `${ticket.title} · ${change.userName} ${closed ? 'fechou' : 'reabriu'} ${own ? 'o seu ticket' : 'o ticket que você acompanha'}${change.note ? `: “${shortText(change.note)}”` : ''}`,
+      facts: [['Módulo', moduleTitle(ticket.module, ticket.submodule)], [closed ? 'Fechado por' : 'Reaberto por', change.userName], ['Data e hora', `${bahiaTime(change.at)} (horário da Bahia)`]],
+      messageLabel: closed ? 'Como foi resolvido' : 'Motivo da reabertura', message: change.note || 'Sem motivo informado.',
+      closing: own ? (closed ? 'Se o problema continuar, responda no Portal GMAC, no menu Ticket.' : 'Acompanhe a conversa no Portal GMAC, no menu Ticket.') : followingClosing,
     }),
   }
 }
@@ -217,19 +252,27 @@ export default function createSupportTicketsRouter(accounts, requireAdmin, { mai
     const item = store.supportTickets.find((row) => row.id === ticket.id)?.comments?.find((entry) => entry.id === comment.id)
     if (item) change(item, email)
   }
-  // Whoever follows the ticket gets each new message by e-mail, one e-mail per person; an address that already got this
-  // message (the developers' list, whoever opened the ticket) is not written to twice.
-  async function emailFollowers(ticket, comment, alreadyTold) {
+  // E-mails to people one by one (whoever opened the ticket, whoever follows it): `list` gives the entries written on the
+  // record beforehand, each one filled with how its e-mail went. An address that already got this e-mail (the
+  // developers' list, an earlier entry) is not written to twice.
+  async function emailEach(what, people, alreadyTold, mailFor, saveEntry) {
     const told = new Set(alreadyTold.map((address) => String(address || '').trim().toLowerCase()).filter(Boolean))
-    for (const entry of comment.followerEmails || []) {
-      const save = onComment(ticket, comment, (item, email) => { const row = (item.followerEmails || []).find((follower) => sameId(follower.userId, entry.userId)); if (row) Object.assign(row, email) })
+    for (const entry of people) {
+      const save = (store, email) => saveEntry(store, entry, email)
       const account = await accounts.account(entry.userId).catch(() => null)
       const address = String(account?.email || '').trim()
-      if (address && told.has(address.toLowerCase())) { await record(`do ticket ${ticket.id} para quem acompanha`, save, { skippedAt: new Date().toISOString(), reason: 'Este endereço já recebeu o e-mail da mensagem.' }); continue }
+      if (address && told.has(address.toLowerCase())) { await record(what, save, { skippedAt: new Date().toISOString(), reason: 'Este endereço já recebeu o mesmo e-mail.' }); continue }
       if (address) told.add(address.toLowerCase())
-      deliver(`do ticket ${ticket.id} para quem acompanha`, followerMail(ticket, comment, { name: account?.name || entry.userName, email: address }), save, 'Sem e-mail cadastrado.')
+      deliver(what, mailFor({ name: account?.name || entry.userName, email: address }, entry), save, 'Sem e-mail cadastrado.')
     }
   }
+  const fillEntry = (list, entry, email) => { const row = (list || []).find((item) => sameId(item.userId, entry.userId)); if (row) Object.assign(row, email) }
+  const emailPeopleOfComment = (ticket, comment, alreadyTold) => emailEach(`da mensagem no ticket ${ticket.id}`, comment.personEmails || [], alreadyTold,
+    (person, entry) => followerMail(ticket, comment, person, { own: Boolean(entry.author) }),
+    (store, entry, email) => onComment(ticket, comment, (item) => fillEntry(item.personEmails, entry, email))(store))
+  const emailPeopleOfChange = (ticket, change) => emailEach(`do status do ticket ${ticket.id}`, change.emails || [], [],
+    (person, entry) => statusMail(ticket, change, person, { own: Boolean(entry.author) }),
+    (store, entry, email) => fillEntry(store.supportTickets.find((row) => row.id === ticket.id)?.history?.find((item) => item.id === change.id)?.emails, entry, email))
 
   router.get('/support-tickets', handle(async (req, res) => {
     const store = await readStore(); init(store)
@@ -296,48 +339,56 @@ export default function createSupportTicketsRouter(accounts, requireAdmin, { mai
 
   // Who follows the ticket and is told of what someone else did in it (whoever opened it is always told).
   const followersOf = (row, actorId) => (row.followers || []).filter((entry) => !sameId(entry.userId, actorId) && !sameId(entry.userId, row.createdBy))
+  // The people told one by one of what someone did in the ticket: whoever opened it (unless it was them, or the
+  // `authorTold` some other way) and whoever follows it.
+  const peopleOf = (row, actorId, authorTold = false) => [
+    ...(!authorTold && !sameId(row.createdBy, actorId) ? [{ userId: row.createdBy, userName: row.createdByName, author: true }] : []),
+    ...followersOf(row, actorId).map(({ userId, userName }) => ({ userId, userName })),
+  ]
 
-  // The conversation of a ticket, also after it is closed. A developer's comment (an activity that will be fixed, a
-  // question): everybody sees it, and whoever opened the ticket is told in the bell and by e-mail. Whoever opened it
-  // answers back ("deu certo, obrigado"; "voltou a acontecer"), and the developers are told the same way; a closed ticket
-  // stays closed, only the developers reopen it. A message may bring new files (more evidence), or be only files.
-  // Whoever follows the ticket (the bell) is told of every message, in the bell and by e-mail.
+  // The conversation of a ticket, open to everybody (2026-11-23) and also after it is closed. A developer's comment (an
+  // activity that will be fixed, a question): whoever opened the ticket is told in the bell and by e-mail. Whoever opened
+  // it answers back ("deu certo, obrigado"; "voltou a acontecer") and anybody else comments ("comigo também"): the
+  // developers are told the same way, and whoever opened it too. A closed ticket stays closed, only the developers reopen
+  // it. A message may bring new files (more evidence), or be only files. Whoever follows the ticket (the bell) is told of
+  // every message, in the bell and by e-mail.
   router.post('/support-tickets/:id/comments', handle(async (req, res) => {
     const developer = req.viewer.developer
     const text = multiline(req.body.text, COMMENT_MAX)
     const fileIds = readFileIds(req.body.fileIds)
-    if (!text && !fileIds.length) fail(developer ? 'Escreva o comentário ou anexe um arquivo.' : 'Escreva a resposta ou anexe um arquivo.')
+    if (!text && !fileIds.length) fail(developer ? 'Escreva o comentário ou anexe um arquivo.' : 'Escreva a mensagem ou anexe um arquivo.')
     const notify = developer ? [] : await developerIds()
     const { ticket, comment } = await mutateStore((store) => {
       init(store)
       const row = find(store, req.params.id), at = new Date().toISOString(), selfAuthored = sameId(row.createdBy, req.viewer.id)
-      if (!developer && !selfAuthored) fail('Somente quem abriu o ticket e os desenvolvedores do sistema respondem nele.', 403)
       const attachments = claimUploads(store, fileIds, req.viewer.id)
-      const followers = followersOf(row, req.viewer.id)
-      const added = { id: randomUUID(), text, ...(attachments.length ? { attachments } : {}), at, userId: req.viewer.id, userName: req.viewer.name, byDeveloper: developer, ...(developer && selfAuthored ? { email: { skippedAt: at, reason: 'O comentário é de quem abriu o ticket.' } } : {}), ...(followers.length ? { followerEmails: followers.map(({ userId, userName }) => ({ userId, userName })) } : {}) }
+      // A developer's comment goes to whoever opened the ticket in its own e-mail (`email`); the others go to the
+      // developers' list, and whoever opened it is told with the people who follow it.
+      const people = peopleOf(row, req.viewer.id, developer)
+      const added = { id: randomUUID(), text, ...(attachments.length ? { attachments } : {}), at, userId: req.viewer.id, userName: req.viewer.name, byDeveloper: developer, ...(developer && selfAuthored ? { email: { skippedAt: at, reason: 'O comentário é de quem abriu o ticket.' } } : {}), ...(people.length ? { personEmails: people } : {}) }
       row.comments = [...(row.comments || []), added]
       const said = text || `Enviou ${attachments.length} ${attachments.length === 1 ? 'anexo' : 'anexos'}.`
       const summary = `${row.title} · ${said.length > 120 ? `${said.slice(0, 117)}...` : said}`
-      const recipientIds = uniqueIds([...(developer ? [row.createdBy] : notify), ...followers.map((entry) => entry.userId)])
-      addNotification(store, { type: 'ticket-comment', at, ticketId: row.id, commentId: added.id, authorId: req.viewer.id, recipientIds, title: `${developer ? 'Novo comentário' : 'Nova resposta'} no ticket ${row.id}`, description: summary, employeeName: req.viewer.name })
+      const recipientIds = uniqueIds([row.createdBy, ...notify, ...followersOf(row, req.viewer.id).map((entry) => entry.userId)])
+      addNotification(store, { type: 'ticket-comment', at, ticketId: row.id, commentId: added.id, authorId: req.viewer.id, recipientIds, title: `${!developer && selfAuthored ? 'Nova resposta' : 'Novo comentário'} no ticket ${row.id}`, description: summary, employeeName: req.viewer.name })
       return { ticket: row, comment: added }
     })
     const saveEmail = onComment(ticket, comment, (item, email) => { item.email = email })
     let told = []
     if (!developer) {
       told = recipients()
-      deliver(`da resposta no ticket ${ticket.id}`, replyMail(ticket, comment, told), saveEmail)
+      deliver(`da mensagem no ticket ${ticket.id}`, replyMail(ticket, comment, told), saveEmail)
     } else if (!comment.email) {
       const author = await accounts.account(ticket.createdBy).catch(() => null)
       told = [author?.email]
       deliver(`do comentário no ticket ${ticket.id}`, commentMail(ticket, comment, { name: author?.name || ticket.createdByName, email: author?.email || '' }), saveEmail)
     }
-    emailFollowers(ticket, comment, told).catch((error) => console.error(`Falha ao avisar quem acompanha o ticket ${ticket.id}:`, error.message))
+    emailPeopleOfComment(ticket, comment, told).catch((error) => console.error(`Falha ao avisar as pessoas do ticket ${ticket.id}:`, error.message))
     res.status(201).json({ item: ticketView(ticket, req.viewer) })
   }))
 
-  // The bell of a ticket: whoever marks it is told of everything that happens in it (each message, in the bell and by
-  // e-mail; closing and reopening, in the bell), like whoever opened it. Whoever opened it is always told: no bell.
+  // The bell of a ticket: whoever marks it is told of everything that happens in it (each message and each closing or
+  // reopening, in the bell and by e-mail), like whoever opened it. Whoever opened it is always told: no bell.
   router.post('/support-tickets/:id/follow', handle(async (req, res) => {
     const following = req.body.following
     if (typeof following !== 'boolean') fail('Escolha se quer acompanhar o ticket.')
@@ -354,14 +405,15 @@ export default function createSupportTicketsRouter(accounts, requireAdmin, { mai
     res.json({ item: ticketView(item, req.viewer) })
   }))
 
-  // Closing asks how the problem was solved, and the answer shows on the ticket; a closed ticket can be reopened.
+  // Closing asks how the problem was solved, and the answer shows on the ticket; a closed ticket can be reopened. Whoever
+  // opened it and whoever follows it are told in the bell and by e-mail (2026-11-23).
   router.post('/support-tickets/:id/status', handle(async (req, res) => {
     if (!req.viewer.developer) fail('Somente os desenvolvedores do sistema alteram o status do ticket.', 403)
     const status = req.body.status
     if (!['open', 'closed'].includes(status)) fail('Status inválido.')
     const note = multiline(req.body.note, RESOLUTION_MAX)
     if (status === 'closed' && !note) fail('Escreva a resposta: como o problema foi resolvido.')
-    const item = await mutateStore((store) => {
+    const { item, change } = await mutateStore((store) => {
       init(store)
       const ticket = find(store, req.params.id)
       if (ticket.status === status) fail(status === 'closed' ? 'Este ticket já está fechado.' : 'Este ticket já está aberto.', 409)
@@ -369,10 +421,13 @@ export default function createSupportTicketsRouter(accounts, requireAdmin, { mai
       ticket.status = status
       if (status === 'closed') Object.assign(ticket, { closedAt: at, closedBy: req.viewer.id, closedByName: req.viewer.name, resolution: note })
       else { delete ticket.closedAt; delete ticket.closedBy; delete ticket.closedByName; delete ticket.resolution }
-      ticket.history = [...(ticket.history || []), { type: status === 'closed' ? 'closed' : 'reopened', at, ...by, ...(note ? { note } : {}) }]
-      addNotification(store, { type: 'ticket-status', at, ticketId: ticket.id, authorId: req.viewer.id, recipientIds: uniqueIds([ticket.createdBy, ...followersOf(ticket, req.viewer.id).map((entry) => entry.userId)]), title: `Ticket ${ticket.id} ${status === 'closed' ? 'fechado' : 'reaberto'}`, description: ticket.title, employeeName: req.viewer.name })
-      return ticket
+      const people = peopleOf(ticket, req.viewer.id)
+      const entry = { id: randomUUID(), type: status === 'closed' ? 'closed' : 'reopened', at, ...by, ...(note ? { note } : {}), ...(people.length ? { emails: people } : {}) }
+      ticket.history = [...(ticket.history || []), entry]
+      addNotification(store, { type: 'ticket-status', at, ticketId: ticket.id, authorId: req.viewer.id, recipientIds: uniqueIds([ticket.createdBy, ...followersOf(ticket, req.viewer.id).map((follower) => follower.userId)]), title: `Ticket ${ticket.id} ${status === 'closed' ? 'fechado' : 'reaberto'}`, description: ticket.title, employeeName: req.viewer.name })
+      return { item: ticket, change: entry }
     })
+    emailPeopleOfChange(item, change).catch((error) => console.error(`Falha ao avisar as pessoas do ticket ${item.id}:`, error.message))
     res.json({ item: ticketView(item, req.viewer) })
   }))
   return router
