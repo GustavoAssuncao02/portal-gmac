@@ -1,5 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { CircleCheck, CircleDot, Clock3, Download, Eye, FilterX, Hourglass, Inbox, Info, Lock, Mail, MessageCircle, Paperclip, RotateCcw, Search, Send } from 'lucide-react'
+import { Bell, BellRing, CircleCheck, CircleDot, Clock3, Download, Eye, FilterX, Hourglass, Inbox, Info, Lock, Mail, MessageCircle, Paperclip, RotateCcw, Search, Send } from 'lucide-react'
 import AdminWorkspace from './AdminWorkspace.jsx'
 import { PayableModal, FilePicker, FilePreview, previewable } from './PayableModal.jsx'
 import { payableRequest, uploadFiles, downloadFile } from './payablesApi.js'
@@ -28,7 +28,9 @@ const urgencyHints = {
 const monthShort = (month) => new Date(`${month}-15T12:00:00Z`).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit', timeZone: 'UTC' }).replace('.', '').replace(' de ', '/')
 const monthLong = (month) => new Date(`${month}-15T12:00:00Z`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' })
 const shiftMonth = (month, count) => { const [year, number] = month.split('-').map(Number), total = year * 12 + number - 1 + count; return `${Math.floor(total / 12)}-${String(total % 12 + 1).padStart(2, '0')}` }
-const noFilters = { search: '', status: 'all', urgency: '', module: '', submodule: '', author: '', from: '', to: '', mine: false }
+const noFilters = { search: '', status: 'all', urgency: '', module: '', submodule: '', author: '', from: '', to: '', mine: false, following: false }
+const filesWord = (count) => `${count} ${count === 1 ? 'anexo' : 'anexos'}`
+const lockedNote = 'Os anexos abrem só para quem abriu o ticket e para os administradores.'
 
 // The dot has the color of the urgency in the charts; the word carries the meaning.
 export function UrgencyBadge({ value }) {
@@ -233,12 +235,40 @@ function relativeTime(at, now) {
   return days === 1 ? 'há 1 dia' : `há ${days} dias`
 }
 const emailNote = (email, who, label = 'E-mail') => email?.sentAt ? `${label} enviado para ${who} em ${dateTime(email.sentAt)}.` : email?.failedAt || email?.skippedAt ? `${label} não enviado: ${email.reason}` : `Enviando ${label.toLowerCase()} para ${who}...`
+// How the e-mails of one message went to whoever follows the ticket (shown to the developers).
+function followersEmailNote(list) {
+  const sent = list.filter((entry) => entry.sentAt).map((entry) => entry.userName)
+  const missed = list.filter((entry) => !entry.sentAt && (entry.failedAt || entry.skippedAt)).map((entry) => `${entry.userName} (${entry.reason})`)
+  const waiting = list.filter((entry) => !entry.sentAt && !entry.failedAt && !entry.skippedAt).map((entry) => entry.userName)
+  return ['Quem acompanha:', sent.length ? `e-mail enviado para ${sent.join(', ')}.` : '', missed.length ? `não enviado para ${missed.join(', ')}.` : '', waiting.length ? `enviando para ${waiting.join(', ')}...` : ''].filter(Boolean).join(' ')
+}
 const threadActions = { opened: 'abriu o ticket', closed: 'fechou o ticket', reopened: 'reabriu o ticket', reply: 'respondeu' }
 const threadIcons = { opened: CircleDot, closed: CircleCheck, reopened: RotateCcw }
 
-// The conversation of a ticket, oldest first and going down like a thread: its opening, the developers' comments and
-// each time it was closed (with the answer) or reopened.
-function TicketThread({ ticket, viewer }) {
+// The bell of a ticket: marked, its holder is told of what happens in the ticket (in the bell of the portal and, for each
+// new message, by e-mail), like whoever opened it, who is always told and has no bell to mark.
+function FollowButton({ ticket, compact = false, onChanged, onError }) {
+  const [busy, setBusy] = useState(false)
+  if (ticket.own) return compact ? <span className="ticket-follow ticket-follow--compact ticket-follow--own" title="Você abriu este ticket e já recebe os avisos dele"><BellRing size={16} aria-label="Você abriu este ticket e já recebe os avisos dele" /></span> : null
+  async function toggle(event) {
+    event.stopPropagation()
+    setBusy(true)
+    try { const { item } = await payableRequest(`/support-tickets/${ticket.id}/follow`, 'POST', { following: !ticket.following }); await onChanged(item) } catch (caught) { onError?.(caught.message) } finally { setBusy(false) }
+  }
+  const Icon = ticket.following ? BellRing : Bell, label = ticket.following ? 'Acompanhando' : 'Acompanhar'
+  const hint = ticket.following ? 'Você recebe os avisos deste ticket. Clique para deixar de acompanhar.' : 'Acompanhar: receber os avisos do que acontecer neste ticket.'
+  // The label in its own element: the icon changes on each click (see StatusBadge).
+  return <button type="button" className={`ticket-follow${compact ? ' ticket-follow--compact' : ' admin-tool-button'}${ticket.following ? ' ticket-follow--on' : ''}`} aria-pressed={Boolean(ticket.following)} aria-label={compact ? `${label} o ticket ${ticket.id}` : undefined} title={hint} disabled={busy} onClick={toggle}><Icon size={16} aria-hidden="true" />{!compact && <span>{busy ? 'Salvando...' : label}</span>}</button>
+}
+
+// Files of the ticket: the eye opens images and PDFs inside the portal; a file sent in the conversation says by whom.
+function TicketFileList({ ticket, files, onPreview, onError, className = '' }) {
+  return <ul className={`ticket-detail-files ${className}`}>{files.map((file) => <li key={file.id}><Paperclip size={14} aria-hidden="true" /><span>{file.name}{file.sentBy && <small>Enviado na conversa por {file.sentBy} em {dateTime(file.sentAt)}</small>}</span>{previewable(withType(file)) && <button type="button" className="payable-icon" title="Visualizar" aria-label={`Visualizar ${file.name}`} onClick={() => onPreview(withType(file))}><Eye size={15} /></button>}<button type="button" className="payable-icon" title="Baixar" aria-label={`Baixar ${file.name}`} onClick={() => downloadFile(`/api/support-tickets/${ticket.id}/files/${file.id}`, file.name).catch((caught) => onError(caught.message))}><Download size={15} /></button></li>)}</ul>
+}
+
+// The conversation of a ticket, oldest first and going down like a thread: its opening, the messages (with the files
+// sent in them) and each time it was closed (with the answer) or reopened.
+function TicketThread({ ticket, viewer, onPreview, onError }) {
   const now = Date.now()
   const entries = [
     { key: 'opened', kind: 'opened', at: ticket.createdAt, userName: ticket.createdByName },
@@ -246,29 +276,50 @@ function TicketThread({ ticket, viewer }) {
     ...(ticket.comments || []).map((comment) => ({ ...comment, key: comment.id, kind: comment.byDeveloper === false ? 'reply' : 'comment' })),
     ...(ticket.history || []).filter((entry) => entry.type !== 'opened').map((entry, index) => ({ key: `history-${index}`, kind: entry.type, at: entry.at, userName: entry.userName, text: entry.note })),
   ].sort((left, right) => Date.parse(left.at) - Date.parse(right.at))
-  return <ol className="ticket-thread">{entries.map((entry) => { const Icon = threadIcons[entry.kind]; return <li key={entry.key} className={`ticket-thread-item ticket-thread-item--${entry.kind}${entry.kind === 'reply' ? ' ticket-thread-item--comment' : ''}`}>
-    <span className="ticket-thread-avatar" aria-hidden="true">{Icon ? <Icon size={16} /> : initialsOf(entry.userName)}</span>
-    <div className="ticket-thread-body">
-      <header><strong>{entry.userName}</strong>{entry.kind === 'comment' && <span className="ticket-dev-badge">Desenvolvedor</span>}{threadActions[entry.kind] && <span>{threadActions[entry.kind]}</span>}<time dateTime={entry.at} title={dateTime(entry.at)}>· {relativeTime(entry.at, now)}</time></header>
-      {entry.kind === 'closed' && entry.text && <small className="ticket-thread-label">Resposta do desenvolvedor</small>}
-      {entry.text && <p className="ticket-detail-text">{entry.text}</p>}
-      {viewer.developer && (entry.kind === 'comment' || entry.kind === 'reply') && <small className="ticket-thread-email"><Mail size={12} aria-hidden="true" /><span>{entry.kind === 'reply' ? emailNote(entry.email, 'os desenvolvedores') : emailNote(entry.email, ticket.createdByName)}</span></small>}
-    </div>
-  </li> })}</ol>
+  return <ol className="ticket-thread">{entries.map((entry) => {
+    const Icon = threadIcons[entry.kind], message = entry.kind === 'comment' || entry.kind === 'reply'
+    const action = message && !entry.text && entry.attachmentCount ? `enviou ${filesWord(entry.attachmentCount)}` : threadActions[entry.kind]
+    return <li key={entry.key} className={`ticket-thread-item ticket-thread-item--${entry.kind}${entry.kind === 'reply' ? ' ticket-thread-item--comment' : ''}`}>
+      <span className="ticket-thread-avatar" aria-hidden="true">{Icon ? <Icon size={16} /> : initialsOf(entry.userName)}</span>
+      <div className="ticket-thread-body">
+        <header><strong>{entry.userName}</strong>{entry.kind === 'comment' && <span className="ticket-dev-badge">Desenvolvedor</span>}{action && <span>{action}</span>}<time dateTime={entry.at} title={dateTime(entry.at)}>· {relativeTime(entry.at, now)}</time></header>
+        {entry.kind === 'closed' && entry.text && <small className="ticket-thread-label">Resposta do desenvolvedor</small>}
+        {entry.text && <p className="ticket-detail-text">{entry.text}</p>}
+        {message && entry.attachments?.length > 0 && <TicketFileList ticket={ticket} files={entry.attachments} onPreview={onPreview} onError={onError} className="ticket-thread-files" />}
+        {message && entry.attachmentsLocked && <p className="ticket-locked ticket-thread-files"><Lock size={14} aria-hidden="true" /><span>{filesWord(entry.attachmentCount)}. {lockedNote}</span></p>}
+        {viewer.developer && message && <small className="ticket-thread-email"><Mail size={12} aria-hidden="true" /><span>{entry.kind === 'reply' ? emailNote(entry.email, 'os desenvolvedores') : emailNote(entry.email, ticket.createdByName)}</span></small>}
+        {viewer.developer && message && entry.followerEmails?.length > 0 && <small className="ticket-thread-email"><BellRing size={12} aria-hidden="true" /><span>{followersEmailNote(entry.followerEmails)}</span></small>}
+      </div>
+    </li>
+  })}</ol>
 }
 
 function TicketDetail({ ticket, viewer, onClose, onChanged }) {
-  const [note, setNote] = useState(''), [busy, setBusy] = useState(''), [error, setError] = useState(''), [preview, setPreview] = useState(null)
+  const [note, setNote] = useState(''), [files, setFiles] = useState([]), [busy, setBusy] = useState(''), [error, setError] = useState(''), [preview, setPreview] = useState(null)
   const closing = ticket.status === 'open', replying = !viewer.developer && ticket.own
+  // A message (comment or reply) may carry new files; closing and reopening keep the files chosen for the next message.
   async function send(kind) {
     setBusy(kind); setError('')
     try {
-      const { item } = kind === 'comment' || kind === 'reply' ? await payableRequest(`/support-tickets/${ticket.id}/comments`, 'POST', { text: note }) : await payableRequest(`/support-tickets/${ticket.id}/status`, 'POST', { status: closing ? 'closed' : 'open', note })
-      setNote(''); await onChanged(item)
+      const message = kind === 'comment' || kind === 'reply'
+      const fileIds = message ? await uploadFiles('/support-tickets', files) : []
+      const { item } = message ? await payableRequest(`/support-tickets/${ticket.id}/comments`, 'POST', { text: note, fileIds }) : await payableRequest(`/support-tickets/${ticket.id}/status`, 'POST', { status: closing ? 'closed' : 'open', note })
+      setNote(''); if (message) setFiles([])
+      await onChanged(item)
     } catch (caught) { setError(caught.message) } finally { setBusy('') }
   }
   const days = ticketDays(ticket)
+  const conversationFiles = (ticket.comments || []).flatMap((comment) => (comment.attachments || []).map((file) => ({ ...file, sentBy: comment.userName, sentAt: comment.at })))
+  const allFiles = [...ticket.attachments, ...conversationFiles]
+  const followers = (ticket.followers || []).filter((entry) => String(entry.userId) !== String(viewer.id)).map((entry) => entry.userName)
+  const filePicker = <div className="ticket-files ticket-message-files"><FilePicker title="Anexos (opcional)" files={files} setFiles={setFiles} disabled={Boolean(busy)} /><small className="payable-hint"><Lock size={12} aria-hidden="true" /> {lockedNote}</small></div>
+  const canSend = Boolean(note.trim()) || files.length > 0
   return <PayableModal title={`${ticket.id} · ${ticket.title}`} wide busy={Boolean(busy)} onClose={onClose} className="ticket-detail-modal" footer={<button className="admin-tool-button" type="button" disabled={Boolean(busy)} onClick={onClose}>Fechar janela</button>}>
+    <div className="ticket-follow-bar">
+      {ticket.own ? <p className="ticket-follow-own"><BellRing size={16} aria-hidden="true" /><span>Você abriu este ticket e recebe os avisos do que acontecer nele.</span></p>
+        : <><FollowButton ticket={ticket} onChanged={onChanged} onError={setError} /><small className="payable-hint">{ticket.following ? 'Você recebe no sino as novidades deste ticket e, por e-mail, cada nova mensagem.' : 'Marque o sininho para receber no sino as novidades deste ticket e, por e-mail, cada nova mensagem.'}</small></>}
+      {followers.length > 0 && <small className="ticket-followers"><Bell size={12} aria-hidden="true" /><span>{ticket.following ? 'Também acompanham' : 'Acompanham'}: {followers.join(', ')}</span></small>}
+    </div>
     <dl className="ticket-detail-meta">
       <div><dt>Status</dt><dd><StatusBadge value={ticket.status} /></dd></div>
       <div><dt>Urgência</dt><dd><UrgencyBadge value={ticket.urgency} /></dd></div>
@@ -279,24 +330,26 @@ function TicketDetail({ ticket, viewer, onClose, onChanged }) {
     </dl>
     <section className="ticket-detail-block"><h3>Descrição do problema</h3><p className="ticket-detail-text">{ticket.description}</p></section>
     <section className="ticket-detail-block"><h3>Anexos</h3>
-      {ticket.attachments.length ? <ul className="ticket-detail-files">{ticket.attachments.map((file) => <li key={file.id}><Paperclip size={14} aria-hidden="true" /><span>{file.name}</span>{previewable(withType(file)) && <button type="button" className="payable-icon" title="Visualizar" aria-label={`Visualizar ${file.name}`} onClick={() => setPreview(withType(file))}><Eye size={15} /></button>}<button type="button" className="payable-icon" title="Baixar" aria-label={`Baixar ${file.name}`} onClick={() => downloadFile(`/api/support-tickets/${ticket.id}/files/${file.id}`, file.name).catch((caught) => setError(caught.message))}><Download size={15} /></button></li>)}</ul>
-        : ticket.attachmentsLocked ? <p className="ticket-locked"><Lock size={15} aria-hidden="true" />{ticket.attachmentCount} {ticket.attachmentCount === 1 ? 'anexo' : 'anexos'}. Os anexos abrem só para quem abriu o ticket e para os administradores.</p>
-        : <p className="payable-muted">Sem anexos.</p>}
+      {allFiles.length > 0 && <TicketFileList ticket={ticket} files={allFiles} onPreview={setPreview} onError={setError} />}
+      {ticket.lockedCount > 0 && <p className="ticket-locked"><Lock size={15} aria-hidden="true" /><span>{filesWord(ticket.lockedCount)}{allFiles.length ? ' restritos' : ''}. {lockedNote}</span></p>}
+      {!allFiles.length && !ticket.lockedCount && <p className="payable-muted">Sem anexos.</p>}
     </section>
-    <section className="ticket-detail-block"><h3>Acompanhamento</h3><TicketThread ticket={ticket} viewer={viewer} /></section>
+    <section className="ticket-detail-block"><h3>Acompanhamento</h3><TicketThread ticket={ticket} viewer={viewer} onPreview={setPreview} onError={setError} /></section>
     {viewer.developer ? <section className="ticket-detail-block ticket-developer"><h3>Responder como desenvolvedor</h3>
-      <label className="ticket-field">Mensagem<textarea aria-label="Mensagem do desenvolvedor" rows={3} maxLength={COMMENT_MAX} disabled={Boolean(busy)} placeholder={closing ? 'Ex.: a correção entra na próxima atualização.' : 'Motivo da reabertura (opcional).'} value={note} onChange={(event) => setNote(event.target.value)} /></label>
-      <small className="payable-hint">{ticket.own ? 'O comentário fica no ticket para todos verem.' : `Comentar avisa ${ticket.createdByName} no sistema e por e-mail.`} {closing ? 'Para fechar, escreva como o problema foi resolvido.' : 'Para reabrir, a mensagem é opcional.'}</small>
+      <label className="ticket-field">Mensagem<textarea aria-label="Mensagem do desenvolvedor" rows={3} maxLength={COMMENT_MAX} disabled={Boolean(busy)} placeholder={closing ? 'Ex.: a correção entra na próxima atualização.' : 'Comentário ou motivo da reabertura (opcional).'} value={note} onChange={(event) => setNote(event.target.value)} /></label>
+      {filePicker}
+      <small className="payable-hint">{ticket.own ? 'O comentário fica no ticket para todos verem.' : `Comentar avisa ${ticket.createdByName} no sistema e por e-mail.`}{followers.length || ticket.following ? ' Quem acompanha o ticket também é avisado.' : ''} {closing ? 'Para fechar, escreva como o problema foi resolvido.' : 'Comentar não reabre o ticket; para reabrir, a mensagem é opcional.'}</small>
       <div className="ticket-form-actions">
-        <button className="admin-tool-button admin-tool-button--primary" type="button" disabled={Boolean(busy) || !note.trim()} onClick={() => send('comment')}><MessageCircle size={16} aria-hidden="true" /><span>{busy === 'comment' ? 'Enviando...' : 'Comentar'}</span></button>
+        <button className="admin-tool-button admin-tool-button--primary" type="button" disabled={Boolean(busy) || !canSend} onClick={() => send('comment')}><MessageCircle size={16} aria-hidden="true" /><span>{busy === 'comment' ? 'Enviando...' : 'Comentar'}</span></button>
         <button className="admin-tool-button" type="button" disabled={Boolean(busy) || (closing && !note.trim())} onClick={() => send('status')}>{closing ? <CircleCheck size={16} aria-hidden="true" /> : <RotateCcw size={16} aria-hidden="true" />}<span>{busy === 'status' ? 'Salvando...' : closing ? 'Fechar ticket' : 'Reabrir ticket'}</span></button>
       </div>
       <p className="payable-muted ticket-email-status"><Send size={13} aria-hidden="true" />{emailNote(ticket.email, 'os desenvolvedores', 'E-mail de abertura')}</p>
-    </section> : replying && closing ? <section className="ticket-detail-block ticket-developer ticket-reply"><h3>Responder</h3>
-      <label className="ticket-field">Sua resposta<textarea aria-label="Sua resposta" rows={3} maxLength={COMMENT_MAX} disabled={Boolean(busy)} placeholder="Ex.: deu certo, obrigado." value={note} onChange={(event) => setNote(event.target.value)} /></label>
-      <small className="payable-hint">Os desenvolvedores recebem um aviso no sistema e por e-mail. Quem fecha o ticket são eles, quando o problema estiver resolvido.</small>
-      <div className="ticket-form-actions"><button className="admin-tool-button admin-tool-button--primary" type="button" disabled={Boolean(busy) || !note.trim()} onClick={() => send('reply')}><Send size={16} aria-hidden="true" /><span>{busy === 'reply' ? 'Enviando...' : 'Responder'}</span></button></div>
-    </section> : <p className="payable-muted">{replying ? 'Este ticket está fechado. Se o problema continuar, abra um novo ticket.' : 'Somente quem abriu o ticket e os desenvolvedores do sistema respondem nele; o status, só os desenvolvedores alteram.'}</p>}
+    </section> : replying ? <section className="ticket-detail-block ticket-developer ticket-reply"><h3>Responder</h3>
+      <label className="ticket-field">Sua resposta<textarea aria-label="Sua resposta" rows={3} maxLength={COMMENT_MAX} disabled={Boolean(busy)} placeholder={closing ? 'Ex.: deu certo, obrigado.' : 'Ex.: o problema voltou a acontecer.'} value={note} onChange={(event) => setNote(event.target.value)} /></label>
+      {filePicker}
+      <small className="payable-hint">{closing ? 'Os desenvolvedores recebem um aviso no sistema e por e-mail. Quem fecha o ticket são eles, quando o problema estiver resolvido.' : 'Este ticket está fechado, mas você ainda pode responder e enviar anexos. Os desenvolvedores recebem um aviso no sistema e por e-mail e, se for preciso, reabrem o ticket.'}</small>
+      <div className="ticket-form-actions"><button className="admin-tool-button admin-tool-button--primary" type="button" disabled={Boolean(busy) || !canSend} onClick={() => send('reply')}><Send size={16} aria-hidden="true" /><span>{busy === 'reply' ? 'Enviando...' : 'Responder'}</span></button></div>
+    </section> : <p className="payable-muted">Somente quem abriu o ticket e os desenvolvedores do sistema respondem nele; o status, só os desenvolvedores alteram. Para receber os avisos deste ticket, marque o sininho no alto.</p>}
     {error && <p className="admin-tool-error" role="alert">{error}</p>}
     {preview && <FilePreview url={`/api/support-tickets/${ticket.id}/files/${preview.id}`} file={preview} onClose={() => setPreview(null)} />}
   </PayableModal>
@@ -312,6 +365,7 @@ const columns = [
   { key: 'age', label: 'Tempo aberto', value: (row) => ticketDays(row), numeric: true },
   { key: 'author', label: 'Aberto por', value: (row) => row.createdByName },
   { key: 'files', label: 'Anexos', value: (row) => row.attachmentCount, numeric: true },
+  { key: 'follow', label: 'Avisos', value: (row) => row.own ? 2 : row.following ? 1 : 0, numeric: true },
 ]
 
 // Tickets de suporte: anyone of the portal opens a ticket for the developers; every ticket is listed below the form, with
@@ -320,6 +374,11 @@ export default function SupportTicketsScreen(props) {
   const [data, setData] = useState(null), [error, setError] = useState(''), [filters, setFilters] = useState(noFilters), [openId, setOpenId] = useState(null)
   const reader = useMemo(() => latestOnly(() => payableRequest('/support-tickets')), [])
   const load = () => reader((result) => { setData(result); setError('') })
+  // A ticket changed here (the bell) shows at once; the reload that follows brings the rest.
+  const apply = async (item) => {
+    if (item) setData((current) => current && { ...current, items: current.items.map((ticket) => ticket.id === item.id ? item : ticket) })
+    await load().catch(() => {})
+  }
   useEffect(() => {
     // Opened from a notification: the ticket comes up.
     const wanted = sessionStorage.getItem('gmac-ticket-open')
@@ -335,7 +394,7 @@ export default function SupportTicketsScreen(props) {
   const term = plain(filters.search.trim())
   const matches = (ticket, skipStatus = false) => (skipStatus || filters.status === 'all' || ticket.status === filters.status)
     && (!filters.urgency || ticket.urgency === filters.urgency) && (!filters.module || ticket.module === filters.module) && (!filters.submodule || ticket.submodule === filters.submodule)
-    && (!filters.author || String(ticket.createdBy) === filters.author) && (!filters.mine || ticket.own)
+    && (!filters.author || String(ticket.createdBy) === filters.author) && (!filters.mine || ticket.own) && (!filters.following || ticket.following)
     && (!filters.from || bahiaDate(ticket.createdAt) >= filters.from) && (!filters.to || bahiaDate(ticket.createdAt) <= filters.to)
     && (!term || plain(`${ticket.id} ${ticket.title} ${ticket.description} ${ticket.createdByName} ${moduleTitle(ticket.module, ticket.submodule)}`).includes(term))
   const visible = items.filter((ticket) => matches(ticket))
@@ -363,6 +422,7 @@ export default function SupportTicketsScreen(props) {
             <label>De<input type="date" aria-label="Aberto a partir de" max={filters.to || undefined} value={filters.from} onChange={(event) => set('from', event.target.value)} /></label>
             <label>Até<input type="date" aria-label="Aberto até" min={filters.from || undefined} value={filters.to} onChange={(event) => set('to', event.target.value)} /></label>
             <label className="ticket-mine"><input type="checkbox" checked={filters.mine} onChange={(event) => set('mine', event.target.checked)} />Meus tickets</label>
+            <label className="ticket-mine"><input type="checkbox" checked={filters.following} onChange={(event) => set('following', event.target.checked)} />Acompanhando</label>
             <button className="admin-tool-button" type="button" disabled={!filtering} onClick={() => setFilters(noFilters)}><FilterX size={16} aria-hidden="true" />Limpar filtros</button>
           </div>
           <div className="ticket-charts">
@@ -383,12 +443,13 @@ export default function SupportTicketsScreen(props) {
               <td data-label="Tempo aberto"><span className={`ticket-age${ticket.status === 'closed' ? ' ticket-age--closed' : ''}`}><Clock3 size={13} aria-hidden="true" />{daysLabel(ticketDays(ticket))}{ticket.status === 'closed' && <small>até fechar</small>}</span></td>
               <td data-label="Aberto por">{ticket.createdByName}</td>
               <td data-label="Anexos">{ticket.attachmentCount ? <span className="ticket-file-count" title={ticket.attachmentsLocked ? 'Os anexos abrem só para quem abriu o ticket e para os administradores' : undefined}>{ticket.attachmentsLocked ? <Lock size={13} aria-label="Restrito" /> : <Paperclip size={13} aria-hidden="true" />}{ticket.attachmentCount}</span> : <span className="payable-muted">—</span>}</td>
+              <td data-label="Avisos"><FollowButton ticket={ticket} compact onChanged={apply} onError={setError} /></td>
             </tr>)}
             {!sorted.rows.length && <tr><td colSpan={columns.length} className="payable-empty">{items.length ? 'Nenhum ticket encontrado com estes filtros.' : 'Nenhum ticket aberto ainda.'}</td></tr>}
             </tbody></table></div>}</SortableRows>
         </>}
       </section>
-      {detail && <TicketDetail key={detail.id} ticket={detail} viewer={viewer} onClose={() => setOpenId(null)} onChanged={async () => { await load().catch(() => {}) }} />}
+      {detail && <TicketDetail key={detail.id} ticket={detail} viewer={viewer} onClose={() => setOpenId(null)} onChanged={apply} />}
     </div>
   </AdminWorkspace>
 }

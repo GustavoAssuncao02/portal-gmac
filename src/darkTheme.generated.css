@@ -4428,6 +4428,43 @@
 :root[data-theme="dark"] .ticket-detail-files li {
     color: #e1ebf6
 }
+:root[data-theme="dark"] .ticket-detail-files li > span small {
+    color: #c1cfde
+}
+:root[data-theme="dark"] .ticket-follow-bar {
+    border: 1px solid #36516f;
+    background: #203c59
+}
+:root[data-theme="dark"] .ticket-follow-own {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .ticket-follow-own svg, :root[data-theme="dark"] .ticket-follow--own {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .ticket-followers {
+    color: #b4c2cf
+}
+:root[data-theme="dark"] .admin-tool-button.ticket-follow--on {
+    border-color: #ae9047;
+    background: #3c3520;
+    color: #eccb89
+}
+:root[data-theme="dark"] .ticket-follow--compact {
+    color: #b7c2cd
+}
+:root[data-theme="dark"] button.ticket-follow--compact:hover {
+    border-color: #36516f;
+    background: #203c59;
+    color: #e1ebf6
+}
+:root[data-theme="dark"] button.ticket-follow--compact:focus-visible {
+    outline: 2px solid #36516f
+}
+:root[data-theme="dark"] button.ticket-follow--compact.ticket-follow--on {
+    border-color: #ae9047;
+    background: #3c3520;
+    color: #ecc889
+}
 :root[data-theme="dark"] .ticket-locked {
     color: #b4c2cf
 }

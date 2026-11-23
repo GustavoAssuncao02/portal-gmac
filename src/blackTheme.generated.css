@@ -3753,6 +3753,39 @@
 :root[data-theme="dark"][data-tone="black"] .ticket-detail-files li {
     color: #ebebec
 }
+:root[data-theme="dark"][data-tone="black"] .ticket-detail-files li > span small {
+    color: #cdcfd2
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-follow-bar {
+    border: 1px solid #303133;
+    background: #232425
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-follow-own {
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-follow-own svg, :root[data-theme="dark"][data-tone="black"] .ticket-follow--own {
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-followers {
+    color: #bec2c5
+}
+:root[data-theme="dark"][data-tone="black"] .admin-tool-button.ticket-follow--on {
+    background: #302a1a
+}
+:root[data-theme="dark"][data-tone="black"] .ticket-follow--compact {
+    color: #bfc2c5
+}
+:root[data-theme="dark"][data-tone="black"] button.ticket-follow--compact:hover {
+    border-color: #303133;
+    background: #232425;
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] button.ticket-follow--compact:focus-visible {
+    outline: 2px solid #303133
+}
+:root[data-theme="dark"][data-tone="black"] button.ticket-follow--compact.ticket-follow--on {
+    background: #302a1a
+}
 :root[data-theme="dark"][data-tone="black"] .ticket-locked {
     color: #bec2c5
 }

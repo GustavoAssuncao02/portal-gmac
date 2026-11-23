@@ -116,6 +116,24 @@
 .ticket-detail-files { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .ticket-detail-files li { display: flex; align-items: center; gap: 8px; color: #24405d; font-size: 13px; }
 .ticket-detail-files li span { flex: 1; overflow-wrap: anywhere; }
+.ticket-detail-files li > span { display: grid; }
+.ticket-detail-files li > span small { color: #6b7f92; font-size: 11.5px; }
+.ticket-thread-files { margin-top: 8px; }
+.ticket-message-files .payable-files h3 { font-weight: 600; }
+/* The bell of a ticket: marked, whoever holds it is told of what happens in it. */
+.ticket-follow-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 16px; padding: 10px 12px; border: 1px solid #dce6ef; border-radius: 8px; background: #f8fbfe; }
+.ticket-follow-bar .payable-hint { flex: 1 1 260px; }
+.ticket-follow-own { display: flex; align-items: center; gap: 8px; margin: 0; color: #24405d; font-size: 13px; }
+.ticket-follow-own svg, .ticket-follow--own { color: #0c4c91; }
+.ticket-followers { display: flex; align-items: center; gap: 5px; flex-basis: 100%; color: #5d7792; font-size: 12px; }
+.admin-tool-button.ticket-follow { gap: 7px; }
+.admin-tool-button.ticket-follow--on { border-color: #e2b23f; background: #fff7e0; color: #7a5200; }
+.ticket-follow--compact { display: inline-grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid transparent; border-radius: 50%; background: none; color: #7a8ea3; cursor: pointer; }
+button.ticket-follow--compact:hover { border-color: #c4d5e6; background: #f3f8fd; color: #0c4c91; }
+button.ticket-follow--compact:focus-visible { outline: 2px solid #467ba8; outline-offset: 1px; }
+button.ticket-follow--compact.ticket-follow--on { border-color: #e2b23f; background: #fff7e0; color: #a86b00; }
+button.ticket-follow--compact:disabled { cursor: progress; opacity: .6; }
+span.ticket-follow--own { cursor: default; }
 .ticket-locked { display: flex; align-items: center; gap: 8px; margin: 0; color: #5d7792; font-size: 13px; }
 .ticket-resolution { padding: 14px; border: 1px solid #bfe3cc; border-radius: 6px; background: #effaf3; }
 .ticket-resolution small { display: block; margin-top: 8px; color: #4f7a62; font-size: 12px; }

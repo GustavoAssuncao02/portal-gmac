@@ -6,7 +6,7 @@ export const releaseNotes = [
     notes: [
       'Ofertas e serviços: até 5 solicitantes por oferta, opção "Sem quantidade definida", oferta em aberto não é mais assumida por quem a inseriu',
       'Ofertas e serviços: botão "Desfazer recusa" nas ofertas recusadas por engano, que voltam para "Em análise" com tudo o que tinham',
-      'Ticket: e-mails com tipo, urgência e tema em destaque',
+      'Ticket: e-mails com tipo, urgência e tema em destaque, sininho para acompanhar um ticket, anexos na conversa e respostas mesmo com o ticket fechado',
       'Tela do operador: títulos de ordenação da lista mais fáceis de tocar no tablet',
     ],
   },

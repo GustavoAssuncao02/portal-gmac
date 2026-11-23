@@ -2,12 +2,12 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createWorkflowFixture } from './workflowFixture.js'
 
-// A ticket is a conversation: the developer explains, whoever opened it answers back ("deu certo, obrigado") while it is
-// open, and the developers close it. Nobody else answers, and a closed ticket takes no reply.
+// A ticket is a conversation: the developer explains, whoever opened it answers back ("deu certo, obrigado"), and the
+// developers close it. Nobody else answers; a closed ticket still takes messages and stays closed (2026-11-23).
 const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Administradora' }
 const person = (index) => ({ name: `Funcionário ${index}`, birthDate: '1990-01-01', cpf: `0000000000${index}`, email: `funcionario${index}@example.invalid`, identification: '', type: 'administrative', password: 'senha123' })
 
-test('whoever opened a ticket replies while it is open and the developers are told; only developers close it', async () => {
+test('whoever opened a ticket replies, also after it is closed, and the developers are told; only developers close it', async () => {
   const fixture = await createWorkflowFixture({ accountsEnv: env, ticketDevelopers: ['00000000004'] })
   try {
     const login = async (index) => {
@@ -43,8 +43,11 @@ test('whoever opened a ticket replies while it is open and the developers are to
     assert.equal((await someone(`/support-tickets/${ticket.id}/comments`, 'POST', { text: 'Comigo também.' })).status, 403)
     assert.equal((await mine(`/support-tickets/${ticket.id}/status`, 'POST', { status: 'closed', note: 'Resolvido' })).status, 403)
     assert.equal((await dev(`/support-tickets/${ticket.id}/status`, 'POST', { status: 'closed', note: 'Exclusão liberada para conta com baixa estornada.' })).status, 200)
-    const closed = await mine(`/support-tickets/${ticket.id}/comments`, 'POST', { text: 'Mais uma coisa.' })
-    assert.deepEqual([closed.status, closed.data.message], [409, 'Este ticket está fechado. Se o problema continuar, abra um novo ticket.'])
+    // Closed, the conversation goes on: whoever opened it answers, the developers are told, and it stays closed.
+    const closed = await mine(`/support-tickets/${ticket.id}/comments`, 'POST', { text: 'Voltou a acontecer hoje.' })
+    assert.deepEqual([closed.status, closed.data.item.status, closed.data.item.comments.at(-1).text], [201, 'closed', 'Voltou a acontecer hoje.'])
+    assert.ok((await notices(dev)).some((item) => item.commentId === closed.data.item.comments.at(-1).id), 'the developers are told of a reply on a closed ticket')
+    assert.equal((await someone(`/support-tickets/${ticket.id}/comments`, 'POST', { text: 'Comigo também.' })).status, 403, 'closed or open, nobody else answers')
     assert.equal((await dev(`/support-tickets/${ticket.id}/comments`, 'POST', { text: 'Registro depois de fechado.' })).status, 201, 'developers still comment on a closed ticket')
   } finally {
     await fixture.close()

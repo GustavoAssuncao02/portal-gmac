@@ -754,6 +754,9 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .ticket-detail-modal .ticket-detail-block h3 { font-size: calc(14px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .ticket-detail-text { font-size: calc(14px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .ticket-detail-files li { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .ticket-detail-files li > span small { font-size: calc(11.5px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .ticket-follow-own { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .ticket-followers { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .ticket-locked { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .ticket-resolution small { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .ticket-thread-avatar { font-size: calc(12px * var(--account-font-scale)); }
