@@ -5,7 +5,7 @@ import path from 'node:path'
 import { dataDirectory } from './dataDirectory.js'
 import { readStore, mutateStore } from './offers.js'
 import { exportPdf, exportWorkbook } from './reports.js'
-import { cents, validDate, todayBahia, payableStatus, daysUntil, makeInstallments, shiftMonth, filterPayables, settlementMethods, treasuryEntry, classificationParts, splitInstallments, MAX_SERIES } from './payableRules.js'
+import { cents, validDate, todayBahia, payableStatus, daysUntil, makeInstallments, shiftMonth, filterPayables, settlementMethods, treasuryEntry, classificationParts, splitInstallments, duplicateError, duplicateAccepted, MAX_SERIES } from './payableRules.js'
 import { notificationSettings } from './accounts.js'
 import { assertNotReconciled, reconciledTransaction } from './bankStatements.js'
 import { orderValue } from './receivables.js'
@@ -37,14 +37,32 @@ function claimFiles(store, ids, actor) {
   store.payableUploads = (store.payableUploads || []).filter((f) => !ids.includes(f.id))
   return files
 }
-function duplicates(store, proposed, ignored = []) {
+// Another account with the same supplier, value and due date is a possible duplicate: the form warns and names it, and
+// the user may still post it after confirming (`allowDuplicate`, TCK-0007), since equal bills do happen. An edit that
+// keeps supplier, value and due date does not warn again about a match already accepted. Tesouraria entries are not
+// checked: two equal purchases on the same day are legitimate. Returns, for each proposed account, the ids of the
+// matches the user accepted.
+const duplicateKey = (row) => JSON.stringify([String(row.supplierId), row.valueCents, row.dueDate])
+function duplicates(store, proposed, ignored = [], allowed = false) {
+  const kept = new Set(store.payables.filter((item) => ignored.includes(item.id)).map(duplicateKey))
+  const others = store.payables.filter((item) => !ignored.includes(item.id) && !item.treasury)
   const seen = new Set()
-  // Tesouraria entries are not checked: two equal purchases on the same day are legitimate.
-  for (const row of [...store.payables.filter((item) => !ignored.includes(item.id) && !item.treasury), ...proposed]) {
-    const key = JSON.stringify([String(row.supplierId), row.valueCents, row.dueDate])
-    if (seen.has(key)) fail('Conta duplicada: fornecedor, valor e vencimento já cadastrados.', 409)
+  let repeated = false
+  const found = proposed.map((row) => {
+    const key = duplicateKey(row)
+    if (seen.has(key)) repeated = true
     seen.add(key)
-  }
+    return kept.has(key) ? [] : others.filter((item) => duplicateKey(item) === key)
+  })
+  const matches = [...new Set(found.flat())]
+  if (allowed || !matches.length && !repeated) return found.map((rows) => rows.map((item) => item.id))
+  throw duplicateError(matches, duplicateFields, (item) => ({ id: item.id, name: item.supplierName, description: item.description || '', documentNumber: item.documentNumber || '', valueCents: item.valueCents, dueDate: item.dueDate, status: item.inactive ? 'inactive' : payableStatus(item) }))
+}
+const duplicateFields = 'fornecedor, valor e vencimento'
+// The history of an account saved over a possible duplicate says so.
+const acceptedDetails = (ids, details = {}) => {
+  const text = [details.text, duplicateAccepted(ids, duplicateFields)].filter(Boolean).join(' · ')
+  return text ? { ...details, text } : details
 }
 function fields(store, body, current) {
   const supplier = (store.suppliers || []).find((item) => String(item.id) === String(body.supplierId))
@@ -294,13 +312,13 @@ export default function createPayablesRouter(accounts, requireAdmin) {
       const occurrences = ahead ? Array.from({ length: ahead + 1 }, (_, index) => ({ valueCents: common.valueCents, issueDate: shiftMonth(common.issueDate, index * step), dueDate: shiftMonth(common.dueDate, index * step) })) : parts
       const splits = common.kind === 'installment' ? splitInstallments(common.classificationSplit, occurrences.map((part) => part.valueCents)) : occurrences.map(() => common.classificationSplit)
       const proposed = occurrences.map((part, index) => ({ ...common, ...part, classificationSplit: splits[index], groupId, installmentNumber: seriesId ? 1 : index + 1, installmentCount: seriesId ? 1 : parts.length, seriesId, seriesIndex: seriesId ? index + 1 : null, seriesCount: seriesId ? occurrences.length : null, originalTotalCents: common.valueCents, previousId: index === 0 ? previous?.id || null : null, inactive: false, payment: null, attachments: [], createdAt: new Date().toISOString() }))
-      if (!treasury) duplicates(store, proposed)
+      const accepted = treasury ? [] : duplicates(store, proposed, [], req.body.allowDuplicate === true)
       const attachments = claimFiles(store, req.body.fileIds || [], req.actor)
       for (const [index, row] of proposed.entries()) {
         row.attachments = seriesId && index > 0 ? [] : [...attachments]
         if (treasury) Object.assign(row, { treasury: true, payment: treasuryPayment(req.body, row.valueCents, store) })
         store.payableSequence = (store.payableSequence || 0) + 1; row.id = `PAG-${String(store.payableSequence).padStart(6, '0')}`; row.lastStatus = payableStatus(row); store.payables.push(row)
-        event(store, req.actor, 'created', row.id, { details: { valueCents: row.valueCents, dueDate: row.dueDate, previousId: row.previousId, text: treasury ? 'Saída lançada na Tesouraria, já baixada' : previous ? `Criada a partir de ${previous.id}` : seriesId ? `Recorrência ${index + 1} de ${proposed.length}, gerada antecipadamente` : '' } })
+        event(store, req.actor, 'created', row.id, { details: acceptedDetails(accepted[index], { valueCents: row.valueCents, dueDate: row.dueDate, previousId: row.previousId, text: treasury ? 'Saída lançada na Tesouraria, já baixada' : previous ? `Criada a partir de ${previous.id}` : seriesId ? `Recorrência ${index + 1} de ${proposed.length}, gerada antecipadamente` : '' }) })
         if (treasury) event(store, req.actor, 'paid', row.id, { details: { ...row.payment, treasury: true } })
         if (!seriesId || index === 0) for (const file of attachments) event(store, req.actor, 'attachment_added', row.id, { details: { name: file.name } })
       }
@@ -332,12 +350,12 @@ export default function createPayablesRouter(accounts, requireAdmin) {
         }
         const splits = splitInstallments(common.classificationSplit, parts.map((part) => part.valueCents))
         const proposed = parts.map((part, index) => ({ ...(siblings[index] || row), ...common, ...part, classificationSplit: splits[index], originalTotalCents: row.originalTotalCents, installmentNumber: index + 1, installmentCount: parts.length, attachments: siblings[index]?.attachments || [], id: siblings[index]?.id }))
-        duplicates(store, proposed, siblings.map((r) => r.id))
+        const accepted = duplicates(store, proposed, siblings.map((r) => r.id), req.body.allowDuplicate === true)
         if (siblings.slice(parts.length).some((r) => r.attachments.length || store.payables.some((p) => p.previousId === r.id) || store.payableEvents.some((e) => e.accountId === r.id && ['paid', 'reversed'].includes(e.type)))) fail('Não é possível remover parcelas com anexos, pagamentos anteriores ou vínculos.', 409)
         store.payables = store.payables.filter((r) => r.groupId !== row.groupId)
         for (const [index, updated] of proposed.entries()) {
           if (!updated.id) { store.payableSequence++; updated.id = `PAG-${String(store.payableSequence).padStart(6, '0')}` }
-          const before = siblings[index] || null; updated.lastStatus = payableStatus(updated); store.payables.push(updated); event(store, req.actor, 'edited', updated.id, { changes: { before, after: updated } })
+          const before = siblings[index] || null; updated.lastStatus = payableStatus(updated); store.payables.push(updated); event(store, req.actor, 'edited', updated.id, { changes: { before, after: updated }, ...(accepted[index].length ? { details: acceptedDetails(accepted[index]) } : {}) })
         }
         for (const removed of siblings.slice(parts.length)) event(store, req.actor, 'deleted', removed.id, { details: { installmentRestructure: true } })
         addAttachments(proposed.find((r) => r.id === row.id) || proposed[0])
@@ -347,17 +365,17 @@ export default function createPayablesRouter(accounts, requireAdmin) {
         const parts = installments(req.body, common.valueCents, common.dueDate), groupId = randomUUID(), before = { ...row }
         const splits = splitInstallments(common.classificationSplit, parts.map((part) => part.valueCents))
         const proposed = parts.map((part, index) => ({ ...row, ...common, ...part, classificationSplit: splits[index], id: index === 0 ? row.id : undefined, groupId, installmentNumber: index + 1, installmentCount: parts.length, originalTotalCents: common.valueCents, previousId: index === 0 ? row.previousId : null, attachments: index === 0 ? [...row.attachments] : [], createdAt: index === 0 ? row.createdAt : new Date().toISOString() }))
-        duplicates(store, proposed, [row.id])
+        const accepted = duplicates(store, proposed, [row.id], req.body.allowDuplicate === true)
         store.payables = store.payables.filter((r) => r.id !== row.id)
         for (const [index, updated] of proposed.entries()) {
           if (!updated.id) { store.payableSequence++; updated.id = `PAG-${String(store.payableSequence).padStart(6, '0')}` }
           updated.lastStatus = payableStatus(updated); store.payables.push(updated)
-          event(store, req.actor, index === 0 ? 'edited' : 'created', updated.id, index === 0 ? { changes: { before, after: { ...updated } } } : { details: { valueCents: updated.valueCents, dueDate: updated.dueDate, groupId } })
+          event(store, req.actor, index === 0 ? 'edited' : 'created', updated.id, index === 0 ? { changes: { before, after: { ...updated } }, ...(accepted[0].length ? { details: acceptedDetails(accepted[0]) } : {}) } : { details: acceptedDetails(accepted[index], { valueCents: updated.valueCents, dueDate: updated.dueDate, groupId }) })
         }
         addAttachments(proposed[0]); return proposed
       }
-      duplicates(store, [{ ...row, ...common }], [row.id])
-      const before = { ...row }; Object.assign(row, common, { originalTotalCents: common.valueCents, lastStatus: payableStatus({ ...row, ...common }) }); event(store, req.actor, 'edited', row.id, { changes: { before, after: { ...row } } }); addAttachments(row); return [row]
+      const [accepted] = duplicates(store, [{ ...row, ...common }], [row.id], req.body.allowDuplicate === true)
+      const before = { ...row }; Object.assign(row, common, { originalTotalCents: common.valueCents, lastStatus: payableStatus({ ...row, ...common }) }); event(store, req.actor, 'edited', row.id, { changes: { before, after: { ...row } }, ...(accepted.length ? { details: acceptedDetails(accepted) } : {}) }); addAttachments(row); return [row]
     }); res.json({ items: result })
   }))
   router.post('/payables/bulk', handle(async (req, res) => {

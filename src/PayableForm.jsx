@@ -7,6 +7,7 @@ import { todayBahia, makeInstallments, cents, shiftMonth, settlementMethods, tre
 import BankSelect from './BankSelect.jsx'
 import ClassificationSelect from './ClassificationSelect.jsx'
 import { byName } from './byName.js'
+import { DuplicateWarning, DuplicateConfirm, duplicateOf } from './DuplicateAccount.jsx'
 
 const empty = () => ({ supplierId: '', description: '', classificationId: '', split: [], documentNumber: '', issueDate: todayBahia(), value: '', dueDate: '', kind: 'normal', recurrence: 'monthly', ahead: 11, orderCode: '', count: 1, installments: [], date: todayBahia(), method: 'pix' })
 const safeCents = (value) => { try { return cents(value) } catch { return null } }
@@ -59,9 +60,19 @@ export default function PayableForm({ suppliers, classifications, orders = [], i
     setDraft({ ...draft, supplierId, classificationId: keep || !last ? draft.classificationId : last.classificationId })
     setSuggested(!keep && Boolean(last))
   }
+  // A possible duplicate keeps what was sent: "Lançar mesmo assim" confirms and sends it again. Any change to the form
+  // drops it, so the confirmation never posts data other than what is on screen.
+  const [duplicate, setDuplicate] = useState(null), [confirmingDuplicate, setConfirmingDuplicate] = useState(false)
+  useEffect(() => { setDuplicate(null) }, [draft, files])
+  async function send(payload, another) {
+    const result = await payableRequest(edit ? `/payables/${source.id}` : '/payables', edit ? 'PUT' : 'POST', payload)
+    await onSaved(result.items, !another)
+    if (another) { setDraft(empty()); setFiles([]); setSuggested(false) }
+  }
   async function save(event) {
-    event.preventDefault(); setError(''); setBusy(true)
+    event.preventDefault(); setError(''); setDuplicate(null); setBusy(true)
     const another = event.nativeEvent.submitter?.value === 'another'
+    let payload
     try {
       if (treasury && draft.date > todayBahia()) throw new Error('O pagamento não pode ter data futura.')
       if (!treasury && draft.kind === 'installment' && draft.installments.reduce((sum, r) => sum + cents(r.value), 0) !== cents(draft.value)) throw new Error('A soma das parcelas deve ser exatamente igual ao valor total.')
@@ -69,12 +80,14 @@ export default function PayableForm({ suppliers, classifications, orders = [], i
       const fileIds = await uploadPayableFiles(files)
       const { split, ...fields } = draft
       const classification = divided ? { classificationId: split[0].classificationId, classificationSplit: split.map((part) => ({ classificationId: part.classificationId, value: part.value })) } : { classificationSplit: null }
-      const payload = treasury ? { ...fields, ...classification, treasury: true, kind: 'normal', ahead: 0, count: 1, installments: undefined, previousId: undefined, fileIds }
+      payload = treasury ? { ...fields, ...classification, treasury: true, kind: 'normal', ahead: 0, count: 1, installments: undefined, previousId: undefined, fileIds }
         : { ...fields, ...classification, treasury: false, supplierId: draft.supplierId, ahead: draft.kind === 'recurring' && !edit ? Number(draft.ahead) : 0, ...(draft.kind === 'installment' ? {} : { count: 1, installments: undefined }), fileIds }
-      const result = await payableRequest(edit ? `/payables/${source.id}` : '/payables', edit ? 'PUT' : 'POST', payload)
-      await onSaved(result.items, !another)
-      if (another) { setDraft(empty()); setFiles([]); setSuggested(false) }
-    } catch (caught) { setError(caught.message) } finally { setBusy(false) }
+      await send(payload, another)
+    } catch (caught) { const found = duplicateOf(caught, payload, { another }); if (found) setDuplicate(found); else setError(caught.message) } finally { setBusy(false) }
+  }
+  async function confirmDuplicate() {
+    await send({ ...duplicate.payload, allowDuplicate: true }, duplicate.another)
+    setConfirmingDuplicate(false); setDuplicate(null)
   }
   // Dividir entre classificações: one account, the value spread over two or more classifications.
   const divided = draft.split.length > 1
@@ -126,7 +139,9 @@ export default function PayableForm({ suppliers, classifications, orders = [], i
       </>}
       {draft.kind === 'installment' && <section className="payable-installments"><label>Quantidade de parcelas<input type="number" min={1} required disabled={structureLocked} value={draft.count} onChange={(event) => change('count', Number(event.target.value))} /></label>{draft.installments.map((r, index) => <div className="payable-installment" key={index}><strong>{index + 1}/{draft.count}</strong><label>Valor da parcela {index + 1}<MoneyInput aria-label={`Valor da parcela ${index + 1}`} required positive value={r.value} disabled={structureLocked} onChange={(value) => setDraft({ ...draft, installments: draft.installments.map((part, i) => i === index ? { ...part, value } : part) })} /></label><label>Vencimento da parcela {index + 1}<input type="date" required value={r.dueDate} disabled={structureLocked} onChange={(event) => setDraft({ ...draft, installments: draft.installments.map((part, i) => i === index ? { ...part, dueDate: event.target.value } : part) })} /></label></div>)}<p className="payable-sum">Soma das parcelas: {installmentSum === null ? '—' : money(installmentSum)}</p>{structureLocked && <p>Existe parcela paga. A estrutura está bloqueada.</p>}</section>}</>}
       <FilePicker files={files} setFiles={setFiles} disabled={busy} />{error && <p className="admin-tool-error" role="alert">{error}</p>}
+      {duplicate && <DuplicateWarning duplicate={duplicate} edit={edit} onProceed={() => setConfirmingDuplicate(true)} />}
     </fieldset></form>
-    {creatingSupplier && <SupplierQuickForm onClose={() => setCreatingSupplier(false)} onCreated={async (supplier) => { setNewSuppliers((rows) => [...rows, supplier]); setCreatingSupplier(false); chooseSupplier(supplier.id); await onSupplierCreated?.() }} />}
+    {confirmingDuplicate && duplicate && <DuplicateConfirm duplicate={duplicate} kind="payable" edit={edit} onClose={() => setConfirmingDuplicate(false)} onConfirm={confirmDuplicate} />}
+    {creatingSupplier &&<SupplierQuickForm onClose={() => setCreatingSupplier(false)} onCreated={async (supplier) => { setNewSuppliers((rows) => [...rows, supplier]); setCreatingSupplier(false); chooseSupplier(supplier.id); await onSupplierCreated?.() }} />}
   </PayableModal>
 }

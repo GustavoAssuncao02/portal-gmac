@@ -83,7 +83,12 @@ try {
   await modal().getByLabel('Descrição', { exact: true }).fill('Energia corrigida'); await saveAccount()
   await modal().getByRole('heading', { name: 'Dados principais', exact: true }).waitFor(); await closeDialog()
   await page.getByRole('button', { name: 'Nova conta a pagar', exact: true }).click(); await fillAccount(); await modal().getByRole('button', { name: 'Salvar conta', exact: true }).click()
-  await modal().getByRole('alert').waitFor(); assert.ok((await modal().getByRole('alert').innerText()).includes('duplicada')); await closeDialog()
+  await modal().getByRole('alert').waitFor(); assert.ok((await modal().getByRole('alert').innerText()).includes('duplicada: PAG-000001'))
+  // TCK-0007: the warning can be overridden after a confirmation that shows the account found.
+  await modal().getByRole('button', { name: 'Lançar mesmo assim', exact: true }).click()
+  await modal().getByRole('heading', { name: 'Confirmar possível duplicidade', exact: true }).waitFor(); assert.ok((await modal().innerText()).includes('PAG-000001'))
+  await page.screenshot({ path: 'test-results/payable-duplicate-confirm.png' })
+  await modal().getByRole('button', { name: 'Voltar e revisar', exact: true }).click(); await closeDialog()
   await page.getByRole('button', { name: 'Nova conta a pagar', exact: true }).click(); await fillAccount({ value: '100.01', date: '2027-01-31', description: 'Compra parcelada' })
   await modal().getByRole('radio', { name: 'Parcelada', exact: true }).check(); await modal().getByLabel('Quantidade de parcelas', { exact: true }).fill('3')
   assert.equal(await modal().getByLabel('Vencimento da parcela 2', { exact: true }).inputValue(), '2027-02-28')

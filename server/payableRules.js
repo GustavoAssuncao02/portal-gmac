@@ -72,8 +72,19 @@ export const settlementMethods = { pix: 'Pix', boleto: 'Boleto', transfer: 'Tran
 // statement does not say, and then the user chooses it when closing the reconciliation.
 const OPERATION_METHODS = { 'pix-sent': 'pix', 'pix-received': 'pix', 'ted-sent': 'transfer', 'ted-received': 'transfer', 'bill-paid': 'boleto', 'collection-received': 'boleto' }
 export const settlementMethodFor = (operationType) => OPERATION_METHODS[operationType] || null
+// "PAG-000012", "PAG-000012 e PAG-000015", "PAG-000012, PAG-000015, PAG-000020 e mais 2".
+export const accountList = (ids) => ids.length > 3 ? `${ids.slice(0, 3).join(', ')} e mais ${ids.length - 3}` : ids.length > 1 ? `${ids.slice(0, -1).join(', ')} e ${ids.at(-1)}` : ids[0] || ''
+// A possible duplicate (same payee/payer, value and date) warns and can still be posted after the user confirms (TCK-0007).
+// `matches` are the accounts already registered; `fields` names what they share.
+export function duplicateError(matches, fields, view) {
+  const ids = matches.map((item) => item.id)
+  const message = ids.length ? `Possível conta duplicada: ${accountList(ids)} já ${ids.length === 1 ? 'está cadastrada' : 'estão cadastradas'} com o mesmo ${fields}.` : 'Possível conta duplicada: há parcelas com o mesmo valor e vencimento.'
+  return Object.assign(new Error(message), { status: 409, extra: { duplicate: true, matches: matches.slice(0, 10).map(view) } })
+}
+// The history of an account saved over a possible duplicate says so.
+export const duplicateAccepted = (ids = [], fields) => ids.length ? `Possível duplicidade com ${accountList(ids)} (mesmo ${fields}) confirmada pelo usuário.` : ''
 // Posted in Tesouraria: an account that is born settled, without going through "dar baixa".
-export const treasuryEntry = (row) => row?.treasury === true && Boolean(row.payment || row.receipt) && !row.inactive
+export const treasuryEntry =(row) => row?.treasury === true && Boolean(row.payment || row.receipt) && !row.inactive
 export function filterPayables(rows, filters = {}, today = todayBahia(), useStatus = true) {
   return rows.filter((row) => {
     if (filters.supplierId && String(row.supplierId) !== String(filters.supplierId)) return false

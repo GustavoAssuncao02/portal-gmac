@@ -2981,6 +2981,38 @@
 :root[data-theme="dark"] .registry-history-note {
     color: #b5c2cf
 }
+:root[data-theme="dark"] .duplicate-warning {
+    border: 1px solid #36516f;
+    border-left: 3px solid #ae8947;
+    background: #3c3320;
+    color: #ecc989
+}
+:root[data-theme="dark"] .duplicate-warning svg {
+    color: #ebc389
+}
+:root[data-theme="dark"] .duplicate-matches li {
+    border: 1px solid #36516f;
+    background: #203c59
+}
+:root[data-theme="dark"] .duplicate-matches small {
+    color: #b7c2cd
+}
+:root[data-theme="dark"] .duplicate-status {
+    color: #c1cfde;
+    background: #203c59
+}
+:root[data-theme="dark"] .duplicate-status--paid, :root[data-theme="dark"] .duplicate-status--received {
+    color: #89ecb7;
+    background: #203c2a
+}
+:root[data-theme="dark"] .duplicate-status--overdue {
+    color: #e4909a;
+    background: #3c2025
+}
+:root[data-theme="dark"] .duplicate-status--inactive {
+    color: #c1cfde;
+    background: #112239
+}
 :root[data-theme="dark"] .proposal-model-step > p {
     color: #b2c2d2
 }

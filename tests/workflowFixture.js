@@ -227,7 +227,8 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
       response.json({ user, token: await issueAdminToken(user) })
     } catch (error) { next(error) }
   })
-  app.use((error, _request, response, _next) => response.status(error.status || 500).json({ message: error.message }))
+  // As in server/index.js: an expected refusal may send data with its message (`extra`).
+  app.use((error, _request, response, _next) => response.status(error.status || 500).json({ message: error.message, ...(error.status && error.extra ? error.extra : {}) }))
   serveInterface(app, path.join(root, 'dist'))
   const server = app.listen(0, '127.0.0.1')
   await new Promise((resolve) => server.once('listening', resolve))

@@ -17,6 +17,7 @@ import { useListState, useResetOnChange } from './savedListState.js'
 import DeleteAccountModal, { DeleteRowButton } from './DeleteAccountModal.jsx'
 import ClientQuickForm from './ClientQuickForm.jsx'
 import ReceivableInvoiceImport, { readInvoicePdf, invoiceDrafts } from './ReceivableInvoiceImport.jsx'
+import { DuplicateWarning, DuplicateConfirm, duplicateOf } from './DuplicateAccount.jsx'
 
 export const receiptMethods = { pix: 'Pix', boleto: 'Boleto', transfer: 'Transferência', card: 'Cartão', cash: 'Dinheiro' }
 const statusText = { pending: 'Pendente', overdue: 'Vencido', received: 'Recebido' }
@@ -60,21 +61,34 @@ export function ReceivableForm({ source, siblings = [], structureLocked: receive
   const valueCents = safeCents(draft.value), receivedCents = safeCents(draft.received), difference = receivedCents - valueCents, issCents = safeCents(draft.iss)
   // Expected receipt dates can never come before the issue date.
   const beforeIssue = Boolean(!treasury && draft.dueDate && draft.issueDate && draft.dueDate < draft.issueDate)
-  useEffect(() => { setError('') }, [draft])
+  // A possible duplicate keeps what was sent: "Lançar mesmo assim" confirms and sends it again. Any change to the form
+  // drops it, so the confirmation never posts data other than what is on screen.
+  const [duplicate, setDuplicate] = useState(null), [confirmingDuplicate, setConfirmingDuplicate] = useState(false)
+  useEffect(() => { setError(''); setDuplicate(null) }, [draft])
+  useEffect(() => { setDuplicate(null) }, [files])
   useEffect(() => { dueInput.current?.setCustomValidity(beforeIssue ? beforeIssueMessage : '') }, [beforeIssue])
   function chooseClient(id) { const client = clientOptions.find((row) => String(row.id) === String(id)); setDraft({ ...draft, clientId: id, customerName: client?.name || '', customerDocument: client?.document || '' }) }
+  async function send(payload) {
+    const result = await payableRequest(source ? `/receivables/${source.id}` : '/receivables', source ? 'PUT' : 'POST', payload)
+    if (source && files.length) await uploadFiles('/receivables', files, result.item.id)
+    await onSaved(result.item)
+  }
   async function save(event) {
-    event.preventDefault(); setBusy(true); setError('')
+    event.preventDefault(); setBusy(true); setError(''); setDuplicate(null)
+    let payload
     try {
       if (installment && !structureLocked && draft.installments.reduce((sum, row) => sum + cents(row.value || '0'), 0) !== cents(draft.value)) throw new Error('A soma das parcelas deve ser exatamente igual ao valor total.')
       if (installment && draft.installments.some((row) => row.dueDate < draft.issueDate)) throw new Error('Nenhuma parcela pode ser prevista antes da data de emissão.')
       if (treasury && draft.date > todayBahia()) throw new Error('O recebimento não pode ter data futura.')
       if (!treasury && issCents >= valueCents && issCents) throw new Error('O ISS deve ser menor que o valor da conta.')
       const fileIds = source ? [] : await uploadFiles('/receivables', files)
-      const result = await payableRequest(source ? `/receivables/${source.id}` : '/receivables', source ? 'PUT' : 'POST', { ...draft, ...(treasury ? { treasury: true, kind: 'single', count: 1, installments: undefined, ...(adjusted ? { received: draft.received } : {}) } : installmentPayload(draft)), ...(recurring ? { kind: 'recurring', ahead: Number(draft.ahead) || 0 } : {}), clientId: draft.clientId || undefined, fileIds })
-      if (source && files.length) await uploadFiles('/receivables', files, result.item.id)
-      await onSaved(result.item)
-    } catch (caught) { setError(caught.message) } finally { setBusy(false) }
+      payload = { ...draft, ...(treasury ? { treasury: true, kind: 'single', count: 1, installments: undefined, ...(adjusted ? { received: draft.received } : {}) } : installmentPayload(draft)), ...(recurring ? { kind: 'recurring', ahead: Number(draft.ahead) || 0 } : {}), clientId: draft.clientId || undefined, fileIds }
+      await send(payload)
+    } catch (caught) { const found = duplicateOf(caught, payload); if (found) setDuplicate(found); else setError(caught.message) } finally { setBusy(false) }
+  }
+  async function confirmDuplicate() {
+    await send({ ...duplicate.payload, allowDuplicate: true })
+    setConfirmingDuplicate(false); setDuplicate(null)
   }
   const aheadCount = Number(draft.ahead) || 0, lastDue = draft.dueDate && aheadCount ? shiftMonth(draft.dueDate, aheadCount * (draft.recurrence === 'yearly' ? 12 : 1)) : null
   return <PayableModal title={source ? `Editar ${source.id}` : treasury ? 'Nova entrada' : 'Nova conta a receber'} className="payable-modal--form" wide busy={busy} onClose={onClose} footer={<><button className="admin-tool-button" type="button" disabled={busy} onClick={onClose}>Cancelar</button><button className="admin-tool-button admin-tool-button--primary" form={formId} type="submit" disabled={busy}><Save size={16} />{busy ? 'Salvando...' : treasury ? 'Salvar entrada' : 'Salvar conta'}</button></>}>
@@ -104,8 +118,10 @@ export function ReceivableForm({ source, siblings = [], structureLocked: receive
       {structureLocked && <p className="payable-hint payable-form-wide">Há parcela recebida: valores, datas e parcelas ficam bloqueados. Estorne o recebimento para reestruturar o parcelamento.</p>}
       <FilePicker title="Anexos (NF, boleto, contrato)" files={files} setFiles={setFiles} disabled={busy} />
       {error && <p className="admin-tool-error payable-form-wide" role="alert">{error}</p>}
+      {duplicate && <DuplicateWarning duplicate={duplicate} edit={Boolean(source)} onProceed={() => setConfirmingDuplicate(true)} />}
     </fieldset></form>
-    {creatingClient && <ClientQuickForm onClose={() => setCreatingClient(false)} onCreated={async (client) => { const option = { id: String(client.id), name: client.name, document: client.document }; setNewClients((rows) => [...rows, option]); setCreatingClient(false); setDraft((current) => ({ ...current, clientId: option.id, customerName: option.name, customerDocument: option.document })); await onClientCreated?.() }} />}
+    {confirmingDuplicate && duplicate && <DuplicateConfirm duplicate={duplicate} kind="receivable" edit={Boolean(source)} onClose={() => setConfirmingDuplicate(false)} onConfirm={confirmDuplicate} />}
+    {creatingClient &&<ClientQuickForm onClose={() => setCreatingClient(false)} onCreated={async (client) => { const option = { id: String(client.id), name: client.name, document: client.document }; setNewClients((rows) => [...rows, option]); setCreatingClient(false); setDraft((current) => ({ ...current, clientId: option.id, customerName: option.name, customerDocument: option.document })); await onClientCreated?.() }} />}
   </PayableModal>
 }
 

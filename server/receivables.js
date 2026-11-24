@@ -7,7 +7,7 @@ import path from 'node:path'
 import { dataDirectory } from './dataDirectory.js'
 import { readStore, mutateStore } from './offers.js'
 import { exportPdf, exportWorkbook } from './reports.js'
-import { cents, validDate, todayBahia, daysUntil, makeInstallments, shiftMonth, matchesSearch, treasuryEntry, MAX_SERIES } from './payableRules.js'
+import { cents, validDate, todayBahia, daysUntil, makeInstallments, shiftMonth, matchesSearch, treasuryEntry, duplicateError, duplicateAccepted, MAX_SERIES } from './payableRules.js'
 import { notificationSettings } from './accounts.js'
 import { assertNotReconciled, reconciledTransaction } from './bankStatements.js'
 import { normalizeText } from './ofx.js'
@@ -158,11 +158,21 @@ async function fields(store, body, accounts, current) {
   if (issCents >= valueCents) fail('O ISS deve ser menor que o valor da conta.')
   return { ...customer, description: clean(body.description, 5000), documentNumber: clean(body.documentNumber, 160), issueDate, dueDate: body.dueDate, valueCents, issCents, kind, recurrence: kind === 'recurring' ? body.recurrence : null }
 }
-function duplicates(store, proposed, ignored = []) {
+// Another account with the same payer, value and expected date is a possible duplicate: the form warns and names it, and
+// the user may still post it after confirming (`allowDuplicate`, TCK-0007). An edit that keeps payer, value and date
+// does not warn again about a match already accepted. Tesouraria entries are not checked: two equal sales on the same
+// day are legitimate. Returns, for each proposed account, the ids of the matches the user accepted.
+const duplicateFields = 'cliente, valor e data prevista'
+function duplicates(store, proposed, ignored = [], allowed = false) {
   const key = (row) => JSON.stringify([normalizeText(row.customerName), row.valueCents, row.dueDate])
-  // Tesouraria entries are not checked: two equal sales on the same day are legitimate.
-  if (store.receivables.some((row) => !ignored.includes(row.id) && !row.inactive && !row.treasury && key(row) === key(proposed))) fail('Conta duplicada: cliente, valor e vencimento já cadastrados.', 409)
+  const kept = new Set(store.receivables.filter((row) => ignored.includes(row.id)).map(key))
+  const others = store.receivables.filter((row) => !ignored.includes(row.id) && !row.inactive && !row.treasury)
+  const found = proposed.map((row) => kept.has(key(row)) ? [] : others.filter((item) => key(item) === key(row)))
+  const matches = [...new Set(found.flat())]
+  if (allowed || !matches.length) return found.map((rows) => rows.map((item) => item.id))
+  throw duplicateError(matches, duplicateFields, (item) => ({ id: item.id, name: item.customerName, description: item.description || '', documentNumber: item.documentNumber || '', valueCents: item.valueCents, dueDate: item.dueDate, status: receivableStatus(item) }))
 }
+const acceptedText = (ids) => duplicateAccepted(ids, duplicateFields)
 // Money in takes a revenue classification (or one outside the result, like a loan received). Without one in the request,
 // an account being edited keeps the classification it has.
 function revenueClassification(store, body, current) {
@@ -319,7 +329,7 @@ export default function createReceivablesRouter(accounts, requireAdmin, pool = n
       const groupId = parts.length > 1 && !recurring ? randomUUID() : null, seriesId = recurring && parts.length > 1 ? randomUUID() : null, createdAt = new Date().toISOString()
       const rows = parts.map((part, index) => ({ origin, orderCode: order?.code || null, offerId: order?.offerId || null, ...common, ...part, kind: recurring ? 'recurring' : groupId ? 'installment' : 'single', groupId, installmentNumber: groupId ? index + 1 : 1, installmentCount: groupId ? parts.length : 1, seriesId, seriesIndex: seriesId ? index + 1 : null, seriesCount: seriesId ? parts.length : null, originalTotalCents: groupId ? common.valueCents : part.valueCents, receipt: null, inactive: false, createdAt }))
       // An OS is unique by its code; equal client/value/date across different OSs is legitimate.
-      if (origin === 'manual' && !treasury) for (const row of rows) duplicates(store, row)
+      const accepted = origin === 'manual' && !treasury ? duplicates(store, rows, [], req.body.allowDuplicate === true) : []
       const attachments = claimFiles(store, req.body.fileIds || [], req.actor)
       for (const [index, row] of rows.entries()) {
         // Installments share the document's files; a recurring contract keeps them on its first occurrence.
@@ -329,7 +339,7 @@ export default function createReceivablesRouter(accounts, requireAdmin, pool = n
         row.id = `REC-${String(store.receivableSequence).padStart(6, '0')}`
         row.lastStatus = receivableStatus(row)
         store.receivables.push(row)
-        event(store, req.actor, 'created', row.id, { details: { valueCents: row.valueCents, dueDate: row.dueDate, text: [treasury ? `Entrada lançada na Tesouraria, já recebida${order ? `, na conclusão da ${order.code}` : ''}` : order ? `Programada na conclusão da ${order.code}` : '', groupId ? `Parcela ${row.installmentNumber} de ${rows.length} de ${money(common.valueCents)}` : '', seriesId ? `Contrato recorrente: ocorrência ${row.seriesIndex} de ${rows.length}` : ''].filter(Boolean).join(' · ') } })
+        event(store, req.actor, 'created', row.id, { details: { valueCents: row.valueCents, dueDate: row.dueDate, text: [treasury ? `Entrada lançada na Tesouraria, já recebida${order ? `, na conclusão da ${order.code}` : ''}` : order ? `Programada na conclusão da ${order.code}` : '', groupId ? `Parcela ${row.installmentNumber} de ${rows.length} de ${money(common.valueCents)}` : '', seriesId ? `Contrato recorrente: ocorrência ${row.seriesIndex} de ${rows.length}` : '', acceptedText(accepted[index] || [])].filter(Boolean).join(' · ') } })
         if (treasury) event(store, req.actor, 'received', row.id, { details: { ...row.receipt, treasury: true } })
         for (const file of row.attachments) event(store, req.actor, 'attachment_added', row.id, { details: { name: file.name } })
       }
@@ -368,18 +378,19 @@ export default function createReceivablesRouter(accounts, requireAdmin, pool = n
       if (removed.some((item) => hasReceiptHistory(store, item))) fail('Não é possível remover parcelas com histórico de recebimento.', 409)
       const groupId = parts.length > 1 ? row.groupId || randomUUID() : null, ids = group.map((item) => item.id)
       const updated = parts.map((part, index) => ({ target: group[index], data: { ...common, ...part, kind: groupId ? 'installment' : common.kind === 'recurring' ? 'recurring' : 'single', groupId, installmentNumber: index + 1, installmentCount: parts.length, originalTotalCents: common.valueCents } }))
-      if (row.origin === 'manual') for (const { data } of updated) duplicates(store, data, ids)
+      const accepted = row.origin === 'manual' ? duplicates(store, updated.map(({ data }) => data), ids, req.body.allowDuplicate === true) : []
       const result = []
-      for (const { target, data } of updated) {
+      for (const [index, { target, data }] of updated.entries()) {
+        const acceptance = acceptedText(accepted[index] || [])
         if (target) {
           const before = { ...target }; Object.assign(target, data); target.lastStatus = receivableStatus(target)
-          event(store, req.actor, 'edited', target.id, { changes: { before, after: { ...target } } })
+          event(store, req.actor, 'edited', target.id, { changes: { before, after: { ...target } }, ...(acceptance ? { details: { text: acceptance } } : {}) })
           result.push(target)
         } else {
           store.receivableSequence = (store.receivableSequence || 0) + 1
           const created = { origin: row.origin, orderCode: row.orderCode, offerId: row.offerId, ...data, id: `REC-${String(store.receivableSequence).padStart(6, '0')}`, attachments: [...(row.attachments || [])], receipt: null, inactive: false, createdAt: row.createdAt }
           created.lastStatus = receivableStatus(created); store.receivables.push(created)
-          event(store, req.actor, 'created', created.id, { details: { valueCents: created.valueCents, dueDate: created.dueDate, text: `Parcela ${created.installmentNumber} de ${parts.length}, criada ao editar o parcelamento` } })
+          event(store, req.actor, 'created', created.id, { details: { valueCents: created.valueCents, dueDate: created.dueDate, text: [`Parcela ${created.installmentNumber} de ${parts.length}, criada ao editar o parcelamento`, acceptance].filter(Boolean).join(' · ') } })
           result.push(created)
         }
       }

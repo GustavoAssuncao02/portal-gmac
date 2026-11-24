@@ -2529,6 +2529,31 @@
 :root[data-theme="dark"][data-tone="black"] .registry-history-note {
     color: #bfc2c5
 }
+:root[data-theme="dark"][data-tone="black"] .duplicate-warning {
+    border: 1px solid #303133;
+    background: #30291a
+}
+:root[data-theme="dark"][data-tone="black"] .duplicate-matches li {
+    border: 1px solid #303133;
+    background: #232425
+}
+:root[data-theme="dark"][data-tone="black"] .duplicate-matches small {
+    color: #bfc2c5
+}
+:root[data-theme="dark"][data-tone="black"] .duplicate-status {
+    color: #cdcfd2;
+    background: #232425
+}
+:root[data-theme="dark"][data-tone="black"] .duplicate-status--paid, :root[data-theme="dark"][data-tone="black"] .duplicate-status--received {
+    background: #1a3022
+}
+:root[data-theme="dark"][data-tone="black"] .duplicate-status--overdue {
+    background: #301a1e
+}
+:root[data-theme="dark"][data-tone="black"] .duplicate-status--inactive {
+    color: #cdcfd2;
+    background: #161617
+}
 :root[data-theme="dark"][data-tone="black"] .proposal-model-step > p {
     color: #bfc2c5
 }

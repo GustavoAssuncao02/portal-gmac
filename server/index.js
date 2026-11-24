@@ -181,7 +181,8 @@ const interfacePublished = serveInterface(app, path.resolve(path.dirname(fileURL
 
 app.use((error, _request, response, _next) => {
   console.error('Falha na API:', error.message)
-  response.status(error.status || 500).json({ message: error.status ? error.message : 'Não foi possível concluir a operação.' })
+  // `extra`: data an expected refusal sends with its message (the accounts of a possible duplicate, for example).
+  response.status(error.status || 500).json({ message: error.status ? error.message : 'Não foi possível concluir a operação.', ...(error.status && error.extra ? error.extra : {}) })
 })
 
 const server = app.listen(port, host, () => {

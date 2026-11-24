@@ -311,3 +311,18 @@
 @media(max-width:760px) { .payable-heading-actions { flex-wrap:wrap; }.invoice-import-card { padding:12px; }.invoice-import-fields { grid-template-columns:minmax(0,1fr); }.invoice-import-installments > div { grid-template-columns:minmax(0,1fr); }.invoice-import-client--missing button { margin-left:0; } }
 /* Cadastros: histórico de alterações (RegistryHistoryModal). */
 .registry-history-note { color:#5f7891; font-style:italic; }.registry-history-before { margin-top:12px; }
+/* Possible duplicate account (TCK-0007): a warning that names the account found, and the confirmation to post it anyway. */
+.duplicate-warning { display:flex; flex-wrap:wrap; align-items:center; gap:10px 12px; margin-top:16px; padding:12px 14px; border:1px solid #f0d49a; border-left:3px solid #c98a1b; border-radius:5px; background:#fff7e6; color:#6b4500; font-size:13px; line-height:1.45; }
+.duplicate-warning svg { flex:none; color:#b7791f; }
+.duplicate-warning p { flex:1 1 240px; margin:0; }
+.duplicate-warning .admin-tool-button { flex:none; margin-left:auto; }
+.duplicate-confirm { display:grid; gap:12px; font-size:14px; line-height:1.5; }
+.duplicate-confirm p { margin:0; }
+.duplicate-matches { display:grid; gap:8px; margin:0; padding:0; list-style:none; }
+.duplicate-matches li { display:grid; gap:3px; min-width:0; padding:10px 12px; border:1px solid #d9e4ef; border-radius:5px; background:#f7fafd; overflow-wrap:anywhere; }
+.duplicate-matches li > div { display:flex; align-items:center; gap:8px; }
+.duplicate-matches small { color:#5f7489; font-size:12.5px; }
+.duplicate-status { padding:2px 7px; border-radius:4px; font-size:11px; font-weight:600; color:#617184; background:#edf1f5; }
+.duplicate-status--paid,.duplicate-status--received { color:#137b44; background:#e9f7ee; }
+.duplicate-status--overdue { color:#b42c3c; background:#fcecef; }
+.duplicate-status--inactive { color:#6a7480; background:#edf0f3; }

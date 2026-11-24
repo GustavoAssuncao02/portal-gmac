@@ -4,7 +4,8 @@ export const dateLabel = (value) => value ? value.split('-').reverse().join('/')
 export async function payableRequest(route, method = 'GET', body) {
   const response = await fetch(`/api${route}`, { method, headers: { Authorization: `Bearer ${sessionStorage.getItem('gmac-admin-token') || ''}`, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) }, body: body === undefined ? undefined : JSON.stringify(body) })
   const result = await response.json().catch(() => ({}))
-  if (!response.ok) throw new Error(result.message || 'Não foi possível concluir a operação.')
+  // `data`: what the server sent with the refusal (the accounts of a possible duplicate, for example).
+  if (!response.ok) throw Object.assign(new Error(result.message || 'Não foi possível concluir a operação.'), { status: response.status, data: result })
   return result
 }
 
