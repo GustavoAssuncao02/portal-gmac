@@ -1194,6 +1194,7 @@
 @container (min-width: 2800px) {:root:is([data-font-size="small"], [data-font-size="large"]) .material-orders-table th { font-size: calc(14px * var(--account-font-scale)); } }
 @container (min-width: 2800px) {:root:is([data-font-size="small"], [data-font-size="large"]) .material-orders-table .material-order-action { font-size: calc(14px * var(--account-font-scale)); } }
 :root:is([data-font-size="small"], [data-font-size="large"]) .admin-tools-main .account-notification-options label { font-size: calc(14px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .account-email-notifications small { font-size: calc(12.5px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .material-order-action { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .dashboard-orders h2 { font-size: calc(19px * var(--account-font-scale)); }
 @media (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .orders-header h1 { font-size: calc(24px * var(--account-font-scale)); } }

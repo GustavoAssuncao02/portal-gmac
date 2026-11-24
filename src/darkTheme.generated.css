@@ -7008,6 +7008,12 @@
 :root[data-theme="dark"] .account-notification-options input[type="checkbox"] {
     accent-color: #80b7f0
 }
+:root[data-theme="dark"] .account-email-notifications {
+    border-top: 1px solid #36516f
+}
+:root[data-theme="dark"] .account-email-notifications small {
+    color: #b7c2cd
+}
 :root[data-theme="dark"] .material-order-action {
     border: 1px solid #36516f;
     background: #203c59;

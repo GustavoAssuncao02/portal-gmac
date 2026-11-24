@@ -7,6 +7,8 @@ import { receiveFile, sendStoredFile } from './uploads.js'
 import { dataDirectory } from './dataDirectory.js'
 import { addNotification } from './notificationEvents.js'
 import { createMailer } from './passwordReset.js'
+import { wantsEmail } from './accounts.js'
+import { emailNotificationsOff } from './notificationRules.js'
 import { COMMENT_MAX, DESCRIPTION_MAX, RESOLUTION_MAX, TITLE_MAX, moduleLabel, moduleTitle, submodulesOf, ticketModules, ticketPlace, ticketUrgencies, urgencyLabel } from './ticketRules.js'
 
 // Tickets de suporte: administrators and administrative employees report problems of the portal to its developers.
@@ -224,7 +226,20 @@ export default function createSupportTicketsRouter(accounts, requireAdmin, { mai
   })
   const handle = (fn) => async (req, res, next) => { try { await fn(req, res) } catch (error) { next(error) } }
   const find = (store, id) => store.supportTickets.find((item) => item.id === id) || fail('Ticket não encontrado.', 404)
-  const developerIds = async () => (await Promise.all(cpfs.map((cpf) => accounts.accountByCpf(cpf)))).filter(Boolean).map((account) => account.id)
+  const developerAccounts = async () => (await Promise.all(cpfs.map((cpf) => accounts.accountByCpf(cpf)))).filter(Boolean)
+  const developerIds = async () => (await developerAccounts()).map((account) => account.id)
+  // "Notificações do sistema por e-mail" (Configurações): an account that turned it off gets no e-mail of the tickets,
+  // only the bell. If the preference cannot be read, the e-mail goes as before.
+  const emailAllowed = async (userId) => { try { return wantsEmail(await readStore(), userId) } catch { return true } }
+  // The developers' list, without the address of a developer whose account turned the e-mails off.
+  async function developerList() {
+    try {
+      const store = await readStore()
+      const off = new Set((await developerAccounts()).filter((account) => !wantsEmail(store, account.id)).map((account) => String(account.email || '').trim().toLowerCase()).filter(Boolean))
+      return recipients().filter((address) => !off.has(address.toLowerCase()))
+    } catch { return recipients() }
+  }
+  const optedOut = () => ({ skippedAt: new Date().toISOString(), reason: emailNotificationsOff })
 
   // The e-mails go after the record is saved and do not hold the answer: their outcome is written on the ticket (or on
   // the comment), where the developers see it.
@@ -244,10 +259,11 @@ export default function createSupportTicketsRouter(accounts, requireAdmin, { mai
     }
     await record(what, save, email)
   }
-  const emailTicket = (ticket) => deliver(`do ticket ${ticket.id}`, ticketMail(ticket, recipients()), (store, email) => {
+  const developersOff = 'Os desenvolvedores desativaram as notificações por e-mail.'
+  const emailTicket = async (ticket) => deliver(`do ticket ${ticket.id}`, ticketMail(ticket, await developerList()), (store, email) => {
     const row = store.supportTickets.find((item) => item.id === ticket.id)
     if (row) row.email = email
-  })
+  }, developersOff)
   const onComment = (ticket, comment, change) => (store, email) => {
     const item = store.supportTickets.find((row) => row.id === ticket.id)?.comments?.find((entry) => entry.id === comment.id)
     if (item) change(item, email)
@@ -259,6 +275,7 @@ export default function createSupportTicketsRouter(accounts, requireAdmin, { mai
     const told = new Set(alreadyTold.map((address) => String(address || '').trim().toLowerCase()).filter(Boolean))
     for (const entry of people) {
       const save = (store, email) => saveEntry(store, entry, email)
+      if (!await emailAllowed(entry.userId)) { await record(what, save, optedOut()); continue }
       const account = await accounts.account(entry.userId).catch(() => null)
       const address = String(account?.email || '').trim()
       if (address && told.has(address.toLowerCase())) { await record(what, save, { skippedAt: new Date().toISOString(), reason: 'Este endereço já recebeu o mesmo e-mail.' }); continue }
@@ -320,7 +337,7 @@ export default function createSupportTicketsRouter(accounts, requireAdmin, { mai
       addNotification(store, { id: `ticket-opened:${row.id}`, type: 'ticket-opened', at, ticketId: row.id, authorId: req.viewer.id, recipientIds: notify, title: `Novo ticket ${row.id} · urgência: ${urgencyLabel(urgency)}`, description: `${moduleTitle(module, submodule)} · ${title}`, employeeName: req.viewer.name })
       return row
     })
-    emailTicket(ticket)
+    emailTicket(ticket).catch((error) => console.error(`Falha ao enviar o e-mail do ticket ${ticket.id}:`, error.message))
     res.status(201).json({ item: ticketView(ticket, req.viewer) })
   }))
 
@@ -376,8 +393,10 @@ export default function createSupportTicketsRouter(accounts, requireAdmin, { mai
     const saveEmail = onComment(ticket, comment, (item, email) => { item.email = email })
     let told = []
     if (!developer) {
-      told = recipients()
-      deliver(`da mensagem no ticket ${ticket.id}`, replyMail(ticket, comment, told), saveEmail)
+      told = await developerList()
+      deliver(`da mensagem no ticket ${ticket.id}`, replyMail(ticket, comment, told), saveEmail, developersOff)
+    } else if (!comment.email && !await emailAllowed(ticket.createdBy)) {
+      record(`do comentário no ticket ${ticket.id}`, saveEmail, optedOut())
     } else if (!comment.email) {
       const author = await accounts.account(ticket.createdBy).catch(() => null)
       told = [author?.email]

@@ -9,6 +9,7 @@ export const releaseNotes = [
       'Ticket: e-mails com tipo, urgência e tema em destaque, sininho para acompanhar, todos podem comentar (mesmo com o ticket fechado), anexos na conversa e aviso por e-mail ao fechar ou reabrir',
       'Tela do operador: títulos de ordenação da lista mais fáceis de tocar no tablet',
       'Contas a pagar e a receber: aviso de conta duplicada mostra o número da conta igual e permite lançar mesmo assim, com confirmação',
+      'Configurações: nova opção "Notificações do sistema por e-mail" para escolher se recebe os avisos por e-mail',
     ],
   },
   {

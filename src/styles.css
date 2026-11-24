@@ -7267,6 +7267,9 @@ button {
 .admin-tools-main .account-notification-options label { display: flex; flex-direction: row; align-items: center; gap: 10px; min-width: 0; font-size: 14px; line-height: 1.4; cursor: pointer; }
 .account-notification-options input[type="checkbox"] { flex: 0 0 18px; width: 18px; height: 18px; margin: 0; padding: 0; accent-color: #174f91; }
 .account-notification-options label span { min-width: 0; }
+/* Notificações do sistema por e-mail: apart from the bell options above it. */
+.account-email-notifications { gap: 6px; padding-top: 18px; border-top: 1px solid #dbe5ef; }
+.account-email-notifications small { padding-left: 28px; color: #607589; font-size: 12.5px; line-height: 1.4; overflow-wrap: anywhere; }
 .material-order-action { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 32px; padding: 6px 10px; border: 1px solid #bfd1e8; border-radius: 5px; background: #f7fbff; color: #174f91; font-size: 12px; font-weight: 500; white-space: nowrap; cursor: pointer; }
 .material-order-action .icon { width: 15px; height: 15px; }
 .material-order-action--add:hover { background: #eaf3ff; border-color: #80a7d7; }

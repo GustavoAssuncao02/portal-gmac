@@ -10,7 +10,7 @@ import { sortedByName } from '../server/byName.js'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
-export async function createWorkflowFixture({ pool, inventoryPool = pool, accountsEnv, notificationInventory, fillStageTimes = true, fillClassifications = true, ticketDevelopers, siteOffers = {} } = {}) {
+export async function createWorkflowFixture({ pool, inventoryPool = pool, accountsEnv, notificationInventory, fillStageTimes = true, fillClassifications = true, ticketDevelopers, ticketEmails, siteOffers = {} } = {}) {
   const results = path.join(root, 'test-results')
   await mkdir(results, { recursive: true })
   const directory = await mkdtemp(path.join(results, 'workflow-'))
@@ -183,8 +183,9 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   const mailControl = { failNext: false }
   app.use('/api', proposalEmailsRouter(accounts, requireAdmin, { env: { MAIL_FROM: 'comercial@gmacmetalurgica.com.br' }, mailer: { configured: () => true, send: async (message) => { if (mailControl.failNext) { mailControl.failNext = false; throw Object.assign(new Error('down'), { code: 'ECONNECTION' }) } proposalMail.push(message) } } }))
   // The e-mails of new support tickets stay in `ticketMail`; `ticketDevelopers` lists the CPFs of the developers.
+  // `ticketEmails` replaces the developers' e-mail list (SUPPORT_TICKET_EMAILS).
   const ticketMail = []
-  app.use('/api', supportTicketsRouter(accounts, requireAdmin, { env: {}, cpfs: ticketDevelopers, mailer: { configured: () => true, send: async (message) => { ticketMail.push(message) } } }))
+  app.use('/api', supportTicketsRouter(accounts, requireAdmin, { env: ticketEmails ? { SUPPORT_TICKET_EMAILS: ticketEmails.join(',') } : {}, cpfs: ticketDevelopers, mailer: { configured: () => true, send: async (message) => { ticketMail.push(message) } } }))
   // Ofertar Serviço do site, mounted as in the portal (/gmac/api/offer-requests) with the captcha, Receita and e-mail
   // simulated. Tests steer them through `siteOffers` on the fixture: `turnstile`/`receita` change the stub answers,
   // `env` is live (deleting TURNSTILE_SECRET_KEY tests the 503) and `mail` keeps what would reach the commercial team.

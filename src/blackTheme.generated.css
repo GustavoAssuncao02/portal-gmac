@@ -6006,6 +6006,12 @@
 :root[data-theme="dark"][data-tone="black"] .material-orders-table td small {
     color: #bec1c5
 }
+:root[data-theme="dark"][data-tone="black"] .account-email-notifications {
+    border-top: 1px solid #303133
+}
+:root[data-theme="dark"][data-tone="black"] .account-email-notifications small {
+    color: #bfc2c5
+}
 :root[data-theme="dark"][data-tone="black"] .material-order-action {
     border: 1px solid #303133;
     background: #232425;
