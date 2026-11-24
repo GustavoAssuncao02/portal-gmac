@@ -19,7 +19,8 @@
 .os-facts dt { margin-bottom: 6px; color: #647d92; font-size: 12px; }
 .os-facts dd { margin: 0; color: #203e58; font-size: 14px; font-weight: 600; line-height: 1.45; overflow-wrap: anywhere; }
 .os-facts dd small { display: block; margin-top: 4px; color: #6a8094; font-size: 11px; font-weight: 400; }
-.os-order-summary { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 18px; padding: 19px 0 22px; border-top: 1px solid #dce6ed; border-bottom: 1px solid #dce6ed; }
+/* Two rows on wide screens: who asked (client, requesters, buyer, quote, label), then quantity and dates. */
+.os-order-summary { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 18px; padding: 19px 0 22px; border-top: 1px solid #dce6ed; border-bottom: 1px solid #dce6ed; }
 .os-detail-layout { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(330px, 1fr); gap: 28px; margin-top: 24px; }
 .os-detail-primary, .os-detail-secondary { min-width: 0; }
 .os-detail-secondary { padding-left: 28px; border-left: 1px solid #e0e8ef; }
@@ -176,6 +177,7 @@
   .os-detail-heading { flex-wrap: wrap; gap: 16px; }
   .os-detail-title h2 { font-size: 19px; }
   .os-order-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .os-order-summary > div:first-child { grid-column: 1 / -1; }
   .os-operation-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .os-operation-facts > div:last-child { grid-column: 1 / -1; }
   .os-proposal-summary > div:first-child dd { font-size: 20px; }

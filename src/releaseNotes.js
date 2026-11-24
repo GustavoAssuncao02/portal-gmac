@@ -10,6 +10,7 @@ export const releaseNotes = [
       'Tela do operador: títulos de ordenação da lista mais fáceis de tocar no tablet',
       'Contas a pagar e a receber: aviso de conta duplicada mostra o número da conta igual e permite lançar mesmo assim, com confirmação',
       'Configurações: nova opção "Notificações do sistema por e-mail" para escolher se recebe os avisos por e-mail',
+      'Ordem de serviço: o cabeçalho da OS mostra também o solicitante, o comprador e o número da cotação',
     ],
   },
   {

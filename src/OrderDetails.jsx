@@ -14,6 +14,7 @@ import { UndoAcceptModal } from './DeclineProposalModal.jsx'
 import DownloadLink from './DownloadLink.jsx'
 import { cachedResource, downloadFile, payableRequest } from './payablesApi.js'
 import { documentKind } from '../server/clientDocument.js'
+import { offerRequesterNames, requestersLabel } from '../server/offerRequesters.js'
 import { currentServiceLocation, serviceLocations, serviceLocationTimes } from '../server/serviceLocation.js'
 import { formatQuantity } from '../server/materialUnits.js'
 import { SortableRows, SortHeader } from './RegistryList.jsx'
@@ -469,7 +470,18 @@ function StageList({ order, operation, onSave }) {
   </>
 }
 
-export default function OrderDetails({ order, activeTime, stageNamesInput, onChangeStages, onConfigureStages, onInterrupt, onEdit, onReopen, onUpload, onEditEventTime, onAddEvent, onRefresh, operationError, onBack, Icon }) {
+// Nº da cotação: the number of the proposal document (the quote of the letter models A/B, the number of the Nestlé form,
+// the label of the Etiqueta sheet). Proposals from before the documents have none; an etiqueta OS gets it with its quote.
+const quoteModels = { 'model-a': 'Modelo A', 'model-b': 'Modelo B', nestle: 'Nestlé FS-3055', etiqueta: 'Etiqueta' }
+function quoteNumberFact(order) {
+  if (order.labelQuote?.pending) return ['Nº da cotação', labelQuotePendingText]
+  const document = order.proposal?.document
+  const number = !document ? '' : document.model === 'nestle' ? document.number : document.model === 'etiqueta' ? document.labelNumber : document.quoteNumber
+  return ['Nº da cotação', String(number ?? '').trim() || null, number ? quoteModels[document.model] : null]
+}
+
+// `offer`: the offer the OS came from, where the requesters and the buyer were registered.
+export default function OrderDetails({ order, offer, activeTime, stageNamesInput, onChangeStages, onConfigureStages, onInterrupt, onEdit, onReopen, onUpload, onEditEventTime, onAddEvent, onRefresh, operationError, onBack, Icon }) {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [unaccepting, setUnaccepting] = useState(false)
   const [interruptOpen, setInterruptOpen] = useState(false)
@@ -483,10 +495,12 @@ export default function OrderDetails({ order, activeTime, stageNamesInput, onCha
   const proposalStages = proposal.stages || order.resources?.stages || []
   // The service value is the cost (materials + labor); proposals saved before the OS value existed kept the price in it.
   const serviceCost = proposal.osValue != null ? Number(proposal.serviceValue) || 0 : (Number(proposal.materials) || 0) + (Number(proposal.labor) || 0)
+  const requesters = offerRequesterNames(offer)
   return <article className="order-detail-card os-detail">
     <header className="os-detail-heading"><div className="os-detail-title"><button className="os-icon-button" type="button" onClick={onBack} aria-label="Voltar para a tela anterior" title="Voltar para a tela anterior"><Icon name="collapse" /></button><div><span>{order.code}</span><h2>{order.service}</h2><AtypicalToggle order={order} onChanged={onRefresh} /></div></div><div className="os-detail-actions">{operation?.status === 'waiting' && !operation.startedAt && <button className="os-button os-undo-accept" type="button" aria-haspopup="dialog" onClick={() => setUnaccepting(true)}>Desfazer aceite</button>}<button className="os-button" type="button" aria-haspopup="dialog" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setEditConfirmed(false); if (operation?.status === 'completed') setAction('edit'); else setEditOpen(true) }}><Icon name="edit" />Editar OS</button>{operation?.status === 'completed' && <button className="os-button" type="button" aria-haspopup="dialog" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setAction('reopen') }}><Icon name="expand" />Reabrir OS</button>}<button className="os-icon-button os-history-trigger os-info-trigger" type="button" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setHistoryOpen(true) }} aria-haspopup="dialog" aria-label="Histórico de operações" title="Histórico da OS: tudo o que foi feito, quem fez e quando"><Info size={20} aria-hidden="true" /></button></div></header>
     <Facts className="os-order-summary" items={[
-      ['Cliente', order.company, `${documentKind(order.cnpj)}: ${order.cnpj || 'Não informado'}`], ['Número da etiqueta', order.labelNumber], ['Quantidade', `${number(order.quantity)} unidades`],
+      ['Cliente', order.company, `${documentKind(order.cnpj)}: ${order.cnpj || 'Não informado'}`], [requestersLabel(requesters.length), requesters.map(upper).join(', ') || null], ['Comprador', upper(offer?.buyer) || null], quoteNumberFact(order),
+      ['Número da etiqueta', order.labelNumber], ['Quantidade', `${number(order.quantity)} unidades`],
       ['Prazo solicitado', date(order.deadline), order.deadlineChange && <span className="os-deadline-changed" title={`De ${date(order.deadlineChange.from)} para ${date(order.deadlineChange.to)} em ${moment(order.deadlineChange.at)}. Justificativa: ${order.deadlineChange.reason}`}>Prazo alterado por {order.deadlineChange.by}</span>], ['Solicitação', date(order.requestedAt)], ['OS criada em', date(order.createdAt)],
     ]} />
     <div className="os-detail-layout"><div className="os-detail-primary">

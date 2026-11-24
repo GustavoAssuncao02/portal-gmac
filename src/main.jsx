@@ -2298,8 +2298,11 @@ function OrdersScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout, ta
   </div>
 }
 
+// The offer an OS came from (its requesters and buyer are shown in the OS header).
+const linkedOffer = (offers, orders, code) => { const offerId = orders.find((order) => order.code === code)?.offerId; return offerId ? (offers || []).find((offer) => offer.id === offerId) : undefined }
+
 // The OS with its actions. The Ordem de serviço screen and the planning block (Ver OS) show the same view.
-function OrderPanel({ code: selectedOrderCode, order: selectedOrder, loading, onRefresh, onBack, onReopened }) {
+function OrderPanel({ code: selectedOrderCode, order: selectedOrder, offer, loading, onRefresh, onBack, onReopened }) {
   const [stageNamesInput, setStageNamesInput] = useState('')
   const [operationError, setOperationError] = useState('')
   const [now, setNow] = useState(Date.now())
@@ -2355,17 +2358,17 @@ function OrderPanel({ code: selectedOrderCode, order: selectedOrder, loading, on
     await apiRequest(`/api/operations/orders/${encodeURIComponent(selectedOrderCode)}/events`, jsonOptions('POST', body))
     onRefresh().catch(() => {})
   }
-  return selectedOrder ? <OrderDetails key={selectedOrder.code} order={selectedOrder} activeTime={activeTime} stageNamesInput={stageNamesInput} onChangeStages={setStageNamesInput} onConfigureStages={configureStages} onInterrupt={interruptSession} onEdit={editOrder} onReopen={reopenOrder} onUpload={uploadOrderAttachment} onEditEventTime={editEventTime} onAddEvent={addOperationEvent} onRefresh={onRefresh} operationError={operationError} onBack={onBack} Icon={Icon} />
+  return selectedOrder ? <OrderDetails key={selectedOrder.code} order={selectedOrder} offer={offer} activeTime={activeTime} stageNamesInput={stageNamesInput} onChangeStages={setStageNamesInput} onConfigureStages={configureStages} onInterrupt={interruptSession} onEdit={editOrder} onReopen={reopenOrder} onUpload={uploadOrderAttachment} onEditEventTime={editEventTime} onAddEvent={addOperationEvent} onRefresh={onRefresh} operationError={operationError} onBack={onBack} Icon={Icon} />
         : <div className="os-missing"><p role="status">{loading ? 'Carregando a ordem de serviço...' : 'Ordem de serviço não encontrada.'}</p>{!loading && <button className="os-button" type="button" onClick={onBack}><Icon name="collapse" />Voltar</button>}</div>
 }
 
 // The OS has its own screen, opened from the service panels, offers and material requests.
-function OrderScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, orders, selectedOrderCode, onRefresh, onBack, onReopened, workflowLoading }) {
+function OrderScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, offers, orders, selectedOrderCode, onRefresh, onBack, onReopened, workflowLoading }) {
   return <div className="dashboard-shell orders-shell orders-shell--detail">
     <Sidebar collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} />
     <main className="orders-main"><WorkspaceTabs tabs={tabs} activeNav={activeNav} onNavigate={onNavigate} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} />
       <div className="orders-header"><h1>Ordem de serviço</h1></div>
-      <OrderPanel code={selectedOrderCode} order={orders.find((order) => order.code === selectedOrderCode)} loading={workflowLoading} onRefresh={onRefresh} onBack={onBack} onReopened={onReopened} />
+      <OrderPanel code={selectedOrderCode} order={orders.find((order) => order.code === selectedOrderCode)} offer={linkedOffer(offers, orders, selectedOrderCode)} loading={workflowLoading} onRefresh={onRefresh} onBack={onBack} onReopened={onReopened} />
     </main>
   </div>
 }
@@ -2465,7 +2468,7 @@ function Dashboard({ user, onUpdateUser, collapsed, onToggle, activeNav, onNavig
   if (activeNav === 'Ticket') return <SupportTicketsScreen {...toolProps} />
   if (activeNav === 'Serviços') return <LaborServicesScreen {...toolProps} />
   if (activeNav === 'Etapas') return <StagesScreen {...toolProps} />
-  if (activeNav === 'Planejamento') return <PlanningScreen {...toolProps} renderOrder={(code, back) => <OrderPanel code={code} order={orders.find((order) => order.code === code)} loading={workflowLoading} onRefresh={onRefresh} onBack={back} onReopened={() => {}} />} />
+  if (activeNav === 'Planejamento') return <PlanningScreen {...toolProps} renderOrder={(code, back) => <OrderPanel code={code} order={orders.find((order) => order.code === code)} offer={linkedOffer(offers, orders, code)} loading={workflowLoading} onRefresh={onRefresh} onBack={back} onReopened={() => {}} />} />
   if (activeNav === 'Setores') return <SimpleRegistryScreen key="sectors" {...toolProps} title="Setores" singular="setor" endpoint="/sectors" nameLabel="Nome do setor" countLabel="Em uso por" count={(item) => [[item.employees, 'funcionário', 'funcionários'], [item.machines, 'máquina', 'máquinas'], [item.laborServices, 'serviço', 'serviços']].filter(([total]) => total).map(([total, one, many]) => `${total} ${total === 1 ? one : many}`).join(' · ') || '—'} />
   if (activeNav === 'Solicitantes') return <RequestersScreen key="requesters" {...toolProps} />
   if (activeNav === 'Compradores') return <RequestersScreen key="buyers" {...toolProps} kind={contactKinds.buyers} />
@@ -2485,7 +2488,7 @@ function Dashboard({ user, onUpdateUser, collapsed, onToggle, activeNav, onNavig
   if (activeNav === 'Detalhes da oferta') return <OfferDetailsV2 collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} offer={offers.find((item) => item.id === selectedOfferId)} onRefresh={onRefresh} onSelectOrder={onSelectOrder} />
   if (activeNav === 'Fazer proposta') return <ProposalBuilder collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} offer={offers.find((item) => item.id === selectedOfferId)} onRefresh={onRefresh} onSelectOrder={onSelectOrder} />
   if (activeNav === 'Pedidos') return <OrdersScreen collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} offers={offers} orders={orders} onSelectOffer={onSelectOffer} onSelectOrder={onSelectOrder} onRefresh={onRefresh} materialRequestTarget={materialRequestTarget} onRequestLocated={onRequestLocated} />
-  if (activeNav === 'Ordem de serviço') return <OrderScreen collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} orders={orders} selectedOrderCode={selectedOrderCode} onRefresh={onRefresh} onBack={onCloseOrder} onReopened={onOrderReopened} workflowLoading={workflowLoading} />
+  if (activeNav === 'Ordem de serviço') return <OrderScreen collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} offers={offers} orders={orders} selectedOrderCode={selectedOrderCode} onRefresh={onRefresh} onBack={onCloseOrder} onReopened={onOrderReopened} workflowLoading={workflowLoading} />
   return <AdminServicesView key={activeNav} offers={offers} highlightCode={reopenedCode} collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} orders={orders} onSelectOrder={onSelectOrder} onRefresh={onRefresh} workflowError={workflowError} />
 }
 function App() {
