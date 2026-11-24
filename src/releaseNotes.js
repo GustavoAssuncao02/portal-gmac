@@ -1,6 +1,17 @@
 // Each commit to main is a new version: add an entry at the top, with what changed in plain words for whoever uses the portal.
 export const releaseNotes = [
   {
+    version: '1.0.22',
+    date: '2026-11-24',
+    notes: [
+      'Contas a pagar e a receber: aviso de conta duplicada mostra o número da conta igual e permite lançar mesmo assim, com confirmação',
+      'Configurações: nova opção "Notificações do sistema por e-mail" para escolher se recebe os avisos por e-mail',
+      'Ordem de serviço: o cabeçalho da OS mostra também o solicitante, o comprador e o número da cotação',
+      'Ofertas e serviços: a quantidade pode ser em unidades, pares ou conjuntos, e a proposta em PDF mostra a medida escolhida (Un, Par ou Cj)',
+      'Desenvolvedor: tela de logs e diagnóstico do sistema, visível só para a equipe de desenvolvimento',
+    ],
+  },
+  {
     version: '1.0.21',
     date: '2026-11-23',
     notes: [
@@ -8,11 +19,6 @@ export const releaseNotes = [
       'Ofertas e serviços: botão "Desfazer recusa" nas ofertas recusadas por engano, que voltam para "Em análise" com tudo o que tinham',
       'Ticket: e-mails com tipo, urgência e tema em destaque, sininho para acompanhar, todos podem comentar (mesmo com o ticket fechado), anexos na conversa e aviso por e-mail ao fechar ou reabrir',
       'Tela do operador: títulos de ordenação da lista mais fáceis de tocar no tablet',
-      'Contas a pagar e a receber: aviso de conta duplicada mostra o número da conta igual e permite lançar mesmo assim, com confirmação',
-      'Configurações: nova opção "Notificações do sistema por e-mail" para escolher se recebe os avisos por e-mail',
-      'Ordem de serviço: o cabeçalho da OS mostra também o solicitante, o comprador e o número da cotação',
-      'Ofertas e serviços: a quantidade pode ser em unidades, pares ou conjuntos, e a proposta em PDF mostra a medida escolhida (Un, Par ou Cj)',
-      'Desenvolvedor: tela de logs e diagnóstico do sistema, visível só para a equipe de desenvolvimento',
     ],
   },
   {
