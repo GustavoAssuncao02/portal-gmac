@@ -1,12 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
 import { Hash, X } from 'lucide-react'
 import { backdropClose } from './dialogBackdrop.js'
+import { quantityLabel, quantityUnitOf, quantityUnits } from '../server/quantityUnits.js'
 
 // "Sem quantidade definida" (TCK-0005): the request arrived before anyone counted the pieces at the client. The offer shows
 // "A definir" and, before the proposal options (or the OS of an etiqueta), this dialog asks the quantity
 // (PUT /api/offers/:id/quantity). Per piece, materials and stage times follow it.
 export const quantityPending = (offer) => Boolean(offer?.quantityPending)
-export const quantityText = (offer, unit = 'unidades') => (quantityPending(offer) ? 'A definir' : `${offer.quantity} ${unit}`)
+// With its measure (TCK-0009): "2 pares"; `short` for the lists ("2 un").
+export const quantityText = (offer, { short = false } = {}) => (quantityPending(offer) ? 'A definir' : quantityLabel(offer.quantity, offer.quantityUnit, { short }))
+
+// Unidades, pares ou conjuntos: next to the quantity of the offer and of the OS. The number is what production counts.
+export function QuantityUnitSelect({ value, onChange, ...props }) {
+  return <select aria-label="Medida da quantidade" value={quantityUnitOf(value)} onChange={(event) => onChange(event.target.value)} {...props}>{quantityUnits.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>
+}
 
 export default function OfferQuantityModal({ offer, onConfirm, onClose }) {
   const dialog = useRef(null), input = useRef(null), pending = useRef(false)

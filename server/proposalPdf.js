@@ -309,7 +309,7 @@ export async function renderEtiqueta(document) {
     [98.7, 118.6, [[22.8, 136.3, 'Nome do componente', true], [136.3, 676.8, document.componentName], [676.8, 735.2, 'Etiqueta', true], [735.2, 815.3, document.labelNumber]]],
     [124.2, 144.1, [[22.8, 93.3, 'Equipamento', true], [93.3, 345.8, document.equipment], [345.8, 410.0, 'Componente', true], [410.0, 815.3, document.component]]],
     [149.8, 169.7, [[22.8, 93.3, 'Responsável', true], [93.3, 209.1, document.responsible], [209.1, 345.8, 'Requisitante', true], [345.8, 474.7, document.requester]]],
-    [175.3, 195.3, [[22.8, 93.3, 'Data', true], [93.3, 172.7, shortDate(document.date)], [172.7, 298.7, 'Quantidade', true], [298.7, 345.8, document.quantity]]],
+    [175.3, 195.3, [[22.8, 93.3, 'Data', true], [93.3, 172.7, shortDate(document.date)], [172.7, 298.7, 'Quantidade', true], [298.7, 345.8, etiquetaQuantity(document)]]],
   ]
   for (const [y0, y1, cells] of fields) {
     for (const [x0, x1, text, isLabel] of cells) {
@@ -577,6 +577,8 @@ function segments(text, f, base = f.calibri) {
   return String(text).split(/(\*\*[^*]+\*\*|_[^_]+_)/).filter(Boolean).map((part) => part.startsWith('**') ? [part.slice(2, -2), f.calibriBold] : part.startsWith('_') && part.endsWith('_') && part.length > 2 ? [part.slice(1, -1), f.calibriItalic] : [part, base])
 }
 const fitLine = (doc, text, width) => { let value = String(text); if (doc.widthOfString(value) <= width) return value; while (value.length > 1 && doc.widthOfString(`${value}…`) > width) value = value.slice(0, -1); return `${value.trimEnd()}…` }
+// Etiqueta: the number alone, as always, for unidades; pares and conjuntos (TCK-0009) say so ("2 Par").
+const etiquetaQuantity = (document) => document.quantityUnit && document.quantityUnit !== 'Un' ? `${document.quantity} ${document.quantityUnit}` : document.quantity
 const quantityText = (item) => `${fixed(item.quantity, Number.isInteger(Number(item.quantity)) ? 0 : 2)} ${item.unit || ''}`.trim()
 const addDays = (value, days) => { const date = new Date(`${value}T12:00:00Z`); date.setUTCDate(date.getUTCDate() + days); return date.toISOString().slice(0, 10) }
 

@@ -8,6 +8,7 @@ import { renderProposalDocument, tableTotals, letterTotal, round2 } from './prop
 import { proposalCosts, proposalPricing, hoursText } from './proposalMath.js'
 import { todayBahia } from './payableRules.js'
 import { materialUnit } from './materialUnits.js'
+import { quantityUnitPdf } from './quantityUnits.js'
 import { stagePlanPlace, stagePlanProblem } from './serviceStages.js'
 import { documentDigits } from './clientDocument.js'
 import { actorOf } from './registryHistory.js'
@@ -223,7 +224,7 @@ export async function buildDraft({ model, store, offer, value, deadline, client 
     return {
       ...base, quoteNumber: nextQuoteNumber(store, settings), customer: source?.company || '', customerDocument: formatDocument(source?.cnpj), requester: String(source?.requester || '').slice(0, requesterLimit), attention: String(source?.buyer || '').slice(0, 80), subject: String(source?.service || '').trim(),
       scope: String(source?.description || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
-      items: [{ description: source?.service || 'Serviço', quantity: quantityValue, unit: 'Un', unitPrice: round2(total / quantityValue) }],
+      items: [{ description: source?.service || 'Serviço', quantity: quantityValue, unit: quantityUnitPdf(source?.quantityUnit), unitPrice: round2(total / quantityValue) }],
       deliveryTerm: /^\d{4}-\d{2}-\d{2}$/.test(String(deadline || '').trim()) ? String(deadline).trim().split('-').reverse().join('/') : String(deadline || '').trim(), paymentDays: client?.paymentDays || null, validityDays: settings.validityDays, important: settings.important,
       fiscal: { cnae: asList(previous?.cnae).length ? asList(previous.cnae) : asList(suggestedActivity(source, catalog, issuer.cnpj)), nbs: asList(previous?.nbs), ncm: asList(previous?.ncm) },
       technician: issuerTechnician(issuer),
@@ -233,7 +234,7 @@ export async function buildDraft({ model, store, offer, value, deadline, client 
   const usage = systemUsage(offer).map((item) => ({ ...item, rowId: matchRow(item.name, item.kind === 'labor' ? table.labor : table.materials, settings.aliases[model]) }))
   const totalOf = (rowId) => round2(usage.filter((item) => item.rowId === rowId).reduce((total, item) => total + item.quantity, 0))
   return {
-    ...base, number: model === 'nestle' ? nextNestleNumber(store, settings) : source?.labelNumber || '', labelNumber: source?.labelNumber || '', componentName: source?.service || '', description: source?.description || '', quantity: source?.quantity || 1, quantityUnit: 'Un',
+    ...base, number: model === 'nestle' ? nextNestleNumber(store, settings) : source?.labelNumber || '', labelNumber: source?.labelNumber || '', componentName: source?.service || '', description: source?.description || '', quantity: source?.quantity || 1, quantityUnit: quantityUnitPdf(source?.quantityUnit),
     requester: String(source?.requester || '').slice(0, requesterLimit), responsible: '', equipment: '', component: '', contact: issuer.contact,
     labor: table.labor.map((row) => ({ id: row.id, quantity: totalOf(row.id) || null, situation: 'normal' })),
     materials: table.materials.map((row) => ({ id: row.id, quantity: totalOf(row.id) || null })),
@@ -306,7 +307,7 @@ export async function normalizeDocument(model, input, store) {
   const items = (Array.isArray(input.items) ? input.items : []).map((item, index) => ({
     description: text(item?.description, 300, `a descrição do item ${index + 1}`, { required: true }),
     quantity: (() => { const value = quantity(item?.quantity, `item ${index + 1}`); if (!value) fail(`Informe a quantidade do item ${index + 1}.`); return value })(),
-    unit: { un: 'Un', unidade: 'Un', kg: 'kg', m: 'm', metro: 'm', cj: 'Cj', conjunto: 'Cj' }[text(item?.unit, 20, `a unidade do item ${index + 1}`).toLowerCase()] || fail(`Escolha a unidade do item ${index + 1}: unidade, kg, metro ou conjunto.`), unitPrice: amount(item?.unitPrice, `valor unitário do item ${index + 1}`),
+    unit: { un: 'Un', unidade: 'Un', par: 'Par', pares: 'Par', kg: 'kg', m: 'm', metro: 'm', cj: 'Cj', conjunto: 'Cj' }[text(item?.unit, 20, `a unidade do item ${index + 1}`).toLowerCase()] || fail(`Escolha a unidade do item ${index + 1}: unidade, par, kg, metro ou conjunto.`), unitPrice: amount(item?.unitPrice, `valor unitário do item ${index + 1}`),
     ...(model === 'model-b' && text(item?.group, 60, `o grupo do item ${index + 1}`) ? { group: text(item.group, 60, 'o grupo') } : {}),
   }))
   if (!items.length) fail('Inclua pelo menos um item na composição.')

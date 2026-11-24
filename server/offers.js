@@ -26,6 +26,7 @@ import { isPreRegisteredClient } from './sitePreRegistration.js'
 import { currentServiceLocation, serviceLocationLabel, validServiceLocation } from './serviceLocation.js'
 import { formatQuantity, materialUnit, validMaterialUnit, validQuantityFor } from './materialUnits.js'
 import { labelEstimate, labelPlaceholderProposal } from './labelQuoteRules.js'
+import { quantityLabel, quantityUnitMessage, quantityUnitOf, validQuantityUnit } from './quantityUnits.js'
 
 const filesDirectory = path.join(dataDirectory, 'files')
 const router = express.Router()
@@ -97,7 +98,7 @@ const chargedValue = (proposal) => Number(proposal.osValue ?? proposal.serviceVa
 export function proposalSections(offer, proposal, resources) {
   const facts = (name, entries) => ({ name, records: true, singleRecord: true, columns: entries.map(([label]) => label), rows: [entries.map(([, value]) => value)] })
   const sections = [
-    facts('Dados da solicitação', [['Serviço', offer.service], ['Cliente', offer.company], [documentKind(offer.cnpj), offer.cnpj], ['Número da etiqueta', offer.labelNumber], ['Quantidade', offer.quantity], ['Prazo solicitado', date(offer.deadline)]]),
+    facts('Dados da solicitação', [['Serviço', offer.service], ['Cliente', offer.company], [documentKind(offer.cnpj), offer.cnpj], ['Número da etiqueta', offer.labelNumber], ['Quantidade', quantityUnitOf(offer.quantityUnit) === 'un' ? offer.quantity : quantityLabel(offer.quantity, offer.quantityUnit)], ['Prazo solicitado', date(offer.deadline)]]),
     facts('Descrição do serviço', [['Descrição', offer.description], ...(resources.serviceDescription ? [['Detalhes do serviço', resources.serviceDescription]] : [])]),
     { name: 'Materiais necessários', columns: ['Material', 'Especificação', 'Quantidade', 'Unidade'], rows: (resources.materials || []).map((item) => [item.name, item.detail, Number(item.quantity), materialUnit(item.unit)]) },
     { name: 'Mão de obra', columns: ['Recurso', 'Horas previstas'], rows: (resources.laborEntries || []).map((item) => [item.resource, Number(item.hours)]) },
@@ -132,6 +133,8 @@ router.post('/offers', async (request, response) => {
     return response.status(400).json({ message: 'Preencha CNPJ (14 dígitos) ou CPF (11), empresa, peça/serviço, quantidade e descrição.' })
   }
   if (deadline && !isDay(deadline)) return response.status(400).json({ message: 'Prazo solicitado inválido: escolha uma data ou deixe em branco.' })
+  // Unidades, pares ou conjuntos (TCK-0009); not sent, it is unidades.
+  if (!validQuantityUnit(request.body?.quantityUnit)) return response.status(400).json({ message: quantityUnitMessage })
   try {
     // Up to 5 requesters; each new one is registered in the client like a single one was.
     const requesterNames = offerRequesterInput(request.body)
@@ -144,7 +147,7 @@ router.post('/offers', async (request, response) => {
       // A manual offer starts as "Criando oferta": only "Fazer proposta" in its details (POST /offers/:id/finish) puts it
       // in analysis. The person who is creating it (editingBy) and since when are shown on the list.
       const at = new Date().toISOString(), author = { id: request.adminId ?? null, name: request.adminName || 'Administrador' }
-      const item = { id: randomUUID(), code: nextCode('OF', [...store.offers, ...(store.discardedOffers || [])]), createdAt: at, createdBy: author.id, createdByName: author.name, ...(open ? { openForTeam: true } : { editingBy: { ...author, at } }), cnpj: clean(cnpj, 18), company: clean(company, 160), ...requesters.fields, buyer: buyerLink.name, buyerId: buyerLink.id, deadline, service: clean(service, 160), quantity: quantityPending ? 1 : Number(quantity), ...(quantityPending ? { quantityPending: true } : {}), description: clean(description, 5000), labelNumber: clean(labelNumber, 80), requestedAt: at, origin: 'Inserida Manualmente', status: 'creating', attachments: [], resources: { materials: [], laborEntries: [] }, proposal: null, orderCode: null }
+      const item = { id: randomUUID(), code: nextCode('OF', [...store.offers, ...(store.discardedOffers || [])]), createdAt: at, createdBy: author.id, createdByName: author.name, ...(open ? { openForTeam: true } : { editingBy: { ...author, at } }), cnpj: clean(cnpj, 18), company: clean(company, 160), ...requesters.fields, buyer: buyerLink.name, buyerId: buyerLink.id, deadline, service: clean(service, 160), quantity: quantityPending ? 1 : Number(quantity), ...(quantityPending ? { quantityPending: true } : {}), quantityUnit: quantityUnitOf(request.body?.quantityUnit), description: clean(description, 5000), labelNumber: clean(labelNumber, 80), requestedAt: at, origin: 'Inserida Manualmente', status: 'creating', attachments: [], resources: { materials: [], laborEntries: [] }, proposal: null, orderCode: null }
       store.offers.unshift(item)
       // An open offer has nobody creating it: it waits on the list, like the offers of the site, and the others are told.
       if (open) addNotification(store, { type: 'open-offer', offerId: item.id, authorId: author.id, title: 'Nova oferta em aberto', description: `${item.code} · ${item.company} · inserida por ${author.name}` })
@@ -392,6 +395,7 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
       return response.status(400).json({ message: 'Preencha CNPJ (14 dígitos) ou CPF (11), empresa, peça/serviço, data da solicitação e quantidade.' })
     }
     if (fields.deadline && !isDay(fields.deadline)) return response.status(400).json({ message: 'Prazo solicitado inválido: escolha uma data ou deixe em branco.' })
+    if (!validQuantityUnit(body.quantityUnit)) return response.status(400).json({ message: quantityUnitMessage })
     try {
       const requesterNames = offerRequesterInput(body)
       const document = documentDigits(fields.cnpj)
@@ -414,11 +418,12 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
         const unchangedOldScreen = !Array.isArray(body.requesters) && item.requesters?.length > 1 && String(body.requester ?? '').trim() === item.requester
         const requesters = registerOfferRequesters(store, client, unchangedOldScreen ? item.requesters.map((entry) => entry.name) : requesterNames, actorOf(request))
         const buyer = registerOfferContact(store, 'buyers', client, body.buyer, actorOf(request))
-        const next = { ...fields, ...requesters.fields, buyer: buyer.name, buyerId: buyer.id }
+        // The measure of the quantity goes printed too; a screen of the previous version does not send it and keeps it.
+        const next = { ...fields, ...requesters.fields, buyer: buyer.name, buyerId: buyer.id, quantityUnit: quantityUnitOf(body.quantityUnit === undefined ? item.quantityUnit : body.quantityUnit) }
         // The same document typed with another mask keeps the one already saved.
         if (documentDigits(item.cnpj) === document) next.cnpj = item.cnpj
         const printed = ['cnpj', 'company', 'requester', 'buyer', 'service', 'labelNumber', 'deadline', 'quantity']
-        const changed = printed.some((key) => String(item[key] ?? '') !== String(next[key] ?? ''))
+        const changed = printed.some((key) => String(item[key] ?? '') !== String(next[key] ?? '')) || quantityUnitOf(item.quantityUnit) !== next.quantityUnit
         const quantityChanged = Number(item.quantity) !== fields.quantity
         Object.assign(item, next)
         if (quantityPending) item.quantityPending = true
@@ -759,7 +764,7 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
         // A proposal generated before the planned times and resources became mandatory still needs them to become an OS.
         const problem = existing ? '' : stagePlanProblem(serviceSettings(item).stages, item.resources)
         if (problem) throw Object.assign(new Error(`${problem} Preencha nos detalhes da oferta antes de aceitar.`), { status: 400 })
-        const created = existing || { code: nextCode('OS', [...store.orders, ...(store.cancelledOrders || [])]), offerId: item.id, createdAt: new Date().toISOString(), createdBy: request.adminId ?? null, status: 'Em andamento', company: item.company, cnpj: item.cnpj, service: item.service, description: item.description, labelNumber: item.labelNumber, quantity: item.quantity, deadline: item.deadline, requestedAt: item.requestedAt, attachments: [...item.attachments], resources: item.resources, proposal: label ? labelPlaceholderProposal(item) : item.proposal, ...(label ? { labelQuote: { pending: true, openedAt: new Date().toISOString(), openedByName: request.adminName || 'Administrador', estimate: labelEstimate(item.resources) } } : {}) }
+        const created = existing || { code: nextCode('OS', [...store.orders, ...(store.cancelledOrders || [])]), offerId: item.id, createdAt: new Date().toISOString(), createdBy: request.adminId ?? null, status: 'Em andamento', company: item.company, cnpj: item.cnpj, service: item.service, description: item.description, labelNumber: item.labelNumber, quantity: item.quantity, quantityUnit: quantityUnitOf(item.quantityUnit), deadline: item.deadline, requestedAt: item.requestedAt, attachments: [...item.attachments], resources: item.resources, proposal: label ? labelPlaceholderProposal(item) : item.proposal, ...(label ? { labelQuote: { pending: true, openedAt: new Date().toISOString(), openedByName: request.adminName || 'Administrador', estimate: labelEstimate(item.resources) } } : {}) }
         const materials = created.resources?.materials || []
         let consumption = []
         if (materials.length && pool) {

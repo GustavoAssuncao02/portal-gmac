@@ -6,6 +6,7 @@ import { realChangedFields } from './orderHistory.js'
 import { activeSessions } from './operationSessions.js'
 import { isClientDocument } from './clientDocument.js'
 import { invalidUnitMessage, materialUnit, unitPriceLabel, validMaterialUnit, validQuantityFor } from './materialUnits.js'
+import { quantityUnitMessage, quantityUnitOf, validQuantityUnit } from './quantityUnits.js'
 
 const fail = (status, message) => { const error = new Error(message); error.status = status; throw error }
 const text = (value, limit = 160) => {
@@ -54,6 +55,9 @@ export function editOrder(order, state, body, catalog = {}) {
   // The same document keeps the way it was written.
   if (String(order.cnpj ?? '').replace(/\D/g, '') === fields.cnpj) fields.cnpj = order.cnpj
   fields.quantity = numeric(source.quantity, 'Quantidade da OS', { integer: true, min: 1, max: 1000000000 })
+  // Unidades, pares ou conjuntos (TCK-0009): only how the quantity is written; a screen of the previous version keeps it.
+  if (!validQuantityUnit(source.quantityUnit)) fail(400, quantityUnitMessage)
+  fields.quantityUnit = quantityUnitOf(source.quantityUnit === undefined ? order.quantityUnit : source.quantityUnit)
   fields.deadline = date(source.deadline, 'Prazo solicitado')
   if (typeof source.requestedAt !== 'string' || !Number.isFinite(Date.parse(source.requestedAt))) fail(400, 'Informe uma data de solicitação válida.')
   date(source.requestedAt.slice(0, 10), 'Data da solicitação')

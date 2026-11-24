@@ -1489,6 +1489,14 @@ button {
   min-width: 0;
 }
 
+/* Quantidade and its measure (unidades, pares, conjuntos) side by side; the measure keeps the width of its longest name. */
+.offer-form-grid .offer-quantity-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(118px, 38%);
+  gap: 10px;
+  min-width: 0;
+}
+
 .offer-form-grid label.offer-quantity-pending {
   flex-direction: row;
   align-items: center;
@@ -1596,6 +1604,7 @@ button {
 }
 
 .offer-form-grid input,
+.offer-form-grid select,
 .offer-form-grid textarea {
   width: 100%;
   border: 1px solid #d4deea;
@@ -1611,6 +1620,14 @@ button {
   padding: 0 12px;
 }
 
+.offer-form-grid select {
+  height: 42px;
+  min-width: 0;
+  padding: 0 8px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
 .offer-form-grid textarea {
   min-height: 88px;
   padding: 11px 12px;
@@ -1618,6 +1635,7 @@ button {
 }
 
 .offer-form-grid input:focus,
+.offer-form-grid select:focus,
 .offer-form-grid textarea:focus {
   border-color: #0c4c91;
   box-shadow: 0 0 0 3px rgba(12, 76, 145, 0.1);

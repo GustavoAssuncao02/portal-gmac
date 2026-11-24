@@ -7,7 +7,7 @@ import PasswordHistoryModal from './PasswordHistoryModal.jsx'
 import OrderDetails from './OrderDetails.jsx'
 import RejectOfferModal from './RejectOfferModal.jsx'
 import { CreatingOfferBadge, TakeOverOfferModal, DiscardOfferModal, isCreating } from './CreatingOffer.jsx'
-import OfferQuantityModal, { quantityPending, quantityText } from './OfferQuantityModal.jsx'
+import OfferQuantityModal, { QuantityUnitSelect, quantityPending, quantityText } from './OfferQuantityModal.jsx'
 import DeclineProposalModal, { UndoDeclineModal, UndoRejectModal, AcceptOfferModal, UndoAcceptModal } from './DeclineProposalModal.jsx'
 import RejectMaterialRequestModal from './RejectMaterialRequestModal.jsx'
 import { MaterialRequestModal, MaterialRequestHistoryModal } from './MaterialRequestModals.jsx'
@@ -1363,7 +1363,7 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
   useMobileModal(manualOpen, '.offer-manual-modal', () => setManualOpen(false))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const emptyForm = { cnpj: '', company: '', requesters: [''], buyer: '', deadline: '', service: '', quantity: '', quantityPending: false, description: '', labelNumber: '', attachments: [], open: false }
+  const emptyForm = { cnpj: '', company: '', requesters: [''], buyer: '', deadline: '', service: '', quantity: '', quantityUnit: 'un', quantityPending: false, description: '', labelNumber: '', attachments: [], open: false }
   const [manualForm, setManualForm] = useState(emptyForm)
   // "Deixar oferta em aberto e notificar" comes checked for some accounts (OPEN_OFFER_DEFAULT_CPFS on the server).
   const [openDefault, setOpenDefault] = useState(false)
@@ -1513,7 +1513,7 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
             <div className="offers-table-row offers-table-header">{offerColumns.map((column) => <SortHeader key={column.key} as="span" column={column} list={offerList} />)}<span>Ações</span></div>
             {offerList.rows.map((offer) => <div className="offers-table-row" key={offer.id}>
               <div className="offer-piece"><strong>{offer.service}</strong><span>{offer.code}</span>{offer.labelNumber && <span className="offer-piece-label">Etiqueta {offer.labelNumber}</span>}</div>
-              <span data-label="Cliente">{offer.company}</span><span data-label="Etiqueta">{offer.labelNumber || "—"}</span><span data-label="Quantidade">{quantityText(offer, 'un')}</span><span data-label="Solicitação">{displayDate(offer.requestedAt)}</span><span data-label="Prazo">{displayDate(offer.deadline)}</span>
+              <span data-label="Cliente">{offer.company}</span><span data-label="Etiqueta">{offer.labelNumber || "—"}</span><span data-label="Quantidade">{quantityText(offer, { short: true })}</span><span data-label="Solicitação">{displayDate(offer.requestedAt)}</span><span data-label="Prazo">{displayDate(offer.deadline)}</span>
               <div className="offer-status-cell"><div className={`offer-table-status offer-table-status--${savedProposal(offer) ? 'saved' : offer.status}`}><strong>{savedProposal(offer) ? 'Proposta salva' : isCreating(offer) ? (offer.openForTeam && !offer.editingBy ? 'Em aberto' : 'Criando oferta') : offer.status === 'review' ? 'Em análise' : offer.status === 'proposed' ? 'Proposta gerada' : offer.status === 'rejected' ? offer.proposalDecline ? `Proposta ${offer.proposalDecline.key} recusada` : 'Recusada' : 'Aceita'}</strong>{savedProposal(offer) && <span>Opção {offer.proposalDraft.selectedKey}</span>}{offer.orderCode && <span>{offer.orderCode}</span>}{offer.labelQuote?.pending && <span>{labelQuotePendingText}</span>}{offer.proposalDecline?.reason && <span>{offer.proposalDecline.reason}</span>}</div>{offer.status === 'proposed' && offer.proposal?.generatedAt && <ProposalSentSince at={offer.proposalEmails?.[0]?.sentAt || offer.proposal.generatedAt} />}</div>
               <span data-label="Origem">{offer.origin}</span>
               <div className={`offer-table-actions${isCreating(offer) ? ' offer-table-actions--creating' : ''}`}>
@@ -1544,7 +1544,10 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
             <label>Prazo solicitado<input type="date" value={manualForm.deadline} onChange={(event) => updateManualForm('deadline', event.target.value)} /></label>
             {/* "Sem quantidade definida": somebody goes to the client to count the pieces; it is asked before the proposal. */}
             <div className="offer-quantity-cell">
-              <label>{manualForm.quantityPending ? 'Quantidade' : 'Quantidade *'}<input type="number" min="1" step="1" value={manualForm.quantityPending ? '' : manualForm.quantity} onChange={(event) => updateManualForm('quantity', event.target.value)} disabled={manualForm.quantityPending} placeholder={manualForm.quantityPending ? 'A definir' : undefined} required={!manualForm.quantityPending} /></label>
+              <div className="offer-quantity-row">
+                <label>{manualForm.quantityPending ? 'Quantidade' : 'Quantidade *'}<input type="number" min="1" step="1" value={manualForm.quantityPending ? '' : manualForm.quantity} onChange={(event) => updateManualForm('quantity', event.target.value)} disabled={manualForm.quantityPending} placeholder={manualForm.quantityPending ? 'A definir' : undefined} required={!manualForm.quantityPending} /></label>
+                <label>Medida<QuantityUnitSelect value={manualForm.quantityUnit} onChange={(value) => updateManualForm('quantityUnit', value)} /></label>
+              </div>
               <label className="offer-quantity-pending"><input type="checkbox" checked={manualForm.quantityPending} onChange={(event) => updateManualForm('quantityPending', event.target.checked)} />Sem quantidade definida</label>
             </div>
             <label>Número da etiqueta<input value={manualForm.labelNumber} onChange={(event) => updateManualForm('labelNumber', event.target.value)} placeholder="Opcional" /></label>

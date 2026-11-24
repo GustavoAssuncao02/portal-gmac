@@ -29,7 +29,7 @@ export const emailTemplateFields = [
   ['etiqueta', 'Número da etiqueta'],
   ['servico', 'Peça ou serviço'],
   ['cliente', 'Nome do cliente'],
-  ['quantidade', 'Quantidade com a unidade: "2 unidades"'],
+  ['quantidade', 'Quantidade com a medida: "2 unidades", "2 pares" ou "2 conjuntos"'],
   ['empresa', 'Empresa emissora: GMAC Usinagem ou GMAC Metalúrgica'],
   ['oferta', 'Código da oferta'],
   ['os', 'Código da OS'],

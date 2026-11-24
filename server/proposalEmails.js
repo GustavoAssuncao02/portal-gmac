@@ -12,6 +12,7 @@ import { actorOf, recordRegistryChange } from './registryHistory.js'
 import { accountJobTitle, emailTemplates, fillTemplate } from './emailTemplates.js'
 import { signatureAttachments, signatureHtml, signatureText } from './emailSignature.js'
 import { offerRequesters } from './offerRequesters.js'
+import { quantityLabel } from './quantityUnits.js'
 
 // "Enviar E-mail" on the proposal screen: once the proposal PDF is generated, it goes from the commercial account of the
 // portal (MAIL_FROM, the same SMTP of the site quotes) to the client and the buyer registered for the offer. The text comes
@@ -47,7 +48,7 @@ export function templateValues(store, offer) {
   const issuer = issuerOf(store, offer)
   const document = offer.proposal?.document
   const name = firstName(offer.buyer) || firstName(offerRequesters(offer)[0]?.name)
-  return { saudacao: name ? `Olá, ${name}!` : 'Olá!', nome: name, numero: document?.quoteNumber || document?.number || document?.labelNumber || offer.code, etiqueta: offer.labelNumber || document?.labelNumber || '', servico: offer.service, cliente: offer.company, quantidade: `${offer.quantity} ${Number(offer.quantity) === 1 ? 'unidade' : 'unidades'}`, empresa: issuer.label, oferta: offer.code, os: offer.orderCode || '' }
+  return { saudacao: name ? `Olá, ${name}!` : 'Olá!', nome: name, numero: document?.quoteNumber || document?.number || document?.labelNumber || offer.code, etiqueta: offer.labelNumber || document?.labelNumber || '', servico: offer.service, cliente: offer.company, quantidade: quantityLabel(offer.quantity, offer.quantityUnit), empresa: issuer.label, oferta: offer.code, os: offer.orderCode || '' }
 }
 const unique = (list) => list.map((item) => String(item || '').trim().toLowerCase()).filter((item, index, all) => item && emailPattern.test(item) && all.indexOf(item) === index)
 

@@ -4309,12 +4309,12 @@
 :root[data-theme="dark"][data-tone="black"] .offer-requester-add small {
     color: #cdcfd2
 }
-:root[data-theme="dark"][data-tone="black"] .offer-form-grid input, :root[data-theme="dark"][data-tone="black"] .offer-form-grid textarea {
+:root[data-theme="dark"][data-tone="black"] .offer-form-grid input, :root[data-theme="dark"][data-tone="black"] .offer-form-grid select, :root[data-theme="dark"][data-tone="black"] .offer-form-grid textarea {
     border: 1px solid #303133;
     color: #ebebec;
     background: #1a1b1c
 }
-:root[data-theme="dark"][data-tone="black"] .offer-form-grid input:focus, :root[data-theme="dark"][data-tone="black"] .offer-form-grid textarea:focus {
+:root[data-theme="dark"][data-tone="black"] .offer-form-grid input:focus, :root[data-theme="dark"][data-tone="black"] .offer-form-grid select:focus, :root[data-theme="dark"][data-tone="black"] .offer-form-grid textarea:focus {
     border-color: #47494c;
     box-shadow: 0 0 0 3px #0a0a0b1a
 }

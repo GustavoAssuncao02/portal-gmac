@@ -5041,12 +5041,12 @@
 :root[data-theme="dark"] .offer-requester-add small {
     color: #c1cfde
 }
-:root[data-theme="dark"] .offer-form-grid input, :root[data-theme="dark"] .offer-form-grid textarea {
+:root[data-theme="dark"] .offer-form-grid input, :root[data-theme="dark"] .offer-form-grid select, :root[data-theme="dark"] .offer-form-grid textarea {
     border: 1px solid #36516f;
     color: #e1ebf6;
     background: #162b43
 }
-:root[data-theme="dark"] .offer-form-grid input:focus, :root[data-theme="dark"] .offer-form-grid textarea:focus {
+:root[data-theme="dark"] .offer-form-grid input:focus, :root[data-theme="dark"] .offer-form-grid select:focus, :root[data-theme="dark"] .offer-form-grid textarea:focus {
     border-color: #4778ae;
     box-shadow: 0 0 0 3px #06111d1a
 }

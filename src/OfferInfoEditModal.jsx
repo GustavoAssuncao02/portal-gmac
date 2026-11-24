@@ -6,12 +6,14 @@ import PieceNameInput from './PieceNameInput.jsx'
 import { contactKinds } from './RequestersScreen.jsx'
 import { payableRequest } from './payablesApi.js'
 import { documentDigits, maskClientDocument } from '../server/clientDocument.js'
+import { QuantityUnitSelect } from './OfferQuantityModal.jsx'
+import { quantityUnitOf } from '../server/quantityUnits.js'
 
 // Informações do serviço of an offer not yet accepted: corrects the client, requester, buyer, piece, request date, requested
 // deadline, quantity and label without creating the offer again (PUT /api/offers/:id). What goes printed on the proposal
 // discards a generated one: the screen says so before saving.
-const printed = ['cnpj', 'company', 'requester', 'buyer', 'service', 'labelNumber', 'deadline', 'quantity']
-const formOf = (offer) => ({ cnpj: maskClientDocument(offer.cnpj || ''), company: offer.company || '', requesters: offerRequesterNames(offer).length ? offerRequesterNames(offer) : [''], buyer: offer.buyer || '', service: offer.service || '', requestedAt: String(offer.requestedAt || '').slice(0, 10), deadline: offer.deadline || '', quantity: offer.quantityPending ? '' : String(offer.quantity ?? ''), quantityPending: Boolean(offer.quantityPending), labelNumber: offer.labelNumber || '', notes: offer.notes || '' })
+const printed = ['cnpj', 'company', 'requester', 'buyer', 'service', 'labelNumber', 'deadline', 'quantity', 'quantityUnit']
+const formOf = (offer) => ({ cnpj: maskClientDocument(offer.cnpj || ''), company: offer.company || '', requesters: offerRequesterNames(offer).length ? offerRequesterNames(offer) : [''], buyer: offer.buyer || '', service: offer.service || '', requestedAt: String(offer.requestedAt || '').slice(0, 10), deadline: offer.deadline || '', quantity: offer.quantityPending ? '' : String(offer.quantity ?? ''), quantityPending: Boolean(offer.quantityPending), quantityUnit: quantityUnitOf(offer.quantityUnit), labelNumber: offer.labelNumber || '', notes: offer.notes || '' })
 
 export default function OfferInfoEditModal({ offer, onClose, onSaved }) {
   const [form, setForm] = useState(() => formOf(offer)), [busy, setBusy] = useState(false), [error, setError] = useState('')
@@ -57,7 +59,10 @@ export default function OfferInfoEditModal({ offer, onClose, onSaved }) {
         {/* Optional until the proposal PDF, which asks for it; after the PDF it can be changed but not left empty. */}
         <label>{offer.proposal ? 'Prazo solicitado *' : 'Prazo solicitado'}<input type="date" value={form.deadline} onChange={(event) => update('deadline', event.target.value)} required={Boolean(offer.proposal)} /></label>
         <div className="offer-quantity-cell">
-          <label>{form.quantityPending ? 'Quantidade' : 'Quantidade *'}<input type="number" min="1" step="1" value={form.quantityPending ? '' : form.quantity} onChange={(event) => update('quantity', event.target.value)} disabled={form.quantityPending} placeholder={form.quantityPending ? 'A definir' : undefined} required={!form.quantityPending} /></label>
+          <div className="offer-quantity-row">
+            <label>{form.quantityPending ? 'Quantidade' : 'Quantidade *'}<input type="number" min="1" step="1" value={form.quantityPending ? '' : form.quantity} onChange={(event) => update('quantity', event.target.value)} disabled={form.quantityPending} placeholder={form.quantityPending ? 'A definir' : undefined} required={!form.quantityPending} /></label>
+            <label>Medida<QuantityUnitSelect value={form.quantityUnit} onChange={(value) => update('quantityUnit', value)} /></label>
+          </div>
           {canLeavePending && <label className="offer-quantity-pending"><input type="checkbox" checked={form.quantityPending} onChange={(event) => update('quantityPending', event.target.checked)} />Sem quantidade definida</label>}
         </div>
         <label>Número da etiqueta<input value={form.labelNumber} onChange={(event) => update('labelNumber', event.target.value)} placeholder="Opcional" /></label>

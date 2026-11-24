@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { stageLabel, serviceDetails } from './serviceStages.js'
 import { formatQuantity } from './materialUnits.js'
+import { quantityUnitOf, quantityUnits } from './quantityUnits.js'
 
 // The same value written another way is not a change: CNPJ punctuation, blank fields, defaults of fields added later
 // (proposal type, stage times) and the gross profit, which is derived from the proposal values.
@@ -15,14 +16,14 @@ function canonical(value) {
   }
   return result
 }
-const comparable = (key, value) => key === 'cnpj' ? String(value ?? '').replace(/\D/g, '') : key === 'resources' ? canonical({ ...value, ...serviceDetails(value || {}) }) : key === 'proposal' ? canonical({ ...value, profit: undefined }) : canonical(value)
+const comparable = (key, value) => key === 'cnpj' ? String(value ?? '').replace(/\D/g, '') : key === 'quantityUnit' ? quantityUnitOf(value) : key === 'resources' ? canonical({ ...value, ...serviceDetails(value || {}) }) : key === 'proposal' ? canonical({ ...value, profit: undefined }) : canonical(value)
 export const sameOrderField = (key, left, right) => JSON.stringify(comparable(key, left)) === JSON.stringify(comparable(key, right))
 export const realChangedFields = (changes) => (changes?.changed || []).filter((key) => !sameOrderField(key, changes.before?.[key], changes.after?.[key]))
 
 // Everything done with an OS, in one list: production (operation events), administrative actions recorded on the
 // order itself, and the accounts payable/receivable linked to it. Only administrators receive the last two groups.
 
-const fieldLabels = { company: 'Cliente', cnpj: 'CNPJ/CPF', service: 'Serviço', description: 'Descrição', labelNumber: 'Etiqueta', quantity: 'Quantidade da OS', deadline: 'Prazo solicitado', requestedAt: 'Data da solicitação', resources: 'Materiais e processo', proposal: 'Proposta', attachments: 'Anexos', stages: 'Etapas', stageCounts: 'Peças por etapa' }
+const fieldLabels = { company: 'Cliente', cnpj: 'CNPJ/CPF', service: 'Serviço', description: 'Descrição', labelNumber: 'Etiqueta', quantity: 'Quantidade da OS', quantityUnit: 'Medida da quantidade', deadline: 'Prazo solicitado', requestedAt: 'Data da solicitação', resources: 'Materiais e processo', proposal: 'Proposta', attachments: 'Anexos', stages: 'Etapas', stageCounts: 'Peças por etapa' }
 const resourceLabels = { kind: 'Tipo', manufacturedFrom: 'Fabricado a partir de', tempering: 'Têmpera', urgency: 'Tipo de proposta', serviceLocation: 'Tipo de serviço', paintColor: 'Cor/Tipo', serviceDescription: 'Descrição do serviço', strictProcess: 'Processo Injessado' }
 const valueLabels = { service: 'Serviço', product: 'Produto', sample: 'Amostra', drawing: 'Desenho', normal: 'Normal', emergency: 'Emergencial', internal: 'Interno', external: 'Externo' }
 const proposalLabels = { value: 'Valor', deadline: 'Prazo de entrega', margin: 'Margem (%)', discount: 'Desconto (%)', materials: 'Custo de materiais', labor: 'Custo de mão de obra', machine: 'Tempo de máquina', serviceTime: 'Tempo de serviço' }
@@ -34,6 +35,7 @@ const shown = (value) => {
   return valueLabels[value] || String(value)
 }
 const names = (rows, pick) => (rows || []).map(pick)
+const unitName = (value) => quantityUnits.find(([key]) => key === quantityUnitOf(value))[1]
 export const minutesText = (minutes) => minutes ? `${Math.floor(minutes / 60) ? `${Math.floor(minutes / 60)}h` : ''}${minutes % 60 ? ` ${minutes % 60}min` : ''}`.trim() : 'sem tempo'
 function listChange(label, before, after) {
   const added = after.filter((item) => !before.includes(item)), removed = before.filter((item) => !after.includes(item))
@@ -57,6 +59,7 @@ export function describeOrderChanges(changes) {
         ...Object.keys({ ...left?.stageTimes, ...right?.stageTimes }).filter((code) => (left?.stageTimes?.[code] ?? null) !== (right?.stageTimes?.[code] ?? null)).map((code) => `Tempo previsto de ${stageLabel(code)}: ${minutesText(left?.stageTimes?.[code])} → ${minutesText(right?.stageTimes?.[code])}`)]
     }
     if (key === 'proposal') return Object.keys(proposalLabels).filter((field) => JSON.stringify(left?.[field] ?? null) !== JSON.stringify(right?.[field] ?? null)).map((field) => `${proposalLabels[field]}: ${shown(left?.[field])} → ${shown(right?.[field])}`)
+    if (key === 'quantityUnit') return [`Medida da quantidade: ${unitName(left)} → ${unitName(right)}`]
     return [`${fieldLabels[key] || key}: ${shown(left)} → ${shown(right)}`]
   })
 }

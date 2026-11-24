@@ -43,7 +43,7 @@ export function labelQuoteView(order, operation, offer) {
   const codes = [...new Set([...(order.resources?.stages || []), ...real.map((row) => row.code)])]
   const versions = order.labelQuote?.versions || []
   return {
-    order: { code: order.code, offerId: order.offerId, service: order.service, company: order.company, cnpj: order.cnpj, labelNumber: order.labelNumber, quantity: order.quantity, deadline: order.proposal?.deadline || order.deadline },
+    order: { code: order.code, offerId: order.offerId, service: order.service, company: order.company, cnpj: order.cnpj, labelNumber: order.labelNumber, quantity: order.quantity, quantityUnit: order.quantityUnit, deadline: order.proposal?.deadline || order.deadline },
     completed: operation?.status === 'completed', concluded: Boolean(operation?.completionAcknowledgedAt),
     hours: codes.map((code) => ({ code, stage: stageLabel(code), resource: order.resources?.stageResources?.[code]?.name || '', estimatedHours: round2((Number(estimate.stages?.[code] ?? order.resources?.stageTimes?.[code]) || 0) / 60), realHours: real.find((row) => row.code === code)?.hours || 0 })),
     materials: (order.resources?.materials || []).map((material) => ({ id: material.id, name: material.name, detail: material.detail || '', unit: materialUnit(material.unit), estimated: Number(estimate.materials?.[material.id] ?? material.requestedQuantity ?? material.quantity) || 0, quantity: Number(material.quantity) || 0, fromStock: fromStock(material), pending: Number(material.purchaseQuantity) || 0, linked: material.inventoryId != null })),

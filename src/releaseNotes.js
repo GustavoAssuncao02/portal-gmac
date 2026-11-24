@@ -11,6 +11,7 @@ export const releaseNotes = [
       'Contas a pagar e a receber: aviso de conta duplicada mostra o número da conta igual e permite lançar mesmo assim, com confirmação',
       'Configurações: nova opção "Notificações do sistema por e-mail" para escolher se recebe os avisos por e-mail',
       'Ordem de serviço: o cabeçalho da OS mostra também o solicitante, o comprador e o número da cotação',
+      'Ofertas e serviços: a quantidade pode ser em unidades, pares ou conjuntos, e a proposta em PDF mostra a medida escolhida (Un, Par ou Cj)',
     ],
   },
   {
