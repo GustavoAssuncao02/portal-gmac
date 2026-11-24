@@ -9,6 +9,7 @@ import { addNotification } from './notificationEvents.js'
 import { createMailer } from './passwordReset.js'
 import { wantsEmail } from './accounts.js'
 import { emailNotificationsOff } from './notificationRules.js'
+import { developerCpfs, isDeveloper } from './developers.js'
 import { COMMENT_MAX, DESCRIPTION_MAX, RESOLUTION_MAX, TITLE_MAX, moduleLabel, moduleTitle, submodulesOf, ticketModules, ticketPlace, ticketUrgencies, urgencyLabel } from './ticketRules.js'
 
 // Tickets de suporte: administrators and administrative employees report problems of the portal to its developers.
@@ -16,14 +17,13 @@ import { COMMENT_MAX, DESCRIPTION_MAX, RESOLUTION_MAX, TITLE_MAX, moduleLabel, m
 // administrative employee, only on the tickets they opened. Only the developers, the accounts of these CPFs, close and
 // reopen a ticket; an account registered later with one of them becomes a developer without any change here. Anyone may
 // comment on a ticket and follow it (the bell) to be told of what happens in it, like whoever opened it.
-export const developerCpfs = ['02427847550', '14303355640']
+export { developerCpfs, isDeveloper }
 // A new ticket is also e-mailed to the developers (SUPPORT_TICKET_EMAILS, separated by commas, replaces the list).
 export const ticketEmailRecipients = ['by.cmlla0107@gmail.com', 'Gustavo_Assuncao02@outlook.com']
 export const ticketFilesDirectory = path.join(dataDirectory, 'support-ticket-files')
 // A file sent from the form whose ticket was never saved (window closed, error) is removed after a day.
 const STALE_UPLOAD_MS = 24 * 3600000
 
-const digits = (value) => String(value ?? '').replace(/\D/g, '')
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), { status }) }
 const clean = (value, limit) => String(value ?? '').trim().slice(0, limit)
 const multiline = (value, limit) => String(value ?? '').replace(/\r\n?/g, '\n').trim().slice(0, limit)
@@ -33,7 +33,6 @@ const init = (store) => { store.supportTickets ||= []; store.supportTicketUpload
 const sameId = (left, right) => String(left) === String(right)
 // The same person once, whatever the type of the id (number or text).
 const uniqueIds = (ids) => [...new Map(ids.filter((id) => id != null).map((id) => [String(id), id])).values()]
-export const isDeveloper = (account, cpfs = developerCpfs) => Boolean(account?.cpf) && cpfs.includes(digits(account.cpf))
 
 // The files sent from the form (POST /support-tickets/uploads) and claimed by a ticket or by a message of its
 // conversation: only by whoever sent them, and only once.

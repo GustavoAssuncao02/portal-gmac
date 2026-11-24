@@ -12,6 +12,7 @@ export const releaseNotes = [
       'Configurações: nova opção "Notificações do sistema por e-mail" para escolher se recebe os avisos por e-mail',
       'Ordem de serviço: o cabeçalho da OS mostra também o solicitante, o comprador e o número da cotação',
       'Ofertas e serviços: a quantidade pode ser em unidades, pares ou conjuntos, e a proposta em PDF mostra a medida escolhida (Un, Par ou Cj)',
+      'Desenvolvedor: tela de logs e diagnóstico do sistema, visível só para a equipe de desenvolvimento',
     ],
   },
   {

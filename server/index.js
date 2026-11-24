@@ -8,7 +8,7 @@ import createOffersRouter, { mutateStore } from './offers.js'
 import createOperationsRouter from './operations.js'
 import createLabelQuotesRouter from './labelQuotes.js'
 import createEmailTemplatesRouter from './emailTemplates.js'
-import { createAccountService, createAccountsRouter, loadAdminSessions, requireAdmin, restrictStaffFinance } from './accounts.js'
+import { adminIdentity, createAccountService, createAccountsRouter, loadAdminSessions, requireAdmin, restrictStaffFinance } from './accounts.js'
 import { ensureEmployeeAccess } from './employeeAccess.js'
 import createLoginRouter, { testLoginEnabled } from './authLogin.js'
 import createPasswordResetRouter from './passwordReset.js'
@@ -49,6 +49,8 @@ import { missingFilesReport, missingStoredFiles, storedFileInventory } from './s
 import { configureStore, importJsonStore, onStoreChange, readStore } from './store.js'
 import { createLiveUpdates } from './liveUpdates.js'
 import { requireAdminOrOperator } from './access.js'
+import { createSystemLog } from './systemLog.js'
+import createDeveloperRouter from './developer.js'
 import { dataDirectory } from './dataDirectory.js'
 import { enabled, flag, isProduction } from './envFlags.js'
 
@@ -57,10 +59,25 @@ const port = Number(process.env.PORT || 3002)
 const host = process.env.API_HOST || '127.0.0.1'
 
 const production = isProduction()
+// Logs do sistema (tela Desenvolvedor): the output of the server, the failed or changing requests, the errors of the
+// browsers and how the process starts and stops. Saved in the database once it is connected (below).
+const systemLog = createSystemLog({
+  crashFile: path.join(dataDirectory, 'logs', 'encerramentos.jsonl'),
+  identify: (request) => {
+    const session = adminIdentity(request)
+    if (session) return { key: `${session.role || 'admin'}:${session.id}`, name: session.name || 'Sem nome', role: session.role || 'admin' }
+    // The operator's tablet signs its requests with a token of two parts; each tablet is told apart by address and browser.
+    if (String(request.headers.authorization || '').replace(/^Bearer\s+/i, '').includes('.')) return { key: `operator:${request.ip}|${String(request.headers['user-agent'] || '').slice(0, 300)}`, name: 'Operador (tablet)', role: 'operator' }
+    return null
+  },
+})
+systemLog.captureConsole()
+systemLog.watchProcess()
 const corsOrigins = String(process.env.CORS_ORIGIN || '').split(',').map((origin) => origin.trim()).filter(Boolean)
 
 app.set('trust proxy', trustProxySetting(process.env.TRUST_PROXY))
 configureWeb(app)
+app.use(['/api', '/gmac'], systemLog.requestLogger)
 // The quote form of the main site (gmacmetalurgica.com.br) posts to /gmac/api/quotes. It comes before the portal's CORS and
 // request limit: it answers only the sites in QUOTES_ALLOWED_ORIGINS, with its own limit of attempts.
 const siteQuotes = createSiteQuotes()
@@ -86,6 +103,9 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
 })
+systemLog.connect(pool)
+const restartNotes = systemLog.importLastWords()
+if (restartNotes) console.log(`Registros do encerramento anterior do servidor recuperados: ${restartNotes}.`)
 await configureStore(pool)
 if (await importJsonStore(path.join(dataDirectory, 'offers.json'), path.join(dataDirectory, 'backups'))) console.log('Dados de offers.json importados para o banco; o arquivo foi movido para backups/.')
 if (await importJsonFiscalCatalog(path.join(dataDirectory, 'fiscal-catalog.json'))) console.log('Catálogo fiscal importado para o banco.')
@@ -145,6 +165,12 @@ app.use('/api', createBankStatementsRouter(accounts, requireAdmin))
 app.use('/api', createFiscalRouter(requireAdmin))
 app.use('/api', createProposalDocumentsRouter(requireAdmin, accounts))
 app.use('/api', createSupportTicketsRouter(accounts, requireAdmin))
+app.use('/api', createDeveloperRouter({ accounts, requireAdmin, requireSession: requireAdminOrOperator, systemLog, live, pool, readStore, dataDirectory, version: releaseNotes[0] ? { version: releaseNotes[0].version, date: releaseNotes[0].date } : null, config: () => ({
+  environment: production ? 'produção' : 'desenvolvimento', nodeEnv: process.env.NODE_ENV || '', host, port, database: `${process.env.DB_HOST}:${process.env.DB_PORT || 3306}/${process.env.DB_NAME}`,
+  dataDir: Boolean(process.env.DATA_DIR), smtp: ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'MAIL_FROM'].every((key) => process.env[key]?.trim()), turnstile: Boolean(process.env.TURNSTILE_SECRET_KEY), testLogin: testLoginEnabled(),
+  corsOrigins: corsOrigins.length, apiRateLimit: Number(process.env.API_RATE_LIMIT) || 200, trustProxy: process.env.TRUST_PROXY || '(padrão)', fiscalCatalogSync: flag(process.env.FISCAL_CATALOG_SYNC) !== 'off',
+  openOfferDefaultCpfs: Boolean(process.env.OPEN_OFFER_DEFAULT_CPFS), supportTicketEmails: Boolean(process.env.SUPPORT_TICKET_EMAILS), quotesAllowedOrigins: String(process.env.QUOTES_ALLOWED_ORIGINS || '').split(',').filter((item) => item.trim()).length,
+}) }))
 const notificationsRouter = createNotificationsRouter({ requireAdmin, payables: payablesRouter, receivables: receivablesRouter, loadInventory: async () => {
   const [rows] = await pool.execute('SELECT id, name, unit, quantity_kg AS quantity, minimum_kg AS minimum FROM inventory_materials')
   return [...rows, ...await loadAdminInventoryRows(pool)]
@@ -181,6 +207,8 @@ const interfacePublished = serveInterface(app, path.resolve(path.dirname(fileURL
 
 app.use((error, _request, response, _next) => {
   console.error('Falha na API:', error.message)
+  // The request log keeps the whole error (stack included) with the request that failed.
+  response.locals.logError = error
   // `extra`: data an expected refusal sends with its message (the accounts of a possible duplicate, for example).
   response.status(error.status || 500).json({ message: error.status ? error.message : 'Não foi possível concluir a operação.', ...(error.status && error.extra ? error.extra : {}) })
 })
@@ -192,7 +220,12 @@ const server = app.listen(port, host, () => {
   if (testLoginEnabled()) console.warn('ATENCAO: acesso sem senha ativado para testes. Desative TEST_LOGIN_ENABLED antes de publicar o portal.')
   else if (enabled(process.env.TEST_LOGIN_ENABLED)) console.warn('ATENCAO: TEST_LOGIN_ENABLED foi ignorado e o login continua exigindo senha. O acesso sem senha só funciona com a API e o banco neste computador (API_HOST e DB_HOST locais) e sem NODE_ENV=production.')
   siteQuotes.start()
+  systemLog.record({ level: 'info', source: 'system', message: `Servidor iniciado: versão ${releaseNotes[0]?.version || '?'}, Node ${process.version}, ${production ? 'produção' : 'desenvolvimento'}, porta ${port}.` })
 })
+// Logs older than 30 days leave the database: at the start and every six hours.
+const pruneLogs = () => systemLog.prune().then((removed) => { if (removed) console.log(`Logs do sistema com mais de 30 dias removidos: ${removed}.`) }).catch((error) => console.error('Falha ao limpar os logs antigos:', error.message))
+pruneLogs()
+setInterval(pruneLogs, 6 * 60 * 60 * 1000).unref()
 // A big attachment (up to the limit of uploads.js) on a slow connection takes as long as it needs. Node would end any
 // request after 5 minutes; the headers still have their own short limit (60 s), and a body that stalls is dropped by
 // bodyProgressGuard (webServer.js).

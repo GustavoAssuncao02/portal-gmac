@@ -25,7 +25,8 @@ export function topicOfName(name) {
   return financeNames.test(name) ? 'finance' : 'data'
 }
 const financeRoutes = new Set(['payables', 'receivables', 'bank-statements', 'dre', 'dre-adjustments', 'classifications', 'account-groups', 'suppliers', 'ai-reconciliations'])
-const quietRoutes = new Set(['auth', 'account', 'live', 'password-resets'])
+// The logs of the browser and the Desenvolvedor screen change nothing the other screens show.
+const quietRoutes = new Set(['auth', 'account', 'live', 'password-resets', 'client-logs', 'developer'])
 export function topicOfRoute(path) {
   const first = String(path).split('/').filter(Boolean)[0]?.toLowerCase()
   if (!first || quietRoutes.has(first)) return null
@@ -41,6 +42,8 @@ export function topicsOfRoute(path) {
 
 export function createLiveUpdates({ coalesceMs = COALESCE_MS, heartbeatMs = HEARTBEAT_MS } = {}) {
   const clients = new Set()
+  // Who holds each connection (Desenvolvedor › online users): the account of the session, or the operator's tablet.
+  const peers = new Set()
   let pending = new Set(), timer = null
   // Changes close together (a save that touches offers, OS and notifications; several operators at once) go as one message.
   function publish(list) {
@@ -76,12 +79,14 @@ export function createLiveUpdates({ coalesceMs = COALESCE_MS, heartbeatMs = HEAR
       const send = (text) => response.write(text)
       send(': aberto\n\n')
       clients.add(send)
+      const peer = { since: Date.now(), userId: request.adminId ?? null, name: request.adminName ?? null, role: request.adminRole ?? (request.adminId == null ? 'operator' : 'admin'), ip: request.ip, userAgent: String(request.headers['user-agent'] || '').slice(0, 300) }
+      peers.add(peer)
       // A comment every 25 s keeps the hosting balancer from closing a connection that has been quiet.
       const beat = setInterval(() => send(': ok\n\n'), heartbeatMs)
-      request.on('close', () => { clearInterval(beat); clients.delete(send) })
+      request.on('close', () => { clearInterval(beat); clients.delete(send); peers.delete(peer) })
     })
     return live
   }
 
-  return { publish, fromStore, fromRequests, router, get connections() { return clients.size } }
+  return { publish, fromStore, fromRequests, router, get connections() { return clients.size }, get peers() { return [...peers] } }
 }

@@ -42,6 +42,9 @@ import AccountPlanScreen from './AccountPlanScreen.jsx'
 import DreScreen from './DreScreen.jsx'
 import DreAdjustmentsScreen from './DreAdjustmentsScreen.jsx'
 import SupportTicketsScreen from './SupportTicketsScreen.jsx'
+import DeveloperScreen from './DeveloperScreen.jsx'
+import { isDeveloper } from '../server/developers.js'
+import { installClientLog } from './clientLog.js'
 import CashFlowScreen from './CashFlowScreen.jsx'
 import StockPurchaseFinance, { purchasedQuantity } from './StockPurchaseFinance.jsx'
 import BankStatementsScreen from './BankStatementsScreen.jsx'
@@ -70,7 +73,7 @@ import { useMobileModal } from './useMobileModal.js'
 import { ThemeContext, useAccountTheme } from './accountTheme.js'
 import { latestOnly, pollWhileVisible } from './polling.js'
 import { newId } from './newId.js'
-import { PackageMinus, Ticket, History, Monitor, Minimize2, Plus, Pencil, Trash2, Clock3, CreditCard, HandCoins, Banknote, Landmark, ChartColumn, Tags, FileChartColumn, FilePenLine, FolderTree, ChartNoAxesCombined, Truck, WalletCards, ChevronLeft, ChevronRight, ChevronDown, UsersRound, Menu, X, Info, ArrowLeft, ListChecks, Layers, CircleCheck, CircleX, ArrowUpDown, ArrowUp, ArrowDown, Building2, CirclePause, Power, Factory, Wrench, CalendarClock, Save, Contact, ShoppingCart, Mail, ListOrdered } from 'lucide-react'
+import { PackageMinus, Ticket, Terminal, History, Monitor, Minimize2, Plus, Pencil, Trash2, Clock3, CreditCard, HandCoins, Banknote, Landmark, ChartColumn, Tags, FileChartColumn, FilePenLine, FolderTree, ChartNoAxesCombined, Truck, WalletCards, ChevronLeft, ChevronRight, ChevronDown, UsersRound, Menu, X, Info, ArrowLeft, ListChecks, Layers, CircleCheck, CircleX, ArrowUpDown, ArrowUp, ArrowDown, Building2, CirclePause, Power, Factory, Wrench, CalendarClock, Save, Contact, ShoppingCart, Mail, ListOrdered } from 'lucide-react'
 import { proposalCosts, proposalPricing, osValueOf, hoursText, marginLimits, PROPOSAL_MARGIN_GAP } from '../server/proposalMath.js'
 import { stageLabel, serviceDetails, serviceDescriptionText, readStageLayout, orderedStageSelection, stagePlanProblem, stagePlanPlace, setStageCatalog, onStageCatalogChange, defaultStageResource } from '../server/serviceStages.js'
 import { findInventoryMaterial, materialsStock, normalizeSearch, purchaseMaterialRequests } from './offerResources.js'
@@ -211,6 +214,8 @@ const navigation = [
   ['Relatórios', 'reports'],
   ['Ticket', 'ticket'],
   ['Configurações', 'settings'],
+  // Only for the developers (server/developers.js), right below Configurações.
+  ['Desenvolvedor', 'developer'],
 ]
 
 // Gestão Operacional: the factory's own resources (machines, labor services, stages, stock and material orders).
@@ -379,7 +384,7 @@ function Sidebar({ collapsed, onToggle, activeNav, onNavigate, onLogout }) {
   }
   function navigationItem([label, icon]) {
     return <button className={`nav-item ${activeNav === label ? 'nav-item--active' : ''}`} key={label} type="button" title={pageLabel(label)} aria-label={pageLabel(label)} onClick={() => { setMobileOpen(false); onNavigate(label) }}>
-      {['payables', 'receivables', 'treasury', 'cash-flow', 'batch', 'bank', 'bi', 'dre', 'dre-adjustments', 'account-groups', 'classifications', 'suppliers', 'completed-services', 'sectors', 'pause-reasons', 'banks', 'planning', 'requesters', 'buyers', 'stages', 'ticket', 'email-templates'].includes(icon) ? (() => { const NavIcon = { planning: CalendarClock, payables: CreditCard, receivables: HandCoins, treasury: Banknote, 'cash-flow': ChartNoAxesCombined, batch: Layers, bank: Landmark, bi: ChartColumn, dre: FileChartColumn, 'dre-adjustments': FilePenLine, 'account-groups': FolderTree, classifications: Tags, suppliers: Truck, 'completed-services': ListChecks, sectors: Building2, 'pause-reasons': CirclePause, banks: Landmark, requesters: Contact, buyers: ShoppingCart, stages: ListOrdered, ticket: Ticket, 'email-templates': Mail }[icon]; return <NavIcon className="icon nav-icon" size={20} /> })() : <Icon name={icon} className="nav-icon" />}
+      {['payables', 'receivables', 'treasury', 'cash-flow', 'batch', 'bank', 'bi', 'dre', 'dre-adjustments', 'account-groups', 'classifications', 'suppliers', 'completed-services', 'sectors', 'pause-reasons', 'banks', 'planning', 'requesters', 'buyers', 'stages', 'ticket', 'email-templates', 'developer'].includes(icon) ? (() => { const NavIcon = { planning: CalendarClock, payables: CreditCard, receivables: HandCoins, treasury: Banknote, 'cash-flow': ChartNoAxesCombined, batch: Layers, bank: Landmark, bi: ChartColumn, dre: FileChartColumn, 'dre-adjustments': FilePenLine, 'account-groups': FolderTree, classifications: Tags, suppliers: Truck, 'completed-services': ListChecks, sectors: Building2, 'pause-reasons': CirclePause, banks: Landmark, requesters: Contact, buyers: ShoppingCart, stages: ListOrdered, ticket: Ticket, 'email-templates': Mail, developer: Terminal }[icon]; return <NavIcon className="icon nav-icon" size={20} /> })() : <Icon name={icon} className="nav-icon" />}
       <span>{pageLabel(label)}</span>
     </button>
   }
@@ -424,6 +429,7 @@ function Sidebar({ collapsed, onToggle, activeNav, onNavigate, onLogout }) {
             </button>
             <div className="sidebar-submenu" id="sidebar-finance-menu" hidden={!financialOpen}>{financialNavigation.map(navigationItem)}</div>
           </div>]
+          if (item[0] === 'Desenvolvedor' && !isDeveloper(user)) return []
           return isOperationalPage(item[0]) || isRegistrationPage(item[0]) || isFinancialPage(item[0]) || isOperationPage(item[0]) ? [] : [navigationItem(item)]
         })}
         <div ref={spacerRef} className="sidebar-nav-spacer" aria-hidden="true" />
@@ -2469,6 +2475,7 @@ function Dashboard({ user, onUpdateUser, collapsed, onToggle, activeNav, onNavig
   if (activeNav === 'Conciliação bancária') return <BankStatementsScreen {...toolProps} />
   if (activeNav === 'Relatórios') return <ReportsScreen {...toolProps} />
   if (activeNav === 'Ticket') return <SupportTicketsScreen {...toolProps} />
+  if (activeNav === 'Desenvolvedor' && isDeveloper(user)) return <DeveloperScreen {...toolProps} />
   if (activeNav === 'Serviços') return <LaborServicesScreen {...toolProps} />
   if (activeNav === 'Etapas') return <StagesScreen {...toolProps} />
   if (activeNav === 'Planejamento') return <PlanningScreen {...toolProps} renderOrder={(code, back) => <OrderPanel code={code} order={orders.find((order) => order.code === code)} offer={linkedOffer(offers, orders, code)} loading={workflowLoading} onRefresh={onRefresh} onBack={back} onReopened={() => {}} />} />
@@ -2589,7 +2596,7 @@ function App() {
         if (!user || user.id == null || !user.name) throw new Error('Não foi possível confirmar sua conta.')
         let workspace
         try { workspace = JSON.parse(window.sessionStorage.getItem('gmac-admin-workspace') || 'null') } catch { workspace = null }
-        const validPages = [...navigation.map(([name]) => name), 'Detalhes da oferta', 'Fazer proposta', 'Ordem de serviço'].filter((name) => user.role !== 'staff' || !isFinancialPage(name))
+        const validPages = [...navigation.map(([name]) => name), 'Detalhes da oferta', 'Fazer proposta', 'Ordem de serviço'].filter((name) => (user.role !== 'staff' || !isFinancialPage(name)) && (name !== 'Desenvolvedor' || isDeveloper(user)))
         if (String(workspace?.userId) === String(user.id) && validPages.includes(workspace?.activeNav)) {
           setActiveNav(workspace.activeNav)
           setOpenTabs([...new Set([...(Array.isArray(workspace.tabs) ? workspace.tabs.filter((tab) => validPages.includes(tab)) : []), workspace.activeNav])])
@@ -2853,6 +2860,9 @@ function App() {
     {birthdayScreen}
   </>)
 }
+
+// Errors of this browser go to the system logs (Desenvolvedor), on every screen.
+installClientLog()
 
 // The new version notice covers every screen: login, administrative portal and the operator's tablet.
 createRoot(document.getElementById('root')).render(
