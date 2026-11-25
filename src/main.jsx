@@ -47,6 +47,7 @@ import NotesScreen from './NotesScreen.jsx'
 import NotesButton from './NotesButton.jsx'
 import DeveloperScreen from './DeveloperScreen.jsx'
 import { isDeveloper } from '../server/developers.js'
+import { todayBahia } from '../server/payableRules.js'
 import { installClientLog } from './clientLog.js'
 import CashFlowScreen from './CashFlowScreen.jsx'
 import StockPurchaseFinance, { purchasedQuantity } from './StockPurchaseFinance.jsx'
@@ -1376,7 +1377,7 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
   useMobileModal(manualOpen, '.offer-manual-modal', () => setManualOpen(false))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const emptyForm = { cnpj: '', company: '', requesters: [''], buyer: '', deadline: '', service: '', quantity: '', quantityUnit: 'un', quantityPending: false, description: '', labelNumber: '', attachments: [], open: false }
+  const emptyForm = { cnpj: '', company: '', requesters: [''], buyer: '', requestedAt: '', deadline: '', service: '', quantity: '', quantityUnit: 'un', quantityPending: false, description: '', labelNumber: '', attachments: [], open: false }
   const [manualForm, setManualForm] = useState(emptyForm)
   // "Deixar oferta em aberto e notificar" comes checked for some accounts (OPEN_OFFER_DEFAULT_CPFS on the server).
   const [openDefault, setOpenDefault] = useState(false)
@@ -1519,7 +1520,7 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
             <label className="offers-date"><span>Data</span><input type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label>
             <div className="offer-filters">
               {offerFilters.map((filter) => <button className={`offer-filter offer-filter--${filter.tone || filter.key} ${activeFilter === filter.key ? 'offer-filter--selected' : ''}`} type="button" key={filter.key} onClick={() => setActiveFilter(activeFilter === filter.key ? 'all' : filter.key)}><span>{filter.label}</span><strong>{offers.filter((offer) => offerMatchesFilter(filter, offer)).length}</strong></button>)}
-              <button className="manual-offer-button" type="button" onClick={() => { setError(''); setManualForm((current) => ({ ...current, open: openDefault })); setManualOpen(true) }}><Icon name="plus" />Inserir Oferta Manualmente</button>
+              <button className="manual-offer-button" type="button" onClick={() => { setError(''); setManualForm((current) => ({ ...current, open: openDefault, requestedAt: current.requestedAt || todayBahia() })); setManualOpen(true) }}><Icon name="plus" />Inserir Oferta Manualmente</button>
             </div>
           </div>
           <div className="offers-table-wrap"><div className="offers-table">
@@ -1553,8 +1554,10 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
             <label>Empresa *<ClientNameInput label="Empresa *" value={manualForm.company} documentValue={manualForm.cnpj} clients={clients} onChange={(value) => updateManualForm('company', value)} onSelect={(client) => setManualForm((current) => ({ ...current, company: client.name, cnpj: maskClientDocument(client.document) }))} required /></label>
             <RequesterListInput values={manualForm.requesters} client={manualClient} requesters={requesters} onChange={(value) => updateManualForm('requesters', value)} />
             <label>Comprador<RequesterNameInput label="Comprador" kind={contactKinds.buyers} who="quem compra o serviço" value={manualForm.buyer} client={manualClient} requesters={buyers} onChange={(value) => updateManualForm('buyer', value)} /></label>
-            <label>Peça/Serviço *<PieceNameInput label="Peça/Serviço *" value={manualForm.service} onChange={(value) => updateManualForm('service', value)} pieces={pieces} required /></label>
-            <label>Prazo solicitado<input type="date" value={manualForm.deadline} onChange={(event) => updateManualForm('deadline', event.target.value)} /></label>
+            <label className="offer-form-field--full">Peça/Serviço *<PieceNameInput label="Peça/Serviço *" value={manualForm.service} onChange={(value) => updateManualForm('service', value)} pieces={pieces} required /></label>
+            {/* Today by default; an earlier day is a retroactive entry. The deadline cannot come before it. */}
+            <label>Data da solicitação *<input type="date" value={manualForm.requestedAt} max={todayBahia()} onChange={(event) => updateManualForm('requestedAt', event.target.value)} required /></label>
+            <label>Prazo solicitado<input type="date" value={manualForm.deadline} min={manualForm.requestedAt || undefined} onChange={(event) => updateManualForm('deadline', event.target.value)} /></label>
             {/* "Sem quantidade definida": somebody goes to the client to count the pieces; it is asked before the proposal. */}
             <div className="offer-quantity-cell">
               <div className="offer-quantity-row">

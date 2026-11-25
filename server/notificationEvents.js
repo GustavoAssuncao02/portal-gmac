@@ -48,7 +48,7 @@ export function recordWorkflowNotifications(before, store) {
   delete store.silentMaterialRequestIds
   for (const request of requests(store)) if (!before.requests.has(request.id) && !silent.has(request.id)) addNotification(store, { ...request, id: randomUUID(), requestId: request.id, type: 'material-request', title: 'Novo pedido de material', description: `${request.materialName} · ${formatQuantity(request.quantity, request.unit)}` })
   for (const order of store.orders || []) {
-    if (!before.orders.has(order.code)) addNotification(store, { id: `service-added:${order.code}`, type: 'service-added', at: order.createdAt || new Date().toISOString(), authorId: order.createdBy ?? null, orderCode: order.code, title: 'Novo serviço em andamento', description: `${order.code} · ${order.service}` })
+    if (!before.orders.has(order.code)) addNotification(store, { id: `service-added:${order.code}`, type: 'service-added', at: order.registeredAt || order.createdAt || new Date().toISOString(), authorId: order.createdBy ?? null, orderCode: order.code, title: 'Novo serviço em andamento', description: `${order.code} · ${order.service}` })
     for (const event of order.operationEvents || []) if (event.type === 'completed' && !before.completions.has(event.id)) addNotification(store, completedServiceNotice(order, event))
     if (order.inventoryConsumption && !before.consumptions.has(`${order.code}:${order.inventoryConsumption.processedAt}`)) {
       for (const row of order.inventoryConsumption.materials || []) if (row.inventoryId != null && row.minimum != null) inventorySignal(store, { id: row.inventoryId, name: row.name, unit: row.unit, quantity: row.balance, minimum: row.minimum }, Number(row.stockAvailable) <= Number(row.minimum))

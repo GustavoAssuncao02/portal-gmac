@@ -27,6 +27,8 @@ import { currentServiceLocation, serviceLocationLabel, validServiceLocation } fr
 import { formatQuantity, materialUnit, validMaterialUnit, validQuantityFor } from './materialUnits.js'
 import { labelEstimate, labelPlaceholderProposal } from './labelQuoteRules.js'
 import { quantityLabel, quantityUnitMessage, quantityUnitOf, validQuantityUnit } from './quantityUnits.js'
+import { todayBahia } from './payableRules.js'
+import { retroactiveOrderDay } from './retroactiveEntry.js'
 
 const filesDirectory = path.join(dataDirectory, 'files')
 const router = express.Router()
@@ -65,6 +67,14 @@ export const isDay = (value) => {
   const day = new Date(`${value}T00:00:00Z`)
   return Number.isFinite(day.getTime()) && day.toISOString().slice(0, 10) === value
 }
+// Retroactive entries (2026-11-25): a manual offer takes the day of the request and the acceptance the day of the OS, both
+// typed (today by default) and never after today. Today keeps the real moment, as before; an earlier day is kept at noon
+// (UTC) of that day, since the screens show these dates by their UTC day, and the real moment of the entry is kept apart.
+export const dayMoment = (day, now = new Date()) => day === todayBahia(now) ? now.toISOString() : `${day}T12:00:00.000Z`
+export const afterToday = (day, now = new Date()) => day > todayBahia(now)
+const brDay = (day) => day.split('-').reverse().join('/')
+export const requestedDayFuture = 'A data da solicitação não pode ser depois de hoje.'
+export const deadlineBeforeRequest = 'O prazo solicitado não pode ser antes da data da solicitação.'
 const money = (value) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const date = (value) => value ? new Date(value).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : 'Não informado'
 
@@ -133,6 +143,11 @@ router.post('/offers', async (request, response) => {
     return response.status(400).json({ message: 'Preencha CNPJ (14 dígitos) ou CPF (11), empresa, peça/serviço, quantidade e descrição.' })
   }
   if (deadline && !isDay(deadline)) return response.status(400).json({ message: 'Prazo solicitado inválido: escolha uma data ou deixe em branco.' })
+  // "Data da solicitação": today by default, an earlier day for a retroactive entry. Not sent (older screen), it is now.
+  const requestedDay = String(request.body?.requestedAt ?? '').trim()
+  if (requestedDay && !isDay(requestedDay)) return response.status(400).json({ message: 'Data da solicitação inválida: escolha uma data.' })
+  if (requestedDay && afterToday(requestedDay)) return response.status(400).json({ message: requestedDayFuture })
+  if (requestedDay && deadline && deadline < requestedDay) return response.status(400).json({ message: deadlineBeforeRequest })
   // Unidades, pares ou conjuntos (TCK-0009); not sent, it is unidades.
   if (!validQuantityUnit(request.body?.quantityUnit)) return response.status(400).json({ message: quantityUnitMessage })
   try {
@@ -147,7 +162,7 @@ router.post('/offers', async (request, response) => {
       // A manual offer starts as "Criando oferta": only "Fazer proposta" in its details (POST /offers/:id/finish) puts it
       // in analysis. The person who is creating it (editingBy) and since when are shown on the list.
       const at = new Date().toISOString(), author = { id: request.adminId ?? null, name: request.adminName || 'Administrador' }
-      const item = { id: randomUUID(), code: nextCode('OF', [...store.offers, ...(store.discardedOffers || [])]), createdAt: at, createdBy: author.id, createdByName: author.name, ...(open ? { openForTeam: true } : { editingBy: { ...author, at } }), cnpj: clean(cnpj, 18), company: clean(company, 160), ...requesters.fields, buyer: buyerLink.name, buyerId: buyerLink.id, deadline, service: clean(service, 160), quantity: quantityPending ? 1 : Number(quantity), ...(quantityPending ? { quantityPending: true } : {}), quantityUnit: quantityUnitOf(request.body?.quantityUnit), description: clean(description, 5000), labelNumber: clean(labelNumber, 80), requestedAt: at, origin: 'Inserida Manualmente', status: 'creating', attachments: [], resources: { materials: [], laborEntries: [] }, proposal: null, orderCode: null }
+      const item = { id: randomUUID(), code: nextCode('OF', [...store.offers, ...(store.discardedOffers || [])]), createdAt: at, createdBy: author.id, createdByName: author.name, ...(open ? { openForTeam: true } : { editingBy: { ...author, at } }), cnpj: clean(cnpj, 18), company: clean(company, 160), ...requesters.fields, buyer: buyerLink.name, buyerId: buyerLink.id, deadline, service: clean(service, 160), quantity: quantityPending ? 1 : Number(quantity), ...(quantityPending ? { quantityPending: true } : {}), quantityUnit: quantityUnitOf(request.body?.quantityUnit), description: clean(description, 5000), labelNumber: clean(labelNumber, 80), requestedAt: requestedDay ? dayMoment(requestedDay, new Date(at)) : at, origin: 'Inserida Manualmente', status: 'creating', attachments: [], resources: { materials: [], laborEntries: [] }, proposal: null, orderCode: null }
       store.offers.unshift(item)
       // An open offer has nobody creating it: it waits on the list, like the offers of the site, and the others are told.
       if (open) addNotification(store, { type: 'open-offer', offerId: item.id, authorId: author.id, title: 'Nova oferta em aberto', description: `${item.code} · ${item.company} · inserida por ${author.name}` })
@@ -413,6 +428,10 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
         // Once the PDF exists the deadline can be changed (which discards it, as below) but not left empty.
         if (!fields.deadline && item.proposal) throw Object.assign(new Error('Com o PDF da proposta gerado, o prazo solicitado não pode ficar em branco: troque a data se precisar.'), { status: 400 })
         if (quantityPending && (item.proposal || item.proposalDraft)) throw Object.assign(new Error('Esta oferta já tem proposta: a quantidade não pode voltar para "a definir".'), { status: 400 })
+        // The same rules as a new offer, only for a date that changes: an older offer with dates out of order still saves.
+        const dayChanged = requestedDay !== String(item.requestedAt || '').slice(0, 10)
+        if (dayChanged && afterToday(requestedDay)) throw Object.assign(new Error(requestedDayFuture), { status: 400 })
+        if (fields.deadline && fields.deadline < requestedDay && (dayChanged || fields.deadline !== String(item.deadline || ''))) throw Object.assign(new Error(deadlineBeforeRequest), { status: 400 })
         // A screen of the previous version (a tab not reloaded yet) sends the names joined in one field: unchanged, the list
         // stays as it is instead of becoming one requester called "Ana, Bruno".
         const unchangedOldScreen = !Array.isArray(body.requesters) && item.requesters?.length > 1 && String(body.requester ?? '').trim() === item.requester
@@ -764,7 +783,10 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
         // A proposal generated before the planned times and resources became mandatory still needs them to become an OS.
         const problem = existing ? '' : stagePlanProblem(serviceSettings(item).stages, item.resources)
         if (problem) throw Object.assign(new Error(`${problem} Preencha nos detalhes da oferta antes de aceitar.`), { status: 400 })
-        const created = existing || { code: nextCode('OS', [...store.orders, ...(store.cancelledOrders || [])]), offerId: item.id, createdAt: new Date().toISOString(), createdBy: request.adminId ?? null, status: 'Em andamento', company: item.company, cnpj: item.cnpj, service: item.service, description: item.description, labelNumber: item.labelNumber, quantity: item.quantity, quantityUnit: quantityUnitOf(item.quantityUnit), deadline: item.deadline, requestedAt: item.requestedAt, attachments: [...item.attachments], resources: item.resources, proposal: label ? labelPlaceholderProposal(item) : item.proposal, ...(label ? { labelQuote: { pending: true, openedAt: new Date().toISOString(), openedByName: request.adminName || 'Administrador', estimate: labelEstimate(item.resources) } } : {}) }
+        // Lançamento retroativo: an offer entered with an earlier "Data da solicitação" opens its OS on that same day, with
+        // nothing asked again on the acceptance; the real moment of the entry is kept in registeredAt.
+        const now = new Date(), orderDay = retroactiveOrderDay(item), retroactive = Boolean(orderDay)
+        const created = existing || { code: nextCode('OS', [...store.orders, ...(store.cancelledOrders || [])]), offerId: item.id, createdAt: retroactive ? dayMoment(orderDay, now) : now.toISOString(), ...(retroactive ? { registeredAt: now.toISOString() } : {}), createdBy: request.adminId ?? null, status: 'Em andamento', company: item.company, cnpj: item.cnpj, service: item.service, description: item.description, labelNumber: item.labelNumber, quantity: item.quantity, quantityUnit: quantityUnitOf(item.quantityUnit), deadline: item.deadline, requestedAt: item.requestedAt, attachments: [...item.attachments], resources: item.resources, proposal: label ? labelPlaceholderProposal(item) : item.proposal, ...(label ? { labelQuote: { pending: true, openedAt: new Date().toISOString(), openedByName: request.adminName || 'Administrador', estimate: labelEstimate(item.resources) } } : {}) }
         const materials = created.resources?.materials || []
         let consumption = []
         if (materials.length && pool) {
@@ -777,7 +799,7 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
           const error = new Error('O banco de estoque precisa estar disponível para baixar os materiais e gerar a OS.'); error.status = 503; throw error
         }
         created.inventoryConsumption = { processedAt: new Date().toISOString(), materials: consumption.map(({ materialIndexes, ...row }) => row) }
-        if (!existing) { Object.assign(created, pieceTracking(store, created)); recordOrderEvent(created, 'order_created', request.adminName, label ? `OS da etiqueta ${item.labelNumber} aberta sem proposta (${item.code || item.id}): o orçamento é gerado no fim, com as horas e o material usados.` : `OS gerada a partir da proposta aceita (${item.code || item.id}).`); store.orders.unshift(created) }
+        if (!existing) { Object.assign(created, pieceTracking(store, created)); recordOrderEvent(created, 'order_created', request.adminName, [label ? `OS da etiqueta ${item.labelNumber} aberta sem proposta (${item.code || item.id}): o orçamento é gerado no fim, com as horas e o material usados.` : `OS gerada a partir da proposta aceita (${item.code || item.id}).`, retroactive ? `Lançamento retroativo: data da OS ${brDay(orderDay)}.` : ''].filter(Boolean).join(' ')); store.orders.unshift(created) }
         item.orderCode = created.code
         item.status = 'accepted'
         if (created.labelQuote) item.labelQuote = { pending: created.labelQuote.pending }
