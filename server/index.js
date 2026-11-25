@@ -52,6 +52,8 @@ import { createLiveUpdates } from './liveUpdates.js'
 import { requireAdminOrOperator } from './access.js'
 import { createSystemLog } from './systemLog.js'
 import createDeveloperRouter from './developer.js'
+import { createUpdateScheduler } from './updateSchedule.js'
+import { developerCpfs } from './developers.js'
 import { dataDirectory } from './dataDirectory.js'
 import { enabled, flag, isProduction } from './envFlags.js'
 
@@ -170,11 +172,17 @@ app.use('/api', createSupportTicketsRouter(accounts, requireAdmin))
 const notesRouter = createNotesRouter(accounts, requireAdmin)
 app.use('/api', notesRouter)
 setInterval(() => notesRouter.sweep().catch((error) => console.error('Falha ao verificar os lembretes das tarefas:', error.message)), 60000).unref()
-app.use('/api', createDeveloperRouter({ accounts, requireAdmin, requireSession: requireAdminOrOperator, systemLog, live, pool, readStore, dataDirectory, version: releaseNotes[0] ? { version: releaseNotes[0].version, date: releaseNotes[0].date } : null, config: () => ({
+// Programar atualização (Desenvolvedor): the notices, the countdown and, at the hour, the update through the SaveInCloud.
+// This start may be the update itself: boot() closes it. The schedule is checked every 15 seconds.
+const updateScheduler = createUpdateScheduler({ readStore, mutateStore, version: releaseNotes[0]?.version || null, log: (message) => console.log(message),
+  developerIds: async () => (await Promise.all(developerCpfs.map((cpf) => accounts.accountByCpf(cpf)))).filter(Boolean).map((account) => account.id) })
+await updateScheduler.boot().catch((error) => console.error('Falha ao conferir a atualização programada:', error.message))
+setInterval(() => updateScheduler.sweep().catch((error) => console.error('Falha ao verificar a atualização programada:', error.message)), 15000).unref()
+app.use('/api', createDeveloperRouter({ accounts, requireAdmin, requireSession: requireAdminOrOperator, systemLog, live, pool, readStore, dataDirectory, updates: updateScheduler, version: releaseNotes[0] ? { version: releaseNotes[0].version, date: releaseNotes[0].date } : null, config: () => ({
   environment: production ? 'produção' : 'desenvolvimento', nodeEnv: process.env.NODE_ENV || '', host, port, database: `${process.env.DB_HOST}:${process.env.DB_PORT || 3306}/${process.env.DB_NAME}`,
   dataDir: Boolean(process.env.DATA_DIR), smtp: ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'MAIL_FROM'].every((key) => process.env[key]?.trim()), turnstile: Boolean(process.env.TURNSTILE_SECRET_KEY), testLogin: testLoginEnabled(),
   corsOrigins: corsOrigins.length, apiRateLimit: Number(process.env.API_RATE_LIMIT) || 200, trustProxy: process.env.TRUST_PROXY || '(padrão)', fiscalCatalogSync: flag(process.env.FISCAL_CATALOG_SYNC) !== 'off',
-  openOfferDefaultCpfs: Boolean(process.env.OPEN_OFFER_DEFAULT_CPFS), supportTicketEmails: Boolean(process.env.SUPPORT_TICKET_EMAILS), quotesAllowedOrigins: String(process.env.QUOTES_ALLOWED_ORIGINS || '').split(',').filter((item) => item.trim()).length,
+  automaticUpdate: updateScheduler.automatic(), openOfferDefaultCpfs: Boolean(process.env.OPEN_OFFER_DEFAULT_CPFS), supportTicketEmails: Boolean(process.env.SUPPORT_TICKET_EMAILS), quotesAllowedOrigins: String(process.env.QUOTES_ALLOWED_ORIGINS || '').split(',').filter((item) => item.trim()).length,
 }) }))
 const notificationsRouter = createNotificationsRouter({ requireAdmin, payables: payablesRouter, receivables: receivablesRouter, loadInventory: async () => {
   const [rows] = await pool.execute('SELECT id, name, unit, quantity_kg AS quantity, minimum_kg AS minimum FROM inventory_materials')

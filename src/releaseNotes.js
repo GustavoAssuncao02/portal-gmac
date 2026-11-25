@@ -5,6 +5,7 @@ export const releaseNotes = [
     date: '2026-11-25',
     notes: [
       'Contas a receber: importação da DANFSe nacional e da nova NFS-e de Feira',
+      'Atualizações do portal: aviso programado para todos, com contagem regressiva nos 2 minutos finais',
       'Tela do operador: a tela do tablet não apaga enquanto o portal está aberto',
     ],
   },

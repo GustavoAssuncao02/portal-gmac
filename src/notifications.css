@@ -15,3 +15,17 @@
 .notifications-payables button { width:100%; display:flex; flex-direction:column; gap:7px; text-align:left; border:0; border-bottom:1px solid #e0e8f1; padding:14px 0; background:none; color:#284b6c; font:inherit; font-size:12px; cursor:pointer; }
 .notifications-payables small { color:#74869b; font-size:10px; }
 .notifications-error { padding:14px; color:#b52e44; font-size:12px; }
+
+/* Programar atualização: the countdown of the last 2 minutes before a scheduled update, small, next to the bell. */
+.update-countdown { display: inline-flex; flex: 0 0 auto; align-self: center; align-items: center; gap: 5px; height: 24px; margin: 0 2px 0 8px; padding: 0 9px; border: 1px solid #f0d9a8; border-radius: 999px; background: #fff8e8; color: #8a5a00; font-size: 11.5px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.update-countdown svg { flex: 0 0 auto; }
+.update-countdown strong { font-weight: 700; }
+.update-countdown--running svg { animation: update-countdown-spin 1.4s linear infinite; }
+@keyframes update-countdown-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .update-countdown--running svg { animation: none; } }
+@media (max-width: 760px) {
+  /* Phone: it takes the square left of the bell, with only the time (the hover text tells the rest). */
+  .dashboard-shell .workspace-tabs:has(.update-countdown) .mobile-page-title { grid-column: 1 / 4; }
+  .dashboard-shell .update-countdown { grid-column: 4; grid-row: 1; justify-self: center; margin: 0; padding: 0 6px; gap: 3px; font-size: 11px; }
+  .dashboard-shell .update-countdown-label { display: none; }
+}

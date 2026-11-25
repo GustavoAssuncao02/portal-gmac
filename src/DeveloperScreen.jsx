@@ -3,6 +3,7 @@ import { Activity, AlertTriangle, ChevronDown, ChevronRight, Clock3, Database, D
 import AdminWorkspace from './AdminWorkspace.jsx'
 import { downloadFile, payableRequest } from './payablesApi.js'
 import { pollWhileVisible } from './polling.js'
+import UpdateSchedule from './UpdateSchedule.jsx'
 import './developer.css'
 
 // Tela Desenvolvedor (only the accounts of server/developers.js): the logs of the system, who is online, how the server,
@@ -209,6 +210,7 @@ export default function DeveloperScreen(props) {
       </div>
       <OnlineUsers online={data.online} />
     </>}
+    <UpdateSchedule refreshKey={refreshKey} />
     <Logs refreshKey={refreshKey} />
     {data && <><Traffic traffic={traffic} /><SystemDetails data={data} /></>}
   </AdminWorkspace>

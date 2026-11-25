@@ -2002,6 +2002,11 @@
 :root[data-theme="dark"] .notifications-error {
     color: #e3919f
 }
+:root[data-theme="dark"] .update-countdown {
+    border: 1px solid #36516f;
+    background: #3c3320;
+    color: #ecc989
+}
 :root[data-theme="dark"] .dashboard-shell.admin-tools-shell {
     background: #203c59
 }
@@ -4838,6 +4843,67 @@
     :root[data-theme="dark"] .developer-table td::before {
         color: #b6c3cd
     }
+}
+:root[data-theme="dark"] .developer-update-note {
+    color: #b5c2ce
+}
+:root[data-theme="dark"] .developer-update-mode {
+    background: #203c59;
+    color: #b3c3d1 !important
+}
+:root[data-theme="dark"] .developer-update-mode--auto {
+    background: #203c29;
+    color: #89ebb2 !important
+}
+:root[data-theme="dark"] .developer-update-form fieldset {
+    border: 1px solid #36516f;
+    background: #162b43
+}
+:root[data-theme="dark"] .developer-update-form label {
+    color: #b3c3d1
+}
+:root[data-theme="dark"] .developer-update-form input {
+    border: 1px solid #36516f;
+    background: #162b43;
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .developer-update-active {
+    border: 1px solid #36516f;
+    border-left: 4px solid #4778ae;
+    background: #162b43
+}
+:root[data-theme="dark"] .developer-update-active--started {
+    border-left-color: #ae8447
+}
+:root[data-theme="dark"] .developer-update-active .developer-update-form fieldset {
+    border-top: 1px solid #36516f
+}
+:root[data-theme="dark"] .developer-update-info strong {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .developer-update-info p {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .developer-update-info small {
+    color: #b7c2cc
+}
+:root[data-theme="dark"] .developer-update-status {
+    background: #203c59;
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .developer-update-status--started {
+    background: #3c3320;
+    color: #ecc989
+}
+:root[data-theme="dark"] .developer-update-error {
+    background: #3c2220;
+    color: #ec9089 !important
+}
+:root[data-theme="dark"] .developer-update-cancel {
+    color: #ec9089
+}
+:root[data-theme="dark"] .developer-update-row-message {
+    color: #b7c2cc
 }
 :root[data-theme="dark"] .notes-count--alert {
     background: #98571b !important;

@@ -9,6 +9,9 @@ export const notificationOptions = [
   ['supportTickets', 'Tickets de suporte'],
 ]
 export const notificationDefaults = Object.fromEntries(notificationOptions.map(([key]) => [key, true]))
+// Notices everybody gets whatever the preferences: a new version of the portal and an update scheduled, rescheduled,
+// canceled or 5 minutes away (Desenvolvedor › Programar atualização).
+export const alwaysShownNotices = new Set(['release', 'system-update'])
 // "Notificações do sistema por e-mail" (2026-11-24): whether the account receives the e-mails the system sends by itself
 // (today, those of the support tickets). On unless the person turns it off. Password recovery is not a notification and
 // is always sent; e-mails someone writes (a proposal to a client) are not affected.

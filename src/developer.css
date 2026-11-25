@@ -122,3 +122,34 @@
 @media (max-width: 380px) {
   .developer-metrics { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Programar atualização */
+.developer-update-note { margin: -4px 0 10px; color: #5f7790; font-size: 12.5px; line-height: 1.5; }
+.developer-update-note + .developer-update-note { margin-top: 0; }
+.developer-update-mode { padding: 2px 9px; border-radius: 999px; background: #eef2f6; color: #4d6880 !important; font-weight: 700; }
+.developer-update-mode--auto { background: #e7f6ec; color: #168344 !important; }
+.developer-update-form fieldset { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 14px; margin: 0; padding: 16px; border: 1px solid #dce6ed; border-radius: 8px; background: #fff; }
+.developer-update-form label { display: grid; gap: 5px; color: #4d6880; font-size: 12px; font-weight: 600; }
+.developer-update-form input { min-height: 38px; padding: 7px 10px; border: 1px solid #cddce9; border-radius: 6px; background: #fff; color: #203e58; font: inherit; font-size: 13px; font-weight: 400; }
+.developer-update-message { flex: 1 1 260px; }
+.developer-update-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.developer-update-active { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 14px 20px; padding: 16px; border: 1px solid #dce6ed; border-left: 4px solid #0c4c91; border-radius: 8px; background: #fff; }
+.developer-update-active--started { border-left-color: #b7791f; }
+.developer-update-active .developer-update-form { flex: 1 1 100%; }
+.developer-update-active .developer-update-form fieldset { padding: 12px 0 0; border: 0; border-top: 1px solid #e5ecf2; border-radius: 0; }
+.developer-update-info { display: grid; gap: 5px; min-width: 0; }
+.developer-update-info strong { color: #203e58; font-size: 16px; }
+.developer-update-info p { margin: 0; color: #31516d; font-size: 13px; }
+.developer-update-info small { color: #71859a; font-size: 11.5px; }
+.developer-update-status { justify-self: start; padding: 2px 9px; border-radius: 999px; background: #e8f1fb; color: #0c4c91; font-size: 11px; font-weight: 700; }
+.developer-update-status--started { background: #fff4dc; color: #8a5a00; }
+.developer-update-error { padding: 8px 10px; border-radius: 6px; background: #fff1f0; color: #b42318 !important; font-size: 12px !important; }
+.developer-update-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.developer-update-cancel { color: #b42318; }
+.developer-update-history { margin-top: 14px; }
+.developer-update-row-message { display: block; margin-top: 2px; color: #71859a; font-size: 11px; }
+@media (max-width: 760px) {
+  .developer-update-form fieldset > label:not(.developer-update-message) { flex: 1 1 140px; }
+  .developer-update-buttons { width: 100%; margin-left: 0; }
+  .developer-update-buttons > button { flex: 1 1 0; }
+}

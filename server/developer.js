@@ -22,9 +22,14 @@ const bahia = (ms) => new Date(ms).toLocaleString('pt-BR', { timeZone: 'America/
 
 // `live`: the live updates (who holds a connection); `readStore`: the portal data; `config()`: the settings in force,
 // without the value of any secret; `version`: the newest entry of the release notes.
-export default function createDeveloperRouter({ accounts, requireAdmin, requireSession, systemLog, live, pool, readStore, dataDirectory, config = () => ({}), version = null, now = Date.now }) {
+export default function createDeveloperRouter({ accounts, requireAdmin, requireSession, systemLog, live, pool, readStore, dataDirectory, config = () => ({}), version = null, updates = null, now = Date.now }) {
   const router = express.Router()
   const handle = (fn) => async (request, response, next) => { try { await fn(request, response) } catch (error) { next(error) } }
+
+  // Programar atualização: every screen of the administrative portal reads the next update for its countdown.
+  if (updates) router.get('/update-schedule', requireAdmin, handle(async (_request, response) => {
+    response.set('Cache-Control', 'no-store').json({ item: await updates.next(), now: now() })
+  }))
 
   // Errors of the browsers (screen crashes, failed promises): a few per minute per address, so a loop cannot flood the logs.
   const clientWindows = new Map()
@@ -150,6 +155,32 @@ export default function createDeveloperRouter({ accounts, requireAdmin, requireS
     const items = await systemLog.list(filters)
     response.set('Cache-Control', 'no-store').json({ items, more: items.length === filters.limit })
   }))
+  // Programar atualização (server/updateSchedule.js): list, schedule, reschedule, cancel and close an update by hand.
+  if (updates) {
+    const note = (request, message) => systemLog.record({ level: 'info', source: 'system', user: request.developer.name, message })
+    const actor = (request) => ({ id: request.developer.id, name: request.developer.name })
+    router.get('/developer/updates', handle(async (_request, response) => { response.set('Cache-Control', 'no-store').json(await updates.list()) }))
+    router.post('/developer/updates', handle(async (request, response) => {
+      const item = await updates.create(request.body, actor(request))
+      note(request, `Atualização do portal programada para ${bahia(Date.parse(item.at))}.`)
+      response.status(201).json({ item })
+    }))
+    router.put('/developer/updates/:id', handle(async (request, response) => {
+      const item = await updates.reschedule(request.params.id, request.body, actor(request))
+      note(request, `Atualização programada alterada: ${bahia(Date.parse(item.at))}.`)
+      response.json({ item })
+    }))
+    router.post('/developer/updates/:id/cancel', handle(async (request, response) => {
+      const item = await updates.cancel(request.params.id, actor(request))
+      note(request, `Atualização programada para ${bahia(Date.parse(item.at))} cancelada.`)
+      response.json({ item })
+    }))
+    router.post('/developer/updates/:id/finish', handle(async (request, response) => {
+      const item = await updates.finish(request.params.id, actor(request))
+      note(request, 'Atualização programada marcada como concluída.')
+      response.json({ item })
+    }))
+  }
   router.get('/developer/requests', handle(async (_request, response) => {
     response.set('Cache-Control', 'no-store').json({ items: systemLog.recentRequests(300) })
   }))

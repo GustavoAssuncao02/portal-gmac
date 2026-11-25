@@ -17,3 +17,7 @@ database/export/
 
 # Videos institucionais, capturas e gravacoes: arquivos grandes, fora do repositorio.
 video-institucional/
+
+# Tokens e chaves de acesso nunca vao para o repositorio (publico)
+access-token*
+*.token

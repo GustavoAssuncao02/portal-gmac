@@ -1,7 +1,7 @@
 import express from 'express'
 import { readStore, mutateStore } from './offers.js'
 import { notificationSettings } from './accounts.js'
-import { notificationPreference } from './notificationRules.js'
+import { alwaysShownNotices, notificationPreference } from './notificationRules.js'
 import { inventorySignal } from './notificationEvents.js'
 import { activeNotifications, notificationItems } from './payables.js'
 import { activeReceivableNotices, receivableNotificationItems } from './receivables.js'
@@ -30,12 +30,12 @@ export default function createNotificationsRouter({ requireAdmin, payables, rece
     })().finally(() => { inventorySweep = null })
     return inventorySweep
   }
-  // A notice with an author (a saved proposal, an accepted offer) is not shown to the person who caused it. The notice of
-  // a new version of the portal goes to everybody, whatever the preferences. A notice with recipients (a new support
-  // ticket for the developers, a closed ticket for whoever opened it) goes only to them.
+  // A notice with an author (a saved proposal, an accepted offer) is not shown to the person who caused it. A new version
+  // of the portal and the scheduled updates (alwaysShownNotices) go to everybody, whatever the preferences. A notice with
+  // recipients (a new support ticket for the developers, a closed ticket for whoever opened it) goes only to them.
   const operational = (store, userId) => {
     const settings = notificationSettings(store, userId)
-    return (store.operationalNotifications || []).filter((item) => (item.type === 'release' || settings[notificationPreference[item.type]]) && (item.authorId == null || String(item.authorId) !== String(userId)) && (!Array.isArray(item.recipientIds) || item.recipientIds.some((id) => String(id) === String(userId))))
+    return (store.operationalNotifications || []).filter((item) => (alwaysShownNotices.has(item.type) || settings[notificationPreference[item.type]]) && (item.authorId == null || String(item.authorId) !== String(userId)) && (!Array.isArray(item.recipientIds) || item.recipientIds.some((id) => String(id) === String(userId))))
   }
   // Administrative employees have no access to the finance screens, so they get no payable or receivable notices.
   const items = (store, userId, finance) => [

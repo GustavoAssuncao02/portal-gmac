@@ -1718,6 +1718,10 @@
 :root[data-theme="dark"][data-tone="black"] .notifications-payables small {
     color: #bfc2c5
 }
+:root[data-theme="dark"][data-tone="black"] .update-countdown {
+    border: 1px solid #303133;
+    background: #30291a
+}
 :root[data-theme="dark"][data-tone="black"] .dashboard-shell.admin-tools-shell {
     background: #232425
 }
@@ -4106,6 +4110,58 @@
     :root[data-theme="dark"][data-tone="black"] .developer-table td::before {
         color: #bec2c5
     }
+}
+:root[data-theme="dark"][data-tone="black"] .developer-update-note {
+    color: #bec2c5
+}
+:root[data-theme="dark"][data-tone="black"] .developer-update-mode {
+    background: #232425;
+    color: #bfc2c5 !important
+}
+:root[data-theme="dark"][data-tone="black"] .developer-update-mode--auto {
+    background: #1a3021
+}
+:root[data-theme="dark"][data-tone="black"] .developer-update-form fieldset {
+    border: 1px solid #303133;
+    background: #1a1b1c
+}
+:root[data-theme="dark"][data-tone="black"] .developer-update-form label {
+    color: #bfc2c5
+}
+:root[data-theme="dark"][data-tone="black"] .developer-update-form input {
+    border: 1px solid #303133;
+    background: #1a1b1c;
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .developer-update-active {
+    border: 1px solid #303133;
+    border-left: 4px solid #47494c;
+    background: #1a1b1c
+}
+:root[data-theme="dark"][data-tone="black"] .developer-update-active .developer-update-form fieldset {
+    border-top: 1px solid #303133
+}
+:root[data-theme="dark"][data-tone="black"] .developer-update-info strong {
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .developer-update-info p {
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .developer-update-info small {
+    color: #bec2c5
+}
+:root[data-theme="dark"][data-tone="black"] .developer-update-status {
+    background: #232425;
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .developer-update-status--started {
+    background: #30291a
+}
+:root[data-theme="dark"][data-tone="black"] .developer-update-error {
+    background: #301b1a
+}
+:root[data-theme="dark"][data-tone="black"] .developer-update-row-message {
+    color: #bec2c5
 }
 :root[data-theme="dark"][data-tone="black"] .notes-chip {
     border: 1px solid #303133;
