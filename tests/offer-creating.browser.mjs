@@ -4,7 +4,8 @@ import { chromium } from 'playwright'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
 
 // "Inserir Oferta Manualmente" opens the details of the new offer right away. On the list it shows only a blue box with
-// who is creating it and for how long; someone else is asked before editing it ("editar mesmo assim") and becomes the one
+// who is creating it and for how long, in real time: once the person leaves the details it is "Em aberto · editado há"
+// (2026-11-25). Someone else is asked before editing it ("editar mesmo assim" / "Continuar a oferta") and becomes the one
 // creating it. "Fazer proposta" puts it in analysis; "Descartar oferta" erases it.
 const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Gustavo' }
 const fixture = await createWorkflowFixture({ accountsEnv: env })
@@ -23,9 +24,9 @@ try {
     await page.getByRole('button', { name: 'Entrar', exact: true }).click()
     await page.locator('.admin-home-main').waitFor()
     const mobile = viewport.width < 760
-    const toOffers = async () => {
-      if (mobile) await page.getByRole('button', { name: 'Abrir menu de navegação', exact: true }).click()
-      await page.locator('.sidebar').getByRole('button', { name: 'Ofertas e serviços', exact: true }).click()
+    const toOffers = async (target = page) => {
+      if (mobile) await target.getByRole('button', { name: 'Abrir menu de navegação', exact: true }).click()
+      await target.locator('.sidebar').getByRole('button', { name: 'Ofertas e serviços', exact: true }).click()
     }
     await toOffers()
 
@@ -47,39 +48,65 @@ try {
     assert.equal(offer.status, 'creating')
     await page.screenshot({ path: `test-results/offer-creating-details-${viewport.width}.png` })
 
-    // On the list: only the blue box, out of the "Em análise" count.
+    // On the list, seen from another window while the details are open: the blue box, out of the "Em análise" count.
+    const watcher = await browser.newPage({ viewport })
+    watcher.on('pageerror', (error) => errors.push(error.message))
+    await watcher.goto(fixture.url)
+    await watcher.getByLabel('CPF', { exact: true }).fill(env.DEMO_ADMIN_CPF)
+    await watcher.getByLabel('Senha', { exact: true }).fill(env.DEMO_ADMIN_PASSWORD)
+    await watcher.getByRole('button', { name: 'Entrar', exact: true }).click()
+    await watcher.locator('.admin-home-main').waitFor()
+    await toOffers(watcher)
+    const watched = watcher.locator('.offers-table-row').filter({ hasText: service }).locator('.offer-creating-badge')
+    await watched.getByText('Gustavo', { exact: true }).waitFor()
+    assert.match(await watched.innerText(), /Criando oferta[\s\S]*Gustavo[\s\S]*agora há pouco/)
+    const colors = await watched.evaluate((element) => getComputedStyle(element).backgroundColor.match(/\d+/g).map(Number))
+    assert.ok(colors[2] > colors[0], 'the box is blue')
+    await watcher.screenshot({ path: `test-results/offer-creating-list-${viewport.width}.png` })
+
+    // In real time (2026-11-25): leaving the details turns it into "Em aberto · editado ..." on the other window too,
+    // without reloading it.
     await page.getByRole('button', { name: 'Voltar para ofertas', exact: true }).click()
+    await watched.getByText('Em aberto').waitFor({ timeout: 10000 })
+    assert.match(await watched.innerText(), /Em aberto[\s\S]*Gustavo[\s\S]*editado agora há pouco/)
     const row = page.locator('.offers-table-row').filter({ hasText: service })
     const badge = row.locator('.offer-creating-badge')
-    await badge.getByText('Gustavo', { exact: true }).waitFor()
-    assert.match(await badge.innerText(), /Criando oferta[\s\S]*Gustavo[\s\S]*agora há pouco/)
+    await badge.getByText('Em aberto').waitFor()
+    assert.equal(await row.locator('.offer-table-status').innerText(), 'Em aberto')
     assert.equal(await row.getByRole('button').count(), 1, 'no other action while it is being created')
     const reviewing = (await fixture.adminRequest('/offers')).data.items.filter((item) => item.status === 'review').length
     assert.equal(await page.locator('.offer-filter--review strong').innerText(), String(reviewing), 'it is not counted in "Em análise"')
-    const colors = await badge.evaluate((element) => getComputedStyle(element).backgroundColor.match(/\d+/g).map(Number))
-    assert.ok(colors[2] > colors[0], 'the box is blue')
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false)
     await row.scrollIntoViewIfNeeded()
-    await page.screenshot({ path: `test-results/offer-creating-list-${viewport.width}.png` })
+    await page.screenshot({ path: `test-results/offer-creating-stopped-${viewport.width}.png` })
 
-    // Who is creating it opens it directly.
+    // Who was creating it opens it directly, and the other window shows "Criando oferta" again.
     await badge.click()
     await page.getByRole('heading', { name: `Detalhes da oferta ${offer.code}`, exact: true }).waitFor()
+    await watched.getByText('Criando oferta').waitFor({ timeout: 10000 })
     await page.getByRole('button', { name: 'Voltar para ofertas', exact: true }).click()
+    await watcher.close()
 
-    // Someone else is creating it: asked first; cancelling keeps it with them, confirming passes it on.
-    await fixture.mutateStore((store) => { store.offers.find((item) => item.id === offer.id).editingBy = { id: 'outro', name: 'Maria Souza', at: offer.createdAt } })
+    // Someone else is creating it now: asked first; cancelling keeps it with them.
+    await fixture.mutateStore((store) => { store.offers.find((item) => item.id === offer.id).editingBy = { id: 'outro', name: 'Maria Souza', at: offer.createdAt, active: true, lastActiveAt: new Date().toISOString() } })
     await page.reload()
     await badge.getByText('Maria Souza', { exact: true }).waitFor()
     await badge.click()
     const modal = page.getByRole('dialog', { name: 'Oferta sendo criada' })
-    await modal.getByText(/Maria Souza\s*está criando esta oferta .*Deseja editar mesmo assim\?/).waitFor()
+    await modal.getByText(/Maria Souza\s*está criando esta oferta agora .*Deseja editar mesmo assim\?/).waitFor()
     await page.screenshot({ path: `test-results/offer-creating-take-over-${viewport.width}.png` })
     await modal.getByRole('button', { name: 'Cancelar', exact: true }).click()
     await modal.waitFor({ state: 'detached' })
     assert.equal((await fixture.adminRequest('/offers')).data.items.find((item) => item.id === offer.id).editingBy.name, 'Maria Souza')
+
+    // Maria stopped 20 minutes ago: "Em aberto", and going on with it is asked with that time.
+    await fixture.mutateStore((store) => { store.offers.find((item) => item.id === offer.id).editingBy = { id: 'outro', name: 'Maria Souza', at: offer.createdAt, active: false, lastActiveAt: new Date(Date.now() - 20 * 60000).toISOString() } })
+    await page.reload()
+    await badge.getByText('editado há 20 min').waitFor()
     await badge.click()
-    await modal.getByRole('button', { name: 'Editar mesmo assim', exact: true }).click()
+    const stopped = page.getByRole('dialog', { name: 'Oferta em aberto' })
+    await stopped.getByText(/Maria Souza\s*começou esta oferta e parou de editar há 20 min\. Deseja continuar a criação\?/).waitFor()
+    await stopped.getByRole('button', { name: 'Continuar a oferta', exact: true }).click()
     await page.getByRole('heading', { name: `Detalhes da oferta ${offer.code}`, exact: true }).waitFor()
     await page.locator('.offer-details-creating').getByText('Criando oferta · Gustavo').waitFor()
 
@@ -109,5 +136,5 @@ try {
     assert.deepEqual(errors, [])
     await page.close()
   }
-  console.log('Offer being created passed at 1440 and iPhone 15: details open at once, blue box with name and time, take-over asked, Fazer proposta puts it in analysis, discard erases it.')
+  console.log('Offer being created passed at 1440 and iPhone 15: details open at once, blue box with name and time, "Em aberto · editado" in real time when the person leaves, take-over asked, Fazer proposta puts it in analysis, discard erases it.')
 } finally { await browser.close(); await fixture.close() }

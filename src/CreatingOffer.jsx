@@ -5,6 +5,12 @@ import { backdropClose } from './dialogBackdrop.js'
 // A manual offer starts as "Criando oferta" (status 'creating'): the list shows who is creating it and for how long, and
 // only "Fazer proposta" in its details puts it in analysis (server/offers.js).
 export const isCreating = (offer) => offer?.status === 'creating'
+// In real time (server/offerPresence.js): the person creating it left its details, so it is "Em aberto" since then.
+// An editingBy saved before this rule has no `active` and counts as stopped.
+export const stoppedCreating = (offer) => isCreating(offer) && Boolean(offer.editingBy) && !offer.editingBy.active
+// "Em aberto": left for the team ("Deixar oferta em aberto e notificar") and not taken yet, or stopped.
+export const isOpenOffer = (offer) => isCreating(offer) && ((offer.openForTeam && !offer.editingBy) || stoppedCreating(offer))
+const lastActive = (offer) => offer.editingBy?.lastActiveAt || offer.editingBy?.at || offer.createdAt
 
 export function creatingSinceText(at, now = Date.now()) {
   const minutes = Math.max(0, Math.floor((now - Date.parse(at)) / 60000))
@@ -29,6 +35,12 @@ export function CreatingOfferBadge({ offer, onOpen }) {
     <strong><Inbox size={15} aria-hidden="true" />Em aberto</strong>
     <span>Aguardando responsável</span>
     <small>{since}</small>
+  </button>
+  // The person creating it left: anyone may go on with it ("Em aberto"), and the time is the one of the last edit.
+  if (stoppedCreating(offer)) return <button className="offer-creating-badge offer-creating-badge--open" type="button" onClick={onOpen} title={`${name} começou esta oferta em ${new Date(creatingSince(offer)).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })} e não está mais nela. Última edição em ${new Date(lastActive(offer)).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })}.`}>
+    <strong><Inbox size={15} aria-hidden="true" />Em aberto</strong>
+    <span>{name}</span>
+    <small>editado {creatingSinceText(lastActive(offer), now)}</small>
   </button>
   return <button className="offer-creating-badge" type="button" onClick={onOpen} title={`${name} está criando esta oferta desde ${new Date(creatingSince(offer)).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })}`}>
     <strong><PencilLine size={15} aria-hidden="true" />Criando oferta</strong>
@@ -69,8 +81,13 @@ function ConfirmDialog({ title, subtitle, children, confirmLabel, busyLabel, ico
 // Another administrator clicked the offer someone else is creating: confirming makes them the one creating it.
 export function TakeOverOfferModal({ offer, onConfirm, onClose }) {
   const name = offer.editingBy?.name || offer.createdByName || 'Outro administrador'
+  // Stopped: the person is not on it anymore, so it is only a matter of going on with it.
+  if (stoppedCreating(offer)) return <ConfirmDialog title="Oferta em aberto" subtitle={`${offer.code} · ${offer.service}`} tone="take-over" icon={<PencilLine size={16} />} confirmLabel="Continuar a oferta" busyLabel="Abrindo..." onConfirm={onConfirm} onClose={onClose}>
+    <p><strong>{name}</strong> começou esta oferta e parou de editar {creatingSinceText(lastActive(offer))}. Deseja continuar a criação?</p>
+    <p className="offer-creating-note">A oferta passa a aparecer na lista como criada por você.</p>
+  </ConfirmDialog>
   return <ConfirmDialog title="Oferta sendo criada" subtitle={`${offer.code} · ${offer.service}`} tone="take-over" icon={<PencilLine size={16} />} confirmLabel="Editar mesmo assim" busyLabel="Abrindo..." onConfirm={onConfirm} onClose={onClose}>
-    <p><strong>{name}</strong> está criando esta oferta ({creatingSinceText(creatingSince(offer))}). Deseja editar mesmo assim?</p>
+    <p><strong>{name}</strong> está criando esta oferta agora ({creatingSinceText(creatingSince(offer))}). Deseja editar mesmo assim?</p>
     <p className="offer-creating-note">A oferta passa a aparecer na lista como criada por você.</p>
   </ConfirmDialog>
 }

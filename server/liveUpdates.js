@@ -27,8 +27,9 @@ export function topicOfName(name) {
   return financeNames.test(name) ? 'finance' : 'data'
 }
 const financeRoutes = new Set(['payables', 'receivables', 'bank-statements', 'dre', 'dre-adjustments', 'classifications', 'account-groups', 'suppliers', 'ai-reconciliations'])
-// The logs of the browser and the Desenvolvedor screen change nothing the other screens show.
-const quietRoutes = new Set(['auth', 'account', 'live', 'password-resets', 'client-logs', 'developer'])
+// The logs of the browser and the Desenvolvedor screen change nothing the other screens show. The presence beats of
+// "Criando oferta" (offerPresence.js) neither: the screens are told only when somebody starts or stops, by the store.
+const quietRoutes = new Set(['auth', 'account', 'live', 'password-resets', 'client-logs', 'developer', 'presence'])
 export function topicOfRoute(path) {
   const first = String(path).split('/').filter(Boolean)[0]?.toLowerCase()
   if (!first || quietRoutes.has(first)) return null

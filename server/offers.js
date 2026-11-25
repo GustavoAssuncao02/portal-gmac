@@ -29,6 +29,7 @@ import { labelEstimate, labelPlaceholderProposal } from './labelQuoteRules.js'
 import { quantityLabel, quantityUnitMessage, quantityUnitOf, validQuantityUnit } from './quantityUnits.js'
 import { todayBahia } from './payableRules.js'
 import { retroactiveOrderDay } from './retroactiveEntry.js'
+import { createOfferPresence } from './offerPresence.js'
 
 const filesDirectory = path.join(dataDirectory, 'files')
 const router = express.Router()
@@ -162,7 +163,7 @@ router.post('/offers', async (request, response) => {
       // A manual offer starts as "Criando oferta": only "Fazer proposta" in its details (POST /offers/:id/finish) puts it
       // in analysis. The person who is creating it (editingBy) and since when are shown on the list.
       const at = new Date().toISOString(), author = { id: request.adminId ?? null, name: request.adminName || 'Administrador' }
-      const item = { id: randomUUID(), code: nextCode('OF', [...store.offers, ...(store.discardedOffers || [])]), createdAt: at, createdBy: author.id, createdByName: author.name, ...(open ? { openForTeam: true } : { editingBy: { ...author, at } }), cnpj: clean(cnpj, 18), company: clean(company, 160), ...requesters.fields, buyer: buyerLink.name, buyerId: buyerLink.id, deadline, service: clean(service, 160), quantity: quantityPending ? 1 : Number(quantity), ...(quantityPending ? { quantityPending: true } : {}), quantityUnit: quantityUnitOf(request.body?.quantityUnit), description: clean(description, 5000), labelNumber: clean(labelNumber, 80), requestedAt: requestedDay ? dayMoment(requestedDay, new Date(at)) : at, origin: 'Inserida Manualmente', status: 'creating', attachments: [], resources: { materials: [], laborEntries: [] }, proposal: null, orderCode: null }
+      const item = { id: randomUUID(), code: nextCode('OF', [...store.offers, ...(store.discardedOffers || [])]), createdAt: at, createdBy: author.id, createdByName: author.name, ...(open ? { openForTeam: true } : { editingBy: { ...author, at, active: true, lastActiveAt: at } }), cnpj: clean(cnpj, 18), company: clean(company, 160), ...requesters.fields, buyer: buyerLink.name, buyerId: buyerLink.id, deadline, service: clean(service, 160), quantity: quantityPending ? 1 : Number(quantity), ...(quantityPending ? { quantityPending: true } : {}), quantityUnit: quantityUnitOf(request.body?.quantityUnit), description: clean(description, 5000), labelNumber: clean(labelNumber, 80), requestedAt: requestedDay ? dayMoment(requestedDay, new Date(at)) : at, origin: 'Inserida Manualmente', status: 'creating', attachments: [], resources: { materials: [], laborEntries: [] }, proposal: null, orderCode: null }
       store.offers.unshift(item)
       // An open offer has nobody creating it: it waits on the list, like the offers of the site, and the others are told.
       if (open) addNotification(store, { type: 'open-offer', offerId: item.id, authorId: author.id, title: 'Nova oferta em aberto', description: `${item.code} · ${item.company} · inserida por ${author.name}` })
@@ -363,6 +364,16 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
     if (actor) { request.adminId = actor.id; request.adminName = actor.name }
     next()
   })
+  // "Criando oferta" in real time: the details of the offer being created send a beat; without beats it is "Em aberto".
+  const presence = createOfferPresence({ readStore, mutateStore, log: (error) => console.error('Falha ao atualizar quem está criando a oferta:', error.message) })
+  const presenceTimer = setInterval(() => presence.sweep().catch((error) => console.error('Falha ao conferir quem está criando ofertas:', error.message)), 15000)
+  presenceTimer.unref?.()
+  configured.post('/presence/offers/:id', requireAdmin, async (request, response) => {
+    try {
+      const done = request.body?.leaving === true ? await presence.leave(request.params.id, request.adminId) : await presence.beat(request.params.id, request.adminId)
+      response.json({ ok: Boolean(done) })
+    } catch (error) { handleError(response, error) }
+  })
   // Offers are created and handled only in the administrative portal (there is no public entry of offers). The files of
   // an OS are also opened by the operator account; everything else, including the lists and the proposal PDF, needs an
   // administrator.
@@ -517,7 +528,9 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
     try {
       const offer = await mutateStore((store) => {
         const item = creatingOffer(store, request.params.id)
-        if (String(item.editingBy?.id ?? '') !== String(request.adminId ?? '')) item.editingBy = { id: request.adminId ?? null, name: request.adminName || 'Administrador', at: new Date().toISOString() }
+        // Taking over also means being there now (offerPresence.js): the list shows "Criando oferta" with the new name.
+        const at = new Date().toISOString()
+        if (String(item.editingBy?.id ?? '') !== String(request.adminId ?? '')) item.editingBy = { id: request.adminId ?? null, name: request.adminName || 'Administrador', at, active: true, lastActiveAt: at }
         return item
       })
       response.json({ item: offer })

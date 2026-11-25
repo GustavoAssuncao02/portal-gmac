@@ -4,7 +4,7 @@ export const releaseNotes = [
     version: '1.0.24',
     date: '2026-11-25',
     notes: [
-      'Ofertas e serviços: data da solicitação para lançamentos retroativos, nº do pedido de compra e nota de entrada ao aceitar a oferta',
+      'Ofertas e serviços: data da solicitação para lançamentos retroativos, nº do pedido de compra e nota de entrada ao aceitar a oferta, aviso "Criando oferta" em tempo real',
       'Ordem de serviço: pedido de compra e nota de entrada no cabeçalho, aviso discreto em Serviços em andamento quando faltam',
       'Busca de ofertas e serviços: encontra também solicitante, comprador, pedido de compra e nota de entrada',
       'Contas a pagar e a receber: nova baixa parcial, com saldo em aberto e vencimento próprio',

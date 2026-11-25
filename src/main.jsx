@@ -6,7 +6,8 @@ import PasswordRecovery from './PasswordRecovery.jsx'
 import PasswordHistoryModal from './PasswordHistoryModal.jsx'
 import OrderDetails from './OrderDetails.jsx'
 import RejectOfferModal from './RejectOfferModal.jsx'
-import { CreatingOfferBadge, TakeOverOfferModal, DiscardOfferModal, isCreating } from './CreatingOffer.jsx'
+import { CreatingOfferBadge, TakeOverOfferModal, DiscardOfferModal, isCreating, isOpenOffer } from './CreatingOffer.jsx'
+import { useOfferPresence } from './offerPresence.js'
 import OfferQuantityModal, { QuantityUnitSelect, quantityPending, quantityText } from './OfferQuantityModal.jsx'
 import DeclineProposalModal, { UndoDeclineModal, UndoRejectModal, AcceptOfferModal, UndoAcceptModal } from './DeclineProposalModal.jsx'
 import RejectMaterialRequestModal from './RejectMaterialRequestModal.jsx'
@@ -1347,8 +1348,8 @@ const offerFilters = [
   { key: 'rejected', label: 'Recusadas' },
   // Ofertas do site ainda não assumidas (chegaram pelo formulário público e ninguém abriu). Reusa o estilo offer-filter--new.
   { key: 'site', label: 'Site', tone: 'new', match: (offer) => offer.origin === 'Site' && isCreating(offer) && !offer.editingBy },
-  // Inserted with "Deixar oferta em aberto e notificar" and not taken over yet.
-  { key: 'open', label: 'Em aberto', tone: 'new', match: (offer) => offer.openForTeam && isCreating(offer) && !offer.editingBy },
+  // Inserted with "Deixar oferta em aberto e notificar" and not taken over yet, or left by the person creating it.
+  { key: 'open', label: 'Em aberto', tone: 'new', match: isOpenOffer },
 ]
 const offerMatchesFilter = (filter, offer) => filter.match ? filter.match(offer) : offer.status === filter.key
 
@@ -1528,7 +1529,7 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
             {offerList.rows.map((offer) => <div className="offers-table-row" key={offer.id}>
               <div className="offer-piece"><strong>{offer.service}</strong><span>{offer.code}</span>{offer.labelNumber && <span className="offer-piece-label">Etiqueta {offer.labelNumber}</span>}</div>
               <span data-label="Cliente">{offer.company}</span><span data-label="Etiqueta">{offer.labelNumber || "—"}</span><span data-label="Quantidade">{quantityText(offer, { short: true })}</span><span data-label="Solicitação">{displayDate(offer.requestedAt)}</span><span data-label="Prazo">{displayDate(offer.deadline)}</span>
-              <div className="offer-status-cell"><div className={`offer-table-status offer-table-status--${savedProposal(offer) ? 'saved' : offer.status}`}><strong>{savedProposal(offer) ? 'Proposta salva' : isCreating(offer) ? (offer.openForTeam && !offer.editingBy ? 'Em aberto' : 'Criando oferta') : offer.status === 'review' ? 'Em análise' : offer.status === 'proposed' ? 'Proposta gerada' : offer.status === 'rejected' ? offer.proposalDecline ? `Proposta ${offer.proposalDecline.key} recusada` : 'Recusada' : 'Aceita'}</strong>{savedProposal(offer) && <span>Opção {offer.proposalDraft.selectedKey}</span>}{offer.orderCode && <span>{offer.orderCode}</span>}{offer.labelQuote?.pending && <span>{labelQuotePendingText}</span>}{offer.proposalDecline?.reason && <span>{offer.proposalDecline.reason}</span>}</div>{offer.status === 'proposed' && offer.proposal?.generatedAt && <ProposalSentSince at={offer.proposalEmails?.[0]?.sentAt || offer.proposal.generatedAt} />}</div>
+              <div className="offer-status-cell"><div className={`offer-table-status offer-table-status--${savedProposal(offer) ? 'saved' : offer.status}`}><strong>{savedProposal(offer) ? 'Proposta salva' : isCreating(offer) ? (isOpenOffer(offer) ? 'Em aberto' : 'Criando oferta') : offer.status === 'review' ? 'Em análise' : offer.status === 'proposed' ? 'Proposta gerada' : offer.status === 'rejected' ? offer.proposalDecline ? `Proposta ${offer.proposalDecline.key} recusada` : 'Recusada' : 'Aceita'}</strong>{savedProposal(offer) && <span>Opção {offer.proposalDraft.selectedKey}</span>}{offer.orderCode && <span>{offer.orderCode}</span>}{offer.labelQuote?.pending && <span>{labelQuotePendingText}</span>}{offer.proposalDecline?.reason && <span>{offer.proposalDecline.reason}</span>}</div>{offer.status === 'proposed' && offer.proposal?.generatedAt && <ProposalSentSince at={offer.proposalEmails?.[0]?.sentAt || offer.proposal.generatedAt} />}</div>
               <span data-label="Origem">{offer.origin}</span>
               <div className={`offer-table-actions${isCreating(offer) ? ' offer-table-actions--creating' : ''}`}>
                 {isCreating(offer) ? <><CreatingOfferBadge offer={offer} onOpen={() => openCreatingOffer(offer)} />{offer.origin === 'Site' && <button className="offer-reject-button" type="button" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setRejectingOffer(offer) }}><X size={15} aria-hidden="true" />Recusar</button>}</> : offer.status === 'rejected' ? offer.proposalDecline ? <button className="offer-review-button" type="button" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setUndoingOffer(offer) }}>Desfazer recusa</button> : <button className="offer-review-button" type="button" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setUnrejectingOffer(offer) }}>Desfazer recusa</button> : offer.status === 'accepted'
@@ -1599,6 +1600,9 @@ function PieceLeadTime({ offer }) {
 const offerDetails = (resources, description) => ({ ...serviceDetails(resources), description: serviceDescriptionText(description, resources?.serviceDescription) })
 
 function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, offer, onRefresh, onSelectOrder }) {
+  // "Criando oferta" in real time: only the person creating it tells the server they are here.
+  const currentUser = useContext(AdminIdentityContext)
+  useOfferPresence(offer?.id, isCreating(offer) && offer?.editingBy?.id != null && currentUser?.id != null && String(offer.editingBy.id) === String(currentUser.id))
   const [laborServices, setLaborServices] = useState([])
   const [inventory, setInventory] = useState([])
   const [machines, setMachines] = useState([])
