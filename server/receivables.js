@@ -301,7 +301,8 @@ export default function createReceivablesRouter(accounts, requireAdmin, pool = n
   }))
   router.get('/receivables/:id', handle(async (req, res) => {
     const store = await readStore(); init(store); const row = find(store, req.params.id), group = groupOf(store, row)
-    res.json({ item: view(row, store), siblings: row.groupId ? group.map((item) => view(item, store)) : [], structureLocked: group.some((item) => item.receipt || item.partialPaidCents), partials: (row.partialIds || []).map((id) => store.receivables.find((item) => item.id === id)).filter(Boolean).map((item) => view(item, store)), canDelete: !deletionBlock(store, row, group), deleteBlock: deletionBlock(store, row, group)?.message || null, deleteOthers: deletionBlock(store, row, group) ? 0 : deletableOthers(store, row).length - 1, history: store.receivableEvents.filter((e) => e.accountId === row.id).reverse() })
+    const linkedOrder = row.orderCode ? (store.orders || []).find((order) => order.code === row.orderCode) : null
+    res.json({ item: view(row, store), purchaseOrderNumber: linkedOrder?.purchaseOrderNumber || null, entryInvoiceNumber: linkedOrder?.entryInvoiceNumber || null, siblings: row.groupId ? group.map((item) => view(item, store)) : [], structureLocked: group.some((item) => item.receipt || item.partialPaidCents), partials: (row.partialIds || []).map((id) => store.receivables.find((item) => item.id === id)).filter(Boolean).map((item) => view(item, store)), canDelete: !deletionBlock(store, row, group), deleteBlock: deletionBlock(store, row, group)?.message || null, deleteOthers: deletionBlock(store, row, group) ? 0 : deletableOthers(store, row).length - 1, history: store.receivableEvents.filter((e) => e.accountId === row.id).reverse() })
   }))
   router.post('/receivables', handle(async (req, res) => {
     const treasury = req.body.treasury === true

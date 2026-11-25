@@ -40,7 +40,9 @@ try {
   await page.getByRole('button', { name: 'Abrir OS da etiqueta', exact: true }).click()
   const opening = page.getByRole('dialog', { name: 'Abrir a OS da etiqueta?', exact: true })
   await opening.getByText('Orçamento pendente').first().waitFor()
-  await opening.getByRole('button', { name: 'Sim, abrir a OS', exact: true }).click()
+  // The client has no price yet, so usually no purchase order either: the OS opens without it.
+  await opening.getByLabel('Nº do pedido de compra').waitFor()
+  await opening.getByRole('button', { name: 'Abrir OS com informações pendentes', exact: true }).click()
   await opening.waitFor({ state: 'hidden' })
   const order = (await api('/operations/orders')).data.items.find((item) => item.offerId === offer.id)
   assert.ok(order, 'the OS was opened')

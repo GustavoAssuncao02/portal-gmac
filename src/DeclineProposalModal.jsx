@@ -5,6 +5,8 @@ import { formatQuantity } from '../server/materialUnits.js'
 import { labelQuoteOffer } from '../server/labelQuoteRules.js'
 import { upper } from './displayCase.js'
 import { quantityLabel } from '../server/quantityUnits.js'
+import { retroactiveOrderDay } from '../server/retroactiveEntry.js'
+import { uploadPurchaseOrders } from './purchaseOrders.js'
 
 // The customer said no to the proposal sent. The offer is closed as declined and the option counts in its acceptance rate.
 export default function DeclineProposalModal({ offer, onConfirm, onClose }) {
@@ -56,20 +58,51 @@ export function UndoRejectModal({ offer, onConfirm, onClose }) {
 
 const brl = (value) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
-// Accepting creates the OS right away and takes its material out of the stock, so it is confirmed first.
-export function AcceptOfferModal({ offer, onConfirm, onClose }) {
-  const [busy, setBusy] = useState(false), [error, setError] = useState('')
+// Accepting creates the OS right away and takes its material out of the stock, so it is confirmed first. It also asks
+// for the client's documents: Nº do pedido de compra, Nota de entrada and their files (more than one, kept in "Anexos
+// administrativos"). "Sim, aceitar e gerar a OS" needs both numbers; "Gerar OS com informações pendentes" keeps whatever
+// was filled in and leaves the rest for Ver OS, where Serviços em andamento keeps pointing it out. The date of the OS is
+// not asked: a retroactive offer opens its OS on its "Data da solicitação", the others on the day of the acceptance.
+// onConfirm({ purchaseOrderNumber, entryInvoiceNumber }) accepts and returns the OS; onAccepted(order) refreshes and opens it.
+export function AcceptOfferModal({ offer, onConfirm, onAccepted, onClose }) {
+  const formId = useId(), [busy, setBusy] = useState(false), [error, setError] = useState('')
+  const [purchaseOrder, setPurchaseOrder] = useState(''), [entryInvoice, setEntryInvoice] = useState(''), [files, setFiles] = useState([]), [opened, setOpened] = useState(null)
   const materials = (offer.resources?.materials || []).filter((material) => Number(material.quantity) > 0)
-  async function confirm() {
+  const retroDay = retroactiveOrderDay(offer)
+  async function accept() {
     setBusy(true); setError('')
-    try { await onConfirm(); onClose() } catch (caught) { setError(caught.message) } finally { setBusy(false) }
+    try {
+      const order = await onConfirm({ purchaseOrderNumber: purchaseOrder.trim(), entryInvoiceNumber: entryInvoice.trim() })
+      if (files.length) {
+        try { await uploadPurchaseOrders(order.code, files) } catch (caught) {
+          // The OS exists: the files can be attached again in Ver OS.
+          setOpened(order); setError(`A OS ${order.code} foi gerada, mas os anexos não foram enviados (${caught.message}). Anexe de novo em Ver OS › Anexos administrativos.`); return
+        }
+      }
+      await onAccepted?.(order)
+      onClose()
+    } catch (caught) { setError(caught.message) } finally { setBusy(false) }
   }
+  const submit = (event) => { event.preventDefault(); accept() }
+  const finish = async () => { await onAccepted?.(opened); onClose() }
   // An etiqueta opens its OS without proposal: the quote comes at the end, with what was really used.
   const label = labelQuoteOffer(offer)
-  return <PayableModal title={label ? 'Abrir a OS da etiqueta?' : 'Tem certeza que deseja aceitar a oferta?'} busy={busy} onClose={onClose} footer={<><button className="admin-tool-button" type="button" disabled={busy} onClick={onClose}>Cancelar</button><button className="admin-tool-button admin-tool-button--primary" type="button" disabled={busy} onClick={confirm}>{busy ? (label ? 'Abrindo...' : 'Aceitando...') : label ? 'Sim, abrir a OS' : 'Sim, aceitar e gerar a OS'}</button></>}>
+  const pendingLabel = label ? 'Abrir OS com informações pendentes' : 'Gerar OS com informações pendentes'
+  const footer = opened ? <button className="admin-tool-button admin-tool-button--primary" type="button" onClick={finish}>Fechar</button>
+    : <><button className="admin-tool-button" type="button" disabled={busy} onClick={onClose}>Cancelar</button><button className="admin-tool-button" type="button" disabled={busy} title="Gera a OS com o que foi preenchido. O que faltar pode ser informado depois em Ver OS." onClick={accept}>{pendingLabel}</button><button className="admin-tool-button admin-tool-button--primary" type="submit" form={formId} disabled={busy}>{busy ? (label ? 'Abrindo...' : 'Aceitando...') : label ? 'Sim, abrir a OS' : 'Sim, aceitar e gerar a OS'}</button></>
+  return <PayableModal title={label ? 'Abrir a OS da etiqueta?' : 'Tem certeza que deseja aceitar a oferta?'} busy={busy} onClose={opened ? finish : onClose} footer={footer}>
     <p><strong>{offer.code} · {offer.service}</strong></p>
     {label ? <dl className="offer-decision-facts"><div><dt>Etiqueta</dt><dd>{offer.labelNumber}</dd></div><div><dt>Valor da OS</dt><dd>Orçamento pendente</dd></div><div><dt>Quantidade</dt><dd>{quantityLabel(offer.quantity, offer.quantityUnit, { short: true })}</dd></div></dl>
       : <dl className="offer-decision-facts"><div><dt>Opção</dt><dd>Proposta {offer.proposal?.key}</dd></div><div><dt>Valor da OS</dt><dd>{brl(osValueOf(offer.proposal))}</dd></div><div><dt>Quantidade</dt><dd>{quantityLabel(offer.quantity, offer.quantityUnit, { short: true })}</dd></div></dl>}
+    <form id={formId} className="payable-form offer-accept-po" onSubmit={submit}><fieldset disabled={busy || Boolean(opened)}>
+      <div className="offer-accept-po-row">
+        <label>Nº do pedido de compra<input value={purchaseOrder} maxLength={80} onChange={(event) => setPurchaseOrder(event.target.value)} placeholder="Número enviado pelo cliente" required /></label>
+        <label>Nota de entrada<input value={entryInvoice} maxLength={80} onChange={(event) => setEntryInvoice(event.target.value)} placeholder="Número da nota de entrada" required /></label>
+      </div>
+      <label>Anexos (opcional)<input type="file" multiple aria-label="Anexos do pedido de compra e da nota de entrada" onChange={(event) => setFiles([...event.target.files])} /></label>
+      <p className="offer-accept-po-note">Os anexos vão para os Anexos administrativos da OS. Sem algum destes dados agora? Use “{pendingLabel}”: o que faltar pode ser informado depois em Ver OS.</p>
+    </fieldset></form>
+    {retroDay && <p className="offer-accept-date-note">Lançamento retroativo: a OS fica com a data da solicitação, {retroDay.split('-').reverse().join('/')}.</p>}
     {label && <p>A OS da etiqueta abre sem proposta, com a estimativa de material e horas. Quando os operadores concluírem todas as peças, o orçamento é gerado com as horas trabalhadas e o material realmente usado, no botão <strong>Aguardando NF-e</strong>.</p>}
     <p>A OS será gerada agora e aparecerá para os operadores.{materials.length ? ' O material disponível sai do estoque neste momento:' : ''}</p>
     {materials.length > 0 && <ul className="offer-decision-list">{materials.map((material) => <li key={material.id}>{material.name}{material.detail ? ` (${material.detail})` : ''}: {formatQuantity(material.quantity, material.unit)}</li>)}</ul>}

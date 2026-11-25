@@ -141,6 +141,8 @@ try {
   await page.getByRole('heading', { name: 'Fazer proposta', exact: true }).waitFor()
   assert.equal((await margins())[0], `${savedProposal.margin.toFixed(1).replace('.', ',')}%`, 'the saved option shows its margin')
   await page.getByRole('button', { name: 'Aceitar Oferta', exact: true }).click()
+  await page.getByRole('dialog', { name: 'Tem certeza que deseja aceitar a oferta?' }).getByLabel('Nº do pedido de compra').fill('4500991')
+  await page.getByRole('dialog', { name: 'Tem certeza que deseja aceitar a oferta?' }).getByLabel('Nota de entrada', { exact: true }).fill('NF-991')
   await page.getByRole('dialog', { name: 'Tem certeza que deseja aceitar a oferta?' }).getByRole('button', { name: 'Sim, aceitar e gerar a OS', exact: true }).click()
   await page.locator('.order-detail-card').waitFor()
   // Accepted: the request appears with the OS, is shared with other computers and survives a reload.

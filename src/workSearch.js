@@ -1,7 +1,10 @@
+import { offerRequesterNames } from '../server/offerRequesters.js'
+
 // The magnifier of Ofertas e serviços, Serviços em andamento and Serviços concluídos: one rule for the three screens.
-// It finds service, client, offer and OS codes, label, quote number and the name of any attachment — of the offer, of
-// its proposal e-mails, of the OS and of its "Anexos administrativos" (order.purchaseOrders). An offer and its OS are one
-// job: a file attached to either finds both. Accents and capitals do not matter.
+// It finds service, client, offer and OS codes, requesters and buyer, label, quote number, the client's purchase order
+// number, the nota de entrada and the name of any attachment — of the offer, of its proposal e-mails, of the OS and of its "Anexos
+// administrativos" (order.purchaseOrders). An offer and its OS are one job: what belongs to either finds both. Accents
+// and capitals do not matter.
 export const workSearchPlaceholder = 'Buscar por serviço, cliente, OS, cotação ou anexo...'
 
 export const foldSearch = (value) => String(value ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLocaleLowerCase('pt-BR').trim()
@@ -12,12 +15,12 @@ const quoteNumbers = (proposal) => { const document = proposal?.document; return
 
 function offerTerms(offer) {
   if (!offer) return []
-  return [offer.service, offer.company, offer.code, offer.labelNumber, offer.orderCode, ...quoteNumbers(offer.proposal), ...names(offer.attachments), ...(offer.proposalEmails || []).flatMap((email) => names(email.attachments))]
+  return [offer.service, offer.company, offer.code, offer.labelNumber, offer.orderCode, ...offerRequesterNames(offer), offer.buyer, ...quoteNumbers(offer.proposal), ...names(offer.attachments), ...(offer.proposalEmails || []).flatMap((email) => names(email.attachments))]
 }
 
 function orderTerms(order) {
   if (!order) return []
-  return [order.service, order.company, order.code, order.labelNumber, ...quoteNumbers(order.proposal), ...(order.labelQuote?.versions || []).map((version) => version.number), ...names(order.attachments), ...names(order.purchaseOrders)]
+  return [order.service, order.company, order.code, order.labelNumber, order.purchaseOrderNumber, order.entryInvoiceNumber,...quoteNumbers(order.proposal), ...(order.labelQuote?.versions || []).map((version) => version.number), ...names(order.attachments), ...names(order.purchaseOrders)]
 }
 
 // `offers` and `orders` are the full lists, so each side also searches what belongs to the other.

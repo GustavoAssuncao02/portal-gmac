@@ -631,6 +631,30 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
       response.json({ ok: true })
     } catch (error) { handleError(response, error) }
   })
+  // Nº do pedido de compra and Nota de entrada: asked when the offer is accepted ("Gerar OS com informações pendentes"
+  // leaves them for later) and filled in or corrected in Ver OS. A field left out of the body is not touched; an empty
+  // one is removed. Like the Anexos administrativos, they never reach the operators (operatorOrder).
+  // [field, history type, label, gender ending of its words]
+  const purchaseFields = [['purchaseOrderNumber', 'purchase_order_number', 'Nº do pedido de compra', 'o'], ['entryInvoiceNumber', 'entry_invoice_number', 'Nota de entrada', 'a']]
+  configured.put('/orders/:code/purchase-info', requireAdmin, async (request, response) => {
+    const body = request.body ?? {}
+    try {
+      const order = await mutateStore((store) => {
+        const item = store.orders.find((entry) => entry.code === request.params.code)
+        if (!item) throw Object.assign(new Error('OS não encontrada.'), { status: 404 })
+        for (const [key, type, label, g] of purchaseFields) {
+          if (!(key in body)) continue
+          const value = clean(body[key], 80), before = item[key] || ''
+          if (before === value) continue
+          if (value) item[key] = value
+          else delete item[key]
+          recordOrderEvent(item, type, request.adminName, !value ? `${label} removid${g} (era ${before}).` : before ? `${label} alterad${g} de ${before} para ${value}.` : `${label} informad${g}: ${value}.`)
+        }
+        return item
+      })
+      response.json({ item: order })
+    } catch (error) { handleError(response, error) }
+  })
   // Interno/Externo of the OS: each switch is kept with who made it, to measure the time spent in each one.
   configured.put('/orders/:code/location', requireAdmin, async (request, response) => {
     if (!validServiceLocation(request.body?.location)) return response.status(400).json({ message: 'Escolha se o serviço é interno ou externo.' })
@@ -767,6 +791,9 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
   })
   configured.post('/offers/:id/accept', requireAdmin, async (request, response) => {
     let connection
+    // Nº do pedido de compra and Nota de entrada: asked on the acceptance; "Gerar OS com informações pendentes" keeps what
+    // was filled in and leaves the rest for Ver OS.
+    const purchaseOrderNumber = clean(request.body?.purchaseOrderNumber, 80), entryInvoiceNumber = clean(request.body?.entryInvoiceNumber, 80)
     try {
       const order = await mutateStore(async (store) => {
         const item = store.offers.find((entry) => entry.id === request.params.id)
@@ -786,7 +813,7 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
         // Lançamento retroativo: an offer entered with an earlier "Data da solicitação" opens its OS on that same day, with
         // nothing asked again on the acceptance; the real moment of the entry is kept in registeredAt.
         const now = new Date(), orderDay = retroactiveOrderDay(item), retroactive = Boolean(orderDay)
-        const created = existing || { code: nextCode('OS', [...store.orders, ...(store.cancelledOrders || [])]), offerId: item.id, createdAt: retroactive ? dayMoment(orderDay, now) : now.toISOString(), ...(retroactive ? { registeredAt: now.toISOString() } : {}), createdBy: request.adminId ?? null, status: 'Em andamento', company: item.company, cnpj: item.cnpj, service: item.service, description: item.description, labelNumber: item.labelNumber, quantity: item.quantity, quantityUnit: quantityUnitOf(item.quantityUnit), deadline: item.deadline, requestedAt: item.requestedAt, attachments: [...item.attachments], resources: item.resources, proposal: label ? labelPlaceholderProposal(item) : item.proposal, ...(label ? { labelQuote: { pending: true, openedAt: new Date().toISOString(), openedByName: request.adminName || 'Administrador', estimate: labelEstimate(item.resources) } } : {}) }
+        const created = existing || { code: nextCode('OS', [...store.orders, ...(store.cancelledOrders || [])]), offerId: item.id, createdAt: retroactive ? dayMoment(orderDay, now) : now.toISOString(), ...(retroactive ? { registeredAt: now.toISOString() } : {}), ...(purchaseOrderNumber ? { purchaseOrderNumber } : {}), ...(entryInvoiceNumber ? { entryInvoiceNumber } : {}), createdBy: request.adminId ?? null, status: 'Em andamento', company: item.company, cnpj: item.cnpj, service: item.service, description: item.description, labelNumber: item.labelNumber, quantity: item.quantity, quantityUnit: quantityUnitOf(item.quantityUnit), deadline: item.deadline, requestedAt: item.requestedAt, attachments: [...item.attachments], resources: item.resources, proposal: label ? labelPlaceholderProposal(item) : item.proposal, ...(label ? { labelQuote: { pending: true, openedAt: new Date().toISOString(), openedByName: request.adminName || 'Administrador', estimate: labelEstimate(item.resources) } } : {}) }
         const materials = created.resources?.materials || []
         let consumption = []
         if (materials.length && pool) {
@@ -799,7 +826,11 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
           const error = new Error('O banco de estoque precisa estar disponível para baixar os materiais e gerar a OS.'); error.status = 503; throw error
         }
         created.inventoryConsumption = { processedAt: new Date().toISOString(), materials: consumption.map(({ materialIndexes, ...row }) => row) }
-        if (!existing) { Object.assign(created, pieceTracking(store, created)); recordOrderEvent(created, 'order_created', request.adminName, [label ? `OS da etiqueta ${item.labelNumber} aberta sem proposta (${item.code || item.id}): o orçamento é gerado no fim, com as horas e o material usados.` : `OS gerada a partir da proposta aceita (${item.code || item.id}).`, retroactive ? `Lançamento retroativo: data da OS ${brDay(orderDay)}.` : ''].filter(Boolean).join(' ')); store.orders.unshift(created) }
+        if (!existing) { Object.assign(created, pieceTracking(store, created)); recordOrderEvent(created, 'order_created', request.adminName, [label ? `OS da etiqueta ${item.labelNumber} aberta sem proposta (${item.code || item.id}): o orçamento é gerado no fim, com as horas e o material usados.` : `OS gerada a partir da proposta aceita (${item.code || item.id}).`, purchaseOrderNumber ? `Nº do pedido de compra: ${purchaseOrderNumber}.` : 'Sem pedido de compra.', entryInvoiceNumber ? `Nota de entrada: ${entryInvoiceNumber}.` : 'Sem nota de entrada.', retroactive ? `Lançamento retroativo: data da OS ${brDay(orderDay)}.` : ''].filter(Boolean).join(' ')); store.orders.unshift(created) }
+        else {
+          if (purchaseOrderNumber && !existing.purchaseOrderNumber) existing.purchaseOrderNumber = purchaseOrderNumber
+          if (entryInvoiceNumber && !existing.entryInvoiceNumber) existing.entryInvoiceNumber = entryInvoiceNumber
+        }
         item.orderCode = created.code
         item.status = 'accepted'
         if (created.labelQuote) item.labelQuote = { pending: created.labelQuote.pending }

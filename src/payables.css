@@ -182,6 +182,14 @@
 .offer-decision-facts dt { color:#6b84a0; font-size:11px; }
 .offer-decision-facts dd { margin:2px 0 0; color:#173f6a; font-weight:700; }
 .offer-decision-list { margin:0; padding-left:18px; display:grid; gap:4px; font-size:13px; }
+/* Acceptance of an offer: the client's purchase order (number + optional file); the date of the OS is not asked. */
+.payable-form.offer-accept-po { margin:0; max-width:none; }
+.offer-accept-po > fieldset { gap:8px; }
+.offer-accept-po input[type=file] { font-size:13px; }
+.offer-accept-po-note { margin:0; color:#5b6f82; font-size:12px; }
+.offer-accept-po-row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+@media(max-width:560px) { .offer-accept-po-row { grid-template-columns:minmax(0,1fr); } }
+.offer-accept-date-note { margin:0; color:#a35a00; font-size:12px; font-weight:600; }
 @media(max-width:560px) { .offer-decision-facts { grid-template-columns:minmax(0,1fr); } }
 /* Closing of the bank reconciliation (account + month): open, closed (locked) or reopened; the closed ones are listed below. */
 .bank-closing { display:flex; flex-wrap:wrap; align-items:center; gap:12px 20px; margin:0 0 18px; padding:14px 16px; border:1px solid #d8e4ef; border-left:4px solid #8aa2b8; border-radius:6px; background:#fff; }

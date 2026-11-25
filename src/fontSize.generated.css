@@ -230,6 +230,7 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .os-purchase-file { font-size: inherit; }
 :root:is([data-font-size="small"], [data-font-size="large"]) .os-purchase-remove { font-size: calc(16px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .os-deadline-changed { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .os-po-number-edit { font-size: inherit; font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .os-history-changes { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .os-atypical { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .os-atypical-tip { font-size: calc(12px * var(--account-font-scale)); }
@@ -472,6 +473,9 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .registration-modal-form .registration-roles-options label { font-size: calc(14px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .offer-decision-facts dt { font-size: calc(11px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .offer-decision-list { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .offer-accept-po input[type=file] { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .offer-accept-po-note { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .offer-accept-date-note { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .bank-closing-status { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .bank-closing-status strong { font-size: calc(14px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .bank-closings li { font-size: calc(13px * var(--account-font-scale)); }
@@ -1357,6 +1361,7 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .weight-result--length small { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .calculator-contact-prompt { font-size: calc(14px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .admin-os-po::before { font-size: calc(10px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .admin-os-po-missing { font-size: calc(10.5px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .admin-os-sort { font-size: inherit; }
 :root:is([data-font-size="small"], [data-font-size="large"]) .admin-os-collaborator-filter label { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .admin-os-collaborator-filter select { font-size: inherit; }

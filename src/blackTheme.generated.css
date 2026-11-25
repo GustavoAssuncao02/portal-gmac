@@ -1068,6 +1068,18 @@
 :root[data-theme="dark"][data-tone="black"] .os-deadline-changed {
     color: #bec1c5
 }
+:root[data-theme="dark"][data-tone="black"] .os-po-number-edit {
+    border: 1px solid #303133;
+    background: #1a1b1c;
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .os-po-number-edit:hover {
+    border-color: #47494c
+}
+:root[data-theme="dark"][data-tone="black"][data-theme="dark"] .os-po-number-edit {
+    border-color: #303133;
+    color: #bec1c5
+}
 :root[data-theme="dark"][data-tone="black"] .os-atypical {
     color: #bfc2c5
 }
@@ -2331,6 +2343,9 @@
 }
 :root[data-theme="dark"][data-tone="black"] .offer-decision-facts dd {
     color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .offer-accept-po-note {
+    color: #bfc2c5
 }
 :root[data-theme="dark"][data-tone="black"] .bank-closing {
     border: 1px solid #303133;
@@ -7075,6 +7090,12 @@
 :root[data-theme="dark"][data-tone="black"][data-theme="dark"] .admin-os-po--no {
     border-color: #303133
 }
+:root[data-theme="dark"][data-tone="black"] .admin-os-po-missing {
+    color: #bfc2c5
+}
+:root[data-theme="dark"][data-tone="black"][data-theme="dark"] .admin-os-po-missing {
+    color: #bec2c5
+}
 :root[data-theme="dark"][data-tone="black"] .admin-os-sort:focus-visible {
     outline: 2px solid #47494c
 }
@@ -7561,6 +7582,9 @@
     border-color: #2d2f30;
     background: #141515
 }
+:root[data-theme="dark"][data-tone="black"] .os-po-number-edit {
+    border-color: #3c3e40
+}
 :root[data-theme="dark"][data-tone="black"] .os-atypical, :root[data-theme="dark"][data-tone="black"] .os-atypical-info {
     color: #d1d3d5
 }
@@ -7695,6 +7719,9 @@
 }
 :root[data-theme="dark"][data-tone="black"] .admin-os-po--no {
     background: #2e1517
+}
+:root[data-theme="dark"][data-tone="black"] .admin-os-po-missing {
+    color: #c6c9cb
 }
 :root[data-theme="dark"][data-tone="black"] .admin-os-collaborator-filter label, :root[data-theme="dark"][data-tone="black"] .admin-os-collaborator-filter span {
     color: #c6c9cc

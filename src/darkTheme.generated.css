@@ -1217,6 +1217,18 @@
 :root[data-theme="dark"] .os-deadline-changed {
     color: #b7c1cc
 }
+:root[data-theme="dark"] .os-po-number-edit {
+    border: 1px solid #36516f;
+    background: #162b43;
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .os-po-number-edit:hover {
+    border-color: #4778ae
+}
+:root[data-theme="dark"][data-theme="dark"] .os-po-number-edit {
+    border-color: #36516f;
+    color: #a9c1da
+}
 :root[data-theme="dark"] .os-atypical {
     color: #b4c2d0
 }
@@ -2737,6 +2749,12 @@
 }
 :root[data-theme="dark"] .offer-decision-facts dd {
     color: #e1ebf6
+}
+:root[data-theme="dark"] .offer-accept-po-note {
+    color: #b7c2cd
+}
+:root[data-theme="dark"] .offer-accept-date-note {
+    color: #ecbf89
 }
 :root[data-theme="dark"] .bank-closing {
     border: 1px solid #36516f;
@@ -8276,6 +8294,18 @@
 :root[data-theme="dark"][data-theme="dark"] .admin-os-po--no {
     border-color: #36516f;
     color: #ec8990
+}
+:root[data-theme="dark"] .admin-os-po-missing {
+    color: #b7c2cd
+}
+:root[data-theme="dark"] .admin-os-po-missing > span::before {
+    background: #896529
+}
+:root[data-theme="dark"][data-theme="dark"] .admin-os-po-missing {
+    color: #b0c2d3
+}
+:root[data-theme="dark"][data-theme="dark"] .admin-os-po-missing > span::before {
+    background: #906723
 }
 :root[data-theme="dark"] .admin-os-sort:focus-visible {
     outline: 2px solid #4778ae

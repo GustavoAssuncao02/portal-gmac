@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import './orderDetails.css'
 import { stageCodeOf, stageLabel } from '../server/serviceStages.js'
 import OrderEditModal, { OrderActionModal, orderEditDraft } from './OrderEditModal.jsx'
@@ -21,6 +21,8 @@ import { formatQuantity } from '../server/materialUnits.js'
 import { SortableRows, SortHeader } from './RegistryList.jsx'
 import { upper } from './displayCase.js'
 import { backdropClose } from './dialogBackdrop.js'
+import { PayableModal } from './PayableModal.jsx'
+import { savePurchaseInfo, uploadPurchaseOrders } from './purchaseOrders.js'
 
 const currency = (value) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const date = (value) => value ? new Date(value).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : 'Não informado'
@@ -30,7 +32,7 @@ const duration = (value) => {
   return [Math.floor(seconds / 3600), Math.floor(seconds % 3600 / 60), seconds % 60].map((part) => String(part).padStart(2, '0')).join(':')
 }
 const statusLabels = { waiting: 'Aguardando', running: 'Em execução', paused: 'Pausado', stage_done: 'Etapa concluída', finalizing: 'Finalizando', completed: 'Concluído' }
-const eventLabels = { started: 'Início', resumed: 'Retomada', paused: 'Pausa', stage_completed: 'Etapa concluída', machine_changed: 'Troca de máquina', labor_service_changed: 'Troca de serviço de hora homem', resource_changed: 'Troca entre máquina e serviço', session_ended: 'Sessão encerrada na conclusão', stage_progress: 'Peças registradas', completed: 'Conclusão', completion_acknowledged: 'Conclusão confirmada no painel', admin_interrupted: 'Interrupção administrativa', stages_configured: 'Etapas configuradas', order_edited: 'OS editada', order_reopened: 'OS reaberta', order_created: 'OS criada', attachment_added: 'Anexo incluído', purchase_order_added: 'Anexo administrativo adicionado', purchase_order_removed: 'Anexo administrativo removido', payable_event: 'Contas a pagar', receivable_event: 'Contas a receber', stage_changed: 'Troca de etapa', marked_atypical: 'Marcada como OS atípica', unmarked_atypical: 'Desmarcada como OS atípica', location_changed: 'Tipo de serviço alterado', attachment_removed: 'Anexo removido' }
+const eventLabels = { started: 'Início', resumed: 'Retomada', paused: 'Pausa', stage_completed: 'Etapa concluída', machine_changed: 'Troca de máquina', labor_service_changed: 'Troca de serviço de hora homem', resource_changed: 'Troca entre máquina e serviço', session_ended: 'Sessão encerrada na conclusão', stage_progress: 'Peças registradas', completed: 'Conclusão', completion_acknowledged: 'Conclusão confirmada no painel', admin_interrupted: 'Interrupção administrativa', stages_configured: 'Etapas configuradas', order_edited: 'OS editada', order_reopened: 'OS reaberta', order_created: 'OS criada', attachment_added: 'Anexo incluído', purchase_order_added: 'Anexo administrativo adicionado', purchase_order_number: 'Nº do pedido de compra', entry_invoice_number: 'Nota de entrada',purchase_order_removed: 'Anexo administrativo removido', payable_event: 'Contas a pagar', receivable_event: 'Contas a receber', stage_changed: 'Troca de etapa', marked_atypical: 'Marcada como OS atípica', unmarked_atypical: 'Desmarcada como OS atípica', location_changed: 'Tipo de serviço alterado', attachment_removed: 'Anexo removido' }
 
 const moment = (value) => new Date(value).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })
 // Operation times are typed and shown in Bahia time (UTC-3, without daylight saving time).
@@ -398,6 +400,30 @@ function PurchaseOrders({ order, onChanged, Icon }) {
   </section>
 }
 
+// Pedido de compra e nota de entrada: what the acceptance left pending is filled in here; the files go to "Anexos
+// administrativos". A number erased on an OS that had one removes it.
+function PurchaseInfoModal({ order, focus, onSaved, onClose }) {
+  const formId = useId(), [purchaseOrder, setPurchaseOrder] = useState(order.purchaseOrderNumber || ''), [entryInvoice, setEntryInvoice] = useState(order.entryInvoiceNumber || '')
+  const [files, setFiles] = useState([]), [busy, setBusy] = useState(false), [error, setError] = useState('')
+  async function submit(event) {
+    event.preventDefault()
+    setBusy(true); setError('')
+    try { await savePurchaseInfo(order.code, { purchaseOrderNumber: purchaseOrder.trim(), entryInvoiceNumber: entryInvoice.trim() }); if (files.length) await uploadPurchaseOrders(order.code, files); await onSaved?.(); onClose() } catch (caught) { setError(caught.message) } finally { setBusy(false) }
+  }
+  return <PayableModal title="Pedido de compra e nota de entrada" busy={busy} onClose={onClose} footer={<><button className="admin-tool-button" type="button" disabled={busy} onClick={onClose}>Cancelar</button><button className="admin-tool-button admin-tool-button--primary" type="submit" form={formId} disabled={busy}>{busy ? 'Salvando...' : 'Salvar'}</button></>}>
+    <p><strong>{order.code} · {order.service}</strong></p>
+    <form id={formId} className="payable-form offer-accept-po" onSubmit={submit}><fieldset disabled={busy}>
+      <div className="offer-accept-po-row">
+        <label>Nº do pedido de compra<input value={purchaseOrder} maxLength={80} onChange={(event) => setPurchaseOrder(event.target.value)} placeholder="Número enviado pelo cliente" autoFocus={focus !== 'entry'} /></label>
+        <label>Nota de entrada<input value={entryInvoice} maxLength={80} onChange={(event) => setEntryInvoice(event.target.value)} placeholder="Número da nota de entrada" autoFocus={focus === 'entry'} /></label>
+      </div>
+      <label>Anexos (opcional)<input type="file" multiple aria-label="Anexos do pedido de compra e da nota de entrada" onChange={(event) => setFiles([...event.target.files])} /></label>
+      <p className="offer-accept-po-note">Os anexos vão para os Anexos administrativos desta OS. Apague um número para tirá-lo da OS.</p>
+    </fieldset></form>
+    {error && <p className="admin-tool-error" role="alert">{error}</p>}
+  </PayableModal>
+}
+
 const plannedTime = (minutes) => { const hours = Math.floor(minutes / 60), rest = minutes % 60; return hours ? `${hours}h${rest ? ` ${rest}min` : ''}` : `${rest}min` }
 
 // The stages of the OS with their pieces, the planned time and the machine or service of each one. "Editar tempos e
@@ -489,6 +515,7 @@ export default function OrderDetails({ order, offer, activeTime, stageNamesInput
   const [editOpen, setEditOpen] = useState(false)
   const [editConfirmed, setEditConfirmed] = useState(false)
   const [action, setAction] = useState(null)
+  const [purchaseOrderOpen, setPurchaseOrderOpen] = useState(false)
   const operation = order.operation
   const proposal = order.proposal || {}
   const materials = order.resources?.materials || []
@@ -501,6 +528,8 @@ export default function OrderDetails({ order, offer, activeTime, stageNamesInput
     <header className="os-detail-heading"><div className="os-detail-title"><button className="os-icon-button" type="button" onClick={onBack} aria-label="Voltar para a tela anterior" title="Voltar para a tela anterior"><Icon name="collapse" /></button><div><span>{order.code}</span><h2>{order.service}</h2><AtypicalToggle order={order} onChanged={onRefresh} /></div></div><div className="os-detail-actions">{operation?.status === 'waiting' && !operation.startedAt && <button className="os-button os-undo-accept" type="button" aria-haspopup="dialog" onClick={() => setUnaccepting(true)}>Desfazer aceite</button>}<button className="os-button" type="button" aria-haspopup="dialog" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setEditConfirmed(false); if (operation?.status === 'completed') setAction('edit'); else setEditOpen(true) }}><Icon name="edit" />Editar OS</button>{operation?.status === 'completed' && <button className="os-button" type="button" aria-haspopup="dialog" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setAction('reopen') }}><Icon name="expand" />Reabrir OS</button>}<button className="os-icon-button os-history-trigger os-info-trigger" type="button" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setHistoryOpen(true) }} aria-haspopup="dialog" aria-label="Histórico de operações" title="Histórico da OS: tudo o que foi feito, quem fez e quando"><Info size={20} aria-hidden="true" /></button></div></header>
     <Facts className="os-order-summary" items={[
       ['Cliente', order.company, `${documentKind(order.cnpj)}: ${order.cnpj || 'Não informado'}`], [requestersLabel(requesters.length), requesters.map(upper).join(', ') || null], ['Comprador', upper(offer?.buyer) || null], quoteNumberFact(order),
+      ['Nº do pedido de compra', order.purchaseOrderNumber || null, <button type="button" className="os-po-number-edit" aria-haspopup="dialog" aria-label={`${order.purchaseOrderNumber ? 'Alterar' : 'Informar'} o Nº do pedido de compra`} onClick={() => setPurchaseOrderOpen('purchase')}><Pencil size={13} aria-hidden="true" />{order.purchaseOrderNumber ? 'Alterar' : 'Informar'}</button>],
+      ['Nota de entrada', order.entryInvoiceNumber || 'Não informada',<button type="button" className="os-po-number-edit" aria-haspopup="dialog" aria-label={`${order.entryInvoiceNumber ? 'Alterar' : 'Informar'} a nota de entrada`} onClick={() => setPurchaseOrderOpen('entry')}><Pencil size={13} aria-hidden="true" />{order.entryInvoiceNumber ? 'Alterar' : 'Informar'}</button>],
       ['Número da etiqueta', order.labelNumber], ['Quantidade', `${number(order.quantity)} ${quantityWord(order.quantity, order.quantityUnit)}`],
       ['Prazo solicitado', date(order.deadline), order.deadlineChange && <span className="os-deadline-changed" title={`De ${date(order.deadlineChange.from)} para ${date(order.deadlineChange.to)} em ${moment(order.deadlineChange.at)}. Justificativa: ${order.deadlineChange.reason}`}>Prazo alterado por {order.deadlineChange.by}</span>], ['Solicitação', date(order.requestedAt)], ['OS criada em', date(order.createdAt)],
     ]} />
@@ -543,5 +572,6 @@ export default function OrderDetails({ order, offer, activeTime, stageNamesInput
     {interruptOpen && <InterruptSessionModal order={order} onConfirm={onInterrupt} onClose={() => setInterruptOpen(false)} Icon={Icon} />}
     {action && <OrderActionModal order={order} action={action} onClose={() => setAction(null)} onConfirm={action === 'reopen' ? onReopen : () => { setEditConfirmed(true); setEditOpen(true) }} />}
     {editOpen && <OrderEditModal order={order} confirmCompleted={editConfirmed} onSave={onEdit} onUpload={onUpload} onClose={() => setEditOpen(false)} />}
+    {purchaseOrderOpen && <PurchaseInfoModal order={order} focus={purchaseOrderOpen} onSaved={onRefresh} onClose={() => setPurchaseOrderOpen(false)} />}
   </article>
 }
