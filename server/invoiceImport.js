@@ -1,8 +1,10 @@
 import { PDFDocument } from 'pdf-lib'
 
-// Reads the invoices GMAC issues, in the two layouts it uses: the NFS-e of Feira de Santana (services) and the DANFE of an
-// NF-e (products). Each page is read from its text (the PDFs come from the issuing system, never scanned); a DANFE may take
-// more than one page ("FOLHA 1/2"), joined by its access key. Everything read is checked by the user before it is saved.
+// Reads the invoices GMAC issues, in the layouts it uses: the NFS-e of Feira de Santana (services) and the DANFE of an
+// NF-e (products), plus two more layouts of NFS-e: the DANFSe of the national NFS-e ("Documento Auxiliar da NFS-e") and
+// the newer NFS-e of Feira de Santana ("NOTA FISCAL DE SERVIÇOS ELETRÔNICA - NFS-e"). Each page is read from its text (the
+// PDFs come from the issuing system, never scanned); a DANFE may take more than one page ("FOLHA 1/2"), joined by its
+// access key. Everything read is checked by the user before it is saved.
 
 let pdfjs
 async function loadPdfjs() {
@@ -42,10 +44,15 @@ function valueBelow(page, label) {
 }
 const rowsBetween = (page, top, bottom) => page.rows.filter((row) => row.y < top && row.y > bottom)
 
+// The layout of a page: 'nfse', 'nfe', 'danfse' (national NFS-e) or 'nfseFeira' (newer NFS-e of Feira de Santana). The
+// DANFSe is looked for first: its own title is unmistakable, and the logo of some issuers spells "Nota Fiscal de Serviço
+// eletrônica", which would make it pass for the older NFS-e of Feira de Santana.
 function detect(page) {
   const text = page.rows.map((row) => row.text).join('\n')
+  if (/DOCUMENTO AUXILIAR DA NFS-?E/i.test(text)) return 'danfse'
   if (/NOTA FISCAL DE SERVI[ÇC]O ELETR[ÔO]NICA/i.test(text)) return 'nfse'
   if (/DANFE/.test(text) && /NOTA FISCAL ELETR[ÔO]NICA/i.test(text)) return 'nfe'
+  if (/NOTA FISCAL DE SERVI[ÇC]OS ELETR[ÔO]NICA/i.test(text)) return 'nfseFeira'
   return null
 }
 
@@ -122,6 +129,80 @@ function readNfe(pages) {
   return { kind: 'nfe', number, documentNumber: number, issueDate, customerName: customerName(valueBelow(page, nameLabel)), customerDocument: digits(valueBelow(page, documentLabel)), description: pages.flatMap(nfeProducts).join('\n'), valueCents, issCents: 0, netCents: valueCents, installments, warnings }
 }
 
+// The access key of the national NFS-e (50 digits): municipality (7), environment (1), kind of registration (1), the
+// issuer's CPF/CNPJ (14), the number of the NFS-e (13), year and month (4), code (9) and check digit (1).
+const nationalKey = (page) => /(?<!\d)(\d{50})(?!\d)/.exec(page.rows.map((row) => row.text).join('\n'))?.[1] || ''
+const keyNumber = (key) => key ? key.slice(23, 36).replace(/^0+/, '') : ''
+const keyEmitter = (key) => key ? key.slice(9, 23) : ''
+const plainDigitsNumber = (text) => /^\d+$/.test(String(text || '').trim()) ? String(text).trim() : ''
+// The label of a field of the taker: the labels of the provider are the same, so the first one under the section title.
+const labelUnder = (page, section, pattern) => section ? page.pieces.filter((piece) => pattern.test(piece.text) && piece.y < section.y + 3).sort((a, b) => b.y - a.y || a.x - b.x)[0] || null : null
+// The value of a column whose figures are aligned to the right edge of its label (the tables of the NFS-e of Feira de Santana).
+function valueUnder(page, label) {
+  if (!label) return ''
+  const edge = label.x + label.width
+  return page.pieces.filter((piece) => piece.y < label.y - 1 && piece.y > label.y - 20 && Math.abs(piece.x + piece.width - edge) < 4).sort((a, b) => b.y - a.y)[0]?.text || ''
+}
+// A due date written by hand in the text of the note ("VENCIMENTO 04/12/26", "Vencimento: 16/02/2027"): the whole note is
+// due on it.
+function writtenDue(text) {
+  const match = /VENCIMENTO:?\s*(\d{2})\/(\d{2})\/(\d{4}|\d{2})(?!\d)/i.exec(text || '')
+  if (!match || Number(match[1]) < 1 || Number(match[1]) > 31 || Number(match[2]) < 1 || Number(match[2]) > 12) return ''
+  return `${match[3].length === 2 ? `20${match[3]}` : match[3]}-${match[2]}-${match[1]}`
+}
+const federalWarning = (cents) => `A nota tem ${(cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} de retenções federais; o portal desconta só o ISS. Confira o valor.`
+
+// DANFSe of the national NFS-e: each field is a label with its value under it; the taker is the section "TOMADOR".
+function readDanfse(page) {
+  const key = nationalKey(page), warnings = []
+  const field = (pattern) => valueBelow(page, findPiece(page, pattern))
+  const number = plainDigitsNumber(field(/^N[ÚU]MERO DA NFS-?E$/i)) || keyNumber(key)
+  const issueDate = isoDate(field(/^DATA E HORA DA EMISS[ÃA]O DA NFS-?E$/i)) || isoDate(field(/^COMPET[ÊE]NCIA DA NFS-?E$/i))
+  const taker = findPiece(page, /^TOMADOR( \/ ADQUIRENTE| DO SERVI[ÇC]O)?$/i)
+  const name = valueBelow(page, labelUnder(page, taker, /^Nome \/ Nome Empresarial$/i))
+  const document = digits(valueBelow(page, labelUnder(page, taker, /^CNPJ \/ CPF \/ NIF$/i)))
+  // The service as described, and the complementary information (quote, purchase order, requester) without the line of
+  // the approximate taxes.
+  const described = findPiece(page, /^Descri[çc][ãa]o do Servi[çc]o$/i), taxes = findPiece(page, /^TRIBUTA[ÇC][ÃA]O MUNICIPAL/i)
+  const info = findPiece(page, /^INFORMA[ÇC][ÕO]ES COMPLEMENTARES$/i), stub = findPiece(page, /^DATA CIENTIFICA[ÇC][ÃA]O/i)
+  const service = described ? rowsBetween(page, described.y - 1, taxes ? taxes.y + 3 : described.y - 60).map((row) => row.text) : []
+  const extra = info ? rowsBetween(page, info.y - 1, stub ? stub.y + 3 : -Infinity).map((row) => row.text.replace(/^Inf\.?\s*Cont\.?:\s*/i, '')).filter((line) => line.length > 2 && !/^Totais aproximados/i.test(line)) : []
+  const description = [...service, ...extra].join('\n')
+  const valueCents = money(field(/^(VALOR DA OPERA[ÇC][ÃA]O \/ SERVI[ÇC]O|VALOR DO SERVI[ÇC]O)$/i)) || money(field(/^BC ISSQN$/i))
+  const issCents = /^Retido/i.test(field(/^Reten[çc][ãa]o do ISSQN$/i)) ? money(field(/^ISSQN Apurado$/i)) || 0 : 0
+  const netCents = money(field(/^VALOR L[ÍI]QUIDO DA NFS-?E$/i))
+  const federalCents = [/^IRRF$/i, /^Contribui[çc][ãa]o Previdenci[áa]ria - Retida$/i, /^Contribui[çc][õo]es Sociais - Retidas$/i].reduce((sum, pattern) => sum + (money(field(pattern)) || 0), 0)
+  if (federalCents) warnings.push(federalWarning(federalCents))
+  const due = writtenDue(description)
+  return { kind: 'nfse', number, documentNumber: number, issueDate, customerName: customerName(name), customerDocument: document, description, valueCents, issCents, netCents, installments: due ? [{ dueDate: due, valueCents }] : [], warnings, emitterDocument: keyEmitter(key) }
+}
+
+// Newer NFS-e of Feira de Santana: the number of the note is an image, so it comes from the national access key at the
+// foot of the page; the values are in tables, each figure aligned to the right of its label.
+function readFeiraNfse(page) {
+  const key = nationalKey(page), warnings = []
+  const number = keyNumber(key)
+  const issueDate = isoDate(valueBelow(page, findPiece(page, /^Emiss[ãa]o( \(Hor[áa]rio de Bras[íi]lia\))?$/i)))
+  const taker = findPiece(page, /^TOMADOR DE SERVI[ÇC]OS$/i)
+  const name = valueBelow(page, labelUnder(page, taker, /^(Nome\s*\/\s*)?Raz[ãa]o Social$/i))
+  const document = digits(valueBelow(page, labelUnder(page, taker, /^CPF\s*\/\s*CNPJ$/i)))
+  // The service lines, as written (with the quote, the purchase order and the due date the issuer types in).
+  const described = findPiece(page, /^DESCRI[ÇC][ÃA]O DOS SERVI[ÇC]OS$/i), federal = findPiece(page, /^(TRIBUTOS FEDERAIS|VALORES)$/i)
+  const description = described ? rowsBetween(page, described.y - 1, federal ? federal.y + 3 : -Infinity).map((row) => row.text).join('\n') : ''
+  const column = (pattern) => money(valueUnder(page, findPiece(page, pattern)))
+  const valueCents = column(/^Valor dos Servi[çc]os \(R\$\)$/i) || column(/^Valor Total \(R\$\)$/i)
+  const issCents = column(/^ISS Retido \(R\$\)$/i) || 0
+  const netCents = column(/^Valor L[íi]quido \(R\$\)$/i)
+  const federalCents = [/^INSS \(R\$\)$/i, /^IR \(R\$\)$/i, /^PIS \(R\$\)$/i, /^COFINS \(R\$\)$/i, /^CSLL \(R\$\)$/i, /^Outras Reten[çc][õo]es \(R\$\)$/i].reduce((sum, pattern) => sum + (column(pattern) || 0), 0)
+  if (federalCents) warnings.push(federalWarning(federalCents))
+  if (!number) warnings.push('O número da nota não foi encontrado no PDF. Informe o número.')
+  const due = writtenDue(description)
+  return { kind: 'nfse', number, documentNumber: number, issueDate, customerName: customerName(name), customerDocument: document, description, valueCents, issCents, netCents, installments: due ? [{ dueDate: due, valueCents }] : [], warnings, emitterDocument: keyEmitter(key) }
+}
+
+// How each layout is read: a DANFE may take several pages, the other layouts one.
+const readers = { nfse: (read) => readNfse(read[0]), nfe: readNfe, danfse: (read) => readDanfse(read[0]), nfseFeira: (read) => readFeiraNfse(read[0]) }
+
 // Splits the PDF into its invoices. Returns `notes` (with the pages of each one, numbered from 1) and `problems`, the
 // pages that could not be read as an invoice.
 export async function readInvoices(bytes) {
@@ -135,19 +216,19 @@ export async function readInvoices(bytes) {
     let open = null
     for (let number = 1; number <= document.numPages; number++) {
       const page = await readPage(await document.getPage(number))
-      const kind = detect(page)
-      if (!kind) { problems.push({ page: number, message: page.pieces.length ? 'A página não é uma NFS-e nem uma DANFE de NF-e.' : 'A página não tem texto (imagem ou escaneada).' }); open = null; continue }
-      if (kind === 'nfe') {
+      const layout = detect(page)
+      if (!layout) { problems.push({ page: number, message: page.pieces.length ? 'A página não é uma NFS-e nem uma DANFE de NF-e.' : 'A página não tem texto (imagem ou escaneada).' }); open = null; continue }
+      if (layout === 'nfe') {
         const key = nfeKey(page)
-        if (open?.kind === 'nfe' && key && open.key === key) { open.pages.push(number); open.read.push(page); continue }
-        open = { kind, key, pages: [number], read: [page] }
-      } else open = { kind, pages: [number], read: [page] }
+        if (open?.layout === 'nfe' && key && open.key === key) { open.pages.push(number); open.read.push(page); continue }
+        open = { layout, key, pages: [number], read: [page] }
+      } else open = { layout, pages: [number], read: [page] }
       notes.push(open)
     }
   } finally { await loading.destroy() }
   return {
     problems,
-    notes: notes.map(({ kind, key, pages, read }) => ({ ...(kind === 'nfse' ? readNfse(read[0]) : readNfe(read)), emitterDocument: key ? key.slice(6, 20) : '', pages })),
+    notes: notes.map(({ layout, key, pages, read }) => { const note = readers[layout](read); return { ...note, emitterDocument: key ? key.slice(6, 20) : note.emitterDocument || '', pages } }),
   }
 }
 

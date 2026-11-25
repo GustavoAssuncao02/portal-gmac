@@ -1,6 +1,13 @@
 // Each commit to main is a new version: add an entry at the top, with what changed in plain words for whoever uses the portal.
 export const releaseNotes = [
   {
+    version: '1.0.24',
+    date: '2026-11-25',
+    notes: [
+      'Contas a receber: importação da DANFSe nacional e da nova NFS-e de Feira',
+    ],
+  },
+  {
     version: '1.0.23',
     date: '2026-11-24',
     notes: [
