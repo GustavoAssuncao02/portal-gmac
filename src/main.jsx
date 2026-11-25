@@ -58,6 +58,7 @@ import { createWorkSearch, workSearchPlaceholder } from './workSearch.js'
 import ProposalDocumentModal, { modelLabel } from './ProposalDocumentModal.jsx'
 import RequestedDeadlineModal from './RequestedDeadlineModal.jsx'
 import LoginBrandPanel from './LoginBrandPanel.jsx'
+import VexoSignature from './VexoSignature.jsx'
 import { SeasonBackdrop, SeasonCardDecor, loginSeason, seasonClassName } from './loginThemes/LoginSeason.jsx'
 import { BirthdayGreeting, birthdayPreview, firstName, isBirthday } from './loginThemes/Birthday.jsx'
 import SectorPicker from './SectorPicker.jsx'
@@ -2860,6 +2861,7 @@ function App() {
           {message && <p className={`form-message${messageError ? ' form-message--error' : ''}`} role={messageError ? 'alert' : 'status'}>{message}</p>}
           </>}
         </div>
+        <VexoSignature season={season} />
       </section>
     </main>
     {birthdayScreen}
