@@ -1,0 +1,90 @@
+/* Configurações da conta (2026-11-24): the menu of sections on the left (a row of chips on narrow screens) and one
+   section at a time, in cards with one setting per row. The dark and black palettes come from npm run theme:build: the
+   colors that change with a state (selected, on/off) are only on the rules of each state, never on the base rule. */
+.account-settings-page { display: grid; grid-template-columns: 236px minmax(0, 1fr); gap: 28px; align-items: start; max-width: 1120px; }
+.account-settings-page + .account-release-footer { max-width: 1120px; }
+
+.account-settings-menu { position: sticky; top: 16px; display: grid; gap: 2px; min-width: 0; }
+.account-settings-menu > button { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 2px 10px; width: 100%; padding: 10px 12px; border: 0; border-radius: 8px; font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.account-settings-menu > button strong { font-weight: 600; }
+.account-settings-menu > button small { grid-column: 2; font-size: 12px; line-height: 1.3; }
+.account-settings-menu > button:not(.account-settings-menu--active) { background: transparent; color: #31516d; }
+.account-settings-menu > button:not(.account-settings-menu--active) small { color: #6b8096; }
+.account-settings-menu > button:not(.account-settings-menu--active):hover { background: #eef4fa; }
+.account-settings-menu > .account-settings-menu--active { background: #edf5ff; color: #155691; }
+.account-settings-menu > .account-settings-menu--active small { color: #4b74a0; }
+.account-settings-menu > button:focus-visible { outline: 2px solid #467ba8; outline-offset: 1px; }
+.account-settings-menu > hr { width: calc(100% - 8px); margin: 8px 4px; border: 0; border-top: 1px solid #e0e8f0; }
+
+.account-settings-section { display: grid; gap: 16px; min-width: 0; }
+.account-section-heading h2 { margin: 0; color: #22486b; font-size: 20px; }
+.account-section-heading p { margin: 4px 0 0; color: #6b8096; font-size: 14px; }
+.account-section-heading .account-saved, .account-section-heading .account-saved-error { margin-top: 6px; }
+.account-saved { min-height: 18px; margin: 0; color: #4b74a0; font-size: 13px; }
+.account-saved-error-text { color: #b42318; font-size: 13px; }
+
+.account-card { min-width: 0; border: 1px solid #dce5ef; border-radius: 8px; background: #fff; }
+.account-card > header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding: 16px 22px 0; }
+.account-card h3 { display: flex; align-items: center; gap: 8px; margin: 0; color: #22486b; font-size: 16px; }
+.account-card h3 svg { flex: 0 0 auto; color: #4b74a0; }
+.account-card-description { margin: 4px 22px 0; color: #6b8096; font-size: 13px; }
+.account-card-description--last { margin-bottom: 16px; }
+.account-card-body { margin: 14px 22px 18px; }
+.account-card > .account-card-body + .account-card-body { margin-top: 0; }
+.account-card > header + .account-setting-row, .account-card > .account-card-description + .account-setting-row { margin-top: 12px; }
+
+.account-setting-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px 18px; padding: 14px 22px; border-top: 1px solid #e3eaf2; }
+.account-card > header + .account-setting-row, .account-card > .account-setting-row:first-child { border-top: 0; }
+.account-card > .account-setting-row:last-child { border-radius: 0 0 8px 8px; }
+.account-setting-text { display: grid; gap: 2px; min-width: 0; }
+.account-setting-text strong { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; color: #21496e; font-size: 14px; font-weight: 600; }
+.account-setting-text small { color: #6b8096; font-size: 13px; line-height: 1.4; }
+.account-setting-control { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; min-width: 0; }
+.account-setting-control select { min-width: 220px; max-width: 100%; }
+.account-setting-row--stack { grid-template-columns: minmax(0, 1fr); }
+.account-setting-row--child { padding-left: 46px; background: #f7fafd; }
+.account-setting-row--off { opacity: .5; }
+.account-setting-tag { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 4px; background: #e7f0fa; color: #155691; font-size: 11px; font-weight: 700; }
+.account-job-title-field { display: grid; justify-items: end; gap: 4px; min-width: 0; }
+.account-job-title-field input { width: 300px; max-width: 100%; }
+.account-card .account-sound-field select { flex: 1 1 200px; }
+.account-card .account-summary { margin: 16px 22px 18px; }
+.account-card .account-summary + .admin-tool-success { margin-top: 0; }
+
+/* The on/off switches (role="switch"): the knob takes the color of the text, so the dark modes keep it light. */
+.account-switch { position: relative; flex: 0 0 auto; width: 44px; height: 24px; padding: 0; border: 0; border-radius: 12px; color: #fff; cursor: pointer; transition: background-color 120ms ease; }
+.account-switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: currentColor; transition: left 120ms ease; }
+.account-switch[aria-checked="false"] { background: #9fb3c6; }
+.account-switch[aria-checked="true"] { background: #155691; }
+.account-switch[aria-checked="true"]::after { left: 23px; }
+.account-switch:disabled { cursor: not-allowed; }
+/* Phones give every button 44px of height (mobile.css); the switch keeps its shape. */
+.dashboard-shell .account-switch { min-height: 24px; }
+.account-switch:focus-visible { outline: 2px solid #467ba8; outline-offset: 2px; }
+
+/* Acesso do operador keeps its own card (OperatorAccessSettings.jsx), with the title at the size of the other cards. */
+.account-settings-section .operator-access-settings h2 { font-size: 16px; }
+
+@media (prefers-reduced-motion: reduce) { .account-switch, .account-switch::after { transition: none; } }
+
+@media (max-width: 900px) {
+  .account-settings-page { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .account-settings-menu { position: static; display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
+  .account-settings-menu > button { flex: 0 0 auto; grid-template-columns: auto auto; width: auto; padding: 6px 12px; border-radius: 999px; }
+  .account-settings-menu > button strong { white-space: nowrap; }
+  .account-settings-menu > button:not(.account-settings-menu--active) { border: 1px solid #cfdbe7; }
+  .account-settings-menu > .account-settings-menu--active { border: 1px solid #9dbbdb; }
+  .account-settings-menu > button small, .account-settings-menu > hr { display: none; }
+}
+@media (max-width: 760px) {
+  .account-card > header { padding: 14px 16px 0; }
+  .account-card-description { margin-left: 16px; margin-right: 16px; }
+  .account-card-body, .account-card .account-summary { margin-left: 16px; margin-right: 16px; }
+  .account-setting-row { grid-template-columns: minmax(0, 1fr); padding: 12px 16px; }
+  .account-setting-row:has(> .account-setting-control > .account-switch) { grid-template-columns: minmax(0, 1fr) auto; }
+  .account-setting-control { justify-content: flex-start; }
+  .account-setting-control select, .account-job-title-field, .account-job-title-field input { width: 100%; min-width: 0; }
+  .account-job-title-field { justify-items: stretch; }
+  .account-setting-row--child { padding-left: 16px; }
+  .account-card > header .admin-tool-button { width: 100%; }
+}

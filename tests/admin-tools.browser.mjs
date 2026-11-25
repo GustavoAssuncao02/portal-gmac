@@ -95,7 +95,9 @@ try {
   }
   await page.setViewportSize({ width: 1366, height: 900 })
   await navigate('Configurações')
-  // The account data is a summary; the form opens in a dialog.
+  // The account data is a summary (Minha conta, the first section); the form opens in a dialog.
+  await page.locator('.account-settings-menu').getByRole('button', { name: /^Minha conta/ }).click()
+  await page.getByText('Nenhuma alteração registrada', { exact: true }).waitFor()
   assert.equal(await page.getByLabel('Senha atual', { exact: true }).count(), 0)
   await page.getByRole('button', { name: 'Editar dados e senha', exact: true }).click()
   const accountDialog = page.getByRole('dialog', { name: 'Dados da conta' })
@@ -111,7 +113,8 @@ try {
   await page.getByRole('button', { name: 'Salvar alterações', exact: true }).click()
   await page.getByText('Conta atualizada com sucesso.', { exact: true }).waitFor()
   await accountDialog.waitFor({ state: 'detached' })
-  assert.match(await page.locator('.account-summary-card').first().innerText(), /Gustavo Novo/)
+  assert.match(await page.locator('.account-card').first().innerText(), /GUSTAVO NOVO/)
+  await page.getByText(/^Alterada em \d{2}\/\d{2}\/\d{4}/).waitFor()
   // Changing the password closes the earlier sessions, the one of these API checks included: a new one is opened.
   fixture.admin.Authorization = `Bearer ${(await fixture.request('/auth/login', 'POST', { cpf: env.DEMO_ADMIN_CPF, password: 'novaSenha123' })).data.token}`
   assert.equal(await page.locator('.account-copy strong').innerText(), 'Gustavo Novo')

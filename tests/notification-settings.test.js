@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createWorkflowFixture } from './workflowFixture.js'
 import { todayBahia } from '../server/payableRules.js'
-import { notificationDefaults, notificationSoundDefault, notificationSounds } from '../server/notificationRules.js'
+import { notesPreferenceDefaults, notificationDefaults, notificationSoundDefault, notificationSounds } from '../server/notificationRules.js'
 
 const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Gustavo' }
 const dateAfter = (days) => new Date(Date.parse(`${todayBahia()}T12:00:00Z`) + days * 86400000).toISOString().slice(0, 10)
@@ -17,7 +17,7 @@ test('payable reminder preferences are authenticated, strict, persistent per adm
     const auth = { Authorization: `Bearer ${token}` }
     const request = (path, method, body) => fixture.request(path, method, body, auth)
     const before = (await request('/auth/session')).data.user
-    assert.deepEqual((await request(route)).data.settings, { payableReminderDays: 3, receivableReminderDays: 3, sound: notificationSoundDefault, emailNotifications: true, ...notificationDefaults })
+    assert.deepEqual((await request(route)).data.settings, { payableReminderDays: 3, receivableReminderDays: 3, sound: notificationSoundDefault, emailNotifications: true, ...notificationDefaults, ...notesPreferenceDefaults })
     for (const value of [null, undefined, 0, 1, 4, 6, 8, '5', false, {}, [], 'invalid']) {
       assert.equal((await request(route, 'PATCH', { payableReminderDays: value })).status, 400, JSON.stringify(value))
     }

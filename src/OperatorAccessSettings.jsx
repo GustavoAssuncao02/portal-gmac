@@ -8,7 +8,7 @@ const moment = (value) => new Date(value).toLocaleString('pt-BR', { timeZone: 'A
 const changeLabel = (row) => [row.changes.includes('username') && `Usuário: ${row.usernameBefore ? userMask(row.usernameBefore) : '—'} → ${userMask(row.usernameAfter)}`, row.changes.includes('password') && 'Senha alterada'].filter(Boolean).join(' · ')
 
 // Shared login of the shop-floor tablets. Settings show a summary; the change opens in a dialog, asks for a reason and is kept.
-export default function OperatorAccessSettings() {
+export default function OperatorAccessSettings({ title = 'Acesso do operador' }) {
   const [data, setData] = useState(null), [error, setError] = useState(''), [message, setMessage] = useState(''), [busy, setBusy] = useState(false), [history, setHistory] = useState(false), [editing, setEditing] = useState(false)
   const [username, setUsername] = useState(''), [password, setPassword] = useState(''), [confirmation, setConfirmation] = useState(''), [reason, setReason] = useState(''), [show, setShow] = useState(false)
   useEffect(() => {
@@ -34,7 +34,7 @@ export default function OperatorAccessSettings() {
   }
   const last = data?.history?.[0]
   return <section className="account-summary-card operator-access-settings" aria-labelledby="operator-access-title">
-    <header><h2 id="operator-access-title">Acesso do operador</h2><button className="admin-tool-button" type="button" disabled={!data} onClick={openEditor}><KeyRound size={16} />Alterar acesso do operador</button></header>
+    <header><h2 id="operator-access-title">{title}</h2><button className="admin-tool-button" type="button" disabled={!data} onClick={openEditor}><KeyRound size={16} />Alterar acesso do operador</button></header>
     <p className="payable-muted">Login compartilhado dos tablets da produção. Cada operador ainda se identifica pelo seu código de 4 dígitos.</p>
     <dl className="account-summary"><div><dt>Usuário do operador</dt><dd>{data ? userMask(data.username) || '—' : 'Carregando...'}</dd></div>
       <div><dt>Senha</dt><dd className="operator-access-last">{data?.passwordChangedAt ? <span>Alterada em {moment(data.passwordChangedAt)}</span> : <span>{data?.source === 'env' ? 'Definida na instalação do servidor' : data ? 'Ainda não definida' : '—'}</span>}

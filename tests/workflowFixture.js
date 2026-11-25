@@ -16,7 +16,7 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   const directory = await mkdtemp(path.join(results, 'workflow-'))
   // The copied modules keep their data next to them; a DATA_DIR from the shell would point them at real data.
   delete process.env.DATA_DIR
-  for (const name of ['quantityUnits.js', 'developers.js', 'adminInventory.js', 'labelQuotes.js', 'labelQuoteRules.js', 'clientPaymentTerm.js', 'offerRequesters.js', 'emailTemplates.js', 'emailSignature.js', 'entryMode.js', 'registryHistory.js', 'materialStock.js', 'invoiceImport.js', 'loginThrottle.js', 'liveUpdates.js','planning.js','planningRules.js', 'byName.js', 'offers.js', 'stageLabor.js', 'proposalEmails.js', 'stageCatalog.js', 'orderHistory.js', 'pieces.js', 'access.js', 'orderMaterials.js', 'pendingMaterials.js', 'operations.js', 'orderEditing.js', 'operatorAuth.js', 'employeeAccess.js', 'employeeActivity.js', 'serviceStages.js', 'machines.js', 'laborServices.js', 'accounts.js', 'reports.js', 'reportData.js', 'documentExports.js', 'payables.js', 'payableRules.js', 'receivables.js', 'bankStatements.js', 'ofx.js', 'materialRequests.js', 'notificationRules.js', 'notificationEvents.js', 'operationSessions.js', 'operationEventTime.js', 'operationManualEvents.js', 'materialRequestCodes.js', 'notifications.js', 'fiscalCatalog.js', 'dataDirectory.js', 'proposalDocuments.js', 'clientDocument.js', 'proposalDefaults.js', 'proposalPdf.js', 'proposalBrand.js', 'proposalMath.js', 'moneyWords.js', 'store.js', 'materialUnits.js', 'banks.js', 'operatorAccount.js', 'registries.js', 'requesters.js','serviceLocation.js', 'materialRequestSources.js', 'inventory.js', 'inventoryAppearance.js', 'materialIcons.js', 'uploads.js', 'machineUsage.js', 'accountPlan.js', 'accountPlanRules.js', 'dre.js', 'dreRules.js', 'dreExport.js', 'passwordReset.js', 'supportTickets.js', 'ticketRules.js', 'sitePreRegistration.js', 'offerRequests.js', 'homeWidgets.js']) {
+  for (const name of ['quantityUnits.js', 'developers.js', 'adminInventory.js', 'labelQuotes.js', 'labelQuoteRules.js', 'clientPaymentTerm.js', 'offerRequesters.js', 'emailTemplates.js', 'emailSignature.js', 'entryMode.js', 'registryHistory.js', 'materialStock.js', 'invoiceImport.js', 'loginThrottle.js', 'liveUpdates.js','planning.js','planningRules.js', 'byName.js', 'offers.js', 'stageLabor.js', 'proposalEmails.js', 'stageCatalog.js', 'orderHistory.js', 'pieces.js', 'access.js', 'orderMaterials.js', 'pendingMaterials.js', 'operations.js', 'orderEditing.js', 'operatorAuth.js', 'employeeAccess.js', 'employeeActivity.js', 'serviceStages.js', 'machines.js', 'laborServices.js', 'accounts.js', 'reports.js', 'reportData.js', 'documentExports.js', 'payables.js', 'payableRules.js', 'receivables.js', 'bankStatements.js', 'ofx.js', 'materialRequests.js', 'notificationRules.js', 'notificationEvents.js', 'operationSessions.js', 'operationEventTime.js', 'operationManualEvents.js', 'materialRequestCodes.js', 'notifications.js', 'fiscalCatalog.js', 'dataDirectory.js', 'proposalDocuments.js', 'clientDocument.js', 'proposalDefaults.js', 'proposalPdf.js', 'proposalBrand.js', 'proposalMath.js', 'moneyWords.js', 'store.js', 'materialUnits.js', 'banks.js', 'operatorAccount.js', 'registries.js', 'requesters.js','serviceLocation.js', 'materialRequestSources.js', 'inventory.js', 'inventoryAppearance.js', 'materialIcons.js', 'uploads.js', 'machineUsage.js', 'accountPlan.js', 'accountPlanRules.js', 'dre.js', 'dreRules.js', 'dreExport.js', 'passwordReset.js', 'supportTickets.js', 'ticketRules.js', 'sitePreRegistration.js', 'offerRequests.js', 'homeWidgets.js', 'notes.js', 'noteRules.js']) {
     await copyFile(path.join(root, 'server', name), path.join(directory, name))
   }
   // PDFs use the bundled logo and fonts.
@@ -186,6 +186,12 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   // `ticketEmails` replaces the developers' e-mail list (SUPPORT_TICKET_EMAILS).
   const ticketMail = []
   app.use('/api', supportTicketsRouter(accounts, requireAdmin, { env: ticketEmails ? { SUPPORT_TICKET_EMAILS: ticketEmails.join(',') } : {}, cpfs: ticketDevelopers, mailer: { configured: () => true, send: async (message) => { ticketMail.push(message) } } }))
+  // Anotações e Tarefas: the e-mails stay in `notesMail`; `notesClock.now` moves the clock of the reminders (`notesSweep`).
+  const { default: notesRouter } = await import(pathToFileURL(path.join(directory, 'notes.js')))
+  const notesMail = []
+  const notesClock = { now: null }
+  const notes = notesRouter(accounts, requireAdmin, { now: () => notesClock.now ?? Date.now(), mailer: { configured: () => true, send: async (message) => { notesMail.push(message) } } })
+  app.use('/api', notes)
   // Ofertar Serviço do site, mounted as in the portal (/gmac/api/offer-requests) with the captcha, Receita and e-mail
   // simulated. Tests steer them through `siteOffers` on the fixture: `turnstile`/`receita` change the stub answers,
   // `env` is live (deleting TURNSTILE_SECRET_KEY tests the 503) and `mail` keeps what would reach the commercial team.
@@ -245,6 +251,9 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
     sentMail,
     proposalMail,
     ticketMail,
+    notesMail,
+    notesClock,
+    notesSweep: () => notes.sweep(),
     siteOffers: siteOfferControl,
     failNextMail: () => { mailControl.failNext = true },
     // A server module of this fixture (same database), for start-up tasks the HTTP routes do not run.

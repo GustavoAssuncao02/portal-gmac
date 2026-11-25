@@ -26,6 +26,12 @@ async function navigate(name) {
   await button.click()
   await page.waitForTimeout(100)
 }
+// Configurações (2026-11-24): one section at a time, chosen in the menu of the screen.
+const settingsSections = ['Minha conta', 'Aparência', 'Notificações', 'Anotações e Tarefas', 'Acesso do operador']
+async function settingsSection(label) {
+  await page.locator('.account-settings-menu').getByRole('button', { name: new RegExp(`^${label}`) }).click()
+  await page.locator('.account-section-heading h2').filter({ hasText: label }).waitFor()
+}
 async function capture(name) {
   await page.screenshot({ path: `test-results/theme/${slug(name)}.png`, fullPage: true })
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${name}: page overflow`)
@@ -68,6 +74,7 @@ try {
   assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme), 'light')
   await login()
   await navigate('Configurações')
+  await settingsSection('Aparência')
   const dark = page.getByRole('radio', { name: 'Modo escuro', exact: true })
   const light = page.getByRole('radio', { name: 'Modo claro', exact: true })
   await light.waitFor()
@@ -86,6 +93,10 @@ try {
   for (const name of screens) {
     await navigate(name)
     await capture(name)
+    if (name === 'Configurações') for (const label of [...settingsSections.filter((value) => value !== 'Aparência'), 'Aparência']) {
+      await settingsSection(label)
+      await capture(`Configurações ${label}`)
+    }
     if (name === 'Ofertas e serviços') {
       await page.getByRole('button', { name: 'Ver OS', exact: true }).click()
       await page.locator('.os-detail').waitFor()
@@ -101,6 +112,7 @@ try {
   assert.deepEqual(contrasts.filter((entry) => entry.issues.length), [], 'Every sampled text/control must meet 4.5:1 contrast.')
   // "Escuro intenso": the dark rules on true black, checked on the same screens.
   await navigate('Configurações')
+  await settingsSection('Aparência')
   const black = page.getByRole('radio', { name: 'Escuro intenso', exact: true })
   await black.check()
   await page.getByRole('status').getByText('Aparência salva.').waitFor()
@@ -109,6 +121,10 @@ try {
   for (const name of screens) {
     await navigate(name)
     await capture(`escuro-intenso ${name}`)
+    if (name === 'Configurações') for (const label of [...settingsSections.filter((value) => value !== 'Aparência'), 'Aparência']) {
+      await settingsSection(label)
+      await capture(`escuro-intenso Configurações ${label}`)
+    }
   }
   await writeFile('test-results/theme/contrast-escuro-intenso.json', JSON.stringify(contrasts, null, 2))
   assert.deepEqual(contrasts.filter((entry) => entry.issues.length), [], 'Escuro intenso: every sampled text/control must meet 4.5:1 contrast.')
@@ -133,10 +149,12 @@ try {
   await page.locator('.sidebar').getByRole('button', { name: 'Sair', exact: true }).click()
   await login('00000000002')
   await navigate('Configurações')
+  await settingsSection('Aparência')
   assert.ok(await light.isChecked())
   await page.locator('.sidebar').getByRole('button', { name: 'Sair', exact: true }).click()
   await login()
   await navigate('Configurações')
+  await settingsSection('Aparência')
   await light.check()
   await page.getByRole('status').getByText('Aparência salva.').waitFor()
   await page.reload()

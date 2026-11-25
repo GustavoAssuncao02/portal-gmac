@@ -26,12 +26,6 @@
   .registration-card { min-width: 0; }
   .proposal-material-summary button { min-height: 32px; align-items: center; line-height: 1.4; }
   .proposal-material-summary button span { line-height: 1; }
-  .account-settings-layout { display: grid; grid-template-columns: minmax(350px, .85fr) minmax(0, 1.15fr); align-items: start; gap: 28px 40px; }
-  .account-settings-layout > .account-appearance-settings { max-width: none; margin: 0; padding: 0 0 24px; }
-  .account-settings-layout > .account-settings-form { max-width: none; }
-  .account-settings-layout > .account-access-column { grid-column: 2; grid-row: 1 / span 2; }
-  .account-settings-layout > .account-notification-settings { grid-column: 1; grid-row: 2; margin: 0; padding: 0; border-top: 0; }
-  .account-notification-settings .account-settings-fields { grid-template-columns: minmax(0, 1fr); }
   .admin-tools-main:has(.payable-classifications-table) { padding-left: 12px; padding-right: 12px; }
   .payable-classifications-table { table-layout: fixed; }
   .payable-classifications-table :is(th, td) { max-width: none; padding: 16px; }
@@ -114,10 +108,6 @@
   .registration-layout { grid-column: 1; grid-template-columns: minmax(0, 1fr); margin: 0; }
   .registration-list-card { grid-column: 2; grid-row: 2; margin: 0; min-width: 0; }
   .registration-help { padding: 24px; }
-  .account-settings-layout { grid-template-columns: minmax(400px, 1fr) minmax(600px, 1.4fr) minmax(300px, .8fr); }
-  .account-settings-layout > .account-access-column { grid-row: 1; }
-  .account-settings-layout > .account-notification-settings { grid-column: 3; grid-row: 1; }
-  .account-settings-layout > .account-appearance-settings { border-bottom: 0; }
   .proposal-card-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; }
   .proposal-card-content { grid-template-columns: minmax(0, 1fr); }
   .proposal-card-column + .proposal-card-column { padding: 12px 0 0; border-left: 0; border-top: 1px solid #e5ebf1; }

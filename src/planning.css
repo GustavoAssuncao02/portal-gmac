@@ -160,6 +160,37 @@
 .planning-form-summary { margin: 0; color: #3d5876; font-size: 13px; }
 .planning-remove { margin-right: auto; border-color: #f0b6b6; color: #b42318; }
 
+/* Entregas (2026-11-24): the open OS on their delivery day (CalendarGrid), the legend, the list of the chosen day and the
+   next months. */
+.planning-views .planning-view-deliveries { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.planning-deliveries-body { display: grid; gap: 14px; padding: 12px; }
+.planning-delivery-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0; padding: 0; color: #5d738b; font-size: 12px; list-style: none; }
+.planning-delivery-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.planning-delivery-legend .calendar-dot { width: 9px; height: 9px; }
+.planning-delivery-panel { display: grid; gap: 10px; padding: 12px 14px; border: 1px solid #dce5ef; border-radius: 8px; background: #f9fbfe; }
+.planning-delivery-panel > header { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; }
+.planning-delivery-panel h3 { margin: 0 auto 0 0; color: #17375e; font-size: 15px; }
+.planning-delivery-panel h3::first-letter { text-transform: uppercase; }
+.planning-delivery-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.planning-delivery-list li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto auto; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid #dce5ef; border-radius: 8px; background: #fff; }
+.planning-delivery-list li > .calendar-dot { width: 10px; height: 10px; }
+.planning-delivery-list li > div { display: grid; gap: 2px; min-width: 0; }
+.planning-delivery-list strong { overflow: hidden; color: #17375e; font-size: 14px; text-overflow: ellipsis; }
+.planning-delivery-list small { color: #6b8096; font-size: 12px; }
+.planning-delivery-when { justify-items: end; text-align: right; }
+.planning-due { padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.planning-due--on-time { background: #eaf6ef; color: #1d6f43; }
+.planning-due--soon { background: #fff5dd; color: #75560f; }
+.planning-due--at-deadline { background: #fff0e2; color: #8f4c0e; }
+.planning-due--late { background: #ffedef; color: #a8303b; }
+.planning-due--unknown { background: #eef2f6; color: #4f6680; }
+.planning-months { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; }
+.planning-months > span { align-self: center; margin-right: 4px; color: #3d5876; font-size: 13px; font-weight: 700; }
+.planning-months button { display: grid; gap: 1px; min-width: 116px; padding: 7px 12px; border: 1px solid #cbd9e8; border-radius: 8px; background: #fff; color: #17375e; font: inherit; text-align: left; cursor: pointer; }
+.planning-months button:hover { border-color: #8db4e3; }
+.planning-months strong { font-size: 13px; text-transform: capitalize; }
+.planning-months small { color: #6b8096; font-size: 12px; }
+
 @media (max-width: 1100px) {
   .planning-indicators { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .planning-lower { grid-template-columns: minmax(0, 1fr); }
@@ -173,6 +204,12 @@
   .planning-calendar { gap: 3px; padding: 6px; }
   .planning-day { min-height: 64px; padding: 4px; }
   .planning-day-sector, .planning-day-count { display: none; }
+  .planning-deliveries-body { padding: 8px; }
+  .planning-delivery-list li { grid-template-columns: 10px minmax(0, 1fr); }
+  .planning-delivery-when { grid-column: 2; justify-items: start; text-align: left; }
+  .planning-delivery-list li > button { grid-column: 1 / -1; }
+  .planning-months button { flex: 1 1 calc(50% - 8px); min-width: 0; }
+  .planning-months > span { flex-basis: 100%; }
 }
 
 /* Serviços para planejar: each OS with its stages, the machine of each one and the time to plan. */

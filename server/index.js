@@ -39,6 +39,7 @@ import createAdminInventoryRouter, { ensureAdminInventory, loadAdminInventoryRow
 import createMaterialRequestsRouter from './materialRequests.js'
 import createNotificationsRouter from './notifications.js'
 import createSupportTicketsRouter from './supportTickets.js'
+import createNotesRouter from './notes.js'
 import createOfferRequestsRouter from './offerRequests.js'
 import { inventorySignal } from './notificationEvents.js'
 import { createApiRateLimiter } from './rateLimit.js'
@@ -165,6 +166,10 @@ app.use('/api', createBankStatementsRouter(accounts, requireAdmin))
 app.use('/api', createFiscalRouter(requireAdmin))
 app.use('/api', createProposalDocumentsRouter(requireAdmin, accounts))
 app.use('/api', createSupportTicketsRouter(accounts, requireAdmin))
+// Anotações e Tarefas: the reminders and the notices of a task near its day are checked every minute.
+const notesRouter = createNotesRouter(accounts, requireAdmin)
+app.use('/api', notesRouter)
+setInterval(() => notesRouter.sweep().catch((error) => console.error('Falha ao verificar os lembretes das tarefas:', error.message)), 60000).unref()
 app.use('/api', createDeveloperRouter({ accounts, requireAdmin, requireSession: requireAdminOrOperator, systemLog, live, pool, readStore, dataDirectory, version: releaseNotes[0] ? { version: releaseNotes[0].version, date: releaseNotes[0].date } : null, config: () => ({
   environment: production ? 'produção' : 'desenvolvimento', nodeEnv: process.env.NODE_ENV || '', host, port, database: `${process.env.DB_HOST}:${process.env.DB_PORT || 3306}/${process.env.DB_NAME}`,
   dataDir: Boolean(process.env.DATA_DIR), smtp: ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'MAIL_FROM'].every((key) => process.env[key]?.trim()), turnstile: Boolean(process.env.TURNSTILE_SECRET_KEY), testLogin: testLoginEnabled(),

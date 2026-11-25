@@ -1,5 +1,5 @@
 // The live connection of this tab (server/liveUpdates.js): the server says which kind of data changed ("notifications",
-// "finance" or "data") and the screens that show it update at once (polling.js). One connection per tab, opened while
+// "finance", "data" or "notes") and the screens that show it update at once (polling.js). One connection per tab, opened while
 // some screen listens and the tab is in view: a tab hidden for 30 s closes it (when shown again the screens catch up),
 // which also keeps a browser with many tabs under its limit of connections per site. It is read with fetch, so the
 // session token travels in the Authorization header, never in the address. A dropped connection comes back by itself,
@@ -11,7 +11,7 @@ const HIDDEN_CLOSE_MS = 30000
 const IDLE_CLOSE_MS = 2000
 // The server sends a sign of life every 25 s: a minute of silence means a connection lost on the way.
 const SILENCE_MS = 60000
-export const liveTopics = ['notifications', 'finance', 'data']
+export const liveTopics = ['notifications', 'finance', 'data', 'notes']
 
 const listeners = new Set()
 let connected = false

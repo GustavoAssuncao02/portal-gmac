@@ -50,6 +50,8 @@ test('each change is told by kind: the bell, Gestão Financeira or the rest of t
   assert.equal(topicOfRoute('/inventory/5/movements'), 'data')
   assert.equal(topicOfRoute('/payables/7/pay'), 'finance')
   assert.equal(topicOfRoute('/notifications/read-all'), 'notifications')
+  assert.equal(topicOfName('noteItems'), 'notes', 'Anotações e Tarefas refresh only their own screens')
+  assert.equal(topicOfRoute('/notes/abc/complete'), 'notes')
   for (const path of ['/auth/login', '/account', '/live']) assert.equal(topicOfRoute(path), null, path)
   assert.deepEqual(topicsOfRoute('/clients/5'), ['data', 'finance'], 'Contas a Receber and the Tesouraria list the clients')
   assert.deepEqual(topicsOfRoute('/suppliers'), ['finance'])

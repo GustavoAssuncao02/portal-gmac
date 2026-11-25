@@ -8,8 +8,9 @@ import express from 'express'
 // - notifications: the bell (notifications, their read marks and preferences);
 // - finance: Gestão Financeira (payables, receivables, banks, statements, DRE, plan of accounts, suppliers);
 // - data: everything else (offers, OS, operation, stock, machines, registrations, planning...).
+// - notes: Anotações e Tarefas (personal: each screen reads only what is its person's, the others are not refreshed by it).
 // One API process is assumed, as for the sessions and the request limit: the connections live in its memory.
-export const topics = ['notifications', 'finance', 'data']
+export const topics = ['notifications', 'finance', 'data', 'notes']
 const COALESCE_MS = 80
 const HEARTBEAT_MS = 25000
 
@@ -22,6 +23,7 @@ const quietNames = /^(adminAppearancePreferences|adminHomeLayouts|migrations|reg
 export function topicOfName(name) {
   if (quietNames.test(name)) return null
   if (notificationNames.test(name)) return 'notifications'
+  if (name === 'noteItems') return 'notes'
   return financeNames.test(name) ? 'finance' : 'data'
 }
 const financeRoutes = new Set(['payables', 'receivables', 'bank-statements', 'dre', 'dre-adjustments', 'classifications', 'account-groups', 'suppliers', 'ai-reconciliations'])
@@ -31,6 +33,7 @@ export function topicOfRoute(path) {
   const first = String(path).split('/').filter(Boolean)[0]?.toLowerCase()
   if (!first || quietRoutes.has(first)) return null
   if (first === 'notifications') return 'notifications'
+  if (first === 'notes') return 'notes'
   return financeRoutes.has(first) ? 'finance' : 'data'
 }
 // Clients are a registration ("data") that Contas a Receber and the Tesouraria also list ("finance").

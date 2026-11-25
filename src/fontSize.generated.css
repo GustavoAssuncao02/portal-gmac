@@ -382,8 +382,6 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .account-summary-card h2 { font-size: calc(18px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .account-summary dt { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .account-summary dd { font-size: calc(15px * var(--account-font-scale)); }
-:root:is([data-font-size="small"], [data-font-size="large"]) .account-job-title label { font-size: calc(12px * var(--account-font-scale)); }
-:root:is([data-font-size="small"], [data-font-size="large"]) .account-job-title input { font-size: inherit; font-size: calc(14px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .account-settings-modal h3 { font-size: calc(15px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .operator-access-reason textarea { font-size: inherit; }
 :root:is([data-font-size="small"], [data-font-size="large"]) .payable-table { font-size: calc(13px * var(--account-font-scale)); }
@@ -721,6 +719,15 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .planning-form label { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .planning-form select, :root:is([data-font-size="small"], [data-font-size="large"]) .planning-form input { font-size: inherit; }
 :root:is([data-font-size="small"], [data-font-size="large"]) .planning-form-summary { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .planning-delivery-legend { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .planning-delivery-panel h3 { font-size: calc(15px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .planning-delivery-list strong { font-size: calc(14px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .planning-delivery-list small { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .planning-due { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .planning-months > span { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .planning-months button { font-size: inherit; }
+:root:is([data-font-size="small"], [data-font-size="large"]) .planning-months strong { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .planning-months small { font-size: calc(12px * var(--account-font-scale)); }
 @media (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .planning-heading h1 { font-size: calc(24px * var(--account-font-scale)); } }
 :root:is([data-font-size="small"], [data-font-size="large"]) .planning-backlog-stages b { font-size: calc(11px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .planning-order-facts { font-size: calc(13px * var(--account-font-scale)); }
@@ -796,6 +803,70 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .developer-card-note { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .developer-collections li { font-size: calc(12px * var(--account-font-scale)); }
 @media (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .developer-metric strong { font-size: calc(19px * var(--account-font-scale)); } }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-chip { font-size: inherit; font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-group h2 { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-group h2 span { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-invites-hint { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-task-body { font-size: inherit; }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-task-body strong { font-size: calc(14px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-meta { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-pill { font-size: inherit; font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-shared { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-avatar { font-size: calc(9px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-avatar.notes-avatar--large { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-card-open { font-size: inherit; font-size: calc(14px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-card p { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-card ul { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .admin-tools-main .notes-card label, :root:is([data-font-size="small"], [data-font-size="large"]) .notes-card label { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-card-more { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-card footer { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-invite { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-invite small { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-empty-line { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-fab-count { font-size: calc(11px * var(--account-font-scale)); line-height: calc(20px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-drawer { font-size: calc(14px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-drawer > header h2 { font-size: calc(18px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-quick input { font-size: inherit; }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-drawer-actions .account-release-link { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-editor-origin { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-share-mode button { font-size: inherit; font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-person-chip { font-size: inherit; font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-participants li > span:nth-child(2) { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-participants small { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-comments li { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-comments li small { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-history summary { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-history ol { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-choice button { font-size: inherit; }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-choice span { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-view-toggle button { font-size: inherit; font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-calendar-nav button { font-size: inherit; font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-calendar-title { font-size: calc(17px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .admin-tools-main .notes-calendar-done { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-calendar-undated-title { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-calendar-undated-title b { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-calendar-undated small { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-calendar-day h3 { font-size: calc(15px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .notes-calendar-projected { font-size: inherit; font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .account-settings-menu > button { font-size: inherit; font-size: calc(14px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .account-settings-menu > button small { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .account-section-heading h2 { font-size: calc(20px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .account-section-heading p { font-size: calc(14px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .account-saved { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .account-saved-error-text { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .account-card h3 { font-size: calc(16px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .account-card-description { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .account-setting-text strong { font-size: calc(14px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .account-setting-text small { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .account-setting-tag { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .account-settings-section .operator-access-settings h2 { font-size: calc(16px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .calendar-weekday { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .calendar-day-number { font-size: inherit; font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .calendar-day-count { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .calendar-chip { font-size: inherit; font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .calendar-more { font-size: inherit; font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .calendar-day-summary { font-size: calc(11px * var(--account-font-scale)); }
+@media (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .calendar-weekday { font-size: calc(11px * var(--account-font-scale)); } }
 :root:is([data-font-size="small"], [data-font-size="large"]) button, :root:is([data-font-size="small"], [data-font-size="large"]) input { font-size: inherit; }
 :root:is([data-font-size="small"], [data-font-size="large"]) .brand-panel__title { font-size: calc(34px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .brand-panel__subtitle { font-size: calc(19px * var(--account-font-scale)); }
@@ -1218,8 +1289,6 @@
 @container (min-width: 2800px) {:root:is([data-font-size="small"], [data-font-size="large"]) .material-orders-table table { font-size: calc(15px * var(--account-font-scale)); } }
 @container (min-width: 2800px) {:root:is([data-font-size="small"], [data-font-size="large"]) .material-orders-table th { font-size: calc(14px * var(--account-font-scale)); } }
 @container (min-width: 2800px) {:root:is([data-font-size="small"], [data-font-size="large"]) .material-orders-table .material-order-action { font-size: calc(14px * var(--account-font-scale)); } }
-:root:is([data-font-size="small"], [data-font-size="large"]) .admin-tools-main .account-notification-options label { font-size: calc(14px * var(--account-font-scale)); }
-:root:is([data-font-size="small"], [data-font-size="large"]) .account-email-notifications small { font-size: calc(12.5px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .material-order-action { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .dashboard-orders h2 { font-size: calc(19px * var(--account-font-scale)); }
 @media (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .orders-header h1 { font-size: calc(24px * var(--account-font-scale)); } }
@@ -1473,8 +1542,5 @@
 @media screen and (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .payable-detail-actions button { font-size: calc(14px * var(--account-font-scale)); } }
 @media screen and (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .employee-activity-heading h2, :root:is([data-font-size="small"], [data-font-size="large"]) .os-history-heading h2 { font-size: calc(18px * var(--account-font-scale)); } }
 @media screen and (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .employee-activity-table-scroll td, :root:is([data-font-size="small"], [data-font-size="large"]) .os-history-table-wrap td { font-size: calc(14px * var(--account-font-scale)); } }
-:root:is([data-font-size="small"], [data-font-size="large"]) .account-appearance-settings h2 { font-size: calc(18px * var(--account-font-scale)); }
-:root:is([data-font-size="small"], [data-font-size="large"]) .account-appearance-settings h3 { font-size: calc(14px * var(--account-font-scale)); }
-:root:is([data-font-size="small"], [data-font-size="large"]) .account-appearance-settings > p { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .account-theme-option { font-size: calc(14px * var(--account-font-scale)); }
 @media (max-width: 760px) { :root[data-font-size="small"] :is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]), select, textarea) { font-size: 16px !important; } }

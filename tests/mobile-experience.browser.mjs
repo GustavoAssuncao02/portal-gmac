@@ -273,9 +273,9 @@ try {
         }
       }
       if (!before && name === 'Configurações') {
+        await page.locator('.account-settings-menu').getByRole('button', { name: /^Notificações/ }).click()
         await page.getByLabel('Contas a pagar a vencer', { exact: true }).selectOption('7')
-        await page.getByRole('button', { name: 'Salvar notificações', exact: true }).click()
-        await page.locator('.account-notification-settings .admin-tool-success').waitFor()
+        await page.getByText('Preferência salva.', { exact: true }).waitFor()
       }
     }
     if (!before) {

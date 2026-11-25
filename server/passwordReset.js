@@ -168,5 +168,11 @@ export default function createPasswordResetRouter(accounts, requireAdmin, { mail
     const rows = [...((await readStore()).passwordResets || [])].reverse().slice(0, HISTORY_LIMIT)
     response.set('Cache-Control', 'no-store').json({ items: rows.map((row) => historyRow(row, now())) })
   }))
+  // Configurações › Minha conta: when the password of this account last changed (by the person, by an administrator or
+  // with the code of "Esqueci minha senha"), from the same history. Null when no change was recorded.
+  router.get('/account/password-changed', requireAdmin, handle(async (request, response) => {
+    const changes = ((await readStore()).passwordResets || []).filter((row) => row.status === 'completed' && row.userKey === String(request.adminId))
+    response.set('Cache-Control', 'no-store').json({ at: changes.map((row) => row.completedAt || row.requestedAt).sort().at(-1) || null })
+  }))
   return router
 }

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, ArrowLeft, CalendarClock, CheckCircle2, ChevronLeft, ChevronRight, FileText, Gauge, ListChecks, Plus, Trash2, Wrench, X } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, CalendarClock, CheckCircle2, ChevronLeft, ChevronRight, FileText, Gauge, ListChecks, Package, Plus, Trash2, Truck, Wrench, X } from 'lucide-react'
 import { PayableModal } from './PayableModal.jsx'
 import { backdropClose } from './dialogBackdrop.js'
 import { payableRequest } from './payablesApi.js'
@@ -10,6 +10,10 @@ import './adminTools.css'
 import './planning.css'
 import FactoryMap from './FactoryMap.jsx'
 import { upper } from './displayCase.js'
+import { CalendarGrid } from './CalendarGrid.jsx'
+import { calendarWeekdays, dayTitle, monthDays, monthTitle, shiftDay, shiftMonth, shortMonth, sundayOf } from './calendarDays.js'
+import { amountsText, byDeliveryDay, deliveryTotals, kindsText, openDeliveries } from './deliveryCalendar.js'
+import { quantityLabel } from '../server/quantityUnits.js'
 
 const HOUR_WIDTH = 88
 const PX_PER_MINUTE = HOUR_WIDTH / 60
@@ -29,14 +33,16 @@ const placedAt = (block, start) => ({ ...block, start, end: new Date(Date.parse(
 function rangeOf(view, date) {
   if (view === 'day') return [date, date]
   if (view === 'week') return [weekStart(date), addDays(weekStart(date), 6)]
-  const first = `${date.slice(0, 8)}01`, start = weekStart(first)
+  // The month (and Entregas) from Sunday, like the other calendars of the portal (2026-11-24).
+  const start = sundayOf(`${date.slice(0, 8)}01`)
   return [start, addDays(start, 41)]
 }
 
 // The planning of the machines: a calendar (day, week, month) of blocks — one stage of one OS on one machine or labor
 // service — read again every 10 seconds, with the real work drawn over it.
 // `renderOrder(code, back)` draws the whole OS (the same view of the Ordem de serviço screen) inside the block window.
-export default function PlanningScreen({ Sidebar, WorkspaceTabs, navigationProps, renderOrder }) {
+// `orders` (the OS of the portal) fill Entregas: the open OS on their delivery day.
+export default function PlanningScreen({ Sidebar, WorkspaceTabs, navigationProps, renderOrder, orders = [], ordersLoading = false }) {
   const [view, setView] = useState('day')
   const [date, setDate] = useState(() => localDay(Date.now()))
   const [sector, setSector] = useState('')
@@ -47,6 +53,8 @@ export default function PlanningScreen({ Sidebar, WorkspaceTabs, navigationProps
   const [editing, setEditing] = useState(null)
   const [preview, setPreview] = useState('')
   const [fit, setFit] = useState(null)
+  const [kind, setKind] = useState('')
+  const [orderOpen, setOrderOpen] = useState(null)
   const [from, to] = rangeOf(view, date)
   const request = useRef(0)
   // Blocks dragged on the agenda that the server has not confirmed yet: they stay where they were dropped, even when a
@@ -100,7 +108,8 @@ export default function PlanningScreen({ Sidebar, WorkspaceTabs, navigationProps
   const inSector = new Set((data?.backlog || []).filter((row) => !sector || row.group === sector || (data?.resources || []).some((item) => row.suggested && item.type === row.suggested.type && item.id === String(row.suggested.id) && item.sectors.includes(sector))).map((row) => row.orderCode))
   const backlog = (data?.backlog || []).filter((row) => inSector.has(row.orderCode))
   const allSectors = data?.sectors || []
-  const move = (days) => setDate(view === 'month' ? addDays(`${date.slice(0, 8)}01`, days > 0 ? 32 : -1).slice(0, 8) + '01' : addDays(date, days * (view === 'week' ? 7 : 1)))
+  const monthly = view === 'month' || view === 'deliveries'
+  const move = (days) => setDate(monthly ? addDays(`${date.slice(0, 8)}01`, days > 0 ? 32 : -1).slice(0, 8) + '01' : addDays(date, days * (view === 'week' ? 7 : 1)))
   const openDay = (day) => { setDate(day); setView('day') }
 
   return <div className="dashboard-shell admin-tools-shell planning-shell"><Sidebar {...navigationProps} /><main className="admin-tools-main planning-main"><WorkspaceTabs {...navigationProps} />
@@ -111,17 +120,17 @@ export default function PlanningScreen({ Sidebar, WorkspaceTabs, navigationProps
     </header>
     <FactoryMap />
     <div className="planning-toolbar">
-      <div className="planning-views" role="group" aria-label="Período">{[['day', 'Dia'], ['week', 'Semana'], ['month', 'Mês']].map(([value, label]) => <button key={value} type="button" aria-pressed={view === value} onClick={() => setView(value)}>{label}</button>)}</div>
+      <div className="planning-views" role="group" aria-label="Período">{[['day', 'Dia'], ['week', 'Semana'], ['month', 'Mês'], ['deliveries', 'Entregas']].map(([value, label]) => <button key={value} type="button" className={value === 'deliveries' ? 'planning-view-deliveries' : undefined} aria-pressed={view === value} onClick={() => setView(value)}>{value === 'deliveries' && <Truck size={16} aria-hidden="true" />}{label}</button>)}</div>
       <div className="planning-date"><button type="button" aria-label="Anterior" title="Anterior" onClick={() => move(-1)}><ChevronLeft size={18} /></button><input type="date" aria-label="Data" value={date} onChange={(event) => event.target.value && setDate(event.target.value)} /><button type="button" aria-label="Próximo" title="Próximo" onClick={() => move(1)}><ChevronRight size={18} /></button><button type="button" className="planning-today" onClick={() => setDate(localDay(Date.now()))}>Hoje</button></div>
       <strong className="planning-period">{view === 'day' ? longDate(date) : view === 'week' ? `Semana de ${shortDate(from)} a ${shortDate(to)}` : monthLabel(date)}</strong>
-      <div className="planning-filters">
+      {view === 'deliveries' ? <div className="planning-filters"><select aria-label="Tipo" value={kind} onChange={(event) => setKind(event.target.value)}><option value="">Serviços e produtos</option><option value="service">Só serviços</option><option value="product">Só produtos</option></select></div> : <div className="planning-filters">
         <select aria-label="Setor" value={sector} onChange={(event) => { setSector(event.target.value); setMachine('') }}><option value="">Todos os setores</option>{allSectors.map((name) => <option key={name} value={name}>{name}</option>)}</select>
         <select aria-label="Máquina" value={machine} onChange={(event) => setMachine(event.target.value)}><option value="">Todas as máquinas</option>{(data?.resources || []).filter((item) => item.type === 'machine' && (!sector || item.sectors.includes(sector))).map((item) => <option key={item.id} value={resourceKey(item.type, item.id)}>{upper(item.name)}</option>)}</select>
-      </div>
+      </div>}
     </div>
     {error && <p className="admin-tool-error" role="alert">{error}</p>}
     {!data ? <p className="planning-loading">Carregando planejamento...</p> : <>
-      <Indicators view={view} from={from} to={to} date={date} machines={machines} blocks={blocks} now={now} />
+      {view === 'deliveries' ? <Deliveries orders={orders} loading={ordersLoading} kind={kind} month={date.slice(0, 7)} today={today} now={now} onMonth={(month) => setDate(`${month}-01`)} onOpen={renderOrder ? setOrderOpen : null} /> : <Indicators view={view} from={from} to={to} date={date} machines={machines} blocks={blocks} now={now} />}
       {view === 'day' && <DayAgenda date={date} today={today} now={now} resources={resources} blocks={blocks} actual={data.actual} selectedAt={selectedAt} onSelect={setSelectedAt} onPlan={(fields) => setEditing({ plan: fields })} onEdit={(block) => setEditing({ block })} onMove={moveBlock} />}
       {view === 'week' && <WeekTable from={from} machines={machines} blocks={blocks} today={today} onOpen={openDay} />}
       {view === 'month' && <MonthCalendar from={from} month={date.slice(0, 7)} sectors={sector ? [sector] : allSectors} resources={data.resources} blocks={blocks} today={today} onOpen={openDay} />}
@@ -136,6 +145,7 @@ export default function PlanningScreen({ Sidebar, WorkspaceTabs, navigationProps
     {editing && data && (editing.block
       ? <BlockModal data={data} block={editing.block} renderOrder={renderOrder} onClose={() => { setEditing(null); refresh() }} onSaved={() => { setEditing(null); refresh() }} />
       : <OrderPlanModal data={data} initial={editing.plan} date={date} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); setFit(null); refresh() }} />)}
+    {orderOpen && <OrderWindow code={orderOpen} renderOrder={renderOrder} backLabel={null} onBack={() => setOrderOpen(null)} onClose={() => setOrderOpen(null)} />}
   </main></div>
 }
 
@@ -257,7 +267,7 @@ function MonthCalendar({ from, month, sectors, resources, blocks, today, onOpen 
   const days = Array.from({ length: 42 }, (_, index) => addDays(from, index))
   return <section className="planning-agenda planning-month" aria-labelledby="planning-month-title">
     <header><h2 id="planning-month-title">Calendário do mês</h2><p>Ocupação planejada de cada setor por dia. Clique num dia para ver o cronograma.</p></header>
-    <div className="planning-calendar">{weekDays.map((name) => <span key={name} className="planning-weekday">{name}</span>)}
+    <div className="planning-calendar">{calendarWeekdays.map((name) => <span key={name} className="planning-weekday">{name}</span>)}
       {days.map((day) => {
         const inDay = blocks.filter((block) => overlap(blockStart(block), blockEnd(block), dayStart(day)) > 0)
         return <button key={day} type="button" className={`planning-day${day.slice(0, 7) !== month ? ' planning-day--other' : ''}${day === today ? ' planning-day--today' : ''}`} onClick={() => onOpen(day)} aria-label={`Abrir ${shortDate(day)}`}>
@@ -273,6 +283,61 @@ function MonthCalendar({ from, month, sectors, resources, blocks, today, onOpen 
         </button>
       })}</div>
   </section>
+}
+
+// Entregas (2026-11-24): the open OS on the day each one has to be delivered, month by month, to see how much the month
+// (and the next ones) will have to deliver. The colors are the states of Serviços em andamento. A click on an OS opens it;
+// on a day (or "+N mais"), the list of that day below the calendar.
+const operationLabels = { waiting: 'Aguardando', running: 'Em execução', paused: 'Pausado', stage_done: 'Etapa concluída', finalizing: 'Finalizando' }
+const dueTones = [['on-time', 'Dentro do prazo'], ['soon', 'Próximo do prazo'], ['at-deadline', 'Em cima do prazo'], ['late', 'Atrasado'], ['unknown', 'Sem previsão']]
+const UPCOMING_MONTHS = 6
+function Deliveries({ orders, loading, kind, month, today, now, onMonth, onOpen }) {
+  const [selected, setSelected] = useState(null)
+  useEffect(() => { setSelected((current) => current && current.length === 10 && current.slice(0, 7) !== month ? null : current) }, [month])
+  const rows = useMemo(() => openDeliveries(orders, now).filter((row) => !kind || row.kind === kind), [orders, now, kind])
+  const days = useMemo(() => byDeliveryDay(rows), [rows])
+  const dated = rows.filter((row) => row.day)
+  const inMonth = dated.filter((row) => row.day.slice(0, 7) === month)
+  const late = rows.filter((row) => row.due.key === 'late')
+  const week = dated.filter((row) => row.day >= today && row.day <= shiftDay(today, 6))
+  const undated = rows.filter((row) => !row.day)
+  const totals = deliveryTotals(inMonth)
+  const upcoming = Array.from({ length: UPCOMING_MONTHS }, (_, index) => shiftMonth(month, index + 1))
+  const later = dated.filter((row) => row.day.slice(0, 7) > upcoming.at(-1))
+  const list = selected === 'late' ? late : selected === 'undated' ? undated : selected ? days.get(selected) || [] : null
+  const title = selected === 'late' ? `Atrasadas (${late.length})` : selected === 'undated' ? `Sem prazo de entrega (${undated.length})` : selected ? `Entregas de ${dayTitle(selected)}` : 'Escolha um dia'
+  const shortcuts = [['late', `Ver atrasadas (${late.length})`, late.length], ['undated', `Ver sem prazo (${undated.length})`, undated.length]].filter(([key, , count]) => count && key !== selected)
+  return <>
+    <section className="planning-indicators" aria-label="Indicadores das entregas">
+      <article><Truck size={22} aria-hidden="true" /><div><span>Entregas em {monthTitle(month)}</span><strong>{totals.count} OS</strong><small>{totals.count ? kindsText(totals) : 'Nenhuma entrega no mês'}</small></div></article>
+      <article><Package size={22} aria-hidden="true" /><div><span>Quantidade a entregar no mês</span><strong>{totals.count ? amountsText(totals.amounts) : '—'}</strong><small>{totals.count ? `em ${totals.count} OS` : 'Nada a entregar'}</small></div></article>
+      <article className={late.length ? 'planning-indicator--late' : ''}><AlertTriangle size={22} aria-hidden="true" /><div><span>Atrasadas</span><strong>{late.length ? `${late.length} OS` : 'Nada atrasado'}</strong><small>{late.length ? late.slice(0, 2).map((row) => row.code).join(' · ') : 'Todas dentro do prazo'}</small></div></article>
+      <article><CalendarClock size={22} aria-hidden="true" /><div><span>Próximos 7 dias</span><strong>{week.length} OS</strong><small>{week.length ? amountsText(deliveryTotals(week).amounts) : 'Nenhuma entrega'}</small></div></article>
+    </section>
+    <section className="planning-agenda planning-deliveries" aria-labelledby="planning-deliveries-title">
+      <header><h2 id="planning-deliveries-title">Calendário de entregas</h2><p>OS em aberto no dia da entrega: o prazo da proposta aceita ou, sem ele, o prazo pedido pelo cliente. Clique numa OS para abrir, ou num dia para ver a lista.</p></header>
+      {loading && !orders.length ? <p className="planning-loading">Carregando OS...</p> : <div className="planning-deliveries-body">
+        <CalendarGrid days={monthDays(month)} month={month} today={today} selected={selected?.length === 10 ? selected : null} words={['entrega', 'entregas']} label={`Entregas de ${monthTitle(month)}`} onSelectDay={setSelected}
+          entriesFor={(day) => (days.get(day) || []).map((row) => ({ key: row.code, time: row.code, label: upper(row.company), title: `${row.code} · ${upper(row.service)} · ${upper(row.company)} · ${quantityLabel(row.quantity, row.unit)} · ${row.due.label}`, tone: row.due.key, onOpen: onOpen ? () => onOpen(row.code) : () => setSelected(day) }))}
+          summaryFor={(day) => days.has(day) ? amountsText(deliveryTotals(days.get(day)).amounts, { short: true }) : ''} />
+        <ul className="planning-delivery-legend" aria-label="Legenda">{dueTones.map(([key, label]) => <li key={key}><i className={`calendar-dot calendar-dot--${key}`} aria-hidden="true" />{label}</li>)}</ul>
+        <div className="planning-delivery-panel" aria-live="polite">
+          <header><h3>{title}</h3>{shortcuts.map(([key, label]) => <button key={key} type="button" className="planning-link" onClick={() => setSelected(key)}>{label}</button>)}</header>
+          {list == null ? <p className="planning-muted">Clique num dia do calendário para ver as OS que vencem nele.</p>
+            : list.length ? <ul className="planning-delivery-list">{list.map((row) => <li key={row.code}>
+              <i className={`calendar-dot calendar-dot--${row.due.key}`} aria-hidden="true" />
+              <div><strong>{row.code} · {upper(row.service)}{row.urgent && <span className="planning-emergency">Emergência</span>}</strong><small>{upper(row.company)} · {row.kind === 'product' ? 'Produto' : 'Serviço'} · {quantityLabel(row.quantity, row.unit)} · Prontas: {row.done} de {row.quantity} · {operationLabels[row.status] || 'Aguardando'}</small></div>
+              <div className="planning-delivery-when"><span className={`planning-due planning-due--${row.due.key}`}>{row.due.label}</span><small>{row.day ? `Entrega ${fullDate(row.day)}${row.due.key === 'unknown' ? '' : ` · ${row.due.remaining}`}` : 'Sem prazo de entrega'}</small></div>
+              {onOpen && <button className="admin-tool-button" type="button" onClick={() => onOpen(row.code)}><FileText size={16} aria-hidden="true" />Ver OS</button>}
+            </li>)}</ul> : <p className="planning-muted">Nenhuma entrega neste dia.</p>}
+        </div>
+        <div className="planning-months" role="group" aria-label="Próximos meses"><span>Próximos meses</span>
+          {upcoming.map((value) => { const sum = deliveryTotals(dated.filter((row) => row.day.slice(0, 7) === value)); return <button key={value} type="button" onClick={() => onMonth(value)}><strong>{shortMonth(value)}</strong><small>{sum.count ? `${sum.count} OS · ${amountsText(sum.amounts, { short: true })}` : 'Nenhuma entrega'}</small></button> })}
+          {later.length > 0 && <button type="button" onClick={() => onMonth(later[0].day.slice(0, 7))}><strong>Depois</strong><small>{later.length} OS</small></button>}
+        </div>
+      </div>}
+    </section>
+  </>
 }
 
 // The OS waiting for a plan, each one with its stages in order: the machine or service defined for the stage and the time
@@ -505,13 +570,13 @@ function OrderPlanModal({ data, initial, date, onClose, onSaved }) {
 
 // The whole OS opened from a block (Ver OS), in a large window of its own: the form rules of the block window
 // (.payable-modal label, input…) would restyle the OS and the windows it opens, such as the history and Editar OS.
-function OrderWindow({ code, renderOrder, onBack, onClose }) {
+function OrderWindow({ code, renderOrder, onBack, onClose, backLabel = 'Voltar ao bloco' }) {
   const ref = useRef(null)
   useEffect(() => { const dialog = ref.current; dialog.showModal(); return () => dialog.close() }, [])
   return <dialog ref={ref} className="planning-os-modal" aria-labelledby="planning-os-title" onCancel={(event) => { event.preventDefault(); onClose() }} {...backdropClose(onClose)}>
     <header><h2 id="planning-os-title">{`Ordem de serviço ${code}`}</h2><button type="button" className="payable-icon" aria-label="Fechar janela" title="Fechar janela" onClick={onClose}><X size={20} /></button></header>
     <div className="planning-os-body">{renderOrder(code, onBack)}</div>
-    <footer><button className="admin-tool-button planning-back" type="button" onClick={onBack}><ArrowLeft size={16} aria-hidden="true" />Voltar ao bloco</button><button className="admin-tool-button" type="button" onClick={onClose}>Fechar</button></footer>
+    <footer>{backLabel && <button className="admin-tool-button planning-back" type="button" onClick={onBack}><ArrowLeft size={16} aria-hidden="true" />{backLabel}</button>}<button className="admin-tool-button" type="button" onClick={onClose}>Fechar</button></footer>
   </dialog>
 }
 

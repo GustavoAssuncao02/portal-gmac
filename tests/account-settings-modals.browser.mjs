@@ -4,6 +4,7 @@ import { chromium } from 'playwright'
 import { createWorkflowFixture } from './workflowFixture.js'
 
 // In Settings, the account data and the operator access are summaries with a button; each form opens in a dialog.
+// Since 2026-11-24 each one is in its own section of the menu of Configurações (Minha conta, Acesso do operador).
 const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Gustavo' }
 const fixture = await createWorkflowFixture({ accountsEnv: env })
 const browser = await chromium.launch({ headless: true })
@@ -18,13 +19,19 @@ try {
   await page.getByRole('button', { name: 'Entrar', exact: true }).click()
   await page.locator('.admin-home-main').waitFor()
   await page.locator('.sidebar').getByRole('button', { name: 'Configurações', exact: true }).click()
-  const account = page.locator('.account-summary-card').filter({ has: page.getByRole('heading', { name: 'Dados da conta' }) })
-  const operator = page.locator('.account-summary-card').filter({ has: page.getByRole('heading', { name: 'Acesso do operador' }) })
-  await operator.getByRole('button', { name: 'Alterar acesso do operador', exact: true }).waitFor()
-  await page.waitForFunction(() => !document.querySelector('.operator-access-settings header button').disabled)
+  const section = async (label) => { await page.locator('.account-settings-menu').getByRole('button', { name: new RegExp(`^${label}`) }).click(); await page.locator('.account-section-heading h2').filter({ hasText: label }).waitFor() }
+  const account = page.locator('.account-card').filter({ has: page.getByRole('heading', { name: 'Dados de acesso' }) })
+  const operator = page.locator('.account-summary-card').filter({ has: page.getByRole('heading', { name: 'Login dos tablets da produção' }) })
+  await account.waitFor()
+  assert.equal(await page.locator('.account-section-heading h2').innerText(), 'Minha conta', 'Minha conta is the first section')
   assert.match(await account.innerText(), /123\.456\.789-01/)
+  await account.getByText('Nenhuma alteração registrada').waitFor()
   for (const label of ['Senha atual', /^Usuário do operador/, 'Justificativa da alteração']) assert.equal(await page.getByLabel(label).count(), 0, `${label} stays out of the page`)
   await page.screenshot({ path: 'test-results/account-modals/configuracoes.png', fullPage: true })
+  await section('Acesso do operador')
+  await operator.getByRole('button', { name: 'Alterar acesso do operador', exact: true }).waitFor()
+  await page.waitForFunction(() => !document.querySelector('.operator-access-settings header button').disabled)
+  await page.screenshot({ path: 'test-results/account-modals/configuracoes-operador.png', fullPage: true })
 
   await operator.getByRole('button', { name: 'Alterar acesso do operador', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Acesso do operador' })
@@ -50,6 +57,7 @@ try {
   await page.getByRole('dialog', { name: 'Histórico do acesso do operador' }).getByText('Justificativa: Troca periódica da senha dos tablets.').waitFor()
   await page.getByRole('dialog', { name: 'Histórico do acesso do operador' }).getByRole('button', { name: 'Fechar janela' }).click()
 
+  await section('Minha conta')
   await account.getByRole('button', { name: 'Editar dados e senha', exact: true }).click()
   await page.getByRole('dialog', { name: 'Dados da conta' }).waitFor()
   await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; document.documentElement.dataset.tone = 'black' })
@@ -61,6 +69,7 @@ try {
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${width}: no page overflow`)
     await page.screenshot({ path: `test-results/account-modals/configuracoes-${width}.png`, fullPage: true })
   }
+  await section('Acesso do operador')
   await operator.getByRole('button', { name: 'Alterar acesso do operador', exact: true }).click()
   await dialog.waitFor()
   const box = await dialog.boundingBox()

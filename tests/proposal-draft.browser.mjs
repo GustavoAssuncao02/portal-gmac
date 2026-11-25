@@ -82,11 +82,11 @@ try {
 
   // The notice can be turned off in the account settings.
   await navigate(second, 'Configurações')
-  const option = second.getByLabel('Propostas salvas', { exact: true })
-  assert.equal(await option.isChecked(), true)
-  await option.uncheck()
-  await second.getByRole('button', { name: 'Salvar notificações', exact: true }).click()
-  await second.getByText('Preferência de notificações salva.').waitFor()
+  await second.locator('.account-settings-menu').getByRole('button', { name: /^Notificações/ }).click()
+  const option = second.getByRole('switch', { name: 'Propostas salvas', exact: true })
+  assert.equal(await option.getAttribute('aria-checked'), 'true')
+  await option.click()
+  await second.getByText('Preferência salva.').waitFor()
   await second.getByRole('button', { name: 'Notificações', exact: true }).click()
   await second.getByText('Nenhuma notificação no momento.').waitFor()
   assert.deepEqual(errors, [])

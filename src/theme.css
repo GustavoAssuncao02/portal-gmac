@@ -14,25 +14,16 @@
 :root[data-font-family="source-sans-3"] { --account-font-family: "Source Sans 3", Arial, sans-serif; }
 :root:is([data-font-family="system"], [data-font-family="verdana"], [data-font-family="tahoma"], [data-font-family="inter"], [data-font-family="roboto"], [data-font-family="open-sans"], [data-font-family="montserrat"], [data-font-family="source-sans-3"]) { font-family: var(--account-font-family); }
 :root:is([data-font-family="system"], [data-font-family="verdana"], [data-font-family="tahoma"], [data-font-family="inter"], [data-font-family="roboto"], [data-font-family="open-sans"], [data-font-family="montserrat"], [data-font-family="source-sans-3"]) :where(*, *::before, *::after) { font-family: var(--account-font-family) !important; }
-.account-font-family-field { margin-top: 24px; max-width: 400px; }
-.account-font-family-field select { min-height: 44px; width: 100%; }
 :root[data-theme="dark"] { color-scheme: dark; background: #0d1c2e; color: #e4edf7; scrollbar-color: #4a617a #112239; }
 :root[data-theme="dark"] body { background: #0d1c2e; }
-.account-appearance-settings { max-width: 800px; padding-bottom: 24px; margin-bottom: 28px; border-bottom: 1px solid #e0e8f0; }
-.account-appearance-settings h2 { font-size: 18px; margin: 0 0 18px; color: #22486b; }
-.account-appearance-settings h3 { font-size: 14px; margin: 24px 0 12px; color: #31516d; }
 .account-font-icon { display: grid; width: 24px; height: 24px; place-items: center; flex: 0 0 24px; }
 .account-font-options .account-theme-option { display: grid; grid-template-columns: 17px 24px auto; }
 .account-theme-option > svg { flex-shrink: 0; }
-.account-appearance-settings > p { margin: 14px 0 0; font-size: 13px; }
 .account-theme-options { display: flex; gap: 12px; flex-wrap: wrap; }
 .account-theme-option { display: flex; align-items: center; gap: 10px; padding: 13px 18px; min-height: 48px; border: 1px solid #cbdbea; border-radius: 6px; color: #31516d; background: #fff; cursor: pointer; font-size: 14px; }
 .account-theme-option.selected { background: #edf5ff; border-color: #155691; color: #155691; }
 .account-theme-option input { accent-color: #155691; margin: 0; width: 17px; height: 17px; }
 .account-theme-option:has(input:focus-visible) { outline: 2px solid #155691; outline-offset: 2px; }
-:root[data-theme="dark"] .account-appearance-settings { border-color: #30485f; }
-:root[data-theme="dark"] .account-appearance-settings h2 { color: #e4edf7; }
-:root[data-theme="dark"] .account-appearance-settings h3 { color: #c6d6e7; }
 :root[data-theme="dark"] .account-theme-option { color: #c6d6e7; background: #162b43; border-color: #36516f; }
 :root[data-theme="dark"] .account-theme-option.selected { background: #234364; border-color: #80b7f0; color: #e7f2ff; }
 :root[data-theme="dark"] .account-theme-option input { accent-color: #80b7f0; }

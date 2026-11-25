@@ -26,6 +26,11 @@ async function navigate(name) {
   await item.click()
   await page.waitForTimeout(100)
 }
+// Configurações (2026-11-24): the font is in the section Aparência of the menu of the screen.
+async function appearanceSection() {
+  await page.locator('.account-settings-menu').getByRole('button', { name: /^Aparência/ }).click()
+  await page.getByRole('radio', { name: 'Padrão', exact: true }).waitFor()
+}
 async function choose(name, value) {
   const option = page.getByRole('radio', { name, exact: true })
   await option.check()
@@ -47,7 +52,8 @@ try {
   await page.goto(fixture.url)
   await login()
   await navigate('Configurações')
-  const selectors = ['.account-appearance-settings h2', '.account-theme-option', '.account-summary dd', 'main h1']
+  await appearanceSection()
+  const selectors = ['.account-section-heading h2', '.account-theme-option', '.account-setting-text strong', 'main h1']
   const baseline = await Promise.all(selectors.map(font))
   assert.ok(await page.getByRole('radio', { name: 'Padrão', exact: true }).isChecked())
   const snapshot = () => page.evaluate(() => [...document.querySelectorAll('h1,h2,h3,p,label,input,button,span')].map((el) => getComputedStyle(el).fontSize))
@@ -126,6 +132,7 @@ try {
   await page.getByRole('button', { name: 'Sair', exact: true }).click()
   await login('00000000002')
   await navigate('Configurações')
+  await appearanceSection()
   assert.ok(await page.getByRole('radio', { name: 'Padrão', exact: true }).isChecked())
   assert.deepEqual(await Promise.all(selectors.map(font)), baseline)
   assert.equal(await page.getByRole('combobox', { name: 'Fonte', exact: true }).inputValue(), 'default')

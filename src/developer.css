@@ -35,7 +35,9 @@
 .developer-number { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .developer-row--idle td { color: #7c90a3; }
 .developer-presence { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
-.developer-presence i { width: 8px; height: 8px; border-radius: 50%; background: #b5c4d2; }
+/* The grey and the green are each on their own state, so "Escuro intenso" never repeats the grey over the green. */
+.developer-presence i { width: 8px; height: 8px; border-radius: 50%; }
+.developer-presence:not(.developer-presence--on) i { background: #b5c4d2; }
 .developer-presence--on i { background: #22a55a; box-shadow: 0 0 0 3px #dff3e6; }
 
 .developer-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin-bottom: 14px; }
