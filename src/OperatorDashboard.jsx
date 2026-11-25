@@ -12,6 +12,7 @@ import { byDeliveryDeadline, servicePanelOrders } from './servicePanels.js'
 import { SortableRows, SortHeader } from './RegistryList.jsx'
 import './operator.css'
 import { upper } from './displayCase.js'
+import { keepScreenOn } from './keepScreenOn.js'
 import { Minimize2, Monitor } from 'lucide-react'
 
 // Every stage comes with its machine or service from the offer; an OS from before that rule may still lack one.
@@ -194,6 +195,9 @@ export default function OperatorDashboard({ token, onLogout }) {
   const [now, setNow] = useState(Date.now())
   const [idleNotice, setIdleNotice] = useState(false)
   const leaveEmployee = useRef(null)
+
+  // The tablet (and the factory TV in "Modo de exibição") never lets the screen turn off while this screen is open.
+  useEffect(() => keepScreenOn(), [])
 
   // An identified employee who does nothing on the screen for 10 minutes leaves (as the exit button does): the work
   // in progress keeps running and the next one enters with their code. Any touch, movement, key or scroll counts.
