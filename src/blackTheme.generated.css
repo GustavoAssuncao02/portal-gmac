@@ -2545,6 +2545,22 @@
     color: #cdcfd2;
     background: #161617
 }
+:root[data-theme="dark"][data-tone="black"] .payable-mode {
+    border: 1px solid #303133;
+    background: #1a1b1c
+}
+:root[data-theme="dark"][data-tone="black"] .payable-mode button {
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .payable-mode button + button {
+    border-left: 1px solid #303133
+}
+:root[data-theme="dark"][data-tone="black"] .payable-iss-mode {
+    border: 1px solid #303133
+}
+:root[data-theme="dark"][data-tone="black"] .payable-iss-mode legend {
+    color: #bfc2c5
+}
 :root[data-theme="dark"][data-tone="black"] .proposal-model-step > p {
     color: #bfc2c5
 }

@@ -29,7 +29,7 @@ function event(store, actor, type, accountId, details = {}) { store.receivableEv
 function find(store, id) { const row = store.receivables.find((item) => item.id === id); if (!row) fail('Conta a receber não encontrada.', 404); return row }
 // The name follows a classification renamed later.
 const classificationNameOf = (store, row) => (store.classifications || []).find((item) => item.id === row.classificationId)?.name || row.classificationName || ''
-const view = (row, store) => ({ ...row, classificationName: classificationNameOf(store, row), attachments: row.attachments || [], status: receivableStatus(row), daysUntil: daysUntil(row.dueDate), reconciled: Boolean(reconciledTransaction(store, 'receivable', row.id)) })
+const view = (row, store) => ({ ...row, classificationName: classificationNameOf(store, row), attachments: row.attachments || [], status: receivableStatus(row), daysUntil: daysUntil(row.dueDate), ...(row.partialPaidCents ? { fullValueCents: row.valueCents + row.partialPaidCents, fullIssCents: (row.issCents || 0) + (row.partialIssCents || 0) } : {}), reconciled: Boolean(reconciledTransaction(store, 'receivable', row.id)) })
 // Same search as payables: text, value as typed in Brazil and the payer CPF/CNPJ.
 export const matchesReceivable = (row, search) => matchesSearch({ id: row.id, supplierName: row.customerName, supplierDocument: row.customerDocument, description: row.description, documentNumber: row.documentNumber, orderCode: row.orderCode, valueCents: row.valueCents }, search)
 function claimFiles(store, ids, actor) {
@@ -46,6 +46,7 @@ const hasReceiptHistory = (store, row) => Boolean(row.receipt) || store.receivab
 // Only a receipt the account has NOW blocks it: a reversed receipt (by hand or by undoing a reconciliation) leaves the
 // account open, and the history keeps the receipt, the reversal and the deletion.
 function deletionBlock(store, row, group = groupOf(store, row)) {
+  if (group.some((item) => item.partialPaidCents)) return { message: 'Conta com recebimento parcial: estorne os recebimentos parciais antes de excluir.', status: 409 }
   if (!row.treasury && group.some((item) => Boolean(item.receipt))) return { message: row.groupId ? 'Há parcela com recebimento: preserve o histórico do parcelamento.' : 'Conta com recebimento: preserve o histórico.', status: 409 }
   for (const item of group) { try { assertNotReconciled(store, 'receivable', item.id, 'excluir') } catch (error) { return { message: error.message, status: error.status || 409 } } }
   return null
@@ -293,14 +294,14 @@ export default function createReceivablesRouter(accounts, requireAdmin, pool = n
     const store = await readStore(); init(store)
     const order = store.orders.find((item) => item.code === req.params.code)
     if (!order) fail('OS não encontrada.', 404)
-    const existing = linkedReceivables(store, order.code).sort((a, b) => (a.installmentNumber || 1) - (b.installmentNumber || 1))
+    const existing = linkedReceivables(store, order.code).filter((row) => !row.partialOf).sort((a, b) => (a.installmentNumber || 1) - (b.installmentNumber || 1))
     // `deleteBlock` tells why the accounts cannot be removed (when reopening the OS, for instance).
     const deleteBlock = existing.map((row) => deletionBlock(store, row)).find(Boolean)?.message || null
     res.json({ order: { code: order.code, company: order.company, cnpj: String(order.cnpj || '').replace(/\D/g, ''), service: order.service, completed: await operationStatus(order) === 'completed', labelQuotePending: Boolean(order.labelQuote?.pending), ...orderValue(order) }, item: existing.length ? view(existing[0], store) : null, items: existing.map((row) => view(row, store)), deleteBlock, classifications: classificationList(store).filter((item) => !item.inactive && !item.groupInactive && item.nature !== 'expense') })
   }))
   router.get('/receivables/:id', handle(async (req, res) => {
     const store = await readStore(); init(store); const row = find(store, req.params.id), group = groupOf(store, row)
-    res.json({ item: view(row, store), siblings: row.groupId ? group.map((item) => view(item, store)) : [], structureLocked: group.some((item) => item.receipt), canDelete: !deletionBlock(store, row, group), deleteBlock: deletionBlock(store, row, group)?.message || null, deleteOthers: deletionBlock(store, row, group) ? 0 : deletableOthers(store, row).length - 1, history: store.receivableEvents.filter((e) => e.accountId === row.id).reverse() })
+    res.json({ item: view(row, store), siblings: row.groupId ? group.map((item) => view(item, store)) : [], structureLocked: group.some((item) => item.receipt || item.partialPaidCents), partials: (row.partialIds || []).map((id) => store.receivables.find((item) => item.id === id)).filter(Boolean).map((item) => view(item, store)), canDelete: !deletionBlock(store, row, group), deleteBlock: deletionBlock(store, row, group)?.message || null, deleteOthers: deletionBlock(store, row, group) ? 0 : deletableOthers(store, row).length - 1, history: store.receivableEvents.filter((e) => e.accountId === row.id).reverse() })
   }))
   router.post('/receivables', handle(async (req, res) => {
     const treasury = req.body.treasury === true
@@ -365,7 +366,7 @@ export default function createReceivablesRouter(accounts, requireAdmin, pool = n
       assertNotReconciled(store, 'receivable', row.id, 'editar')
       // The payer of an OS receivable comes from the OS and stays fixed.
       const common = { ...(row.origin === 'order' ? await fields(store, { ...req.body, clientId: undefined, customerName: row.customerName, customerDocument: row.customerDocument ?? '' }, accounts, row) : await fields(store, req.body, accounts, row)), ...revenueClassification(store, req.body, row) }
-      if (group.some((item) => item.receipt)) {
+      if (group.some((item) => item.receipt || item.partialPaidCents)) {
         const { valueCents, dueDate, kind, issCents, ...descriptive } = common
         const before = { ...row }; Object.assign(row, descriptive); row.lastStatus = receivableStatus(row)
         event(store, req.actor, 'edited', row.id, { changes: { before, after: { ...row } }, details: { text: 'Parcelamento com parcela recebida: valores e datas preservados.' } })
@@ -410,6 +411,40 @@ export default function createReceivablesRouter(accounts, requireAdmin, pool = n
       return view(row, store)
     })
     res.json({ item })
+  }))
+  // Recebimento parcial: receives part of an open account; the balance stays open (with the due date the user gives it) and the
+  // part becomes a received account linked to it. Interest and discount only come with the final receipt. The ISS withheld
+  // by the customer leaves with this receipt ('now') or with the last one ('last'), as the user chooses.
+  router.post('/receivables/:id/partial', handle(async (req, res) => {
+    const result = await mutateStore((store) => {
+      init(store); const row = find(store, req.params.id)
+      if (row.receipt || row.inactive) fail('Só uma conta em aberto e ativa aceita recebimento parcial.', 409)
+      assertNotReconciled(store, 'receivable', row.id, 'dar baixa parcial em')
+      let receivedCents
+      try { receivedCents = cents(req.body.received) } catch (error) { fail(error.message) }
+      if (receivedCents <= 0) fail('Informe o valor recebido agora.')
+      if (!['now', 'last'].includes(req.body.issMode ?? 'last')) fail('Escolha quando o ISS retido sai.')
+      const issNow = req.body.issMode === 'now' ? row.issCents || 0 : 0, portionCents = receivedCents + issNow
+      if (portionCents >= row.valueCents) fail(`O valor recebido deve ser menor que o saldo de ${money(row.valueCents - issNow)}${issNow ? ' (já descontado o ISS deste recebimento)' : ''}. Para receber tudo, use a baixa total.`)
+      if (row.valueCents - portionCents <= (row.issCents || 0) - issNow) fail('O saldo restante ficaria menor ou igual ao ISS que ainda falta sair. Escolha o ISS neste recebimento ou use a baixa total.')
+      const balanceDueDate = req.body.balanceDueDate || row.dueDate
+      if (!validDate(balanceDueDate)) fail('Informe um vencimento válido para o saldo.')
+      const data = receipt({ date: req.body.date, method: req.body.method, note: req.body.note, bankId: req.body.bankId, iss: issNow ? (issNow / 100).toFixed(2) : '' }, portionCents, false, 0, store)
+      data.receipts = claimFiles(store, req.body.fileIds || [], req.actor)
+      store.receivableSequence = (store.receivableSequence || 0) + 1
+      const { partialPaidCents, partialIssCents, partialIds, ...base } = row
+      const child = { ...base, id: `REC-${String(store.receivableSequence).padStart(6, '0')}`, valueCents: portionCents, issCents: issNow, kind: 'single', recurrence: null, groupId: null, installmentNumber: 1, installmentCount: 1, seriesId: null, seriesIndex: null, seriesCount: null, originalTotalCents: portionCents, attachments: [], receipt: data, partialOf: row.id, inactive: false, createdAt: new Date().toISOString(), lastStatus: 'received' }
+      const dueBefore = row.dueDate
+      Object.assign(row, { valueCents: row.valueCents - portionCents, issCents: (row.issCents || 0) - issNow, dueDate: balanceDueDate, partialPaidCents: (row.partialPaidCents || 0) + portionCents, partialIssCents: (row.partialIssCents || 0) + issNow, partialIds: [...(row.partialIds || []), child.id] })
+      row.lastStatus = receivableStatus(row)
+      store.receivables.push(child)
+      event(store, req.actor, 'created', child.id, { details: { valueCents: portionCents, dueDate: dueBefore, partialOf: row.id, text: `Recebimento parcial de ${row.id}` } })
+      event(store, req.actor, 'received', child.id, { details: { ...data, partialOf: row.id } })
+      for (const file of data.receipts) event(store, req.actor, 'attachment_added', child.id, { details: { name: file.name, receipt: true } })
+      event(store, req.actor, 'partial_received', row.id, { details: { partialId: child.id, valueCents: portionCents, receivedCents, issCents: issNow, balanceCents: row.valueCents, dueDateBefore: dueBefore, dueDateAfter: balanceDueDate, date: data.date, text: `Recebimento parcial de ${money(receivedCents)}${issNow ? ` (com ISS de ${money(issNow)})` : ''}; saldo de ${money(row.valueCents)} com vencimento em ${dateLabel(balanceDueDate)}` } })
+      return { item: view(row, store), partial: view(child, store) }
+    })
+    res.status(201).json(result)
   }))
   router.post('/receivables/bulk', handle(async (req, res) => {
     const items = await mutateStore((store) => {
@@ -513,6 +548,23 @@ export default function createReceivablesRouter(accounts, requireAdmin, pool = n
       if (!row.receipt) fail('Esta conta não possui recebimento.', 409)
       assertNotReconciled(store, 'receivable', row.id, 'estornar')
       const reason = clean(req.body.reason); if (reason.length < 10) fail('Informe um motivo com pelo menos 10 caracteres.')
+      // A partial receipt: its value (and the ISS it took) goes back to the balance of the account it came from, and the record leaves the lists (its history stays).
+      const parent = row.partialOf ? store.receivables.find((item) => item.id === row.partialOf) : null
+      if (parent) {
+        if (parent.receipt || parent.inactive) fail(`Estorne o recebimento final de ${parent.id} (ou reative a conta) antes de estornar este recebimento parcial.`, 409)
+        assertNotReconciled(store, 'receivable', parent.id, 'estornar recebimento parcial de')
+        parent.valueCents += row.valueCents
+        parent.issCents = (parent.issCents || 0) + (row.issCents || 0)
+        parent.partialPaidCents = (parent.partialPaidCents || 0) - row.valueCents
+        parent.partialIssCents = (parent.partialIssCents || 0) - (row.issCents || 0)
+        parent.partialIds = (parent.partialIds || []).filter((id) => id !== row.id)
+        if (!parent.partialPaidCents) { delete parent.partialPaidCents; delete parent.partialIssCents; delete parent.partialIds }
+        event(store, req.actor, 'reversed', row.id, { reason, details: { receipt: row.receipt, partialOf: parent.id, text: `Recebimento parcial estornado: ${money(row.valueCents)} voltaram ao saldo de ${parent.id}` } })
+        event(store, req.actor, 'partial_reversed', parent.id, { reason, details: { partialId: row.id, valueCents: row.valueCents, balanceCents: parent.valueCents } })
+        store.receivables = store.receivables.filter((item) => item.id !== row.id)
+        parent.lastStatus = receivableStatus(parent)
+        return view(parent, store)
+      }
       event(store, req.actor, 'reversed', row.id, { reason, details: { receipt: row.receipt } }); row.receipt = null; row.lastStatus = receivableStatus(row)
       return view(row, store)
     })

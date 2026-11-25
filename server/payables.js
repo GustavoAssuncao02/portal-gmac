@@ -5,7 +5,7 @@ import path from 'node:path'
 import { dataDirectory } from './dataDirectory.js'
 import { readStore, mutateStore } from './offers.js'
 import { exportPdf, exportWorkbook } from './reports.js'
-import { cents, validDate, todayBahia, payableStatus, daysUntil, makeInstallments, shiftMonth, filterPayables, settlementMethods, treasuryEntry, classificationParts, splitInstallments, duplicateError, duplicateAccepted, MAX_SERIES } from './payableRules.js'
+import { cents, validDate, todayBahia, payableStatus, daysUntil, makeInstallments, shiftMonth, filterPayables, settlementMethods, treasuryEntry, classificationParts, splitInstallments, duplicateError, duplicateAccepted, MAX_SERIES, scaleSplit, splitPartial, applyDivision, mergeDivision } from './payableRules.js'
 import { notificationSettings } from './accounts.js'
 import { assertNotReconciled, reconciledTransaction } from './bankStatements.js'
 import { orderValue } from './receivables.js'
@@ -133,7 +133,7 @@ function classificationView(row, store) {
 }
 function view(row, store) {
   const supplier = (store.suppliers || []).find((item) => String(item.id) === String(row.supplierId))
-  return { ...row, supplierDocument: supplier?.document || null, supplierName: supplier?.name || row.supplierName, ...classificationView(row, store), status: payableStatus(row), daysUntil: daysUntil(row.dueDate) }
+  return { ...row, supplierDocument: supplier?.document || null, supplierName: supplier?.name || row.supplierName, ...classificationView(row, store), status: payableStatus(row), daysUntil: daysUntil(row.dueDate), ...(row.partialPaidCents ? { fullValueCents: row.valueCents + row.partialPaidCents } : {}) }
 }
 // Real cost of an OS against its price. The materials and labor planned in the proposal are already part of it;
 // every payable linked to the OS (archived ones were still paid) is an additional cost that came up later.
@@ -142,9 +142,10 @@ function view(row, store) {
 // is removed directly. An installment plan with a paid installment keeps its structure. The history keeps the data.
 // Only a payment the account has NOW blocks the deletion: once it is reversed (by hand or by undoing a bank
 // reconciliation) the account is open again and can be deleted; its history keeps the payment, the reversal and the deletion.
-const paidHistory = (store, row) => Boolean(row.payment)
+const paidHistory = (store, row) => Boolean(row.payment || row.partialPaidCents)
 const relatedPayables = (store, row) => row.groupId ? store.payables.filter((r) => r.groupId === row.groupId) : row.seriesId ? store.payables.filter((r) => r.seriesId === row.seriesId) : [row]
 function payableDeleteBlock(store, row) {
+  if (row.partialPaidCents) return 'Conta com baixa parcial: estorne as baixas parciais antes de excluir.'
   if (!row.treasury && paidHistory(store, row)) return 'Conta com pagamento: preserve o histórico; desative quando paga.'
   if (!row.treasury && row.groupId && relatedPayables(store, row).some((r) => paidHistory(store, r))) return 'Há parcela paga neste parcelamento: preserve o histórico; desative quando paga.'
   if (!row.treasury && store.payables.some((r) => r.previousId === row.id)) return 'Conta com recorrência seguinte vinculada: exclua antes a conta seguinte.'
@@ -289,7 +290,7 @@ export default function createPayablesRouter(accounts, requireAdmin) {
       return rows
     }); res.json({ items: result })
   }))
-  router.get('/payables/:id', handle(async (req, res) => { const store = await sweep(), row = find(store, req.params.id); const siblings = row.groupId ? store.payables.filter((r) => r.groupId === row.groupId) : []; res.json({ item: view(row, store), siblings: siblings.map((r) => view(r, store)), structureLocked: siblings.some((r) => r.payment), canDelete: !payableDeleteBlock(store, row), deleteBlock: payableDeleteBlock(store, row), deleteOthers: deletablePayables(store, row).filter((r) => r.id !== row.id).length, history: store.payableEvents.filter((e) => e.accountId === row.id).reverse() }) }))
+  router.get('/payables/:id', handle(async (req, res) => { const store = await sweep(), row = find(store, req.params.id); const siblings = row.groupId ? store.payables.filter((r) => r.groupId === row.groupId) : []; res.json({ item: view(row, store), siblings: siblings.map((r) => view(r, store)), structureLocked: siblings.some((r) => r.payment || r.partialPaidCents), partials: (row.partialIds || []).map((id) => store.payables.find((item) => item.id === id)).filter(Boolean).map((item) => view(item, store)), canDelete: !payableDeleteBlock(store, row), deleteBlock: payableDeleteBlock(store, row), deleteOthers: deletablePayables(store, row).filter((r) => r.id !== row.id).length, history: store.payableEvents.filter((e) => e.accountId === row.id).reverse() }) }))
   router.post('/payables', handle(async (req, res) => {
     const result = await mutateStore((store) => {
       init(store)
@@ -330,7 +331,7 @@ export default function createPayablesRouter(accounts, requireAdmin) {
       init(store); const row = find(store, req.params.id)
       // A Tesouraria entry is corrected in place and stays paid.
       const treasury = treasuryEntry(row) && req.body.treasury === true
-      if (treasury) treasuryPayment(req.body, 0, store); else editable(row)
+      if (treasury) treasuryPayment(req.body, 0, store); else { editable(row); if (row.partialPaidCents) fail('Estorne as baixas parciais antes de editar esta conta.', 409) }
       assertNotReconciled(store, 'payable', row.id, 'editar')
       const common = fields(store, treasury ? treasuryBody(req.body) : req.body, row)
       const attachments = claimFiles(store, req.body.fileIds || [], req.actor)
@@ -344,8 +345,8 @@ export default function createPayablesRouter(accounts, requireAdmin) {
         const siblings = store.payables.filter((r) => r.groupId === row.groupId).sort((a, b) => a.installmentNumber - b.installmentNumber)
         if (common.kind !== 'installment' || common.valueCents !== row.originalTotalCents) fail('Preserve o parcelamento e o valor total original.')
         const parts = installments(req.body, row.originalTotalCents, common.dueDate)
-        if (siblings.some((r) => r.payment)) {
-          if (parts.length !== siblings.length || parts.some((p, i) => p.valueCents !== siblings[i].valueCents || p.dueDate !== siblings[i].dueDate) || common.dueDate !== row.dueDate) fail('Existe parcela paga. A estrutura do parcelamento está bloqueada.', 409)
+        if (siblings.some((r) => r.payment || r.partialPaidCents)) {
+          if (parts.length !== siblings.length || parts.some((p, i) => p.valueCents !== siblings[i].valueCents + (siblings[i].partialPaidCents || 0) || p.dueDate !== siblings[i].dueDate) || common.dueDate !== row.dueDate) fail('Existe parcela paga. A estrutura do parcelamento está bloqueada.', 409)
           const before = { ...row }; Object.assign(row, common, { valueCents: row.valueCents, originalTotalCents: row.originalTotalCents }); event(store, req.actor, 'edited', row.id, { changes: { before, after: { ...row } } }); addAttachments(row); return [row]
         }
         const splits = splitInstallments(common.classificationSplit, parts.map((part) => part.valueCents))
@@ -397,7 +398,57 @@ export default function createPayablesRouter(accounts, requireAdmin) {
     }); res.json({ items: result })
   }))
   router.post('/payables/:id/pay', handle(async (req, res) => { const item = await mutateStore((store) => { init(store); const row = find(store, req.params.id); editable(row); const data = payment(req.body, row.valueCents, false, billMethods, store); data.receipts = claimFiles(store, req.body.fileIds || [], req.actor); row.payment = data; row.lastStatus = 'paid'; event(store, req.actor, 'paid', row.id, { details: row.payment }); for (const file of data.receipts) event(store, req.actor, 'attachment_added', row.id, { details: { name: file.name, receipt: true } }); return row }); res.json({ item }) }))
-  router.post('/payables/:id/reverse', handle(async (req, res) => { const item = await mutateStore((store) => { init(store); const row = find(store, req.params.id); if (!row.payment || row.inactive) fail('Reative a conta antes de estornar.', 409); assertNotReconciled(store, 'payable', row.id, 'estornar'); const reason = clean(req.body.reason); if (reason.length < 10) fail('Informe um motivo com pelo menos 10 caracteres.'); event(store, req.actor, 'reversed', row.id, { reason, details: { payment: row.payment } }); row.payment = null; row.lastStatus = payableStatus(row); return row }); res.json({ item }) }))
+  router.post('/payables/:id/reverse', handle(async (req, res) => { const item = await mutateStore((store) => { init(store); const row = find(store, req.params.id); if (!row.payment || row.inactive) fail('Reative a conta antes de estornar.', 409); assertNotReconciled(store, 'payable', row.id, 'estornar'); const reason = clean(req.body.reason); if (reason.length < 10) fail('Informe um motivo com pelo menos 10 caracteres.')
+    // A partial payment: its value goes back to the balance of the account it came from and the record leaves the lists (its history stays).
+    const parent = row.partialOf ? store.payables.find((item) => item.id === row.partialOf) : null
+    if (parent) {
+      if (parent.payment || parent.inactive) fail(`Estorne a baixa final de ${parent.id} (ou reative a conta) antes de estornar esta baixa parcial.`, 409)
+      assertNotReconciled(store, 'payable', parent.id, 'estornar baixa parcial de')
+      const merged = mergeDivision(parent, row)
+      parent.valueCents += row.valueCents
+      if (merged) Object.assign(parent, applyDivision(parent, merged))
+      parent.partialPaidCents = (parent.partialPaidCents || 0) - row.valueCents
+      parent.partialIds = (parent.partialIds || []).filter((id) => id !== row.id)
+      if (!parent.partialPaidCents) { delete parent.partialPaidCents; delete parent.partialIds }
+      event(store, req.actor, 'reversed', row.id, { reason, details: { payment: row.payment, partialOf: parent.id, text: `Baixa parcial estornada: ${money(row.valueCents)} voltaram ao saldo de ${parent.id}` } })
+      event(store, req.actor, 'partial_reversed', parent.id, { reason, details: { partialId: row.id, valueCents: row.valueCents, balanceCents: parent.valueCents } })
+      store.payables = store.payables.filter((r) => r.id !== row.id)
+      parent.lastStatus = payableStatus(parent)
+      return parent
+    }
+    event(store, req.actor, 'reversed', row.id, { reason, details: { payment: row.payment } }); row.payment = null; row.lastStatus = payableStatus(row); return row }); res.json({ item }) }))
+  // Baixa parcial: pays part of an open account; the balance stays open (with the due date the user gives it) and the part
+  // becomes a paid account linked to it. Interest and discount only come with the final settlement.
+  router.post('/payables/:id/partial', handle(async (req, res) => {
+    const result = await mutateStore((store) => {
+      init(store); const row = find(store, req.params.id)
+      if (row.payment || row.inactive) fail('Só uma conta em aberto e ativa aceita baixa parcial.', 409)
+      assertNotReconciled(store, 'payable', row.id, 'dar baixa parcial em')
+      let amountCents
+      try { amountCents = cents(req.body.paid) } catch (error) { fail(error.message) }
+      if (amountCents <= 0) fail('Informe o valor pago agora.')
+      if (amountCents >= row.valueCents) fail(`O valor pago deve ser menor que o saldo de ${money(row.valueCents)}. Para pagar tudo, use a baixa total.`)
+      const balanceDueDate = req.body.balanceDueDate || row.dueDate
+      if (!validDate(balanceDueDate)) fail('Informe um vencimento válido para o saldo.')
+      const data = payment({ date: req.body.date, method: req.body.method, note: req.body.note, bankId: req.body.bankId }, amountCents, false, billMethods, store)
+      data.receipts = claimFiles(store, req.body.fileIds || [], req.actor)
+      let division
+      try { division = splitPartial(row, amountCents) } catch (error) { fail(error.message) }
+      store.payableSequence = (store.payableSequence || 0) + 1
+      const { partialPaidCents, partialIds, ...base } = row
+      const child = applyDivision({ ...base, id: `PAG-${String(store.payableSequence).padStart(6, '0')}`, valueCents: amountCents, kind: 'normal', recurrence: null, groupId: null, installmentNumber: 1, installmentCount: 1, seriesId: null, seriesIndex: null, seriesCount: null, originalTotalCents: amountCents, previousId: null, inactive: false, attachments: [], payment: data, partialOf: row.id, createdAt: new Date().toISOString(), lastStatus: 'paid' }, division.paid)
+      const dueBefore = row.dueDate
+      Object.assign(row, applyDivision(row, division.balance), { valueCents: row.valueCents - amountCents, dueDate: balanceDueDate, partialPaidCents: (row.partialPaidCents || 0) + amountCents, partialIds: [...(row.partialIds || []), child.id] })
+      row.lastStatus = payableStatus(row)
+      store.payables.push(child)
+      event(store, req.actor, 'created', child.id, { details: { valueCents: amountCents, dueDate: dueBefore, partialOf: row.id, text: `Baixa parcial de ${row.id}` } })
+      event(store, req.actor, 'paid', child.id, { details: { ...data, partialOf: row.id } })
+      for (const file of data.receipts) event(store, req.actor, 'attachment_added', child.id, { details: { name: file.name, receipt: true } })
+      event(store, req.actor, 'partial_paid', row.id, { details: { partialId: child.id, valueCents: amountCents, balanceCents: row.valueCents, dueDateBefore: dueBefore, dueDateAfter: balanceDueDate, date: data.date, text: `Baixa parcial de ${money(amountCents)}; saldo de ${money(row.valueCents)} com vencimento em ${balanceDueDate.split('-').reverse().join('/')}` } })
+      return { item: view(row, store), partial: view(child, store) }
+    })
+    res.status(201).json(result)
+  }))
   router.post('/payables/:id/activation', handle(async (req, res) => { const item = await mutateStore((store) => { init(store); const row = find(store, req.params.id); if (!row.payment || typeof req.body.inactive !== 'boolean') fail('Somente contas pagas podem ser desativadas ou reativadas.'); if (req.body.inactive) assertNotReconciled(store, 'payable', row.id, 'desativar'); if (row.inactive !== req.body.inactive) { row.inactive = req.body.inactive; event(store, req.actor, row.inactive ? 'deactivated' : 'reactivated', row.id) } return row }); res.json({ item }) }))
   router.delete('/payables/:id', handle(async (req, res) => { const removed = await mutateStore((store) => { init(store); return removePayables(store, req.actor, find(store, req.params.id), req.query.scope === 'all') }); res.json({ ok: true, removed }) }))
   // Files up to the attachment limit (uploads.js): written to the disk first, then recorded; a record that is not saved removes its file.

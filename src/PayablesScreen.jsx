@@ -24,7 +24,7 @@ const initialFilters = () => ({ search: '', supplierId: '', classificationId: ''
 const sortFields = [['id', 'ID'], ['supplierName', 'Fornecedor'], ['documentNumber', 'Documento'], ['description', 'Descrição'], ['classificationName', 'Classificação'], ['valueCents', 'Valor'], ['dueDate', 'Vencimento'], ['status', 'Status'], ['installmentNumber', 'Parcela']]
 export function PayableStatus({ row }) {
   const warning = row.status === 'pending' && row.daysUntil <= 3
-  return <span className={`payable-status payable-status--${row.inactive ? 'inactive' : warning ? 'soon' : row.status}`}><strong>{row.inactive ? 'Desativada' : { pending: 'Pendente', paid: 'Pago', overdue: 'Vencido' }[row.status]}</strong>{!row.payment && (row.daysUntil < 0 || warning) && <small>{dueLabel(row.daysUntil)}</small>}</span>
+  return <span className={`payable-status payable-status--${row.inactive ? 'inactive' : warning ? 'soon' : row.status}`}><strong>{row.inactive ? 'Desativada' : { pending: 'Pendente', paid: 'Pago', overdue: 'Vencido' }[row.status]}</strong>{row.partialPaidCents && !row.payment ? <small>Parcial · saldo</small> : null}{!row.payment && (row.daysUntil < 0 || warning) && <small>{dueLabel(row.daysUntil)}</small>}</span>
 }
 export function ConfirmAction({ title, children, reasonRequired, onClose, onConfirm }) {
   const id = useId(), [reason, setReason] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState('')
@@ -137,7 +137,7 @@ export default function PayablesScreen({ mode = 'accounts', accountFilters, ...p
     if (key === 'pay') { setDetailId(''); setPayRows({ rows: [row], bulk: false }); return }
     if (key === 'delete') return setDeleting(row.id)
     const titles = { reverse: 'Estornar baixa', delete: 'Excluir conta', deactivate: 'Desativar conta', reactivate: 'Reativar conta' }
-    setConfirm({ title: titles[key], reasonRequired: key === 'reverse', text: key === 'reverse' ? '' : `${titles[key]} ${row.id}?`, onConfirm: async (reason) => { await payableRequest(`/payables/${row.id}${key === 'reverse' ? '/reverse' : key === 'delete' ? '' : '/activation'}`, key === 'delete' ? 'DELETE' : 'POST', key === 'reverse' ? { reason } : key === 'delete' ? undefined : { inactive: key === 'deactivate' }); await refresh(); setConfirm(null); if (key === 'delete') setDetailId('') } })
+    setConfirm({ title: titles[key], reasonRequired: key === 'reverse', text: key === 'reverse' ? '' : `${titles[key]} ${row.id}?`, onConfirm: async (reason) => { await payableRequest(`/payables/${row.id}${key === 'reverse' ? '/reverse' : key === 'delete' ? '' : '/activation'}`, key === 'delete' ? 'DELETE' : 'POST', key === 'reverse' ? { reason } : key === 'delete' ? undefined : { inactive: key === 'deactivate' }); await refresh(); setConfirm(null); if (key === 'delete') setDetailId(''); if (key === 'reverse' && row.partialOf) setDetailId(row.partialOf) } })
   }
   const title = { accounts: 'Contas a Pagar', bi: 'Business Intelligence', suppliers: 'Fornecedores' }[mode]
   return <AdminWorkspace {...props} title={title}>
@@ -157,7 +157,7 @@ export default function PayablesScreen({ mode = 'accounts', accountFilters, ...p
     </>}
     {detailId && <PayableDetails id={detailId} key={detailId} refreshVersion={version} onClose={() => setDetailId('')} onAction={action} />}
     {form && <PayableForm {...form} suppliers={data.suppliers} classifications={data.classifications} orders={data.orders || []} items={data.items} onClose={() => { setForm(null); offerRecurrences(form.nextRows) }} onSupplierCreated={() => refresh().catch(() => {})} onSaved={async (items, close) => { await refresh(); if (close) { setForm(null); if (form.edit) setDetailId(items[0].id); offerRecurrences(form.nextRows) } }} />}
-    {payRows && <PayablePayment {...payRows} onClose={() => setPayRows(null)} onSaved={async (row) => { await refresh(); setPayRows(null); setSelected([]); const recurring = payRows.rows.filter((r) => r.kind === 'recurring'); if (!(recurring.length && offerRecurrences(recurring)) && row) setDetailId(row.id) }} />}
+    {payRows && <PayablePayment {...payRows} onClose={() => setPayRows(null)} onSaved={async (row, partial) => { await refresh(); setPayRows(null); setSelected([]); const recurring = partial ? [] : payRows.rows.filter((r) => r.kind === 'recurring'); if (!(recurring.length && offerRecurrences(recurring)) && row) setDetailId(row.id) }} />}
     {deleting && <DeleteAccountModal type="payable" id={deleting} key={deleting} onClose={() => setDeleting(null)} onDeleted={async () => { setDeleting(null); setDetailId(''); setSelected(selected.filter((id) => id !== deleting)); await refresh() }} />}
     {supplierHistory && <RegistryHistoryModal registry="suppliers" record={supplierHistory} onClose={() => setSupplierHistory(null)} />}{confirm && <ConfirmAction {...confirm} onClose={confirm.onCancel || (() => setConfirm(null))}>{confirm.text && <p>{confirm.text}</p>}</ConfirmAction>}
     {history && <PayableModal title="Histórico geral · Contas a Pagar" wide onClose={() => setHistory(null)}><HistoryRows rows={history} /></PayableModal>}

@@ -101,3 +101,31 @@ export function filterPayables(rows, filters = {}, today = todayBahia(), useStat
     return filters.status ? status === filters.status : status !== 'paid'
   })
 }
+
+// Baixa parcial (TCK-0011): a payment of part of an open account. The account stays open with the balance and the part
+// paid becomes an account of its own, already paid and linked to it (`partialOf`). The classification division follows
+// the proportion of the part; whatever is not in the part stays in the balance, so every classification adds up exactly.
+const withoutEmpty = (parts) => parts.filter((part) => part.valueCents > 0)
+export function splitPartial(row, amountCents) {
+  if (!row.classificationSplit?.length) return { paid: null, balance: null }
+  const paid = scaleSplit(row.classificationSplit, amountCents, row.valueCents)
+  const balance = row.classificationSplit.map((part, index) => ({ ...part, valueCents: part.valueCents - paid[index].valueCents }))
+  if (balance.some((part) => part.valueCents < 0)) throw new Error('Não foi possível dividir a baixa parcial entre as classificações.')
+  return { paid: withoutEmpty(paid), balance: withoutEmpty(balance) }
+}
+// The classification fields of an account after its division changed (a division of one part is just the classification).
+export function applyDivision(row, parts) {
+  if (!parts || parts.length === 0) return row
+  if (parts.length === 1) return { ...row, classificationId: parts[0].classificationId, classificationName: parts[0].classificationName, classificationSplit: null }
+  return { ...row, classificationId: parts[0].classificationId, classificationName: parts.map((part) => part.classificationName).join(' + '), classificationSplit: parts }
+}
+// The division of an account that takes back a reversed partial payment.
+export function mergeDivision(parent, child) {
+  if (!parent.classificationSplit?.length && !child.classificationSplit?.length) return null
+  const total = new Map()
+  for (const part of [...classificationParts(parent), ...classificationParts(child)]) {
+    const current = total.get(part.classificationId)
+    total.set(part.classificationId, current ? { ...current, valueCents: current.valueCents + part.valueCents } : { ...part })
+  }
+  return [...total.values()]
+}

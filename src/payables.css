@@ -326,3 +326,15 @@
 .duplicate-status--paid,.duplicate-status--received { color:#137b44; background:#e9f7ee; }
 .duplicate-status--overdue { color:#b42c3c; background:#fcecef; }
 .duplicate-status--inactive { color:#6a7480; background:#edf0f3; }
+
+/* Baixa parcial (TCK-0011): total or partial in the settlement forms, the choice of the ISS and the mark next to the status. */
+.payable-mode { display:inline-flex; width:fit-content; border:1px solid #cddce9; border-radius:8px; overflow:hidden; background:#fff; }
+.payable-mode button { min-height:36px; padding:6px 16px; border:0; background:transparent; color:#31516d; font:inherit; font-size:13px; font-weight:600; cursor:pointer; }
+.payable-mode button + button { border-left:1px solid #cddce9; }
+.payable-mode button[aria-pressed="true"] { background:#0c4c91; color:#fff; }
+.payable-iss-mode { display:grid; gap:6px; margin:0; padding:10px 12px; border:1px solid #dce6ed; border-radius:8px; }
+.payable-iss-mode legend { padding:0 6px; color:#4d6880; font-size:12px; font-weight:600; }
+.payable-status small { display:block; }
+@media (max-width: 760px) { .payable-mode { width:100%; } .payable-mode button { flex:1 1 0; min-height:44px; } }
+.payable-form .payable-iss-mode label { display:flex; flex-direction:row; align-items:center; justify-content:flex-start; gap:8px; text-align:left; font-size:13px; font-weight:400; }
+.payable-form .payable-iss-mode input[type=radio] { flex:0 0 auto; width:16px; height:16px; min-height:0; margin:0; padding:0; }
