@@ -1,6 +1,13 @@
 // Each commit to main is a new version: add an entry at the top, with what changed in plain words for whoever uses the portal.
 export const releaseNotes = [
   {
+    version: '1.0.25',
+    date: '2026-11-26',
+    notes: [
+      'Contas a pagar: novo filtro por tipo da conta (normal, parcelada ou recorrente)',
+    ],
+  },
+  {
     version: '1.0.24',
     date: '2026-11-25',
     notes: [

@@ -14,6 +14,15 @@ test('search finds accounts by value as typed in Brazil and by supplier CPF/CNPJ
   assert.deepEqual([-2, -1, 0, 1, 2].map(dueLabel), ['Vencida há 2 dias', 'Vencida há 1 dia', 'Vence hoje', 'Vence em 1 dia', 'Vence em 2 dias'])
 })
 
+test('the Tipo da conta filter keeps only normal, installment or recurring accounts (accounts without a type count as normal)', () => {
+  const rows = [{ id: 'PAG-000001', kind: 'normal' }, { id: 'PAG-000002', kind: 'installment' }, { id: 'PAG-000003', kind: 'recurring' }, { id: 'PAG-000004' }].map((row) => ({ ...row, supplierName: 'Fornecedor', description: '', documentNumber: '', valueCents: 1000, dueDate: '2026-10-10' }))
+  const found = (kind) => filterPayables(rows, { kind, status: 'all' }, '2026-10-01').map((row) => row.id)
+  assert.deepEqual(found(''), ['PAG-000001', 'PAG-000002', 'PAG-000003', 'PAG-000004'])
+  assert.deepEqual(found('normal'), ['PAG-000001', 'PAG-000004'])
+  assert.deepEqual(found('installment'), ['PAG-000002'])
+  assert.deepEqual(found('recurring'), ['PAG-000003'])
+})
+
 test('recurring accounts can be generated ahead, OS links are validated and the OS real cost and margin add up', async () => {
   const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Gustavo' }
   const f = await createWorkflowFixture({ accountsEnv: env })

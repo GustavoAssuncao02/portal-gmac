@@ -85,8 +85,11 @@ export function duplicateError(matches, fields, view) {
 export const duplicateAccepted = (ids = [], fields) => ids.length ? `Possível duplicidade com ${accountList(ids)} (mesmo ${fields}) confirmada pelo usuário.` : ''
 // Posted in Tesouraria: an account that is born settled, without going through "dar baixa".
 export const treasuryEntry =(row) => row?.treasury === true && Boolean(row.payment || row.receipt) && !row.inactive
+// Tipo da conta, as chosen when it was created (the partial payment of an account is a normal account of its own).
+export const payableKindLabels = { normal: 'Normal', installment: 'Parcelada', recurring: 'Recorrente' }
 export function filterPayables(rows, filters = {}, today = todayBahia(), useStatus = true) {
   return rows.filter((row) => {
+    if (filters.kind && (row.kind || 'normal') !== filters.kind) return false
     if (filters.supplierId && String(row.supplierId) !== String(filters.supplierId)) return false
     if (filters.classificationId && !classificationParts(row).some((part) => part.classificationId === filters.classificationId)) return false
     if (filters.orderCode && row.orderCode !== filters.orderCode) return false

@@ -6,6 +6,9 @@
 .payable-status-filters button[aria-pressed=true] { border-color:#0c4c91; background:#eaf3fc; }
 .payable-status-filters span { background:#edf3f8; padding:2px 6px; border-radius:4px; }
 .payable-advanced { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; padding:18px 0 24px; border-top:1px solid #dce5ef; }
+/* Tipo da conta sits next to Classificação when four columns fit; otherwise it goes last so the two due dates stay side by side. */
+.payable-advanced-kind { order:1; }
+@media(min-width:1200px) { .payable-advanced { grid-template-columns:repeat(4,minmax(0,1fr)); }.payable-advanced-kind { order:0; } }
 .payable-table-scroll { overflow:auto; border:1px solid #d8e4ef; border-radius:6px; background:white; }
 .payable-table { width:100%; border-collapse:collapse; font-size:13px; }
 .payable-table th { background:#f1f6fb; text-align:left; color:#0c4c91; padding:14px 12px; white-space:nowrap; font-size:12px; }
