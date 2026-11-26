@@ -13,6 +13,10 @@ const errors = []
 page.on('pageerror', (error) => errors.push(error.message))
 try {
   await fixture.mutateStore((store) => { store.machines = [{ id: 'torno', name: 'Torno 01' }, { id: 'fresa', name: 'Fresa 02' }] })
+  const catalog = (await fixture.adminRequest('/stages')).data
+  const usinagem = catalog.sectors.find((sector) => sector.name === 'Usinagem')
+  const renamed = await fixture.adminRequest('/stages/turning', 'PUT', { name: 'Torno', sectorId: usinagem.id })
+  assert.equal(renamed.status, 200)
   const service = (await fixture.adminRequest('/labor-services')).data.items.find((item) => item.name === 'Pintura industrial')
   const ana = (await fixture.adminRequest('/employees', 'POST', { name: 'Ana Teste', cpf: '00000000001' })).data.item
   const bruno = (await fixture.adminRequest('/employees', 'POST', { name: 'Bruno Teste', cpf: '00000000002' })).data.item
@@ -26,6 +30,7 @@ try {
   await openOrder(page, order.service)
   const step = page.getByRole('button', { name: /Selecionar etapa/ })
   await step.getByText('Máquina: TORNO 01', { exact: true }).waitFor()
+  assert.match(await step.innerText(), /TORNO · Máquina: TORNO 01/)
   assert.equal(await page.getByRole('button', { name: /Iniciar trabalho/ }).isEnabled(), true, 'the planned machine is enough to start')
 
   await step.click()

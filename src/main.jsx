@@ -2537,6 +2537,17 @@ function App() {
   const [, setStageVersion] = useState(0)
   useEffect(() => onStageCatalogChange(() => setStageVersion((value) => value + 1)), [])
   useEffect(() => { if (isDashboard) cachedResource('/stages', setStageCatalog).catch(() => {}) }, [isDashboard])
+  useEffect(() => {
+    if (!operatorToken) return
+    const controller = new AbortController()
+    apiRequest('/api/stages', {
+      signal: controller.signal,
+      headers: { Authorization: `Bearer ${operatorToken}` },
+    }).then((catalog) => {
+      if (!controller.signal.aborted) setStageCatalog(catalog)
+    }).catch(() => {})
+    return () => controller.abort()
+  }, [operatorToken])
   const [restoringSession, setRestoringSession] = useState(() => !operatorToken && Boolean(window.sessionStorage.getItem('gmac-admin-token')))
   const [restoreError, setRestoreError] = useState('')
   const [restoreAttempt, setRestoreAttempt] = useState(0)
