@@ -1325,7 +1325,7 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .admin-os-display-controls time { font-size: calc(14px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .admin-os-main:fullscreen .admin-os-table th, :root:is([data-font-size="small"], [data-font-size="large"]) .admin-os-main:fullscreen .admin-os-table td { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .admin-os-main:fullscreen .admin-os-stage-label { font-size: calc(8px * var(--account-font-scale)); }
-:root:is([data-font-size="small"], [data-font-size="large"]) .admin-os-main .dashboard-header h1 { font-size: calc(30px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .admin-os-main .dashboard-header h1 { font-size: calc(22px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .offers-main .offers-header h1 { font-size: calc(30px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .admin-os-filter-icon { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .admin-os-table th { font-size: calc(10px * var(--account-font-scale)); }

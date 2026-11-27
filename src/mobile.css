@@ -237,7 +237,7 @@
   .admin-os-stage-label { min-height: 22px; font-size: 10px; line-height: 1.35; white-space: nowrap; word-break: normal; overflow-wrap: normal; }
   .admin-os-stage-block { height: 28px; }
   .admin-os-summary > div { border-radius: 6px; padding: 14px; }
-  .admin-os-display-controls { flex-wrap: wrap; }
+  .admin-os-header-tools, .admin-os-display-controls { flex-wrap: wrap; }
   .global-search { width: 100%; min-width: 0; height: 44px; }
   .offers-board { margin-top: 20px; border-radius: 6px; box-shadow: none; }
   .offers-board-toolbar { grid-template-columns: minmax(0, 1fr); gap: 14px; padding: 16px; }

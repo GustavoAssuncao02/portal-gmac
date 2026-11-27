@@ -7394,18 +7394,21 @@ button {
 .login-role-switch button.active { background: #fff; color: #0c4c91; box-shadow: 0 1px 5px #143a651c; }
 
 .admin-os-shell { min-width: 0; }
-.admin-os-shell--completed .dashboard-header { margin-bottom: 20px; }
+.admin-os-shell--completed .dashboard-header { margin-bottom: 12px; }
 .admin-os-main { display: flex; flex-direction: column; min-width: 0; padding: 70px 16px 28px; }
-.admin-os-display-controls { display: flex; align-items: center; justify-content: flex-end; gap: 20px; margin-top: auto; padding-top: 32px; }
-.admin-os-display-controls button { display: inline-flex; align-items: center; gap: 9px; min-height: 42px; padding: 10px 14px; border: 1px solid #b9d0e4; border-radius: 5px; color: #0c4c91; background: #f1f6fb; font: inherit; font-size: 13px; cursor: pointer; }
-.admin-os-display-controls time { color: #5f7891; font-size: 14px; font-variant-numeric: tabular-nums; }
+/* Search and Modo de exibição share the top right corner; in the display mode the clock shows beside the button. */
+.admin-os-main .dashboard-header { align-items: center; }
+.admin-os-header-tools { display: flex; align-items: center; justify-content: flex-end; gap: 10px; min-width: 0; }
+.admin-os-display-controls { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-shrink: 0; }
+.admin-os-display-controls button { display: inline-flex; align-items: center; gap: 9px; min-height: 40px; padding: 8px 14px; white-space: nowrap; border: 1px solid #b9d0e4; border-radius: 5px; color: #0c4c91; background: #f1f6fb; font: inherit; font-size: 13px; cursor: pointer; }
+.admin-os-display-controls time { color: #5f7891; font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .admin-os-main:fullscreen { width: 100%; height: 100%; padding: 28px; overflow: auto; background: #f8fbfe; }
 .admin-os-main:fullscreen .workspace-tabs { display: none; }
 .admin-os-main:fullscreen .admin-os-table th, .admin-os-main:fullscreen .admin-os-table td { font-size: 12px; padding: 12px 6px; }
 .admin-os-main:fullscreen .admin-os-stage-label { font-size: 8px; }
 .admin-os-main:fullscreen .admin-os-table { min-width: 0; }
 .admin-os-main:fullscreen .admin-os-table-wrap { flex-shrink: 0; }
-.admin-os-main .dashboard-header h1 { color: #0c4c91; font-size: 30px; }
+.admin-os-main .dashboard-header h1 { color: #0c4c91; font-size: 22px; letter-spacing: 0; }
 /* Ofertas e serviços follows the other Operação screens (Serviços em andamento e concluídos): same title and position. */
 .offers-main { padding: 70px 16px 28px; }
 .offers-main .offers-header h1 { color: #0c4c91; font-size: 30px; font-weight: 700; line-height: 1.16; letter-spacing: -1.2px; }
@@ -7414,12 +7417,12 @@ button {
 /* The offers' data shows in capital letters, as typed in the Painel; the database keeps it as it was typed. */
 .offers-table-row:not(.offers-table-header) :is(.offer-piece, [data-label="Cliente"], [data-label="Etiqueta"], [data-label="Quantidade"], [data-label="Origem"]) { text-transform: uppercase; }
 .offers-table-row > span::before { text-transform: none; }
-.admin-os-filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0; }
+.admin-os-filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
 .admin-os-filters:not(.deadline-filters) { display: none; }
 .admin-os-filters button { display: flex; align-items: center; gap: 9px; padding: 9px 13px; border: 1px solid #dce5ef; border-radius: 7px; background: #fff; color: #304e6b; cursor: pointer; }
 .admin-os-filters button.selected { border-color: #0c4c91; background: #eaf3fe; color: #0c4c91; }
 .admin-os-filters strong { min-width: 21px; border-radius: 12px; padding: 2px 5px; background: #ecf2f8; text-align: center; }
-.deadline-filters button { min-height: 40px; padding: 8px 14px; }
+.deadline-filters button { min-height: 32px; padding: 4px 12px; }
 .admin-os-filter-icon { display: inline-grid; width: 15px; height: 15px; place-items: center; font-size: 13px; }
 .admin-os-filter-icon--all { color: #0c4c91; }
 .admin-os-filter-icon--on-time { color: #24a148; }
