@@ -49,7 +49,8 @@ test('the rules: the day, the badge, the order of the list and the plan of the n
   assert.equal(parseProposalDeadline('2026-11-27', '2026-11-28T02:50:00.000Z'), '2026-11-27', 'the request day is the day in Bahia')
 
   const offer = { proposalDeadline: '2026-12-06', status: 'creating' }
-  assert.equal(proposalDeadlineBadge(offer, '2026-12-03'), null, 'far away: the date is enough')
+  assert.equal(proposalDeadlineBadge(offer, '2026-12-02'), null, 'far away: the date is enough')
+  assert.deepEqual(proposalDeadlineBadge(offer, '2026-12-03'), { days: 3, label: 'em 3 dias', tone: 'soon' })
   assert.deepEqual(proposalDeadlineBadge(offer, '2026-12-04'), { days: 2, label: 'em 2 dias', tone: 'soon' })
   assert.deepEqual(proposalDeadlineBadge(offer, '2026-12-05'), { days: 1, label: 'amanhã', tone: 'soon' })
   assert.deepEqual(proposalDeadlineBadge(offer, '2026-12-06'), { days: 0, label: 'vence hoje', tone: 'today' })
@@ -58,7 +59,7 @@ test('the rules: the day, the badge, the order of the list and the plan of the n
   for (const stopped of [{ status: 'proposed' }, { status: 'accepted' }, { status: 'rejected' }, { status: 'review', orderCode: 'OS-2026-0001' }]) {
     assert.equal(proposalDeadlineBadge({ ...offer, ...stopped }, '2026-12-09'), null, JSON.stringify(stopped))
   }
-  assert.deepEqual([proposalDue(offer, '2026-12-05'), proposalDue(offer, '2026-12-06'), proposalDue(offer, '2026-12-08'), proposalDue({ status: 'creating' }, '2026-12-08')], [false, true, true, false])
+  assert.deepEqual([proposalDue(offer, '2026-12-02'), proposalDue(offer, '2026-12-03'), proposalDue(offer, '2026-12-05'), proposalDue(offer, '2026-12-06'), proposalDue(offer, '2026-12-08'), proposalDue({ status: 'creating' }, '2026-12-08')], [false, true, true, true, true, false])
 
   const list = [
     { code: 'OF-1', status: 'review' },

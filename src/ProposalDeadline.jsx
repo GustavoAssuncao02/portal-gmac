@@ -20,7 +20,7 @@ export function ProposalDeadlineField({ value, requestedDay, onChange }) {
   </div>
 }
 
-// "amanhã", "em 2 dias", "vence hoje", "atrasada há 1 dia": only while the offer waits for its proposal.
+// "amanhã", "em 3 dias", "vence hoje", "atrasada há 1 dia": only while the offer waits for its proposal.
 export function ProposalDeadlineBadge({ offer, today = todayBahia() }) {
   const badge = proposalDeadlineBadge(offer, today)
   return badge ? <span className={`offer-response-badge offer-response-badge--${badge.tone}`}>{badge.label}</span> : null
