@@ -184,3 +184,11 @@ span.ticket-follow--own { cursor: default; }
   .ticket-table td.payable-empty { grid-column: 1 / -1; }
   .ticket-table td.payable-empty::before { content: none; }
 }
+
+/* Ticket › Exportar (developers): beside the X of the ticket window. */
+.ticket-export { display: flex; align-items: center; gap: 8px; }
+.ticket-export-button { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; font-size: 13px; white-space: nowrap; }
+@media (max-width: 640px) {
+  .ticket-detail-modal > header { flex-wrap: wrap; }
+  .ticket-detail-modal > header .payable-modal-actions { margin-left: auto; }
+}

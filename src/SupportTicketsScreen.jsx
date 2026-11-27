@@ -1,6 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useSavedState } from './savedListState.js'
-import { Bell, BellRing, CircleCheck, CircleDot, Clock3, Download, Eye, FilterX, Hourglass, Inbox, Info, Lock, Mail, MessageCircle, Paperclip, RotateCcw, Search, Send } from 'lucide-react'
+import { Bell, BellRing, Check, CircleCheck, CircleDot, Clock3, Copy, Download, Eye, FilterX, Hourglass, Inbox, Info, Lock, Mail, MessageCircle, Paperclip, RotateCcw, Search, Send } from 'lucide-react'
 import AdminWorkspace from './AdminWorkspace.jsx'
 import { PayableModal, FilePicker, FilePreview, previewable } from './PayableModal.jsx'
 import { payableRequest, uploadFiles, downloadFile } from './payablesApi.js'
@@ -296,6 +296,38 @@ function TicketThread({ ticket, viewer, onPreview, onError }) {
   })}</ol>
 }
 
+// Ticket › Exportar (developers): the ticket in a light file to hand over (a .json, or a .zip with its attachments), and
+// "Copiar JSON" for a ticket without attachments, to paste it straight into a message.
+function TicketExport({ ticket, hasFiles, onError }) {
+  const [state, setState] = useState('')
+  async function run(kind) {
+    setState(kind); onError('')
+    try {
+      if (kind === 'download') await downloadFile(`/api/support-tickets/${ticket.id}/export`, `${ticket.id}.${hasFiles ? 'zip' : 'json'}`)
+      else {
+        const text = JSON.stringify(await payableRequest(`/support-tickets/${ticket.id}/export?format=json`), null, 2)
+        await copyText(text)
+        setState('copied'); window.setTimeout(() => setState((current) => current === 'copied' ? '' : current), 2500)
+        return
+      }
+    } catch (caught) { onError(caught.message || 'Não foi possível exportar o ticket.') }
+    setState('')
+  }
+  return <div className="ticket-export">
+    {!hasFiles && <button type="button" className="admin-tool-button ticket-export-button" disabled={Boolean(state && state !== 'copied')} onClick={() => run('copy')}>{state === 'copied' ? <Check size={15} aria-hidden="true" /> : <Copy size={15} aria-hidden="true" />}{state === 'copied' ? 'Copiado' : 'Copiar JSON'}</button>}
+    <button type="button" className="admin-tool-button ticket-export-button" disabled={Boolean(state && state !== 'copied')} title={hasFiles ? 'Baixa um .zip com o ticket (JSON) e os anexos' : 'Baixa o ticket em JSON'} onClick={() => run('download')}><Download size={15} aria-hidden="true" />{state === 'download' ? 'Exportando...' : hasFiles ? 'Exportar (.zip)' : 'Exportar (.json)'}</button>
+  </div>
+}
+// The clipboard of the browser (HTTPS or localhost); elsewhere a hidden text field copied the old way.
+async function copyText(text) {
+  if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text)
+  const field = document.createElement('textarea')
+  field.value = text; field.setAttribute('readonly', ''); field.style.position = 'fixed'; field.style.opacity = '0'
+  document.body.appendChild(field); field.select()
+  const done = document.execCommand('copy'); field.remove()
+  if (!done) throw new Error('Não foi possível copiar. Use Exportar.')
+}
+
 function TicketDetail({ ticket, viewer, onClose, onChanged }) {
   const [note, setNote] = useState(''), [files, setFiles] = useState([]), [busy, setBusy] = useState(''), [error, setError] = useState(''), [preview, setPreview] = useState(null)
   const closing = ticket.status === 'open'
@@ -316,7 +348,7 @@ function TicketDetail({ ticket, viewer, onClose, onChanged }) {
   const followers = (ticket.followers || []).filter((entry) => String(entry.userId) !== String(viewer.id)).map((entry) => entry.userName)
   const filePicker = <div className="ticket-files ticket-message-files"><FilePicker title="Anexos (opcional)" files={files} setFiles={setFiles} disabled={Boolean(busy)} /><small className="payable-hint"><Lock size={12} aria-hidden="true" /> {lockedNote}</small></div>
   const canSend = Boolean(note.trim()) || files.length > 0
-  return <PayableModal title={`${ticket.id} · ${ticket.title}`} wide busy={Boolean(busy)} onClose={onClose} className="ticket-detail-modal" footer={<button className="admin-tool-button" type="button" disabled={Boolean(busy)} onClick={onClose}>Fechar janela</button>}>
+  return <PayableModal title={`${ticket.id} · ${ticket.title}`} wide busy={Boolean(busy)} onClose={onClose} className="ticket-detail-modal" actions={viewer.developer ? <TicketExport ticket={ticket} hasFiles={allFiles.length > 0} onError={setError} /> : null} footer={<button className="admin-tool-button" type="button" disabled={Boolean(busy)} onClick={onClose}>Fechar janela</button>}>
     <div className="ticket-follow-bar">
       {ticket.own ? <p className="ticket-follow-own"><BellRing size={16} aria-hidden="true" /><span>Você abriu este ticket e recebe os avisos do que acontecer nele.</span></p>
         : <><FollowButton ticket={ticket} onChanged={onChanged} onError={setError} /><small className="payable-hint">{ticket.following ? 'Você recebe no sino e por e-mail as novidades deste ticket: mensagens, fechamento e reabertura.' : 'Marque o sininho para receber no sino e por e-mail as novidades deste ticket: mensagens, fechamento e reabertura.'}</small></>}

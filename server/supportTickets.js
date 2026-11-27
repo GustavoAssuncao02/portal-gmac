@@ -1,6 +1,6 @@
 import express from 'express'
 import { randomUUID } from 'node:crypto'
-import { rm } from 'node:fs/promises'
+import { readFile, rm } from 'node:fs/promises'
 import path from 'node:path'
 import { readStore, mutateStore } from './offers.js'
 import { receiveFile, sendStoredFile } from './uploads.js'
@@ -10,7 +10,8 @@ import { createMailer } from './passwordReset.js'
 import { wantsEmail } from './accounts.js'
 import { emailNotificationsOff } from './notificationRules.js'
 import { developerCpfs, isDeveloper } from './developers.js'
-import { COMMENT_MAX, DESCRIPTION_MAX, RESOLUTION_MAX, TITLE_MAX, moduleLabel, moduleTitle, submodulesOf, ticketModules, ticketPlace, ticketUrgencies, urgencyLabel } from './ticketRules.js'
+import { COMMENT_MAX, DESCRIPTION_MAX, RESOLUTION_MAX, TITLE_MAX, moduleLabel, moduleTitle, statusLabel, submodulesOf, ticketModules, ticketPlace, ticketUrgencies, urgencyLabel } from './ticketRules.js'
+import { zipFiles } from './zipFile.js'
 
 // Tickets de suporte: administrators and administrative employees report problems of the portal to its developers.
 // Everybody sees every ticket; the attachments (evidence of the problem) open for administrators and, for an
@@ -351,6 +352,50 @@ export default function createSupportTicketsRouter(accounts, requireAdmin, { mai
     const file = found?.file || fail('Arquivo não encontrado.', 404)
     res.setHeader('Content-Type', 'application/octet-stream'); res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(file.name)}`)
     await sendStoredFile(res, path.join(ticketFilesDirectory, file.id))
+  }))
+
+  // Ticket › Exportar (developers only): everything the ticket keeps (conversation, history, followers, how each e-mail
+  // went), with the readable names of its module, urgency and status and the people in it, in a light file to hand to
+  // whoever fixes it. Without attachments (or `?format=json`, for "Copiar JSON") the .json alone; with them a .zip with
+  // ticket.json and the files in anexos/. A file missing on the disk is listed as such.
+  router.get('/support-tickets/:id/export', handle(async (req, res) => {
+    if (!req.viewer.developer) fail('Só os desenvolvedores exportam tickets.', 403)
+    const store = await readStore(); init(store)
+    const ticket = find(store, req.params.id)
+    const sent = [
+      ...(ticket.attachments || []).map((file) => ({ file, sentIn: 'abertura', sentBy: ticket.createdByName, sentAt: ticket.createdAt })),
+      ...(ticket.comments || []).flatMap((comment) => (comment.attachments || []).map((file) => ({ file, sentIn: 'conversa', commentId: comment.id, sentBy: comment.userName, sentAt: comment.at }))),
+    ]
+    const json = req.query.format === 'json'
+    const files = [], attachments = []
+    for (const [index, { file, ...origin }] of sent.entries()) {
+      const inZip = `anexos/${String(index + 1).padStart(2, '0')} - ${String(file.name || file.id).replace(/[\\/:*?"<>|\x00-\x1f]/g, '_')}`
+      let data = null
+      if (!json) {
+        try { data = await readFile(path.join(ticketFilesDirectory, file.id)) } catch (error) { if (error.code !== 'ENOENT') throw error }
+      }
+      attachments.push({ ...file, ...origin, ...(json ? {} : data ? { fileInZip: inZip } : { missing: 'Arquivo não encontrado no servidor.' }) })
+      if (data) files.push({ name: inZip, data })
+    }
+    const ids = uniqueIds([ticket.createdBy, ...(ticket.followers || []).map((entry) => entry.userId), ...(ticket.comments || []).map((comment) => comment.userId), ...(ticket.history || []).map((entry) => entry.userId)])
+    const people = []
+    for (const id of ids) {
+      const person = await accounts.account(id).catch(() => null)
+      people.push(person ? { id: person.id, name: person.name, role: person.role, email: person.email || null, developer: isDeveloper(person, cpfs) } : { id, missing: 'Conta não encontrada.' })
+    }
+    const exported = {
+      exportedAt: new Date().toISOString(), exportedBy: req.viewer.name,
+      ticket: { ...ticket, moduleTitle: moduleTitle(ticket.module, ticket.submodule), urgencyLabel: urgencyLabel(ticket.urgency), statusLabel: statusLabel(ticket.status) },
+      attachments, people,
+    }
+    const text = JSON.stringify(exported, null, 2)
+    res.set('Cache-Control', 'no-store')
+    if (json || !files.length) {
+      res.setHeader('Content-Type', 'application/json; charset=utf-8'); res.setHeader('Content-Disposition', `attachment; filename="${ticket.id}.json"`)
+      return res.send(text)
+    }
+    res.setHeader('Content-Type', 'application/zip'); res.setHeader('Content-Disposition', `attachment; filename="${ticket.id}.zip"`)
+    res.send(zipFiles([{ name: 'ticket.json', data: text }, ...files]))
   }))
 
   // Who follows the ticket and is told of what someone else did in it (whoever opened it is always told).

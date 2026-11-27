@@ -811,6 +811,7 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .ticket-age small { font-size: calc(11px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .ticket-comment-count { font-size: calc(11px * var(--account-font-scale)); }
 @media (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .ticket-table td::before { font-size: calc(11px * var(--account-font-scale)); } }
+:root:is([data-font-size="small"], [data-font-size="large"]) .ticket-export-button { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .developer-toolbar > p { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .developer-updated { font-size: calc(11px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .developer-export label { font-size: calc(11px * var(--account-font-scale)); }

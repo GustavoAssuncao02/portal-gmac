@@ -43,6 +43,7 @@
 .payable-modal[open] { display:flex; flex-direction:column; }.payable-modal--wide { width:min(980px,calc(100vw - 24px)); }
 .payable-modal::backdrop { background:#10283e66; }
 .payable-modal > header { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:18px 24px; border-bottom:1px solid #dce6ef; flex-shrink:0; }
+.payable-modal-actions { display:flex; align-items:center; gap:10px; flex-shrink:0; }
 .payable-modal h2 { font-size:20px; margin:0; color:#0c4c91; overflow-wrap:anywhere; }.payable-modal h3 { margin:0 0 16px; font-size:15px; color:#234768; }
 .payable-modal-body { min-height:0; overflow:auto; padding:24px; overscroll-behavior:contain; }.payable-modal-body > section+section { margin-top:28px; padding-top:22px; border-top:1px solid #e0e8f0; }
 .payable-modal > footer { flex-shrink:0; border-top:1px solid #dce6ef; padding:16px 24px; display:flex; flex-wrap:wrap; justify-content:flex-end; gap:10px; }
