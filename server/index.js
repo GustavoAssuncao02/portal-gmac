@@ -40,7 +40,7 @@ import createMaterialRequestsRouter from './materialRequests.js'
 import createNotificationsRouter from './notifications.js'
 import createSupportTicketsRouter from './supportTickets.js'
 import createNotesRouter from './notes.js'
-import createOfferResponseNotices from './offerResponseNotices.js'
+import createProposalDeadlineNotices from './proposalDeadlineNotices.js'
 import createOfferRequestsRouter from './offerRequests.js'
 import { inventorySignal } from './notificationEvents.js'
 import { createApiRateLimiter } from './rateLimit.js'
@@ -171,9 +171,9 @@ app.use('/api', createProposalDocumentsRouter(requireAdmin, accounts))
 app.use('/api', createSupportTicketsRouter(accounts, requireAdmin))
 // Anotações e Tarefas: the reminders and the notices of a task near its day are checked every minute.
 const notesRouter = createNotesRouter(accounts, requireAdmin)
-// TCK-0012: the notices of the deadline for the client to answer a proposal, at 07:30 (checked every minute).
-const offerResponseNotices = createOfferResponseNotices({ people: () => accounts.people() })
-setInterval(() => offerResponseNotices.sweep().catch((error) => console.error('Falha ao verificar os prazos de resposta das ofertas:', error.message)), 60000).unref()
+// TCK-0012: the notices of the Prazo para enviar a proposta, at 07:30 (checked every minute).
+const proposalDeadlineNotices = createProposalDeadlineNotices({ people: () => accounts.people() })
+setInterval(() => proposalDeadlineNotices.sweep().catch((error) => console.error('Falha ao verificar os prazos para enviar as propostas:', error.message)), 60000).unref()
 app.use('/api', notesRouter)
 setInterval(() => notesRouter.sweep().catch((error) => console.error('Falha ao verificar os lembretes das tarefas:', error.message)), 60000).unref()
 // Programar atualização (Desenvolvedor): the notices, the countdown and, at the hour, the update through the SaveInCloud.
@@ -186,7 +186,7 @@ app.use('/api', createDeveloperRouter({ accounts, requireAdmin, requireSession: 
   environment: production ? 'produção' : 'desenvolvimento', nodeEnv: process.env.NODE_ENV || '', host, port, database: `${process.env.DB_HOST}:${process.env.DB_PORT || 3306}/${process.env.DB_NAME}`,
   dataDir: Boolean(process.env.DATA_DIR), smtp: ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'MAIL_FROM'].every((key) => process.env[key]?.trim()), turnstile: Boolean(process.env.TURNSTILE_SECRET_KEY), testLogin: testLoginEnabled(),
   corsOrigins: corsOrigins.length, apiRateLimit: Number(process.env.API_RATE_LIMIT) || 200, trustProxy: process.env.TRUST_PROXY || '(padrão)', fiscalCatalogSync: flag(process.env.FISCAL_CATALOG_SYNC) !== 'off',
-  automaticUpdate: updateScheduler.automatic(), openOfferDefaultCpfs: Boolean(process.env.OPEN_OFFER_DEFAULT_CPFS), supportTicketEmails: Boolean(process.env.SUPPORT_TICKET_EMAILS), quotesAllowedOrigins: String(process.env.QUOTES_ALLOWED_ORIGINS || '').split(',').filter((item) => item.trim()).length,
+  automaticUpdate: updateScheduler.automatic(), openOfferDefaultCpfs: Boolean(process.env.OPEN_OFFER_DEFAULT_CPFS), proposalDeadlineNoticeCpfs: Boolean(process.env.PROPOSAL_DEADLINE_NOTICE_CPFS), supportTicketEmails: Boolean(process.env.SUPPORT_TICKET_EMAILS), quotesAllowedOrigins: String(process.env.QUOTES_ALLOWED_ORIGINS || '').split(',').filter((item) => item.trim()).length,
 }) }))
 const notificationsRouter = createNotificationsRouter({ requireAdmin, payables: payablesRouter, receivables: receivablesRouter, loadInventory: async () => {
   const [rows] = await pool.execute('SELECT id, name, unit, quantity_kg AS quantity, minimum_kg AS minimum FROM inventory_materials')

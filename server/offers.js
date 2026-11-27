@@ -29,7 +29,7 @@ import { labelEstimate, labelPlaceholderProposal } from './labelQuoteRules.js'
 import { quantityLabel, quantityUnitMessage, quantityUnitOf, validQuantityUnit } from './quantityUnits.js'
 import { todayBahia } from './payableRules.js'
 import { requestDay, retroactiveOrderDay } from './retroactiveEntry.js'
-import { parseResponseDays, requestDayOf, responseDaysMessage, responseDeadlineOf } from './offerResponseRules.js'
+import { parseProposalDeadline, proposalDeadlineMessage } from './proposalDeadlineRules.js'
 import { createOfferPresence } from './offerPresence.js'
 
 const filesDirectory = path.join(dataDirectory, 'files')
@@ -152,9 +152,9 @@ router.post('/offers', async (request, response) => {
   if (requestedDay && deadline && deadline < requestedDay) return response.status(400).json({ message: deadlineBeforeRequest })
   // Unidades, pares ou conjuntos (TCK-0009); not sent, it is unidades.
   if (!validQuantityUnit(request.body?.quantityUnit)) return response.status(400).json({ message: quantityUnitMessage })
-  // Prazo para resposta do cliente (TCK-0012): optional days from the Data da solicitação.
-  const responseDays = parseResponseDays(request.body?.responseDays)
-  if (Number.isNaN(responseDays)) return response.status(400).json({ message: responseDaysMessage })
+  // Prazo para enviar a proposta (TCK-0012): an optional day, not before the Data da solicitação.
+  const proposalDeadline = parseProposalDeadline(request.body?.proposalDeadline, requestedDay || todayBahia())
+  if (Number.isNaN(proposalDeadline)) return response.status(400).json({ message: proposalDeadlineMessage })
   try {
     // Up to 5 requesters; each new one is registered in the client like a single one was.
     const requesterNames = offerRequesterInput(request.body)
@@ -167,7 +167,7 @@ router.post('/offers', async (request, response) => {
       // A manual offer starts as "Criando oferta": only "Fazer proposta" in its details (POST /offers/:id/finish) puts it
       // in analysis. The person who is creating it (editingBy) and since when are shown on the list.
       const at = new Date().toISOString(), author = { id: request.adminId ?? null, name: request.adminName || 'Administrador' }
-      const item = { id: randomUUID(), code: nextCode('OF', [...store.offers, ...(store.discardedOffers || [])]), createdAt: at, createdBy: author.id, createdByName: author.name, ...(open ? { openForTeam: true } : { editingBy: { ...author, at, active: true, lastActiveAt: at } }), cnpj: clean(cnpj, 18), company: clean(company, 160), ...requesters.fields, buyer: buyerLink.name, buyerId: buyerLink.id, deadline, service: clean(service, 160), quantity: quantityPending ? 1 : Number(quantity), ...(quantityPending ? { quantityPending: true } : {}), quantityUnit: quantityUnitOf(request.body?.quantityUnit), description: clean(description, 5000), labelNumber: clean(labelNumber, 80), requestedAt: requestedDay ? dayMoment(requestedDay, new Date(at)) : at, ...(responseDays ? { responseDays, responseDeadline: responseDeadlineOf(requestedDay || todayBahia(new Date(at)), responseDays), responseSetAt: at } : {}), origin: 'Inserida Manualmente', status: 'creating', attachments: [], resources: { materials: [], laborEntries: [] }, proposal: null, orderCode: null }
+      const item = { id: randomUUID(), code: nextCode('OF', [...store.offers, ...(store.discardedOffers || [])]), createdAt: at, createdBy: author.id, createdByName: author.name, ...(open ? { openForTeam: true } : { editingBy: { ...author, at, active: true, lastActiveAt: at } }), cnpj: clean(cnpj, 18), company: clean(company, 160), ...requesters.fields, buyer: buyerLink.name, buyerId: buyerLink.id, deadline, service: clean(service, 160), quantity: quantityPending ? 1 : Number(quantity), ...(quantityPending ? { quantityPending: true } : {}), quantityUnit: quantityUnitOf(request.body?.quantityUnit), description: clean(description, 5000), labelNumber: clean(labelNumber, 80), requestedAt: requestedDay ? dayMoment(requestedDay, new Date(at)) : at, ...(proposalDeadline ? { proposalDeadline, proposalDeadlineSetAt: at } : {}), origin: 'Inserida Manualmente', status: 'creating', attachments: [], resources: { materials: [], laborEntries: [] }, proposal: null, orderCode: null }
       store.offers.unshift(item)
       // An open offer has nobody creating it: it waits on the list, like the offers of the site, and the others are told.
       if (open) addNotification(store, { type: 'open-offer', offerId: item.id, authorId: author.id, title: 'Nova oferta em aberto', description: `${item.code} · ${item.company} · inserida por ${author.name}` })
@@ -426,9 +426,9 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
     }
     if (fields.deadline && !isDay(fields.deadline)) return response.status(400).json({ message: 'Prazo solicitado inválido: escolha uma data ou deixe em branco.' })
     if (!validQuantityUnit(body.quantityUnit)) return response.status(400).json({ message: quantityUnitMessage })
-    // Prazo para resposta do cliente: a screen of the previous version does not send it and keeps it; empty removes it.
-    const responseDays = body.responseDays === undefined ? undefined : parseResponseDays(body.responseDays)
-    if (Number.isNaN(responseDays)) return response.status(400).json({ message: responseDaysMessage })
+    // Prazo para enviar a proposta: a screen of the previous version does not send it and keeps it; empty removes it.
+    const proposalDeadline = body.proposalDeadline === undefined ? undefined : parseProposalDeadline(body.proposalDeadline)
+    if (Number.isNaN(proposalDeadline)) return response.status(400).json({ message: proposalDeadlineMessage })
     try {
       const requesterNames = offerRequesterInput(body)
       const document = documentDigits(fields.cnpj)
@@ -450,6 +450,8 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
         const dayChanged = requestedDay !== requestDay(item.requestedAt)
         if (dayChanged && afterToday(requestedDay)) throw Object.assign(new Error(requestedDayFuture), { status: 400 })
         if (fields.deadline && fields.deadline < requestedDay && (dayChanged || fields.deadline !== String(item.deadline || ''))) throw Object.assign(new Error(deadlineBeforeRequest), { status: 400 })
+        // The Prazo para enviar a proposta never before the day of the request (checked when either of them changes).
+        if (proposalDeadline && proposalDeadline < requestedDay && (dayChanged || proposalDeadline !== (item.proposalDeadline ?? null))) throw Object.assign(new Error(proposalDeadlineMessage), { status: 400 })
         // A screen of the previous version (a tab not reloaded yet) sends the names joined in one field: unchanged, the list
         // stays as it is instead of becoming one requester called "Ana, Bruno".
         const unchangedOldScreen = !Array.isArray(body.requesters) && item.requesters?.length > 1 && String(body.requester ?? '').trim() === item.requester
@@ -470,17 +472,14 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
         // The screens show the day of the request in Bahia (requestDay): a new day keeps it at noon UTC of that day.
         const requestDayKept = !dayChanged
         if (!requestDayKept) item.requestedAt = `${requestedDay}T12:00:00.000Z`
-        // Prazo para resposta do cliente (TCK-0012): not printed on the proposal, so it never discards one. Its day follows
-        // the Data da solicitação; a new day (or number of days) starts the notices again.
-        const days = responseDays === undefined ? item.responseDays ?? null : responseDays
-        if (days) {
-          const responseDeadline = responseDeadlineOf(requestDayKept ? requestDayOf(item.requestedAt) : requestedDay, days)
-          if (days !== item.responseDays || responseDeadline !== item.responseDeadline) Object.assign(item, { responseDays: days, responseDeadline, responseSetAt: new Date().toISOString() })
-        } else if (item.responseDays || item.responseDeadline) {
-          delete item.responseDays
-          delete item.responseDeadline
-          delete item.responseSetAt
+        // Prazo para enviar a proposta (TCK-0012): not printed on the proposal, so it never discards one. A new day starts
+        // the notices again. The old fields of the first version (days for the client to answer) are dropped.
+        const nextDeadline = proposalDeadline === undefined ? item.proposalDeadline ?? null : proposalDeadline
+        if (nextDeadline !== (item.proposalDeadline ?? null)) {
+          if (nextDeadline) Object.assign(item, { proposalDeadline: nextDeadline, proposalDeadlineSetAt: new Date().toISOString() })
+          else { delete item.proposalDeadline; delete item.proposalDeadlineSetAt }
         }
+        for (const key of ['responseDays', 'responseDeadline', 'responseSetAt']) delete item[key]
         if (quantityChanged) resizePerPiece(store, item, fields.quantity, inventory)
         if (changed && item.proposal) {
           item.proposal = null

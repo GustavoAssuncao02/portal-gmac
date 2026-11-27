@@ -1,6 +1,14 @@
 // Each commit to main is a new version: add an entry at the top, with what changed in plain words for whoever uses the portal.
 export const releaseNotes = [
   {
+    version: '1.0.27',
+    date: '2026-11-27',
+    notes: [
+      'Ofertas: prazo para enviar a proposta, com destaque na lista, filtro Prazo vencendo e avisos',
+      'Início: novo widget de propostas com prazo próximo',
+    ],
+  },
+  {
     version: '1.0.26',
     date: '2026-11-27',
     notes: [

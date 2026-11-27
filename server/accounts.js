@@ -5,7 +5,7 @@ import { readStore, mutateStore } from './offers.js'
 import { storePool } from './store.js'
 import { notificationDefaults, notificationOptions, notificationSoundDefault, notesPreferenceDefaults, validNotificationSound } from './notificationRules.js'
 import { dueNoticeDays } from './noteRules.js'
-import { responseNoticeDayKeys, responseNoticeDefaults, responseNoticeSwitches, validResponseNoticeDays } from './offerResponseRules.js'
+import { proposalNoticeDayKeys, proposalNoticeDefaults, proposalNoticeSwitches, validProposalNoticeDays } from './proposalDeadlineRules.js'
 import { employeeRecords, isStaff, staffAccountId } from './employeeAccess.js'
 import { clientContactKinds, clientRequesters } from './requesters.js'
 import { recordPasswordChange } from './passwordReset.js'
@@ -19,12 +19,43 @@ const sessions = new Map()
 const safe = ({ id, name, birthDate, cpf, email, createdAt, role }) => ({ id, name, birthDate, cpf, email, createdAt, role: role || 'admin' })
 const digits = (value) => String(value || '').replace(/\D/g, '')
 const fail = (status, message) => { const error = new Error(message); error.status = status; throw error }
-export function notificationSettings(store, userId) {
+// Prazo para enviar a proposta (TCK-0012): its notices come off for everybody and on for the CPFs listed in
+// PROPOSAL_DEADLINE_NOTICE_CPFS (comma separated, server environment only: the repository is public).
+export const proposalNoticesOnByDefault = (account, env = process.env) => {
+  const own = digits(account?.cpf)
+  return own.length === 11 && String(env.PROPOSAL_DEADLINE_NOTICE_CPFS || '').split(',').map((item) => digits(item)).includes(own)
+}
+// Those accounts keep the switches they never touched written as on, so every reading of their settings (the bell
+// included, which knows only the id) sees them on. Returns whether something was written.
+const unseeded = (store, account) => {
+  if (!proposalNoticesOnByDefault(account)) return []
+  const preference = store.adminNotificationPreferences?.find((item) => String(item.userId) === String(account.id))
+  return proposalNoticeSwitches.filter((key) => preference?.[key] === undefined)
+}
+export const proposalNoticeSeedNeeded = (store, persons) => persons.some((person) => unseeded(store, person).length > 0)
+export function seedProposalNoticeDefaults(store, persons) {
+  let written = false
+  for (const person of persons) {
+    const keys = unseeded(store, person)
+    if (!keys.length) continue
+    store.adminNotificationPreferences ||= []
+    let preference = store.adminNotificationPreferences.find((item) => String(item.userId) === String(person.id))
+    if (!preference) { preference = { userId: person.id }; store.adminNotificationPreferences.push(preference) }
+    for (const key of keys) preference[key] = true
+    written = true
+  }
+  return written
+}
+// `account` (optional, with its CPF): for the default of the notices of the Prazo para enviar a proposta.
+export function notificationSettings(store, userId, account = null) {
   const preference = store.adminNotificationPreferences?.find((item) => String(item.userId) === String(userId))
   return { payableReminderDays: preference?.payableReminderDays ?? 3, receivableReminderDays: preference?.receivableReminderDays ?? 3, sound: validNotificationSound(preference?.sound) ? preference.sound : notificationSoundDefault, emailNotifications: preference?.emailNotifications !== false, ...Object.fromEntries(notificationOptions.map(([key]) => [key,preference?.[key] ?? notificationDefaults[key]])), ...Object.fromEntries(['notesButton', 'notesNotifications', 'notesDueReminder'].map((key) => [key, preference?.[key] ?? notesPreferenceDefaults[key]])), notesDueDays: dueNoticeDays.includes(preference?.notesDueDays) ? preference.notesDueDays : notesPreferenceDefaults.notesDueDays,
-    // Prazo de resposta do cliente (TCK-0012): 1º e 2º aviso (dias antes) e o aviso no dia, all on by default.
-    ...Object.fromEntries(responseNoticeSwitches.map((key) => [key, preference?.[key] ?? responseNoticeDefaults[key]])),
-    ...Object.fromEntries(responseNoticeDayKeys.map((key) => [key, validResponseNoticeDays(preference?.[key]) ? preference[key] : responseNoticeDefaults[key]])) }
+    // Prazo para enviar a proposta (TCK-0012): 1º e 2º aviso (dias antes) e o aviso no dia do vencimento.
+    ...proposalSettings(preference, proposalNoticeDefaults(proposalNoticesOnByDefault(account))) }
+}
+function proposalSettings(preference, defaults) {
+  return { ...Object.fromEntries(proposalNoticeSwitches.map((key) => [key, preference?.[key] ?? defaults[key]])),
+    ...Object.fromEntries(proposalNoticeDayKeys.map((key) => [key, validProposalNoticeDays(preference?.[key]) ? preference[key] : defaults[key]])) }
 }
 // "Notificações do sistema por e-mail": false when the account turned off the e-mails the system sends by itself.
 export const wantsEmail = (store, userId) => notificationSettings(store, userId).emailNotifications
@@ -329,20 +360,23 @@ export function createAccountService(pool, env = process.env) {
     if (pool && current) await recordHistory({ registry: kind, recordId: id, type: 'deleted', actor: audit.actor, before: registryView(kind, current) })
   }
   async function getNotificationSettings(id) {
-    if (!await account(id)) fail(404, 'Conta não encontrada.')
-    return notificationSettings(await readStore(), id)
+    const own = await account(id)
+    if (!own) fail(404, 'Conta não encontrada.')
+    return notificationSettings(await readStore(), id, own)
   }
   async function updateNotificationSettings(id, fields) {
     // The switches of Anotações e Tarefas are saved like the bell options: true or false.
-    const keys = [...notificationOptions.map(([key]) => key), 'notesButton', 'notesNotifications', 'notesDueReminder', ...responseNoticeSwitches]
-    if (!fields || fields.payableReminderDays === undefined && fields.receivableReminderDays === undefined && fields.sound === undefined && fields.emailNotifications === undefined && fields.notesDueDays === undefined && ![...keys, ...responseNoticeDayKeys].some((key) => fields[key] !== undefined)) fail(400, 'Informe uma preferencia de notificacoes.')
+    const keys = [...notificationOptions.map(([key]) => key), 'notesButton', 'notesNotifications', 'notesDueReminder', ...proposalNoticeSwitches]
+    if (!fields || fields.payableReminderDays === undefined && fields.receivableReminderDays === undefined && fields.sound === undefined && fields.emailNotifications === undefined && fields.notesDueDays === undefined && ![...keys, ...proposalNoticeDayKeys].some((key) => fields[key] !== undefined)) fail(400, 'Informe uma preferencia de notificacoes.')
     if (fields.notesDueDays !== undefined && !dueNoticeDays.includes(fields.notesDueDays)) fail(400, 'Escolha 1, 2, 3, 5 ou 7 dias antes.')
-    if (responseNoticeDayKeys.some((key) => fields[key] !== undefined && !validResponseNoticeDays(fields[key]))) fail(400, 'Escolha de 1 a 30 dias antes do prazo de resposta.')
+    if (proposalNoticeDayKeys.some((key) => fields[key] !== undefined && !validProposalNoticeDays(fields[key]))) fail(400, 'Escolha de 1 a 30 dias antes do prazo para enviar a proposta.')
     for (const key of ['payableReminderDays', 'receivableReminderDays']) if (fields[key] !== undefined && ![3, 5, 7, 'never'].includes(fields[key])) fail(400, 'Escolha 3, 5, 7 dias ou nunca.')
     if ([...keys, 'emailNotifications'].some((key) => fields[key] !== undefined && typeof fields[key] !== 'boolean')) fail(400, 'Informe verdadeiro ou falso para as notificacoes.')
     if (fields.sound !== undefined && !validNotificationSound(fields.sound)) fail(400, 'Escolha um dos sons de notificação ou desligue o som.')
-    await getNotificationSettings(id)
+    const own = await account(id)
+    if (!own) fail(404, 'Conta não encontrada.')
     return mutateStore((store) => {
+      seedProposalNoticeDefaults(store, [own])
       store.adminNotificationPreferences ||= []
       let preference = store.adminNotificationPreferences.find((item) => String(item.userId) === String(id))
       if (!preference) { preference = { userId: id }; store.adminNotificationPreferences.push(preference) }
@@ -352,8 +386,8 @@ export function createAccountService(pool, env = process.env) {
       if (fields.emailNotifications !== undefined) preference.emailNotifications = fields.emailNotifications
       for (const key of keys) if (fields[key] !== undefined) preference[key] = fields[key]
       if (fields.notesDueDays !== undefined) preference.notesDueDays = fields.notesDueDays
-      for (const key of responseNoticeDayKeys) if (fields[key] !== undefined) preference[key] = fields[key]
-      return notificationSettings(store, id)
+      for (const key of proposalNoticeDayKeys) if (fields[key] !== undefined) preference[key] = fields[key]
+      return notificationSettings(store, id, own)
     })
   }
   async function getAppearanceSettings(id) {

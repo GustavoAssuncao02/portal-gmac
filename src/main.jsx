@@ -59,8 +59,8 @@ import BankStatementsScreen from './BankStatementsScreen.jsx'
 import ReceivableScheduleModal from './ReceivableScheduleModal.jsx'
 import LabelQuoteModal from './LabelQuoteModal.jsx'
 import CompleteOperatorModal from './CompleteOperatorModal.jsx'
-import { ResponseDaysField, ResponseDeadlineCell, ResponseDeadlineDetail } from './OfferResponseDeadline.jsx'
-import { responseAnswered } from '../server/offerResponseRules.js'
+import { ProposalDeadlineCell, ProposalDeadlineDetail, ProposalDeadlineField } from './ProposalDeadline.jsx'
+import { proposalDeadlineBadge, proposalDue, urgentFirst } from '../server/proposalDeadlineRules.js'
 import { requestDay } from '../server/retroactiveEntry.js'
 import EmailTemplatesScreen from './EmailTemplatesScreen.jsx'
 import { labelQuoteOffer, labelQuotePendingText } from '../server/labelQuoteRules.js'
@@ -545,7 +545,7 @@ function WorkspaceTabs({ tabs, activeNav, onNavigate, onCloseTab, onReorderTabs 
     {scrollState.overflow && <button ref={rightArrowRef} className="workspace-tabs-control" type="button" aria-label="Rolar abas para a direita" title="Rolar abas para a direita" disabled={!scrollState.right} onClick={() => scrollTabs(1)}><ChevronRight size={17} aria-hidden="true" /></button>}
     {tabs.length > 3 && <button className="workspace-tabs-control workspace-tabs-close-all" type="button" aria-label="Fechar todas as abas" title="Fechar todas as abas" onClick={closeAllTabs}><X size={17} aria-hidden="true" /></button>}
     <UpdateCountdown />
-    <NotificationsButton onOpenAccount={(id) => { sessionStorage.setItem('gmac-payable-open', id); onNavigate('Contas a Pagar'); window.dispatchEvent(new CustomEvent('gmac-payable-open', { detail: id })) }} onOpenReceivable={(id) => { sessionStorage.setItem('gmac-receivable-open', id); onNavigate('Contas a Receber'); window.dispatchEvent(new CustomEvent('gmac-receivable-open', { detail: id })) }} onOpenNotice={(notice) => notice.type === 'system-update' ? (notice.developer ? onNavigate('Desenvolvedor') : undefined) : notice.type === 'note-removed' ? onNavigate('Anotações e Tarefas') : String(notice.type).startsWith('note-') ? (sessionStorage.setItem('gmac-note-open', notice.noteId), onNavigate('Anotações e Tarefas'), window.dispatchEvent(new CustomEvent('gmac-note-open', { detail: notice.noteId }))) : ['ticket-opened', 'ticket-status', 'ticket-comment'].includes(notice.type) ? (sessionStorage.setItem('gmac-ticket-open', notice.ticketId), onNavigate('Ticket'), window.dispatchEvent(new CustomEvent('gmac-ticket-open', { detail: notice.ticketId }))) : String(notice.type).startsWith('offer-response-') ? window.dispatchEvent(new CustomEvent('gmac-offer-open', { detail: notice.offerId })) : notice.type === 'proposal-saved' ? window.dispatchEvent(new CustomEvent('gmac-proposal-open', { detail: notice.offerId })) : notice.type === 'release' ? (sessionStorage.setItem('gmac-release-notes-open', '1'), onNavigate('Configurações'), window.dispatchEvent(new CustomEvent('gmac-release-notes-open'))) : onNavigate(notice.type === 'low-stock' && notice.admin ? 'Estoque Administrativo' : { 'material-request': 'Pedidos', 'low-stock': 'Estoque', 'service-completed': 'Serviços em andamento', 'service-added': 'Serviços em andamento', 'site-offer': 'Ofertas e serviços', 'open-offer': 'Ofertas e serviços' }[notice.type] || 'Dashboard')} />
+    <NotificationsButton onOpenAccount={(id) => { sessionStorage.setItem('gmac-payable-open', id); onNavigate('Contas a Pagar'); window.dispatchEvent(new CustomEvent('gmac-payable-open', { detail: id })) }} onOpenReceivable={(id) => { sessionStorage.setItem('gmac-receivable-open', id); onNavigate('Contas a Receber'); window.dispatchEvent(new CustomEvent('gmac-receivable-open', { detail: id })) }} onOpenNotice={(notice) => notice.type === 'system-update' ? (notice.developer ? onNavigate('Desenvolvedor') : undefined) : notice.type === 'note-removed' ? onNavigate('Anotações e Tarefas') : String(notice.type).startsWith('note-') ? (sessionStorage.setItem('gmac-note-open', notice.noteId), onNavigate('Anotações e Tarefas'), window.dispatchEvent(new CustomEvent('gmac-note-open', { detail: notice.noteId }))) : ['ticket-opened', 'ticket-status', 'ticket-comment'].includes(notice.type) ? (sessionStorage.setItem('gmac-ticket-open', notice.ticketId), onNavigate('Ticket'), window.dispatchEvent(new CustomEvent('gmac-ticket-open', { detail: notice.ticketId }))) : String(notice.type).startsWith('proposal-deadline-') ? window.dispatchEvent(new CustomEvent('gmac-offer-open', { detail: notice.offerId })) : notice.type === 'proposal-saved' ? window.dispatchEvent(new CustomEvent('gmac-proposal-open', { detail: notice.offerId })) : notice.type === 'release' ? (sessionStorage.setItem('gmac-release-notes-open', '1'), onNavigate('Configurações'), window.dispatchEvent(new CustomEvent('gmac-release-notes-open'))) : onNavigate(notice.type === 'low-stock' && notice.admin ? 'Estoque Administrativo' : { 'material-request': 'Pedidos', 'low-stock': 'Estoque', 'service-completed': 'Serviços em andamento', 'service-added': 'Serviços em andamento', 'site-offer': 'Ofertas e serviços', 'open-offer': 'Ofertas e serviços' }[notice.type] || 'Dashboard')} />
     <div className="workspace-tabs-clock" aria-label="Data e hora atual"><strong>{currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</strong><span>{currentTime.toLocaleDateString('pt-BR')}</span></div>
   </div>
 }
@@ -1349,14 +1349,15 @@ function ProposalSentSince({ at }) {
 const savedProposal = (offer) => offer.status === 'review' && Boolean(offer.proposalDraft)
 
 const offerFilters = [
+  // Inserted with "Deixar oferta em aberto e notificar" and not taken over yet, or left by the person creating it. Since
+  // 2026-11-27 first, and with the offers of the site nobody took over yet (the chip "Site" left: they wait the same way).
+  { key: 'open', label: 'Em aberto', tone: 'new', match: (offer) => isOpenOffer(offer) || (offer.origin === 'Site' && isCreating(offer) && !offer.editingBy) },
   { key: 'review', label: 'Em análise' },
   { key: 'proposed', label: 'Propostas' },
   { key: 'accepted', label: 'Aceitas' },
   { key: 'rejected', label: 'Recusadas' },
-  // Ofertas do site ainda não assumidas (chegaram pelo formulário público e ninguém abriu). Reusa o estilo offer-filter--new.
-  { key: 'site', label: 'Site', tone: 'new', match: (offer) => offer.origin === 'Site' && isCreating(offer) && !offer.editingBy },
-  // Inserted with "Deixar oferta em aberto e notificar" and not taken over yet, or left by the person creating it.
-  { key: 'open', label: 'Em aberto', tone: 'new', match: isOpenOffer },
+  // TCK-0012: the offers whose Prazo para enviar a proposta is over or falls today, still without a proposal.
+  { key: 'deadline', label: 'Prazo vencendo', tone: 'late', match: (offer) => proposalDue(offer, todayBahia()) },
 ]
 const offerMatchesFilter = (filter, offer) => filter.match ? filter.match(offer) : offer.status === filter.key
 
@@ -1367,8 +1368,8 @@ const offerColumns = [
   { key: 'quantity', label: 'Quantidade', value: (offer) => (quantityPending(offer) ? 0 : Number(offer.quantity)), numeric: true },
   { key: 'requestedAt', label: 'Data de solicitação', value: (offer) => offer.requestedAt, numeric: true },
   { key: 'deadline', label: 'Prazo solicitado', value: (offer) => offer.deadline, numeric: true },
-  // TCK-0012: the day the client has to answer by; none once the client answered (accepted or refused).
-  { key: 'responseDeadline', label: 'Resposta até', value: (offer) => responseAnswered(offer) ? '' : offer.responseDeadline || '' },
+  // TCK-0012: the day to send the proposal by (the earliest first).
+  { key: 'proposalDeadline', label: 'Proposta até', value: (offer) => offer.proposalDeadline || '' },
   { key: 'status', label: 'Status', value: (offer) => offer.status },
   { key: 'origin', label: 'Origem', value: (offer) => offer.origin || offer.source },
 ]
@@ -1387,7 +1388,7 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
   useMobileModal(manualOpen, '.offer-manual-modal', () => setManualOpen(false))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const emptyForm = { cnpj: '', company: '', requesters: [''], buyer: '', requestedAt: '', deadline: '', responseDays: '', service: '', quantity: '', quantityUnit: 'un', quantityPending: false, description: '', labelNumber: '', attachments: [], open: false }
+  const emptyForm = { cnpj: '', company: '', requesters: [''], buyer: '', requestedAt: '', deadline: '', proposalDeadline: '', service: '', quantity: '', quantityUnit: 'un', quantityPending: false, description: '', labelNumber: '', attachments: [], open: false }
   const [manualForm, setManualForm] = useState(emptyForm)
   // "Deixar oferta em aberto e notificar" comes checked for some accounts (OPEN_OFFER_DEFAULT_CPFS on the server).
   const [openDefault, setOpenDefault] = useState(false)
@@ -1426,7 +1427,9 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
       && workSearch.offer(offer, search)
       && (!date || requestDay(offer.requestedAt) === date)
   })
-  const offerList = useTableSort(filteredOffers, offerColumns, null, 'offers')
+  // TCK-0012: without a title chosen, the offers late, due today or in the next 2 days for their proposal come first.
+  const today = todayBahia()
+  const offerList = useTableSort(urgentFirst(filteredOffers, today), offerColumns, null, 'offers')
 
   function updateManualForm(field, value) {
     setManualForm((current) => ({ ...current, [field]: value }))
@@ -1535,9 +1538,9 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
           </div>
           <div className="offers-table-wrap"><div className="offers-table">
             <div className="offers-table-row offers-table-header">{offerColumns.map((column) => <SortHeader key={column.key} as="span" column={column} list={offerList} />)}<span>Ações</span></div>
-            {offerList.rows.map((offer) => <div className="offers-table-row" key={offer.id}>
+            {offerList.rows.map((offer) => <div className={`offers-table-row${proposalDeadlineBadge(offer, today) ? ` offers-table-row--deadline-${proposalDeadlineBadge(offer, today).tone}` : ''}`} key={offer.id}>
               <div className="offer-piece"><strong>{offer.service}</strong><span>{offer.code}</span>{offer.labelNumber && <span className="offer-piece-label">Etiqueta {offer.labelNumber}</span>}</div>
-              <span data-label="Cliente">{offer.company}</span><span data-label="Etiqueta">{offer.labelNumber || "—"}</span><span data-label="Quantidade">{quantityText(offer, { short: true })}</span><span data-label="Solicitação">{displayDate(requestDay(offer.requestedAt))}</span><span data-label="Prazo">{displayDate(offer.deadline)}</span><ResponseDeadlineCell offer={offer} />
+              <span data-label="Cliente">{offer.company}</span><span data-label="Etiqueta">{offer.labelNumber || "—"}</span><span data-label="Quantidade">{quantityText(offer, { short: true })}</span><span data-label="Solicitação">{displayDate(requestDay(offer.requestedAt))}</span><span data-label="Prazo">{displayDate(offer.deadline)}</span><ProposalDeadlineCell offer={offer} today={today} />
               <div className="offer-status-cell"><div className={`offer-table-status offer-table-status--${savedProposal(offer) ? 'saved' : offer.status}`}><strong>{savedProposal(offer) ? 'Proposta salva' : isCreating(offer) ? (isOpenOffer(offer) ? 'Em aberto' : 'Criando oferta') : offer.status === 'review' ? 'Em análise' : offer.status === 'proposed' ? 'Proposta gerada' : offer.status === 'rejected' ? offer.proposalDecline ? `Proposta ${offer.proposalDecline.key} recusada` : 'Recusada' : 'Aceita'}</strong>{savedProposal(offer) && <span>Opção {offer.proposalDraft.selectedKey}</span>}{offer.orderCode && <span>{offer.orderCode}</span>}{offer.labelQuote?.pending && <span>{labelQuotePendingText}</span>}{offer.proposalDecline?.reason && <span>{offer.proposalDecline.reason}</span>}</div>{offer.status === 'proposed' && offer.proposal?.generatedAt && <ProposalSentSince at={offer.proposalEmails?.[0]?.sentAt || offer.proposal.generatedAt} />}</div>
               <span data-label="Origem">{offer.origin}</span>
               <div className={`offer-table-actions${isCreating(offer) ? ' offer-table-actions--creating' : ''}`}>
@@ -1577,7 +1580,7 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
               <label className="offer-quantity-pending"><input type="checkbox" checked={manualForm.quantityPending} onChange={(event) => updateManualForm('quantityPending', event.target.checked)} />Sem quantidade definida</label>
             </div>
             <label>Número da etiqueta<input value={manualForm.labelNumber} onChange={(event) => updateManualForm('labelNumber', event.target.value)} placeholder="Opcional" /></label>
-            <ResponseDaysField value={manualForm.responseDays} requestedAt={manualForm.requestedAt || todayBahia()} onChange={(value) => updateManualForm('responseDays', value)} />
+            <ProposalDeadlineField value={manualForm.proposalDeadline} requestedDay={manualForm.requestedAt || todayBahia()} onChange={(value) => updateManualForm('proposalDeadline', value)} />
             <label className="offer-form-field--full">Descrição do serviço *<textarea value={manualForm.description} onChange={(event) => updateManualForm('description', event.target.value)} rows="4" required /></label>
             <div className="offer-form-field--full offer-attachment-field">
               <label>Anexos<span className="offer-file-picker"><input type="file" multiple onChange={(event) => { addManualFiles(event.target.files); event.target.value = '' }} /><span>Escolher arquivos</span><strong>{manualForm.attachments.length ? `${manualForm.attachments.length} ${manualForm.attachments.length === 1 ? 'arquivo selecionado' : 'arquivos selecionados'}` : 'Nenhum arquivo selecionado'}</strong></span></label>
@@ -1965,7 +1968,7 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
           ? <span className="offer-details-creating" title="Oferta em aberto: quem abrir primeiro pela lista assume a oferta"><Icon name="edit" />Em aberto · Aguardando responsável</span>
           : <span className="offer-details-creating" title="Só depois de clicar em Fazer proposta a oferta fica disponível na lista para todos"><Icon name="edit" />Criando oferta{offer.editingBy?.name ? ` · ${offer.editingBy.name}` : ''}</span>)}</div>
         <div className="offer-details-grid">
-          <section className="offer-information-card"><div className="offer-information-heading"><span className="offer-details-section-title">Informações do serviço</span>{offer.orderCode ? <small>Oferta aceita: corrija pela {offer.orderCode}</small> : offer.status !== 'rejected' && <button className="offer-information-edit" type="button" onClick={() => setEditingInfo(true)}><Pencil size={14} aria-hidden="true" />Editar</button>}</div><h2>{upper(offer.service)}</h2><p className="offer-details-description">{upper(offer.description)}</p><div className="offer-detail-facts"><div><span>▥</span><small>Cliente solicitante</small><strong>{upper(offer.company)}</strong><em>{documentKind(offer.cnpj)}: {offer.cnpj}</em>{offer.requester && <em>{requestersLabel(offerRequesterNames(offer).length)}: {upper(offer.requester)}</em>}{offer.buyer && <em>Comprador: {upper(offer.buyer)}</em>}</div><div><span>▣</span><small>Data da solicitação</small><strong>{displayDate(requestDay(offer.requestedAt))}</strong></div><div><span>◇</span><small>Quantidade solicitada</small><strong>{quantityText(offer)}</strong></div><div><span>◷</span><small>Prazo solicitado pelo cliente</small><strong>{offer.deadline ? displayDate(offer.deadline) : 'Não informado'}</strong></div></div><PieceLeadTime offer={offer} /><div className="offer-detail-text"><h3>Número da etiqueta</h3><p>{upper(offer.labelNumber) || 'Não informado'}</p></div><ResponseDeadlineDetail offer={offer} />{offer.notes && <div className="offer-detail-text"><h3>Observação</h3><p className="offer-detail-notes">{upper(offer.notes)}</p></div>}<div className="offer-detail-text"><h3>Anexos da solicitação</h3>{offer.attachments?.length ? <ul>{offer.attachments.map((attachment) => <li key={attachment.id}><DownloadLink url={attachmentUrl(offer.id, attachment.id)} name={attachment.name}>{attachment.name}</DownloadLink></li>)}</ul> : <p>Nenhum anexo adicionado.</p>}</div>{offer.proposal && <div className="offer-detail-text"><h3>Proposta gerada</h3><p><DownloadLink url={`/api/offers/${offer.id}/proposal.pdf`} name={`proposta-${offer.code}.pdf`}>Baixar PDF da proposta</DownloadLink></p></div>}{(offer.proposal || offer.proposalEmails?.length > 0) && <ProposalEmailHistory offer={offer} />}</section>
+          <section className="offer-information-card"><div className="offer-information-heading"><span className="offer-details-section-title">Informações do serviço</span>{offer.orderCode ? <small>Oferta aceita: corrija pela {offer.orderCode}</small> : offer.status !== 'rejected' && <button className="offer-information-edit" type="button" onClick={() => setEditingInfo(true)}><Pencil size={14} aria-hidden="true" />Editar</button>}</div><h2>{upper(offer.service)}</h2><p className="offer-details-description">{upper(offer.description)}</p><div className="offer-detail-facts"><div><span>▥</span><small>Cliente solicitante</small><strong>{upper(offer.company)}</strong><em>{documentKind(offer.cnpj)}: {offer.cnpj}</em>{offer.requester && <em>{requestersLabel(offerRequesterNames(offer).length)}: {upper(offer.requester)}</em>}{offer.buyer && <em>Comprador: {upper(offer.buyer)}</em>}</div><div><span>▣</span><small>Data da solicitação</small><strong>{displayDate(requestDay(offer.requestedAt))}</strong></div><div><span>◇</span><small>Quantidade solicitada</small><strong>{quantityText(offer)}</strong></div><div><span>◷</span><small>Prazo solicitado pelo cliente</small><strong>{offer.deadline ? displayDate(offer.deadline) : 'Não informado'}</strong></div></div><PieceLeadTime offer={offer} /><div className="offer-detail-text"><h3>Número da etiqueta</h3><p>{upper(offer.labelNumber) || 'Não informado'}</p></div><ProposalDeadlineDetail offer={offer} />{offer.notes && <div className="offer-detail-text"><h3>Observação</h3><p className="offer-detail-notes">{upper(offer.notes)}</p></div>}<div className="offer-detail-text"><h3>Anexos da solicitação</h3>{offer.attachments?.length ? <ul>{offer.attachments.map((attachment) => <li key={attachment.id}><DownloadLink url={attachmentUrl(offer.id, attachment.id)} name={attachment.name}>{attachment.name}</DownloadLink></li>)}</ul> : <p>Nenhum anexo adicionado.</p>}</div>{offer.proposal && <div className="offer-detail-text"><h3>Proposta gerada</h3><p><DownloadLink url={`/api/offers/${offer.id}/proposal.pdf`} name={`proposta-${offer.code}.pdf`}>Baixar PDF da proposta</DownloadLink></p></div>}{(offer.proposal || offer.proposalEmails?.length > 0) && <ProposalEmailHistory offer={offer} />}</section>
           <section className="offer-materials-card offer-resources-card">
             <fieldset className="offer-resource-fields" disabled={Boolean(offer.orderCode)}>
             <EntryModeChoice value={entryMode} onChange={changeEntryMode} />
@@ -2535,7 +2538,7 @@ function Dashboard({ user, onUpdateUser, collapsed, onToggle, activeNav, onNavig
   if (activeNav === 'Bancos') return <SimpleRegistryScreen key="banks" {...toolProps} title="Bancos" singular="banco" endpoint="/banks" nameLabel="Nome do banco" fields={[['agency', 'Agência', 20], ['account', 'Conta', 30]]} countLabel="Baixas registradas" count={(item) => item.settlements} />
   if (activeNav === 'Razões de pausas') return <SimpleRegistryScreen key="pause-reasons" {...toolProps} title="Razões de pausas" singular="razão de pausa" article="a" endpoint="/pause-reasons" nameLabel="Razão da pausa" chart />
   if (activeNav === 'Configurações') return <AccountSettings {...toolProps} user={user} onUpdateUser={onUpdateUser} />
-  if (activeNav === 'Dashboard') return <AdminHome user={user} orders={orders} offers={offers} workflowError={workflowError} workflowLoading={workflowLoading} onRefresh={onRefresh} onNavigate={onNavigate} onSelectOrder={onSelectOrder} onOpenPayables={onOpenPayables} loadPayables={user?.role === 'staff' ? null : loadOverviewPayables} loadInventory={loadOverviewInventory} Sidebar={Sidebar} WorkspaceTabs={WorkspaceTabs} navigationProps={{ collapsed, onToggle, activeNav, onLogout, tabs, onCloseTab, onReorderTabs }} />
+  if (activeNav === 'Dashboard') return <AdminHome user={user} orders={orders} offers={offers} workflowError={workflowError} workflowLoading={workflowLoading} onRefresh={onRefresh} onNavigate={onNavigate} onSelectOrder={onSelectOrder} onSelectOffer={onSelectOffer} onOpenPayables={onOpenPayables} loadPayables={user?.role === 'staff' ? null : loadOverviewPayables} loadInventory={loadOverviewInventory} Sidebar={Sidebar} WorkspaceTabs={WorkspaceTabs} navigationProps={{ collapsed, onToggle, activeNav, onLogout, tabs, onCloseTab, onReorderTabs }} />
   if (activeNav === 'Máquinas') return <Machines collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} />
   if (activeNav === 'Estoque Administrativo') return <InventoryScreen key="admin" kind="admin" collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} onSelectOrder={onSelectOrder} />
   if (activeNav === 'Estoque') return <InventoryScreen key="factory" collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} onSelectOrder={onSelectOrder} />
@@ -2728,7 +2731,7 @@ function App() {
     window.addEventListener('gmac-proposal-open', openProposal)
     return () => window.removeEventListener('gmac-proposal-open', openProposal)
   }, [adminUser?.role])
-  // The notice of the deadline for the client's answer (TCK-0012) opens the offer, read again first.
+  // The notice of the Prazo para enviar a proposta (TCK-0012) opens the offer, read again first.
   useEffect(() => {
     const openOffer = ({ detail }) => refreshWorkflow().catch(() => {}).then(() => selectOffer(detail))
     window.addEventListener('gmac-offer-open', openOffer)

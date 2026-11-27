@@ -1461,6 +1461,9 @@
 :root[data-theme="dark"][data-tone="black"] .home-rows-value--gray {
     color: #cdcfd2
 }
+:root[data-theme="dark"][data-tone="black"] .home-rows li.home-rows-item--late {
+    background: #301a1b
+}
 :root[data-theme="dark"][data-tone="black"] .home-rows-badge {
     background: #30261a
 }
@@ -6377,6 +6380,10 @@
 :root[data-theme="dark"][data-tone="black"] .offer-filter--selected.offer-filter--rejected {
     background: #301a1a
 }
+:root[data-theme="dark"][data-tone="black"] .offer-filter--selected.offer-filter--late {
+    border-color: #303133;
+    background: #301a1a
+}
 :root[data-theme="dark"][data-tone="black"] .manual-offer-button {
     border: 1px solid #47494c;
     box-shadow: 0 4px 9px #0a0a0b29
@@ -7562,10 +7569,16 @@
     background: #30281a
 }
 :root[data-theme="dark"][data-tone="black"] .offer-response-badge--today {
-    background: #30241a
-}
-:root[data-theme="dark"][data-tone="black"] .offer-response-badge--late {
     background: #301a1c
+}
+:root[data-theme="dark"][data-tone="black"] .offers-table-row--deadline-soon {
+    background: #302a1a
+}
+:root[data-theme="dark"][data-tone="black"] .offers-table-row--deadline-today {
+    background: #301a1a
+}
+:root[data-theme="dark"][data-tone="black"] .offers-table-row--deadline-late {
+    background: #301a1a
 }
 :root[data-theme="dark"][data-tone="black"] .offer-response-answered {
     color: #bec2c5;
@@ -7576,6 +7589,15 @@
 }
 :root[data-theme="dark"][data-tone="black"] .offer-response-field small.offer-response-date {
     color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .proposal-deadline-shortcuts button {
+    border: 1px solid #303133;
+    color: #ebebec;
+    background: #1a1b1c
+}
+:root[data-theme="dark"][data-tone="black"] .proposal-deadline-shortcuts button:hover {
+    border-color: #303133;
+    background: #232425
 }
 :root[data-theme="dark"][data-tone="black"] .admin-invoice-block {
     border: 1px solid #303133;

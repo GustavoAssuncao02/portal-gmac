@@ -196,6 +196,9 @@
 .home-rows-value--green { color: #1f7f55; }
 .home-rows-value--pink { color: #b34d84; }
 .home-rows-value--gray { color: #93a2ae; }
+/* A row that needs attention (Propostas com prazo próximo: the late ones). */
+.home-rows li.home-rows-item--late { position: relative; overflow: hidden; margin: 0 -10px; padding: 0 10px; border-radius: 6px; background: #fff1f2; }
+.home-rows li.home-rows-item--late::before { content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 3px; background: #c35058; pointer-events: none; }
 .home-rows-badge { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 4px; background: #fff0de; color: #b85b08; font-size: 10px; font-weight: 700; vertical-align: 1px; }
 /* Próximas entregas: the late OS, under the list, open the panel on Atrasado. */
 .home-deliveries-late { display: inline-flex; align-self: flex-start; align-items: center; gap: 6px; margin-top: 10px; padding: 6px 10px; border: 1px solid #f3c9cd; border-radius: 6px; background: #fdf1f2; color: #b84450; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }

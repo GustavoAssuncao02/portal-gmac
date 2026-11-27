@@ -16,7 +16,7 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   const directory = await mkdtemp(path.join(results, 'workflow-'))
   // The copied modules keep their data next to them; a DATA_DIR from the shell would point them at real data.
   delete process.env.DATA_DIR
-  for (const name of ['quantityUnits.js', 'developers.js', 'systemLog.js', 'offerResponseRules.js', 'offerResponseNotices.js', 'adminInventory.js', 'labelQuotes.js', 'labelQuoteRules.js', 'clientPaymentTerm.js', 'offerRequesters.js', 'retroactiveEntry.js', 'offerPresence.js', 'emailTemplates.js', 'emailSignature.js', 'entryMode.js', 'registryHistory.js', 'materialStock.js', 'invoiceImport.js', 'loginThrottle.js', 'liveUpdates.js','planning.js','planningRules.js', 'byName.js', 'offers.js', 'stageLabor.js', 'proposalEmails.js', 'stageCatalog.js', 'orderHistory.js', 'pieces.js', 'access.js', 'orderMaterials.js', 'pendingMaterials.js', 'operations.js', 'orderEditing.js', 'operatorAuth.js', 'employeeAccess.js', 'employeeActivity.js', 'serviceStages.js', 'machines.js', 'laborServices.js', 'accounts.js', 'reports.js', 'reportData.js', 'documentExports.js', 'payables.js', 'payableRules.js', 'receivables.js', 'bankStatements.js', 'ofx.js', 'materialRequests.js', 'notificationRules.js', 'notificationEvents.js', 'operationSessions.js', 'operationEventTime.js', 'operationManualEvents.js', 'materialRequestCodes.js', 'notifications.js', 'fiscalCatalog.js', 'dataDirectory.js', 'proposalDocuments.js', 'clientDocument.js', 'proposalDefaults.js', 'proposalPdf.js', 'proposalBrand.js', 'proposalMath.js', 'moneyWords.js', 'store.js', 'materialUnits.js', 'banks.js', 'operatorAccount.js', 'registries.js', 'requesters.js','serviceLocation.js', 'materialRequestSources.js', 'inventory.js', 'inventoryAppearance.js', 'materialIcons.js', 'uploads.js', 'machineUsage.js', 'accountPlan.js', 'accountPlanRules.js', 'dre.js', 'dreRules.js', 'dreExport.js', 'passwordReset.js', 'supportTickets.js', 'ticketRules.js', 'sitePreRegistration.js', 'offerRequests.js', 'homeWidgets.js', 'notes.js', 'noteRules.js', 'bulkAccounts.js']) {
+  for (const name of ['quantityUnits.js', 'developers.js', 'systemLog.js', 'proposalDeadlineRules.js', 'proposalDeadlineNotices.js', 'adminInventory.js', 'labelQuotes.js', 'labelQuoteRules.js', 'clientPaymentTerm.js', 'offerRequesters.js', 'retroactiveEntry.js', 'offerPresence.js', 'emailTemplates.js', 'emailSignature.js', 'entryMode.js', 'registryHistory.js', 'materialStock.js', 'invoiceImport.js', 'loginThrottle.js', 'liveUpdates.js','planning.js','planningRules.js', 'byName.js', 'offers.js', 'stageLabor.js', 'proposalEmails.js', 'stageCatalog.js', 'orderHistory.js', 'pieces.js', 'access.js', 'orderMaterials.js', 'pendingMaterials.js', 'operations.js', 'orderEditing.js', 'operatorAuth.js', 'employeeAccess.js', 'employeeActivity.js', 'serviceStages.js', 'machines.js', 'laborServices.js', 'accounts.js', 'reports.js', 'reportData.js', 'documentExports.js', 'payables.js', 'payableRules.js', 'receivables.js', 'bankStatements.js', 'ofx.js', 'materialRequests.js', 'notificationRules.js', 'notificationEvents.js', 'operationSessions.js', 'operationEventTime.js', 'operationManualEvents.js', 'materialRequestCodes.js', 'notifications.js', 'fiscalCatalog.js', 'dataDirectory.js', 'proposalDocuments.js', 'clientDocument.js', 'proposalDefaults.js', 'proposalPdf.js', 'proposalBrand.js', 'proposalMath.js', 'moneyWords.js', 'store.js', 'materialUnits.js', 'banks.js', 'operatorAccount.js', 'registries.js', 'requesters.js','serviceLocation.js', 'materialRequestSources.js', 'inventory.js', 'inventoryAppearance.js', 'materialIcons.js', 'uploads.js', 'machineUsage.js', 'accountPlan.js', 'accountPlanRules.js', 'dre.js', 'dreRules.js', 'dreExport.js', 'passwordReset.js', 'supportTickets.js', 'ticketRules.js', 'sitePreRegistration.js', 'offerRequests.js', 'homeWidgets.js', 'notes.js', 'noteRules.js', 'bulkAccounts.js']) {
     await copyFile(path.join(root, 'server', name), path.join(directory, name))
   }
   // PDFs use the bundled logo and fonts.
@@ -191,9 +191,9 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   const notesMail = []
   const notesClock = { now: null }
   const notes = notesRouter(accounts, requireAdmin, { now: () => notesClock.now ?? Date.now(), mailer: { configured: () => true, send: async (message) => { notesMail.push(message) } } })
-  // Prazo para resposta do cliente (TCK-0012): `offerResponseSweep(at)` gives the notices due at that moment.
-  const { default: offerResponseNotices } = await import(pathToFileURL(path.join(directory, 'offerResponseNotices.js')))
-  const offerResponse = offerResponseNotices({ people: () => accounts.people() })
+  // Prazo para enviar a proposta (TCK-0012): `proposalDeadlineSweep(at)` gives the notices due at that moment.
+  const { default: proposalDeadlineNotices } = await import(pathToFileURL(path.join(directory, 'proposalDeadlineNotices.js')))
+  const proposalDeadline = proposalDeadlineNotices({ people: () => accounts.people() })
   app.use('/api', notes)
   // Ofertar Serviço do site, mounted as in the portal (/gmac/api/offer-requests) with the captcha, Receita and e-mail
   // simulated. Tests steer them through `siteOffers` on the fixture: `turnstile`/`receita` change the stub answers,
@@ -257,7 +257,7 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
     notesMail,
     notesClock,
     notesSweep: () => notes.sweep(),
-    offerResponseSweep: (at) => offerResponse.sweep(at),
+    proposalDeadlineSweep: (at) => proposalDeadline.sweep(at),
     siteOffers: siteOfferControl,
     failNextMail: () => { mailControl.failNext = true },
     // A server module of this fixture (same database), for start-up tasks the HTTP routes do not run.

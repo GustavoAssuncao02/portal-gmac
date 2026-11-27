@@ -5155,6 +5155,7 @@ button {
 .offer-filter--review strong { color: #b17816; background: #ffedc3; }
 .offer-filter--approved strong { color: #15945a; background: #cef4df; }
 .offer-filter--rejected strong { color: #d8454a; background: #ffd9dc; }
+.offer-filter--late strong { color: #ffffff; background: #c62828; }
 
 .offer-filter--selected {
   border-color: #b7d4ee;
@@ -5165,6 +5166,7 @@ button {
 .offer-filter--selected.offer-filter--review { background: #fffaf0; }
 .offer-filter--selected.offer-filter--approved { background: #f2fcf6; }
 .offer-filter--selected.offer-filter--rejected { background: #fff5f5; }
+.offer-filter--selected.offer-filter--late { border-color: #f1b4b4; background: #fff5f5; }
 
 .manual-offer-button {
   display: inline-flex;
@@ -7914,14 +7916,27 @@ input.upper-input::placeholder, textarea.upper-input::placeholder { text-transfo
 .offer-response-badge { display: inline-block; width: fit-content; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 700; line-height: 1.5; white-space: nowrap; text-transform: none; }
 .offer-response-badge--ok { color: #168344; background: #e8f6ed; }
 .offer-response-badge--soon { color: #9c670a; background: #fff2d9; }
-.offer-response-badge--today { color: #b85b08; background: #ffe9d6; }
-.offer-response-badge--late { color: #b42318; background: #fdecee; }
+.offer-response-badge--today { color: #b42318; background: #fdecee; }
+.offer-response-badge--late { color: #ffffff; background: #c62828; }
+/* TCK-0012: the offers whose proposal falls due soon (yellow), today (red) or is late (strong red), while it is not generated.
+   The bar on the left is a background (the dark themes keep its color; a shadow would turn gray). */
+.offers-table-row:is(.offers-table-row--deadline-soon, .offers-table-row--deadline-today, .offers-table-row--deadline-late) { position: relative; }
+.offers-table-row:is(.offers-table-row--deadline-soon, .offers-table-row--deadline-today, .offers-table-row--deadline-late)::before { content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 4px; pointer-events: none; }
+.offers-table-row--deadline-soon { background: #fffcf3; }
+.offers-table-row--deadline-soon::before { background: #e0a526; }
+.offers-table-row--deadline-today { background: #fff7f7; }
+.offers-table-row--deadline-today::before { background: #e5484d; }
+.offers-table-row--deadline-late { background: #fdeeee; }
+.offers-table-row--deadline-late::before { background: #b42318; }
 .offer-response-detail p { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 .offer-response-answered { display: inline-block; padding: 1px 7px; border-radius: 999px; color: #4f6377; background: #eef2f6; font-size: 11px; font-weight: 700; }
 .offer-form-grid .offer-response-field { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px 16px; min-width: 0; }
 .offer-form-grid .offer-response-field label { flex: 0 1 300px; min-width: 0; }
 .offer-response-field small { flex: 1 1 220px; padding-bottom: 11px; color: #5b7189; font-size: 12.5px; line-height: 1.4; }
 .offer-response-field small.offer-response-date { color: #0c4c91; font-weight: 700; }
+.proposal-deadline-shortcuts { display: inline-flex; flex-wrap: wrap; gap: 6px; padding-bottom: 6px; }
+.proposal-deadline-shortcuts button { min-height: 34px; padding: 0 12px; border: 1px solid #c9d7e6; border-radius: 8px; color: #0c4c91; background: #ffffff; font-size: 13px; font-weight: 700; cursor: pointer; }
+.proposal-deadline-shortcuts button:hover { border-color: #8fb4da; background: #f3f8fd; }
 
 /* "Aguardando NF-e" (2026-11-27): the OS whose production is finished, in their own block at the end of Serviços em
    andamento (src/InvoiceWaitingBlock.jsx). Compact rows, only what the invoicing needs. */

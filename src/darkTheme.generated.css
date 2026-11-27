@@ -1704,6 +1704,12 @@
 :root[data-theme="dark"] .home-rows-value--gray {
     color: #c1cfde
 }
+:root[data-theme="dark"] .home-rows li.home-rows-item--late {
+    background: #3c2022
+}
+:root[data-theme="dark"] .home-rows li.home-rows-item--late::before {
+    background: #852e34
+}
 :root[data-theme="dark"] .home-rows-badge {
     background: #3c2f20;
     color: #ecb789
@@ -7430,6 +7436,10 @@
     color: #e78d90;
     background: #3c2022
 }
+:root[data-theme="dark"] .offer-filter--late strong {
+    color: #f2f6fc;
+    background: #941e1e
+}
 :root[data-theme="dark"] .offer-filter--selected {
     border-color: #36516f;
     box-shadow: 0 2px 5px #06111d0f
@@ -7444,6 +7454,10 @@
     background: #203c2b
 }
 :root[data-theme="dark"] .offer-filter--selected.offer-filter--rejected {
+    background: #3c2020
+}
+:root[data-theme="dark"] .offer-filter--selected.offer-filter--late {
+    border-color: #36516f;
     background: #3c2020
 }
 :root[data-theme="dark"] .manual-offer-button {
@@ -8865,12 +8879,30 @@
     background: #3c3220
 }
 :root[data-theme="dark"] .offer-response-badge--today {
-    color: #ecb789;
-    background: #3c2d20
-}
-:root[data-theme="dark"] .offer-response-badge--late {
     color: #ec9089;
     background: #3c2023
+}
+:root[data-theme="dark"] .offer-response-badge--late {
+    color: #f2f6fc;
+    background: #941e1e
+}
+:root[data-theme="dark"] .offers-table-row--deadline-soon {
+    background: #3c3520
+}
+:root[data-theme="dark"] .offers-table-row--deadline-soon::before {
+    background: #98701b
+}
+:root[data-theme="dark"] .offers-table-row--deadline-today {
+    background: #3c2020
+}
+:root[data-theme="dark"] .offers-table-row--deadline-today::before {
+    background: #981b1f
+}
+:root[data-theme="dark"] .offers-table-row--deadline-late {
+    background: #3c2020
+}
+:root[data-theme="dark"] .offers-table-row--deadline-late::before {
+    background: #98241b
 }
 :root[data-theme="dark"] .offer-response-answered {
     color: #b5c2ce;
@@ -8881,6 +8913,15 @@
 }
 :root[data-theme="dark"] .offer-response-field small.offer-response-date {
     color: #e1ebf6
+}
+:root[data-theme="dark"] .proposal-deadline-shortcuts button {
+    border: 1px solid #36516f;
+    color: #e1ebf6;
+    background: #162b43
+}
+:root[data-theme="dark"] .proposal-deadline-shortcuts button:hover {
+    border-color: #36516f;
+    background: #203c59
 }
 :root[data-theme="dark"] .admin-invoice-block {
     border: 1px solid #36516f;

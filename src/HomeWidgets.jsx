@@ -18,6 +18,7 @@ import { answerInvite, sortNotes, sortTasks, useTaskToggle } from './notesShared
 import { TITLE_MAX, dueLabel as taskDueLabel, taskGroup } from '../server/noteRules.js'
 import { payableRequest } from './payablesApi.js'
 import { upper } from './displayCase.js'
+import { deadlineOffers, proposalDaysLeft, proposalDeadlineBadge } from '../server/proposalDeadlineRules.js'
 import { useAccountAppearance } from './accountTheme.js'
 
 // The widgets of the Início (catalog in server/homeWidgets.js). Each one receives `ctx` (the portal data, the sources
@@ -90,7 +91,7 @@ function Stats({ items, columns }) {
 function Rows({ rows, onSelect }) {
   return <ul className="home-rows">{rows.map((row) => {
     const content = <><span className="home-rows-main"><strong>{row.title}{row.badge && <span className="home-rows-badge">{row.badge}</span>}</strong>{row.detail && <small>{row.detail}</small>}</span>{row.value !== undefined && <span className={`home-rows-value home-rows-value--${row.tone || 'plain'}`}>{row.value}{row.valueDetail && <small>{row.valueDetail}</small>}</span>}</>
-    return <li key={row.key}>{onSelect ? <button type="button" onClick={() => onSelect(row)}>{content}</button> : <div>{content}</div>}</li>
+    return <li key={row.key} className={row.highlight ? `home-rows-item--${row.highlight}` : undefined}>{onSelect ? <button type="button" onClick={() => onSelect(row)}>{content}</button> : <div>{content}</div>}</li>
   })}</ul>
 }
 const rowLimit = (size, short, tall) => size.h === 2 ? tall : short
@@ -156,6 +157,32 @@ function DeadlineHealth({ ctx }) {
   const late = open.filter((order) => order.due.key === 'late').length
   return <Card icon={Hourglass} tone="amber" title="Prazos das OS" subtitle={ctx.workflowLoading ? 'Carregando...' : open.length ? `${percent((open.length - late) / open.length)} dentro do prazo ou a caminho` : 'Nenhuma OS em aberto'} action={{ label: 'Ver OS', onClick: () => ctx.onNavigate('Serviços em andamento') }}>
     {ctx.workflowLoading ? <Empty>Carregando...</Empty> : <Bars rows={deadlineRows.map(([key, label, tone]) => ({ key, label, tone, value: open.filter((order) => order.due.key === key).length }))} />}
+  </Card>
+}
+
+// Propostas com prazo próximo (TCK-0012): the offers still waiting for their proposal with a Prazo para enviar a proposta,
+// the nearest first, so the late ones open the list, in red. "Ver todas" opens Ofertas on the filter Prazo vencendo.
+function openDueOffers(ctx) {
+  saveListState('offers', 'filter', 'deadline')
+  saveListState('offers', 'search', '')
+  saveListState('offers', 'date', '')
+  forgetScroll('Ofertas e serviços')
+  ctx.onNavigate('Ofertas e serviços')
+}
+const proposalTone = { soon: 'amber', today: 'red', late: 'red' }
+function ProposalDeadlines({ ctx, size }) {
+  const rows = deadlineOffers(ctx.offers, ctx.today)
+  const late = rows.filter((offer) => proposalDaysLeft(offer, ctx.today) < 0).length
+  const limit = rowLimit(size, 4, 8)
+  const subtitle = ctx.workflowLoading ? 'Carregando...' : !rows.length ? 'Ofertas aguardando proposta' : late ? `${plural(late, 'atrasada', 'atrasadas')} de ${plural(rows.length, 'oferta', 'ofertas')}` : plural(rows.length, 'oferta aguardando proposta', 'ofertas aguardando proposta')
+  return <Card icon={CalendarClock} tone={late ? 'red' : 'amber'} title="Propostas com prazo próximo" subtitle={subtitle} action={{ label: 'Ver todas', onClick: () => openDueOffers(ctx) }}>
+    {ctx.workflowLoading ? <Empty>Carregando...</Empty> : !rows.length ? <Empty>Nenhuma oferta com prazo para enviar a proposta.</Empty> : <>
+      <Rows rows={rows.slice(0, limit).map((offer) => {
+        const badge = proposalDeadlineBadge(offer, ctx.today), days = proposalDaysLeft(offer, ctx.today)
+        return { key: offer.id, title: offer.service || offer.code, detail: `${offer.code} · ${offer.company || 'Cliente não informado'}`, value: shortDate(offer.proposalDeadline), valueDetail: badge?.label || `em ${days} dias`, tone: proposalTone[badge?.tone] || 'plain', highlight: badge?.tone === 'late' ? 'late' : null }
+      })} onSelect={(row) => ctx.onSelectOffer(row.key)} />
+      {rows.length > limit && <p className="home-card-more">e mais {plural(rows.length - limit, 'oferta', 'ofertas')}</p>}
+    </>}
   </Card>
 }
 
@@ -687,6 +714,7 @@ export const widgetViews = {
   'note-invites': { Component: NoteInvites, icon: MailOpen, sources: ['notes'] },
   'deadline-health': { Component: DeadlineHealth, icon: Hourglass },
   'order-status': { Component: OrderStatus, icon: ClipboardList },
+  'proposal-deadlines': { Component: ProposalDeadlines, icon: CalendarClock },
   'offer-pipeline': { Component: OfferPipeline, icon: Funnel },
   'management-attention': { Component: ManagementAttention, icon: TriangleAlert },
   'recent-completed': { Component: RecentCompleted, icon: CircleCheck },

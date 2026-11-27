@@ -87,7 +87,7 @@ function WidgetCatalog({ role, layout, onAdd, onRemove, onClose }) {
   </PayableModal>
 }
 
-export default function AdminHome({ user, orders, offers, workflowError, workflowLoading, onRefresh, onNavigate, onSelectOrder, onOpenPayables, loadPayables, loadInventory, Sidebar, WorkspaceTabs, navigationProps }) {
+export default function AdminHome({ user, orders, offers, workflowError, workflowLoading, onRefresh, onNavigate, onSelectOrder, onSelectOffer, onOpenPayables, loadPayables, loadInventory, Sidebar, WorkspaceTabs, navigationProps }) {
   const role = user?.role
   const home = useHomeLayout(user)
   // `draft`: the layout being edited (null when not editing). Nothing reaches the server until "Salvar".
@@ -108,7 +108,7 @@ export default function AdminHome({ user, orders, offers, workflowError, workflo
   const sources = useHomeSources(loaders, needed, retry)
   const summary = adminOverview(orders, offers, sources.inventory.data || [], now)
   const today = new Date(now).toLocaleDateString('pt-BR', { timeZone: 'America/Bahia', day: 'numeric', month: 'long', year: 'numeric' })
-  const ctx = { user, staff: role === 'staff', orders, offers, summary, sources, workflowLoading, workflowError, now, today: todayBahia(new Date(now)), onNavigate, onSelectOrder, onOpenPayables, retry: () => setRetry((value) => value + 1) }
+  const ctx = { user, staff: role === 'staff', orders, offers, summary, sources, workflowLoading, workflowError, now, today: todayBahia(new Date(now)), onNavigate, onSelectOrder, onSelectOffer, onOpenPayables, retry: () => setRetry((value) => value + 1) }
 
   const sensors = useSensors(useSensor(MouseSensor, { activationConstraint: { distance: 6 } }), useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }))
   const [activeId, setActiveId] = useState(null)

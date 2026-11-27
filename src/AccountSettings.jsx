@@ -6,7 +6,7 @@ import { useAccountAppearance } from './accountTheme.js'
 import { playNotificationSound } from './notificationSounds.js'
 import { notificationOptions, notificationSounds, emailNotificationsLabel } from '../server/notificationRules.js'
 import { dueNoticeDays } from '../server/noteRules.js'
-import { RESPONSE_NOTICE_DAYS_MAX } from '../server/offerResponseRules.js'
+import { PROPOSAL_NOTICE_DAYS_MAX } from '../server/proposalDeadlineRules.js'
 import ReleaseNotesModal from './ReleaseNotesModal.jsx'
 import { PayableModal } from './PayableModal.jsx'
 import OperatorAccessSettings from './OperatorAccessSettings.jsx'
@@ -133,17 +133,18 @@ function AppearanceSection({ appearance }) {
   </>
 }
 
-// Prazo de resposta do cliente (TCK-0012), in Comercial: the 1st and 2nd notice (days before, 1 to 30) and the one on the
-// day, each with its switch (on the right, in line with the other switches). The same number of days in both arrives once.
-const responseNoticeDays = Array.from({ length: RESPONSE_NOTICE_DAYS_MAX }, (_, index) => index + 1)
-function ResponseNoticeRows({ settings, save }) {
-  const days = (key, label, disabled) => <select aria-label={label} value={settings[key]} disabled={disabled} onChange={(event) => save({ [key]: Number(event.target.value) })}>{responseNoticeDays.map((day) => <option key={day} value={day}>{day} {day === 1 ? 'dia antes' : 'dias antes'}</option>)}</select>
-  const same = settings.offerResponseFirst && settings.offerResponseSecond && settings.offerResponseFirstDays === settings.offerResponseSecondDays
+// Prazo para enviar a proposta (TCK-0012), in Comercial: the 1st and 2nd notice (days before, 1 to 30) and the one on the
+// day it falls due, each with its switch (on the right, in line with the other switches). The same number of days in both
+// arrives once.
+const proposalNoticeDayOptions = Array.from({ length: PROPOSAL_NOTICE_DAYS_MAX }, (_, index) => index + 1)
+function ProposalNoticeRows({ settings, save }) {
+  const days = (key, label, disabled) => <select aria-label={label} value={settings[key]} disabled={disabled} onChange={(event) => save({ [key]: Number(event.target.value) })}>{proposalNoticeDayOptions.map((day) => <option key={day} value={day}>{day} {day === 1 ? 'dia antes' : 'dias antes'}</option>)}</select>
+  const same = settings.proposalDeadlineFirst && settings.proposalDeadlineSecond && settings.proposalDeadlineFirstDays === settings.proposalDeadlineSecondDays
   return <>
-    <Row title="Prazo de resposta do cliente" help="Avisos às 07:30 das ofertas com prazo para o cliente aceitar ou recusar a proposta. Param quando a oferta é aceita ou recusada." />
-    <Row child off={!settings.offerResponseFirst} title="1º aviso"><span className="account-response-control">{days('offerResponseFirstDays', '1º aviso: dias antes do prazo', !settings.offerResponseFirst)}<Switch checked={settings.offerResponseFirst} label="1º aviso do prazo de resposta" onChange={(value) => save({ offerResponseFirst: value })} /></span></Row>
-    <Row child off={!settings.offerResponseSecond} title="2º aviso" help={same ? 'Mesmo número de dias do 1º aviso: chega um aviso só.' : undefined}><span className="account-response-control">{days('offerResponseSecondDays', '2º aviso: dias antes do prazo', !settings.offerResponseSecond)}<Switch checked={settings.offerResponseSecond} label="2º aviso do prazo de resposta" onChange={(value) => save({ offerResponseSecond: value })} /></span></Row>
-    <Row child off={!settings.offerResponseDueDay} title="Avisar no dia do prazo"><Switch checked={settings.offerResponseDueDay} label="Avisar no dia do prazo" onChange={(value) => save({ offerResponseDueDay: value })} /></Row>
+    <Row title="Prazo para enviar a proposta" help="Avisos às 07:30 das ofertas com prazo para enviar a proposta. Param quando a proposta é gerada." />
+    <Row child off={!settings.proposalDeadlineFirst} title="1º aviso"><span className="account-response-control">{days('proposalDeadlineFirstDays', '1º aviso: dias antes do prazo', !settings.proposalDeadlineFirst)}<Switch checked={settings.proposalDeadlineFirst} label="1º aviso do prazo da proposta" onChange={(value) => save({ proposalDeadlineFirst: value })} /></span></Row>
+    <Row child off={!settings.proposalDeadlineSecond} title="2º aviso" help={same ? 'Mesmo número de dias do 1º aviso: chega um aviso só.' : undefined}><span className="account-response-control">{days('proposalDeadlineSecondDays', '2º aviso: dias antes do prazo', !settings.proposalDeadlineSecond)}<Switch checked={settings.proposalDeadlineSecond} label="2º aviso do prazo da proposta" onChange={(value) => save({ proposalDeadlineSecond: value })} /></span></Row>
+    <Row child off={!settings.proposalDeadlineDueDay} title="Avisar no dia do vencimento"><Switch checked={settings.proposalDeadlineDueDay} label="Avisar no dia do vencimento" onChange={(value) => save({ proposalDeadlineDueDay: value })} /></Row>
   </>
 }
 
@@ -166,7 +167,7 @@ function NotificationsSection({ user, preferences, onOpenNotes }) {
         <Row title="Contas a pagar a vencer"><select aria-label="Contas a pagar a vencer" value={String(settings.payableReminderDays)} onChange={(event) => save({ payableReminderDays: event.target.value === 'never' ? 'never' : Number(event.target.value) })}><option value="3">3 dias antes do vencimento</option><option value="5">5 dias antes do vencimento</option><option value="7">7 dias antes do vencimento</option><option value="never">Nunca</option></select></Row>
         <Row title="Contas a receber a vencer"><select aria-label="Contas a receber a vencer" value={String(settings.receivableReminderDays ?? 3)} onChange={(event) => save({ receivableReminderDays: event.target.value === 'never' ? 'never' : Number(event.target.value) })}><option value="3">3 dias antes e quando vencer</option><option value="5">5 dias antes e quando vencer</option><option value="7">7 dias antes e quando vencer</option><option value="never">Nunca</option></select></Row>
       </Card>}
-      {groups.map(([key, title, icon, keys]) => <Card key={key} icon={icon} title={title}>{keys.filter((option) => labels[option]).map(toggle)}{key === 'commercial' && <ResponseNoticeRows settings={settings} save={save} />}</Card>)}
+      {groups.map(([key, title, icon, keys]) => <Card key={key} icon={icon} title={title}>{keys.filter((option) => labels[option]).map(toggle)}{key === 'commercial' && <ProposalNoticeRows settings={settings} save={save} />}</Card>)}
       {others.length > 0 && <Card icon={Bell} title="Outros avisos">{others.map(toggle)}</Card>}
       <section className="account-card" aria-label="Anotações e Tarefas"><Row title="Anotações e Tarefas" help="Lembretes, convites e prazos das tarefas têm a própria seção."><button className="admin-tool-button" type="button" onClick={onOpenNotes}>Abrir</button></Row></section>
     </>}
