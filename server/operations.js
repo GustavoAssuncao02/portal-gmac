@@ -19,7 +19,7 @@ import { pendingOrderMaterials } from './pendingMaterials.js'
 import { addNotification, completedServiceNotice } from './notificationEvents.js'
 import { activeSessions, activeSince } from './operationSessions.js'
 import { editEventTime } from './operationEventTime.js'
-import { addManualEvent, manualEventTypes } from './operationManualEvents.js'
+import { addManualEvent, addManualPeriod, manualEventTypes } from './operationManualEvents.js'
 import { blockedMessage, createLoginThrottle } from './loginThrottle.js'
 import { removeOrderReceivables } from './receivables.js'
 import { pauseReasonNames, sectorRows, SWITCH_PAUSE_REASON } from './registries.js'
@@ -268,7 +268,8 @@ export default function createOperationsRouter(pool) {
       const state = normalizeSessions(current.operation || defaultOperation(current))
       current.operationEvents ||= []
       const { event, added } = apply(state, current.operationEvents, current)
-      if (added) current.operationEvents.push(added)
+      // `added` is one new record or several saved together (a manual period: start and pause).
+      current.operationEvents.push(...[added ?? []].flat())
       current.operation = state
       return result(current, state, event)
     })
@@ -282,7 +283,7 @@ export default function createOperationsRouter(pool) {
       const [eventRows] = await connection.execute('SELECT data FROM order_operation_events WHERE order_code = ? ORDER BY seq', [code])
       const { event, changed, added } = apply(state, eventRows.map((row) => json(row.data)), order)
       await connection.execute('UPDATE order_operations SET data = ? WHERE order_code = ?', [JSON.stringify(state), code])
-      if (added) await connection.execute('INSERT INTO order_operation_events (id, order_code, data, occurred_at) VALUES (?, ?, ?, ?)', [added.id, code, JSON.stringify(added), new Date(added.at)])
+      for (const item of [added ?? []].flat()) await connection.execute('INSERT INTO order_operation_events (id, order_code, data, occurred_at) VALUES (?, ?, ?, ?)', [item.id, code, JSON.stringify(item), new Date(item.at)])
       for (const item of changed) await connection.execute('UPDATE order_operation_events SET data = ?, occurred_at = ? WHERE id = ? AND order_code = ?', [JSON.stringify(item), new Date(item.at), item.id, code])
       await connection.commit()
       return result(await orderByCode(code), state, event)
@@ -600,7 +601,9 @@ export default function createOperationsRouter(pool) {
       const employee = (await employeeRows()).find((item) => isOperator(item) && String(item.id) === String(body.employeeId))
       if (!employee) throw new OperationError(400, 'Selecione o funcionário responsável.')
       const input = { type: body.type, at: body.at, employee: { id: employee.id, name: employee.name }, stageKey: body.stageKey, quantity: body.quantity }
-      if (body.type === 'pause') {
+      // A start is always typed in with its pause (the period of work); a pause alone closes a start typed in before.
+      if (body.type === 'start') input.endAt = body.endAt
+      if (['pause', 'start'].includes(body.type)) {
         if (!(await pauseReasonNames()).includes(body.reason)) throw new OperationError(400, 'Selecione o motivo da pausa.')
         input.reason = body.reason
       }
@@ -615,10 +618,15 @@ export default function createOperationsRouter(pool) {
         const stage = body.type === 'start' && state.stages.find((item) => item.key === body.stageKey)
         const plan = stage && stagePlan(order, stage, catalog)
         if (plan && String((plan.machine ? input.machine : input.laborService)?.id ?? '') !== String((plan.machine || plan.laborService).id)) throw new OperationError(409, `A etapa ${stage.name} é feita em ${plan.name}.`)
-        const { event, changed } = addManualEvent(state, events, order, input, { id: request.adminId, name: request.adminName })
+        const editor = { id: request.adminId, name: request.adminName }
+        if (body.type === 'start') {
+          const period = addManualPeriod(state, events, order, input, editor)
+          return { event: period.events, changed: period.changed, added: period.events }
+        }
+        const { event, changed } = addManualEvent(state, events, order, input, editor)
         return { event, changed, added: event }
       })
-      response.status(201).json({ item: result.event, operation: result.operation })
+      response.status(201).json(Array.isArray(result.event) ? { item: result.event[0], items: result.event, operation: result.operation } : { item: result.event, operation: result.operation })
     } catch (error) { sendError(response, error) }
   })
 

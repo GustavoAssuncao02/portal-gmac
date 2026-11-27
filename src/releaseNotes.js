@@ -4,6 +4,7 @@ export const releaseNotes = [
     version: '1.0.26',
     date: '2026-11-27',
     notes: [
+      'Ordens de serviço: lançamento manual com início e pausa juntos',
       'Melhorias gerais: correções de problemas e maior estabilidade do sistema',
     ],
   },

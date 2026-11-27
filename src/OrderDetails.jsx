@@ -79,7 +79,10 @@ function Facts({ items, className = '' }) {
   return <dl className={`os-facts ${className}`}>{items.map(([label, value, detail]) => <div key={label}><dt>{label}</dt><dd>{value ?? 'Não informado'}{detail && <small>{detail}</small>}</dd></div>)}</dl>
 }
 
-const manualTypes = [['start', 'Início da operação'], ['pieces', 'Peças registradas'], ['pause', 'Pausa']]
+const manualTypes = [['start', 'Período de trabalho (início e pausa)'], ['pieces', 'Peças registradas'], ['pause', 'Pausa']]
+const periodEnds = ['paused', 'stage_completed', 'completed', 'session_ended', 'admin_interrupted']
+// A start typed in before the period form existed may still wait for its pause: only then the pause alone is offered.
+const pendingManualStart = (items, employeeId) => Boolean(employeeId) && items.some((event) => event.manual && ['started', 'resumed'].includes(event.type) && String(event.employeeId) === String(employeeId) && !items.some((other) => other.sessionId === event.sessionId && periodEnds.includes(other.type)))
 // Stage the employee was working on at a moment, from the starts and stage changes already in the history.
 function stageAt(items, employeeId, value) {
   if (!employeeId || !value) return ''
@@ -93,7 +96,7 @@ function stageAt(items, employeeId, value) {
 function ManualOperationForm({ order, items, onSave, onCancel }) {
   const [options, setOptions] = useState(null)
   const [loadError, setLoadError] = useState('')
-  const [form, setForm] = useState({ at: '', type: 'start', employeeId: '', stageKey: '', resource: '', quantity: '', reason: '' })
+  const [form, setForm] = useState({ at: '', endAt: '', type: 'start', employeeId: '', stageKey: '', resource: '', quantity: '', reason: '' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   useEffect(() => {
@@ -112,6 +115,7 @@ function ManualOperationForm({ order, items, onSave, onCancel }) {
     setError('')
     setForm((current) => {
       const next = { ...current, ...changes }
+      if (next.type === 'pause' && !pendingManualStart(items, next.employeeId)) next.type = 'start'
       // Pieces go to the stage the employee was on at that moment, as on the operator screen.
       if (next.type === 'pieces' && ('employeeId' in changes || 'at' in changes || 'type' in changes)) { const key = stageAt(items, next.employeeId, next.at); if (key) next.stageKey = key }
       if ('stageKey' in changes || 'type' in changes) next.quantity = ''
@@ -128,7 +132,7 @@ function ManualOperationForm({ order, items, onSave, onCancel }) {
     const split = form.resource.indexOf(':'), resourceType = form.resource.slice(0, split), resourceId = form.resource.slice(split + 1)
     try {
       await onSave({ type: form.type, at: bahiaInstant(form.at), employeeId: form.employeeId,
-        ...(form.type === 'start' ? { stageKey: form.stageKey, machineId: resourceType === 'machine' ? resourceId : null, laborServiceId: resourceType === 'labor-service' ? resourceId : null } : {}),
+        ...(form.type === 'start' ? { endAt: bahiaInstant(form.endAt), reason: form.reason, stageKey: form.stageKey, machineId: resourceType === 'machine' ? resourceId : null, laborServiceId: resourceType === 'labor-service' ? resourceId : null } : {}),
         ...(form.type === 'pieces' ? { stageKey: form.stageKey, quantity: Number(form.quantity) } : {}),
         ...(form.type === 'pause' ? { reason: form.reason } : {}) })
     } catch (caught) {
@@ -139,11 +143,11 @@ function ManualOperationForm({ order, items, onSave, onCancel }) {
   const quantity = Number(form.quantity)
   const preview = form.type === 'pieces' && stage && quantity ? `${stage.name}: +${number(quantity)} peça(s), ${number(stage.count + quantity)}/${number(options.quantity)} no total` : ''
   return <form className="os-history-add" onSubmit={submit} aria-label="Adicionar operação" aria-busy={saving}>
-    <p className="os-history-add-intro">Lance as anotações do funcionário na ordem em que aconteceram: primeiro o início, depois as peças e por fim a pausa.</p>
+    <p className="os-history-add-intro">Lance o período de trabalho (início e pausa) e depois as peças desse período.</p>
     {loadError ? <p className="os-interrupt-error" role="alert">{loadError}</p> : !options ? <p className="os-history-add-intro" role="status">Carregando listas...</p> : <>
       <div className="os-history-add-grid">
-        <label>Data e hora<input type="datetime-local" step="1" required value={form.at} max={bahiaInput(Date.now())} disabled={saving} onChange={(change) => set({ at: change.target.value })} /></label>
-        <label>Operação<select required value={form.type} disabled={saving} onChange={(change) => set({ type: change.target.value })}>{manualTypes.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+        <label>{form.type === 'start' ? 'Início' : 'Data e hora'}<input type="datetime-local" step="1" required value={form.at} max={bahiaInput(Date.now())} disabled={saving} onChange={(change) => set({ at: change.target.value })} /></label>
+        <label>Operação<select required value={form.type} disabled={saving} onChange={(change) => set({ type: change.target.value })}>{manualTypes.filter(([key]) => key !== 'pause' || pendingManualStart(items, form.employeeId)).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
         <label>Responsável<select required value={form.employeeId} disabled={saving} onChange={(change) => set({ employeeId: change.target.value })}><option value="">Selecione o funcionário</option>{options.employees.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
         <fieldset className="os-history-add-details" disabled={saving}><legend>Detalhes</legend>
           {form.type !== 'pause' && <label>Etapa<select required value={form.stageKey} onChange={(change) => set({ stageKey: change.target.value })}><option value="">Selecione a etapa</option>{stages.map((item) => <option key={item.key} value={item.key}>{upper(item.name)}</option>)}</select></label>}
@@ -152,7 +156,8 @@ function ManualOperationForm({ order, items, onSave, onCancel }) {
             {options.laborServices.length > 0 && <optgroup label="Serviços de hora homem">{options.laborServices.map((item) => <option key={item.id} value={`labor-service:${item.id}`}>{upper(item.name)}</option>)}</optgroup>}
           </select>{stage?.plan && <small>Definido na oferta para esta etapa.</small>}</label>}
           {form.type === 'pieces' && <label>Quantidade<select required value={form.quantity} disabled={!stage || remaining < 1} onChange={(change) => set({ quantity: change.target.value })}><option value="">{stage && remaining < 1 ? 'Etapa completa' : 'Selecione'}</option>{Array.from({ length: remaining }, (_, index) => index + 1).map((value) => <option key={value} value={value}>{value} {value === 1 ? 'peça' : 'peças'}</option>)}</select></label>}
-          {form.type === 'pause' && <label>Motivo<select required value={form.reason} onChange={(change) => set({ reason: change.target.value })}><option value="">Selecione o motivo</option>{options.pauseReasons.map((reason) => <option key={reason} value={reason}>{reason}</option>)}</select></label>}
+          {form.type === 'start' && <label>Pausa (fim do período)<input type="datetime-local" step="1" required value={form.endAt} min={form.at || undefined} max={bahiaInput(Date.now())} onChange={(change) => set({ endAt: change.target.value })} /></label>}
+          {['start', 'pause'].includes(form.type) && <label>Motivo da pausa<select required value={form.reason} onChange={(change) => set({ reason: change.target.value })}><option value="">Selecione o motivo</option>{options.pauseReasons.map((reason) => <option key={reason} value={reason}>{reason}</option>)}</select></label>}
         </fieldset>
       </div>
       {preview && <p className="os-history-add-preview">No histórico: <strong>{preview}</strong></p>}

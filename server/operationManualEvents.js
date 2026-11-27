@@ -10,6 +10,8 @@ export const manualEventTypes = ['start', 'pieces', 'pause']
 
 const fail = (status, message) => { const error = new Error(message); error.status = status; throw error }
 const moment = (ms) => new Date(ms).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })
+const day = (ms) => new Date(ms).toLocaleDateString('pt-BR', { timeZone: 'America/Bahia', day: '2-digit', month: '2-digit' })
+const clock = (ms) => new Date(ms).toLocaleTimeString('pt-BR', { timeZone: 'America/Bahia' })
 const sessionFields = (event) => ({ employeeId: event.employeeId, employeeName: event.employeeName, sessionId: event.sessionId, machineId: event.machineId ?? null, machineName: event.machineName ?? null, laborServiceId: event.laborServiceId ?? null, laborServiceName: event.laborServiceName ?? null })
 
 // The employee's work sessions in this OS. `end` is Infinity while the employee is still working in the portal and null
@@ -21,6 +23,16 @@ function employeeSessions(events, employeeId, openIds) {
     const last = Math.max(...own.map((event) => Date.parse(event.at)))
     return { id: start.sessionId, start, from: Date.parse(start.at), last, end: end ? Date.parse(end.at) : openIds.has(start.sessionId) ? Infinity : start.manual ? null : last }
   })
+}
+
+// How a recorded period reads in a message: when, in which stage and who recorded it, so the conflict can be found in
+// the history, e.g. "já tem um período em 18/11 das 08:00:18 às 16:45:02 (Montagem, lançado por Ana)".
+function periodText(session) {
+  const details = [session.start.workStageName, session.start.manual ? `lançado por ${session.start.manual.adminName || 'Administrador'}` : 'registrado no tablet'].filter(Boolean).join(', ')
+  if (session.end === Infinity) return `está trabalhando nesta OS desde ${day(session.from)} às ${clock(session.from)} (${details})`
+  if (session.end == null) return `tem um início em ${day(session.from)} às ${clock(session.from)} ainda sem pausa (${details})`
+  const when = day(session.from) === day(session.end) ? `em ${day(session.from)} das ${clock(session.from)} às ${clock(session.end)}` : `de ${day(session.from)} ${clock(session.from)} a ${day(session.end)} ${clock(session.end)}`
+  return `já tem um período ${when} (${details})`
 }
 
 // Stage and machine or labor service of a session at a given moment, following its changes up to then.
@@ -58,7 +70,7 @@ export function addManualEvent(state, events, order, input, editor = {}, now = D
     const pending = sessions.find((session) => session.end === null)
     if (pending) fail(409, `Lance a pausa do início de ${moment(pending.from)} de ${employee.name} antes de um novo início.`)
     const busy = sessions.find((session) => session.from <= time && time < session.end)
-    if (busy) fail(409, `${employee.name} já estava trabalhando nesta OS nesse horário (início em ${moment(busy.from)}).`)
+    if (busy) fail(409, `${employee.name} ${periodText(busy)}.`)
     const stage = state.stages.find((item) => item.key === input.stageKey)
     if (!stage) fail(400, 'Selecione uma etapa desta OS.')
     // The first start of the OS is "Início"; a start typed before it turns the former first one into a resumption.
@@ -114,4 +126,32 @@ export function addManualEvent(state, events, order, input, editor = {}, now = D
   state.accumulatedMs = Math.max(0, Number(state.accumulatedMs || 0) + timeAfter.closedMs - timeBefore.closedMs)
   if (openIds.size && timeAfter.openSince != null && timeAfter.openSince !== timeBefore.openSince) state.activeSince = new Date(timeAfter.openSince).toISOString()
   return { event, changed: [...changed] }
+}
+
+// A period of work typed in at once (Histórico de operações > Adicionar operação): the start and its pause are saved
+// together or not at all. `input` is the one of a start plus `endAt` and the pause `reason`. Before anything is written
+// the whole period is compared with every period of the employee in this OS, the ones typed in and the ones of the
+// operator screen, and a period that touches another one is refused naming it.
+export function addManualPeriod(state, events, order, input, editor = {}, now = Date.now()) {
+  const from = typeof input.at === 'string' ? Date.parse(input.at) : NaN
+  const to = typeof input.endAt === 'string' ? Date.parse(input.endAt) : NaN
+  if (!Number.isFinite(from)) fail(400, 'Informe a data e a hora do início.')
+  if (!Number.isFinite(to)) fail(400, 'Informe a data e a hora da pausa.')
+  if (to <= from) fail(400, 'A pausa precisa ser posterior ao início.')
+  if (to > now) fail(400, 'O horário não pode estar no futuro.')
+  if (!input.reason) fail(400, 'Selecione o motivo da pausa.')
+  const openIds = new Set((state.activeSessions || []).map((session) => session.id))
+  const sessions = employeeSessions(events, input.employee.id, openIds)
+  const pending = sessions.find((session) => session.end === null)
+  if (pending) fail(409, `Lance a pausa do início de ${moment(pending.from)} de ${input.employee.name} antes de um novo período.`)
+  const conflict = sessions.find((session) => from < session.end && session.from <= to)
+  if (conflict) fail(409, `${input.employee.name} ${periodText(conflict)}.`)
+  // Both records are made on copies; the real state and history only change when the two are accepted.
+  const draftState = structuredClone(state), draftEvents = structuredClone(events)
+  const start = addManualEvent(draftState, draftEvents, order, { ...input, type: 'start' }, editor, now)
+  const pause = addManualEvent(draftState, [...draftEvents, start.event], order, { ...input, type: 'pause', at: new Date(to).toISOString() }, editor, now)
+  for (const key of Object.keys(state)) delete state[key]
+  Object.assign(state, draftState)
+  const changed = [...start.changed, ...pause.changed].map((draft) => Object.assign(events.find((item) => item.id === draft.id), draft))
+  return { events: [start.event, pause.event], changed: [...new Set(changed)] }
 }

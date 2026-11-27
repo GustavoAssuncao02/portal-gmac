@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { addManualEvent } from '../server/operationManualEvents.js'
+import { addManualEvent, addManualPeriod } from '../server/operationManualEvents.js'
 import { operationElapsed } from '../server/operationSessions.js'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
 
@@ -52,7 +52,7 @@ test('the records keep their sequence', () => {
   add(state, events, { type: 'start', at: at('08:30:00'), employee: bia, stageKey: 'stage-2' })
   assert.equal(events.at(-1).type, 'resumed')
   add(state, events, { type: 'pause', at: at('12:00:00'), employee: ana, reason: 'Descanso' })
-  rejects(state, events, { type: 'start', at: at('11:00:00'), employee: ana, stageKey: 'stage-1' }, /Ana já estava trabalhando nesta OS nesse horário/)
+  rejects(state, events, { type: 'start', at: at('11:00:00'), employee: ana, stageKey: 'stage-1' }, /^Error: Ana já tem um período em 01\/10 das 05:00:00 às 09:00:00 \(Plaina, lançado por Gilson\)\.$/)
   const strict = waiting(), strictEvents = []
   add(strict, strictEvents, { type: 'start', at: at('08:00:00'), employee: ana, stageKey: 'stage-2' })
   assert.throws(() => addManualEvent(strict, strictEvents, { quantity: 20, resources: { strictProcess: true } }, { type: 'pieces', at: at('09:00:00'), employee: ana, stageKey: 'stage-2', quantity: 1 }, admin, now), /etapa anterior/)
@@ -98,16 +98,83 @@ test('API: lists for the form, records in the history and checks', async (t) => 
   assert.equal((await fixture.request(`${route}/events`, 'POST', { type: 'start', at: '2026-10-01T11:00:00.000Z', employeeId: employee.id, stageKey }, operator)).status, 401, 'only administrators type operations in')
   assert.equal((await fixture.adminRequest(`${route}/events`, 'POST', { type: 'start', at: '2026-10-01T11:00:00.000Z', employeeId: 999, stageKey })).status, 400)
   assert.equal((await fixture.adminRequest(`${route}/events`, 'POST', { type: 'pause', at: '2026-10-01T12:00:00.000Z', employeeId: employee.id, reason: 'Inventado' })).data.message, 'Selecione o motivo da pausa.')
-  const started = await fixture.adminRequest(`${route}/events`, 'POST', { type: 'start', at: '2026-10-01T11:00:00.000Z', employeeId: employee.id, stageKey })
+  // A start is typed in with its pause: without the end or the reason nothing is saved.
+  const period = { type: 'start', at: '2026-10-01T11:00:00.000Z', endAt: '2026-10-01T13:00:00.000Z', reason: 'Descanso', employeeId: employee.id, stageKey }
+  assert.equal((await fixture.adminRequest(`${route}/events`, 'POST', { ...period, endAt: undefined })).data.message, 'Informe a data e a hora da pausa.')
+  assert.equal((await fixture.adminRequest(`${route}/events`, 'POST', { ...period, reason: undefined })).data.message, 'Selecione o motivo da pausa.')
+  assert.equal((await fixture.adminRequest(`${route}/events`)).data.items.filter((event) => event.manual).length, 0)
+  const started = await fixture.adminRequest(`${route}/events`, 'POST', period)
   assert.equal(started.status, 201)
-  assert.equal((await fixture.adminRequest(`${route}/events`, 'POST', { type: 'pieces', at: '2026-10-01T12:00:00.000Z', employeeId: employee.id, stageKey, quantity: 1 })).status, 201)
-  const paused = await fixture.adminRequest(`${route}/events`, 'POST', { type: 'pause', at: '2026-10-01T13:00:00.000Z', employeeId: employee.id, reason: 'Descanso' })
-  assert.equal(paused.status, 201)
-  assert.deepEqual([paused.data.operation.status, paused.data.operation.accumulatedMs, paused.data.operation.stageCounts[stageKey]], ['paused', 2 * hour, 1])
+  assert.deepEqual(started.data.items.map((event) => event.type), ['started', 'paused'])
+  assert.deepEqual([started.data.operation.status, started.data.operation.accumulatedMs], ['paused', 2 * hour])
+  const paused = { data: { item: started.data.items[1] } }
+  // Pieces go inside the closed period.
+  const counted = await fixture.adminRequest(`${route}/events`, 'POST', { type: 'pieces', at: '2026-10-01T12:00:00.000Z', employeeId: employee.id, stageKey, quantity: 1 })
+  assert.equal(counted.status, 201)
+  assert.deepEqual([counted.data.operation.accumulatedMs, counted.data.operation.stageCounts[stageKey]], [2 * hour, 1])
+  // A period touching it is refused naming the record, and nothing is saved.
+  const overlap = await fixture.adminRequest(`${route}/events`, 'POST', { ...period, at: '2026-10-01T10:59:42.000Z', endAt: '2026-10-01T11:30:00.000Z' })
+  assert.deepEqual([overlap.status, overlap.data.message], [409, `Aloisio já tem um período em 01/10 das 08:00:00 às 10:00:00 (${options.stages[0].name}, lançado por ${started.data.items[0].manual.adminName}).`])
   const history = (await fixture.adminRequest(`${route}/events`)).data.items.filter((event) => event.manual)
   assert.deepEqual(history.map((event) => [event.type, event.employeeName]), [['started', 'Aloisio'], ['stage_progress', 'Aloisio'], ['paused', 'Aloisio']])
   // The pieces typed in count as the ones registered on the operator screen.
   assert.equal((await fixture.adminRequest(`${route}/manual-options`)).data.stages[0].count, 1)
   // A manual record can have its time corrected like any other.
   assert.equal((await fixture.adminRequest(`${route}/events/${paused.data.item.id}/time`, 'PUT', { at: '2026-10-01T14:00:00.000Z' })).data.operation.accumulatedMs, 3 * hour)
+})
+
+// The start of 18/11 08:00:00 typed in without its pause, 18 s before a period already recorded for the same employee,
+// locked his operations: a period of work is now typed in at once and compared with every period of the employee.
+test('a period of work: start and pause together, refused when it touches another period of the employee', () => {
+  const state = waiting(), events = []
+  const period = (from, to, extra = {}) => ({ type: 'start', at: at(from), endAt: at(to), reason: 'Descanso', employee: ana, stageKey: 'stage-1', ...extra })
+  const addPeriod = (input) => { const result = addManualPeriod(state, events, order, input, admin, now); events.push(...result.events); return result }
+  const refuses = (input, pattern) => {
+    const before = [structuredClone(state), structuredClone(events)]
+    assert.throws(() => addManualPeriod(state, events, order, input, admin, now), pattern)
+    assert.deepEqual([state, events], before, 'nothing changes when the period is refused')
+  }
+  const first = addPeriod(period('11:00:18', '19:45:02'))
+  assert.deepEqual(first.events.map((event) => [event.type, event.sessionId === first.events[0].sessionId, event.reason ?? null]), [['started', true, null], ['paused', true, 'Descanso']])
+  assert.deepEqual([state.status, state.accumulatedMs, state.stageTimeMs['stage-1'], state.lastPauseReason], ['paused', 8 * hour + 44 * 60000 + 44000, 8 * hour + 44 * 60000 + 44000, 'Descanso'])
+  // The case of the locked OS: 18 s before the recorded period, the message names it.
+  refuses(period('11:00:00', '20:00:00'), /^Error: Ana já tem um período em 01\/10 das 08:00:18 às 16:45:02 \(Plaina, lançado por Gilson\)\.$/)
+  refuses(period('12:00:00', '13:00:00'), /já tem um período em 01\/10 das 08:00:18 às 16:45:02/)
+  refuses(period('08:00:00', '11:00:18'), /já tem um período/, 'ending when the next one starts is refused, as the pause alone')
+  refuses(period('09:00:00', '08:00:00'), /A pausa precisa ser posterior ao início/)
+  refuses(period('09:00:00', '10:00:00', { reason: '' }), /Selecione o motivo da pausa/)
+  refuses(period('09:00:00', '10:00:00', { endAt: undefined }), /Informe a data e a hora da pausa/)
+  refuses(period('09:00:00', '10:00:00', { endAt: '2026-10-03T08:00:00.000Z' }), /futuro/)
+  refuses(period('09:00:00', '10:00:00', { stageKey: 'outra' }), /Selecione uma etapa desta OS/)
+  // Right before and right after are fine; the earlier one becomes the first start of the OS.
+  addPeriod(period('08:00:00', '11:00:00'))
+  assert.deepEqual([events[0].type, events.at(-2).type, state.startedAt], ['resumed', 'started', at('08:00:00')])
+  addPeriod(period('19:45:02', '20:30:00'))
+  assert.equal(state.accumulatedMs, 3 * hour + 8 * hour + 44 * 60000 + 44000 + 44 * 60000 + 58000)
+  // Pieces are typed in afterwards, inside the period.
+  add(state, events, { type: 'pieces', at: at('12:00:00'), employee: ana, stageKey: 'stage-1', quantity: 2 })
+  assert.equal(state.stageCounts['stage-1'], 2)
+  // Another employee in the same hours is independent.
+  addPeriod(period('11:00:00', '12:00:00', { employee: bia }))
+  // A start typed in before (still waiting for its pause) asks for that pause first.
+  const legacy = waiting(), legacyEvents = []
+  legacyEvents.push(addManualEvent(legacy, legacyEvents, order, { type: 'start', at: at('08:00:00'), employee: ana, stageKey: 'stage-1' }, admin, now).event)
+  assert.throws(() => addManualPeriod(legacy, legacyEvents, order, period('12:00:00', '13:00:00'), admin, now), /Lance a pausa do início de .* de Ana antes de um novo período/)
+})
+
+test('a period of work is compared with the periods of the operator screen too', () => {
+  // Bia worked in the portal from 08:00 to 10:00 and is working again since 12:00.
+  const live = { id: 's-now', employeeId: 2, employeeName: 'Bia', startedAt: at('12:00:00'), stageKey: 'stage-1', stageName: 'Plaina', stageSince: at('12:00:00') }
+  const state = { ...waiting(), status: 'running', startedAt: at('08:00:00'), activeSessions: [live], activeSince: at('12:00:00') }
+  const events = [
+    { id: 'e1', type: 'started', at: at('08:00:00'), sessionId: 's-old', employeeId: 2, employeeName: 'Bia', workStageKey: 'stage-1', workStageName: 'Plaina' },
+    { id: 'e2', type: 'paused', at: at('10:00:00'), sessionId: 's-old', employeeId: 2, employeeName: 'Bia', reason: 'Descanso' },
+    { id: 'e3', type: 'resumed', at: at('12:00:00'), sessionId: 's-now', employeeId: 2, employeeName: 'Bia', workStageKey: 'stage-2', workStageName: 'Pintura' },
+  ]
+  const period = (from, to) => ({ type: 'start', at: at(from), endAt: at(to), reason: 'Descanso', employee: bia, stageKey: 'stage-1' })
+  assert.throws(() => addManualPeriod(state, events, order, period('09:00:00', '09:30:00'), admin, now), /^Error: Bia já tem um período em 01\/10 das 05:00:00 às 07:00:00 \(Plaina, registrado no tablet\)\.$/)
+  assert.throws(() => addManualPeriod(state, events, order, period('11:00:00', '13:00:00'), admin, now), /^Error: Bia está trabalhando nesta OS desde 01\/10 às 09:00:00 \(Pintura, registrado no tablet\)\.$/)
+  const result = addManualPeriod(state, events, order, period('10:00:00', '11:00:00'), admin, now)
+  assert.deepEqual(result.events.map((event) => event.type), ['resumed', 'paused'])
+  assert.equal(state.status, 'running', 'someone still working keeps the OS running')
 })
