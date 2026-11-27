@@ -196,6 +196,11 @@
 .home-rows-value--green { color: #1f7f55; }
 .home-rows-value--pink { color: #b34d84; }
 .home-rows-value--gray { color: #93a2ae; }
+.home-rows-badge { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 4px; background: #fff0de; color: #b85b08; font-size: 10px; font-weight: 700; vertical-align: 1px; }
+/* Próximas entregas: the late OS, under the list, open the panel on Atrasado. */
+.home-deliveries-late { display: inline-flex; align-self: flex-start; align-items: center; gap: 6px; margin-top: 10px; padding: 6px 10px; border: 1px solid #f3c9cd; border-radius: 6px; background: #fdf1f2; color: #b84450; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
+.home-deliveries-late:hover { border-color: #b84450; }
+.home-deliveries-late .icon { width: 14px; height: 14px; flex-shrink: 0; }
 .home-shortcuts { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; }
 .home-shortcuts button { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 40px; padding: 8px 10px; border: 1px solid #dde7ef; border-radius: 6px; background: #f8fbfd; color: #2c5878; font: inherit; font-size: 11px; font-weight: 600; text-align: left; cursor: pointer; }
 .home-shortcuts button:hover { border-color: #7fa5c3; background: #eef5fb; }

@@ -32,6 +32,7 @@ export const homeWidgets = [
   widget('operation-summary', 'operation', 'Resumo da operação', 'OS em aberto, em execução, atrasadas e ofertas em análise.', { widths: [2, 4], w: 4 }),
   widget('open-orders', 'operation', 'OS em aberto', 'Lista das ordens de serviço abertas, pelo prazo de entrega.', { widths: [2, 3, 4], w: 3, h: 2, tall: true }),
   widget('late-orders', 'operation', 'OS atrasadas', 'As ordens de serviço que passaram do prazo de entrega.', { widths: [1, 2, 3], w: 2, tall: true }),
+  widget('upcoming-deliveries', 'operation', 'Próximas entregas', 'As 5 OS abertas de entrega mais próxima, a partir de hoje, e quantas estão atrasadas.', { widths: [1, 2, 3], w: 2, tall: true }),
   widget('deadline-health', 'operation', 'Prazos das OS', 'Quantas OS estão dentro do prazo, perto dele ou atrasadas.', { widths: [1, 2], w: 2 }),
   widget('order-status', 'operation', 'OS por situação', 'Aguardando, em execução, pausadas, etapa concluída e finalizando.', { widths: [1, 2], w: 2 }),
   widget('offer-pipeline', 'operation', 'Funil de ofertas', 'Ofertas em criação, em análise, com proposta, aceitas e recusadas.', { widths: [1, 2, 4], w: 2 }),

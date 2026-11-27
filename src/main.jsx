@@ -2397,10 +2397,11 @@ function OrderScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout, tab
   </div>
 }
 
-function AdminServicesView({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, orders, offers = [], onSelectOrder, onRefresh, workflowError, highlightCode }) {
+function AdminServicesView({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, orders, offers = [], onSelectOrder, onRefresh, workflowError, highlightCode, initialFilter }) {
   const completedView = activeNav === 'Serviços concluídos'
   const [search, setSearch] = useState('')
-  const [filter, setFilter] = useState('all')
+  // The Início may open the panel on a filter (OS atrasadas › Ver todas: Atrasado).
+  const [filter, setFilter] = useState(initialFilter || 'all')
   const [collaborator, setCollaborator] = useState('')
   const [sort, setSort] = useState(null)
   const [now, setNow] = useState(Date.now())
@@ -2487,7 +2488,7 @@ function AdminServicesView({ collapsed, onToggle, activeNav, onNavigate, onLogou
   </div>
 }
 
-function Dashboard({ user, onUpdateUser, collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, offers, orders, selectedOfferId, selectedOrderCode, onRefresh, onSelectOffer, onSelectOrder, onCloseOrder, onOrderReopened, reopenedCode, onOpenPayables, payableFilters, workflowError, workflowLoading, materialRequestTarget, onRequestLocated }) {
+function Dashboard({ user, onUpdateUser, collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, offers, orders, selectedOfferId, selectedOrderCode, onRefresh, onSelectOffer, onSelectOrder, onCloseOrder, onOrderReopened, reopenedCode, onOpenPayables, payableFilters, workflowError, workflowLoading, materialRequestTarget, onRequestLocated, panelFilter }) {
   const toolProps = { Sidebar, WorkspaceTabs, navigationProps: { collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs } }
   if (['Contas a Pagar', 'Business Intelligence', 'Fornecedores'].includes(activeNav)) return <PayablesScreen {...toolProps} accountFilters={payableFilters} mode={{ 'Contas a Pagar': 'accounts', 'Business Intelligence': 'bi', 'Fornecedores': 'suppliers' }[activeNav]} />
   if (['Grupos de contas', 'Classificações'].includes(activeNav)) return <AccountPlanScreen key={activeNav} {...toolProps} mode={activeNav === 'Grupos de contas' ? 'groups' : 'classifications'} />
@@ -2525,7 +2526,7 @@ function Dashboard({ user, onUpdateUser, collapsed, onToggle, activeNav, onNavig
   if (activeNav === 'Fazer proposta') return <ProposalBuilder collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} offer={offers.find((item) => item.id === selectedOfferId)} onRefresh={onRefresh} onSelectOrder={onSelectOrder} />
   if (activeNav === 'Pedidos') return <OrdersScreen collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} offers={offers} orders={orders} onSelectOffer={onSelectOffer} onSelectOrder={onSelectOrder} onRefresh={onRefresh} materialRequestTarget={materialRequestTarget} onRequestLocated={onRequestLocated} />
   if (activeNav === 'Ordem de serviço') return <OrderScreen collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} offers={offers} orders={orders} selectedOrderCode={selectedOrderCode} onRefresh={onRefresh} onBack={onCloseOrder} onReopened={onOrderReopened} workflowLoading={workflowLoading} />
-  return <AdminServicesView key={activeNav} offers={offers} highlightCode={reopenedCode} collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} orders={orders} onSelectOrder={onSelectOrder} onRefresh={onRefresh} workflowError={workflowError} />
+  return <AdminServicesView key={activeNav} offers={offers} highlightCode={reopenedCode} collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} tabs={tabs} onCloseTab={onCloseTab} onReorderTabs={onReorderTabs} orders={orders} onSelectOrder={onSelectOrder} onRefresh={onRefresh} workflowError={workflowError} initialFilter={activeNav === 'Serviços em andamento' ? panelFilter : null} />
 }
 function App() {
   const [cpf, setCpf] = useState('')
@@ -2573,6 +2574,8 @@ function App() {
   const [orderOrigin, setOrderOrigin] = useState(null)
   const [reopenedCode, setReopenedCode] = useState(null)
   const [materialRequestTarget, setMaterialRequestTarget] = useState(null)
+  // Filter Serviços em andamento opens on, when the Início asks for one (`onNavigate(label, { panelFilter })`).
+  const [panelFilter, setPanelFilter] = useState(null)
   const [workflowError, setWorkflowError] = useState('')
   const [workflowLoading, setWorkflowLoading] = useState(true)
   const appearance = useAccountTheme(isDashboard ? adminUser : null, restoringSession)
@@ -2706,6 +2709,7 @@ function App() {
   function navigateTo(label, requestTarget = null) {
     if (adminUser?.role === 'staff' && isFinancialPage(label)) return
     setMaterialRequestTarget(label === 'Pedidos' ? requestTarget : null)
+    setPanelFilter(label === 'Serviços em andamento' ? requestTarget?.panelFilter || null : null)
     if (label === 'Contas a Pagar') setPayableFilters(null)
     setActiveNav(label)
     setOpenTabs((current) => current.includes(label) ? current : [...current, label])
@@ -2819,7 +2823,7 @@ function App() {
   if (restoringSession) return <main className="session-restore"><img src="/images/gmac-logo-transparent.png" alt="GMAC Metalúrgica" />{restoreError ? <><p role="alert">{restoreError}</p><div><button type="button" className="admin-tool-button admin-tool-button--primary" onClick={() => setRestoreAttempt((value) => value + 1)}>Tentar novamente</button><button type="button" className="admin-tool-button" onClick={logoutAdmin}>Sair</button></div></> : <p role="status">Restaurando sessão...</p>}</main>
   // The birthday screen stays in the same place of both returns, so it keeps fading out over the portal that opens behind it.
   const birthdayScreen = birthday && <BirthdayGreeting name={birthday.name} onContinue={() => enterAdmin(birthday.user, birthday.token)} onClosed={() => setBirthday(null)} />
-  if (isDashboard) return <><ThemeContext.Provider value={appearance}><AdminIdentityContext.Provider value={adminUser}><WorkspaceTabsContext.Provider value={closeAllTabs}><Dashboard user={adminUser} onUpdateUser={setAdminUser} collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((current) => !current)} activeNav={activeNav} onNavigate={navigateTo} onCloseTab={closeTab} onReorderTabs={reorderTabs} tabs={openTabs} onLogout={logoutAdmin} offers={offers} orders={orders} selectedOfferId={selectedOfferId} selectedOrderCode={selectedOrderCode} onRefresh={refreshWorkflow} onSelectOffer={selectOffer} onSelectOrder={selectOrder} onCloseOrder={closeOrder} onOrderReopened={orderReopened} reopenedCode={reopenedCode} onOpenPayables={openPayables} payableFilters={payableFilters} workflowError={workflowError} workflowLoading={workflowLoading} materialRequestTarget={materialRequestTarget} onRequestLocated={setMaterialRequestTarget} />{adminUser && <NotesButton key={adminUser.id} activeNav={activeNav} onNavigate={navigateTo} offers={offers} orders={orders} onSelectOrder={selectOrder} onSelectOffer={selectOffer} />}</WorkspaceTabsContext.Provider></AdminIdentityContext.Provider></ThemeContext.Provider>{birthdayScreen}</>
+  if (isDashboard) return <><ThemeContext.Provider value={appearance}><AdminIdentityContext.Provider value={adminUser}><WorkspaceTabsContext.Provider value={closeAllTabs}><Dashboard user={adminUser} onUpdateUser={setAdminUser} collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((current) => !current)} activeNav={activeNav} onNavigate={navigateTo} onCloseTab={closeTab} onReorderTabs={reorderTabs} tabs={openTabs} onLogout={logoutAdmin} offers={offers} orders={orders} selectedOfferId={selectedOfferId} selectedOrderCode={selectedOrderCode} onRefresh={refreshWorkflow} onSelectOffer={selectOffer} onSelectOrder={selectOrder} onCloseOrder={closeOrder} onOrderReopened={orderReopened} reopenedCode={reopenedCode} onOpenPayables={openPayables} payableFilters={payableFilters} workflowError={workflowError} workflowLoading={workflowLoading} materialRequestTarget={materialRequestTarget} onRequestLocated={setMaterialRequestTarget} panelFilter={panelFilter} />{adminUser && <NotesButton key={adminUser.id} activeNav={activeNav} onNavigate={navigateTo} offers={offers} orders={orders} onSelectOrder={selectOrder} onSelectOffer={selectOffer} />}</WorkspaceTabsContext.Provider></AdminIdentityContext.Provider></ThemeContext.Provider>{birthdayScreen}</>
 
   // Commemorative looks (Christmas, New Year, Carnival...; dates in loginThemes/calendar.js): decorations on top of
   // the same screen, the login itself is unchanged.

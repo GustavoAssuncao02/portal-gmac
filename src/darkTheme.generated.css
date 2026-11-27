@@ -1704,6 +1704,18 @@
 :root[data-theme="dark"] .home-rows-value--gray {
     color: #c1cfde
 }
+:root[data-theme="dark"] .home-rows-badge {
+    background: #3c2f20;
+    color: #ecb789
+}
+:root[data-theme="dark"] .home-deliveries-late {
+    border: 1px solid #36516f;
+    background: #3c2022;
+    color: #da9aa1
+}
+:root[data-theme="dark"] .home-deliveries-late:hover {
+    border-color: #36516f
+}
 :root[data-theme="dark"] .home-shortcuts button {
     border: 1px solid #36516f;
     background: #203c59;

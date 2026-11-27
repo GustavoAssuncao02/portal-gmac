@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Archive, ArrowUpRight, Banknote, Boxes, Building2, Cake, Calculator, CalendarClock, CalendarDays, ChartColumn, CircleCheck, CirclePlay, ClipboardList, Clock, Contact, CreditCard, Factory, FileText, Funnel, Gauge, HandCoins, Hourglass, Landmark, LayoutGrid, LifeBuoy, Moon, Package, PackageMinus, Palette, Receipt, RefreshCw, Ruler, ShoppingCart, Sparkles, Sun, Timer, TrendingDown, TrendingUp, TriangleAlert, UserCog, UserRoundX, Users, Wallet, Wrench } from 'lucide-react'
+import { Archive, ArrowUpRight, Banknote, Boxes, Building2, Cake, Calculator, CalendarClock, CalendarDays, ChartColumn, CircleCheck, CirclePlay, ClipboardList, Clock, Contact, CreditCard, Factory, FileText, Funnel, Gauge, HandCoins, Hourglass, Landmark, LayoutGrid, LifeBuoy, Moon, Package, PackageMinus, Palette, Receipt, RefreshCw, Ruler, ShoppingCart, Sparkles, Sun, Timer, TrendingDown, TrendingUp, TriangleAlert, Truck, UserCog, UserRoundX, Users, Wallet, Wrench } from 'lucide-react'
 import { payableOverview, receivableOverview } from './adminOverview.js'
 import { money } from './payablesApi.js'
 import { formatQuantity } from '../server/materialUnits.js'
@@ -13,6 +13,7 @@ import { calculatorFormats, calculatorMaterials, calculatorWeight, conversionOpt
 import { currentVersion, releaseNotes } from './releaseNotes.js'
 import { DEFAULT_HOME_PERIOD, homePeriods } from '../server/homeWidgets.js'
 import { saveListState } from './savedListState.js'
+import { openDeliveries } from './deliveryCalendar.js'
 import { useAccountAppearance } from './accountTheme.js'
 
 // The widgets of the Início (catalog in server/homeWidgets.js). Each one receives `ctx` (the portal data, the sources
@@ -78,10 +79,10 @@ function Bars({ rows, onSelect }) {
 function Stats({ items, columns }) {
   return <div className="home-stats" style={columns ? { '--home-stat-columns': columns } : undefined}>{items.map((item) => <div className={`home-stat home-stat--${item.tone || 'plain'}`} key={item.label}><span>{item.label}</span><strong>{item.value}</strong>{item.hint && <small>{item.hint}</small>}</div>)}</div>
 }
-// A list of rows that open something: title, a line under it and a value on the right.
+// A list of rows that open something: title (with an optional badge), a line under it and a value on the right.
 function Rows({ rows, onSelect }) {
   return <ul className="home-rows">{rows.map((row) => {
-    const content = <><span className="home-rows-main"><strong>{row.title}</strong>{row.detail && <small>{row.detail}</small>}</span>{row.value !== undefined && <span className={`home-rows-value home-rows-value--${row.tone || 'plain'}`}>{row.value}{row.valueDetail && <small>{row.valueDetail}</small>}</span>}</>
+    const content = <><span className="home-rows-main"><strong>{row.title}{row.badge && <span className="home-rows-badge">{row.badge}</span>}</strong>{row.detail && <small>{row.detail}</small>}</span>{row.value !== undefined && <span className={`home-rows-value home-rows-value--${row.tone || 'plain'}`}>{row.value}{row.valueDetail && <small>{row.valueDetail}</small>}</span>}</>
     return <li key={row.key}>{onSelect ? <button type="button" onClick={() => onSelect(row)}>{content}</button> : <div>{content}</div>}</li>
   })}</ul>
 }
@@ -116,10 +117,28 @@ function OpenOrders({ ctx, size }) {
 function LateOrders({ ctx, size }) {
   const late = ctx.summary.openOrders.filter((order) => order.due.key === 'late')
   const limit = rowLimit(size, 4, 8)
-  return <Card icon={TriangleAlert} tone="red" title="OS atrasadas" subtitle={ctx.workflowLoading ? 'Carregando...' : plural(late.length, 'ordem de serviço', 'ordens de serviço')} action={{ label: 'Ver todas', onClick: () => ctx.onNavigate('Serviços em andamento') }}>
+  return <Card icon={TriangleAlert} tone="red" title="OS atrasadas" subtitle={ctx.workflowLoading ? 'Carregando...' : plural(late.length, 'ordem de serviço', 'ordens de serviço')} action={{ label: 'Ver todas', onClick: () => openLatePanel(ctx) }}>
     {ctx.workflowLoading ? <Empty>Carregando...</Empty> : !late.length ? <Empty>Nenhuma OS atrasada.</Empty> : <>
       <Rows rows={late.slice(0, limit).map((order) => ({ key: order.code, title: order.service, detail: `${order.code} · ${order.company || 'Cliente não informado'}`, value: order.due.remaining, valueDetail: `Prazo ${displayDate(order.deliveryDeadline)}`, tone: 'red' }))} onSelect={(row) => ctx.onSelectOrder(row.key)} />
       {late.length > limit && <p className="home-card-more">e mais {plural(late.length - limit, 'OS atrasada', 'OS atrasadas')}</p>}
+    </>}
+  </Card>
+}
+
+// Serviços em andamento opened on the Atrasado filter.
+const openLatePanel = (ctx) => ctx.onNavigate('Serviços em andamento', { panelFilter: 'late' })
+const deliveryTone = { 'on-time': 'green', soon: 'amber', 'at-deadline': 'amber', late: 'red' }
+const deliveryWhen = (days) => days === 0 ? 'hoje' : days === 1 ? 'amanhã' : `em ${days} dias`
+// Próximas entregas: the 5 open OS whose delivery comes first from today on (the late ones are counted at the bottom),
+// with the same date and state of Serviços em andamento and of Planejamento › Entregas.
+function UpcomingDeliveries({ ctx }) {
+  const rows = openDeliveries(ctx.orders, ctx.now)
+  const upcoming = rows.filter((row) => row.day && row.day >= ctx.today && row.due.key !== 'late').slice(0, 5)
+  const late = rows.filter((row) => row.due.key === 'late').length
+  return <Card icon={Truck} title="Próximas entregas" subtitle={ctx.workflowLoading ? 'Carregando...' : upcoming.length ? `As ${upcoming.length === 1 ? 'próxima' : `${upcoming.length} próximas`} a partir de hoje` : 'A partir de hoje'} action={{ label: 'Ver painel', onClick: () => ctx.onNavigate('Serviços em andamento') }}>
+    {ctx.workflowLoading ? <Empty>Carregando...</Empty> : <>
+      {!upcoming.length ? <Empty>Nenhuma entrega prevista a partir de hoje.</Empty> : <Rows rows={upcoming.map((row) => ({ key: row.code, title: row.service || row.code, badge: row.urgent ? 'Emergencial' : null, detail: `${row.code} · ${row.company || 'Cliente não informado'} · peças ${number(row.done)}/${number(row.quantity)}`, value: shortDate(row.day), valueDetail: deliveryWhen(daysUntil(row.day, ctx.today)), tone: deliveryTone[row.due.key] || 'gray' }))} onSelect={(row) => ctx.onSelectOrder(row.key)} />}
+      {late > 0 && <button className="home-deliveries-late" type="button" onClick={() => openLatePanel(ctx)}><TriangleAlert className="icon" aria-hidden="true" strokeWidth={1.8} />{plural(late, 'OS atrasada', 'OS atrasadas')}<Expand /></button>}
     </>}
   </Card>
 }
@@ -550,6 +569,7 @@ export const widgetViews = {
   'operation-summary': { Component: OperationSummary, icon: ClipboardList },
   'open-orders': { Component: OpenOrders, icon: ClipboardList },
   'late-orders': { Component: LateOrders, icon: TriangleAlert },
+  'upcoming-deliveries': { Component: UpcomingDeliveries, icon: Truck },
   'deadline-health': { Component: DeadlineHealth, icon: Hourglass },
   'order-status': { Component: OrderStatus, icon: ClipboardList },
   'offer-pipeline': { Component: OfferPipeline, icon: Funnel },

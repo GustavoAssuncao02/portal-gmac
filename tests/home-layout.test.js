@@ -83,3 +83,11 @@ test('Contas a pagar / a receber keep a period of their own in the layout; 12 mo
   assert.equal((await fixture.request(route, 'PUT', { layout: original.map((entry) => entry.id === 'payables-summary' ? { ...entry, period: 5 } : entry) }, admin)).status, 400)
   assert.equal((await fixture.request(route, 'GET', undefined, admin)).data.layout.find((entry) => entry.id === 'payables-summary').period, 'all', 'a refused save keeps the period')
 })
+
+test('Próximas entregas is in Operação, for administrators and administrative employees, outside the default layout', () => {
+  const item = homeWidgets.find((widget) => widget.id === 'upcoming-deliveries')
+  assert.equal(item.module, 'operation')
+  assert.equal(item.finance, false)
+  assert.equal(validHomeLayout([{ id: 'upcoming-deliveries', w: 2, h: 2 }], 'staff'), true)
+  assert.ok(!defaultHomeLayout('admin').some((entry) => entry.id === 'upcoming-deliveries'))
+})
