@@ -51,11 +51,11 @@
   .offers-table-wrap { padding: 0 8px 12px; }
   .offers-table { width: 100%; min-width: 0; border-radius: 6px; }
   /* Etiqueta, Quantidade and Origem give room to Peça/Serviço and Cliente, shown in capital letters (wider). */
-  .offers-table-row { grid-template-columns: minmax(0, 2fr) minmax(0, 1.7fr) minmax(105px, .65fr) minmax(112px, .6fr) minmax(112px, .8fr) minmax(112px, .8fr) minmax(125px, .9fr) minmax(125px, .8fr) minmax(210px, 1.1fr); min-height: 72px; font-size: 13px; }
+  .offers-table-row { grid-template-columns: minmax(0, 2fr) minmax(0, 1.7fr) minmax(105px, .65fr) minmax(112px, .6fr) minmax(112px, .8fr) minmax(112px, .8fr) minmax(112px, .8fr) minmax(125px, .9fr) minmax(125px, .8fr) minmax(210px, 1.1fr); min-height: 72px; font-size: 13px; }
   .offers-table-row > *, .offers-table-header > * { padding: 12px 8px; overflow-wrap: anywhere; }
   .offers-table-header { min-height: 52px; font-size: 13px; }
   .offers-table-header > * { overflow-wrap: normal; }
-  .offers-table-row > :nth-child(8) { overflow-wrap: normal; }
+  .offers-table-row > :nth-child(9) { overflow-wrap: normal; }
   .offer-piece strong { font-size: 14px; line-height: 1.35; }
   .offer-piece span { font-size: 12px; }
   .offer-table-status { margin: 8px 0; padding: 6px 8px; min-height: 40px; }
@@ -77,7 +77,7 @@
 }
 
 @media (min-width: 1800px) {
-  .offers-table-row { grid-template-columns: minmax(0, 2fr) minmax(0, 1.7fr) minmax(145px, .65fr) minmax(125px, .6fr) minmax(145px, .8fr) minmax(140px, .8fr) minmax(165px, .9fr) minmax(135px, .8fr) minmax(290px, 1.1fr); }
+  .offers-table-row { grid-template-columns: minmax(0, 2fr) minmax(0, 1.7fr) minmax(145px, .65fr) minmax(125px, .6fr) minmax(145px, .8fr) minmax(140px, .8fr) minmax(130px, .8fr) minmax(165px, .9fr) minmax(135px, .8fr) minmax(290px, 1.1fr); }
   .offers-table-row > *, .offers-table-header > * { padding-left: 12px; padding-right: 12px; }
   .offer-table-status { padding: 6px 8px; }
   .offer-piece strong { font-size: 15px; }

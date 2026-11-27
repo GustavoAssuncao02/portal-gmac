@@ -40,6 +40,7 @@ import createMaterialRequestsRouter from './materialRequests.js'
 import createNotificationsRouter from './notifications.js'
 import createSupportTicketsRouter from './supportTickets.js'
 import createNotesRouter from './notes.js'
+import createOfferResponseNotices from './offerResponseNotices.js'
 import createOfferRequestsRouter from './offerRequests.js'
 import { inventorySignal } from './notificationEvents.js'
 import { createApiRateLimiter } from './rateLimit.js'
@@ -170,6 +171,9 @@ app.use('/api', createProposalDocumentsRouter(requireAdmin, accounts))
 app.use('/api', createSupportTicketsRouter(accounts, requireAdmin))
 // Anotações e Tarefas: the reminders and the notices of a task near its day are checked every minute.
 const notesRouter = createNotesRouter(accounts, requireAdmin)
+// TCK-0012: the notices of the deadline for the client to answer a proposal, at 07:30 (checked every minute).
+const offerResponseNotices = createOfferResponseNotices({ people: () => accounts.people() })
+setInterval(() => offerResponseNotices.sweep().catch((error) => console.error('Falha ao verificar os prazos de resposta das ofertas:', error.message)), 60000).unref()
 app.use('/api', notesRouter)
 setInterval(() => notesRouter.sweep().catch((error) => console.error('Falha ao verificar os lembretes das tarefas:', error.message)), 60000).unref()
 // Programar atualização (Desenvolvedor): the notices, the countdown and, at the hour, the update through the SaveInCloud.

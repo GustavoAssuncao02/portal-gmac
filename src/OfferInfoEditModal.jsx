@@ -8,12 +8,13 @@ import { payableRequest } from './payablesApi.js'
 import { documentDigits, maskClientDocument } from '../server/clientDocument.js'
 import { QuantityUnitSelect } from './OfferQuantityModal.jsx'
 import { quantityUnitOf } from '../server/quantityUnits.js'
+import { ResponseDaysField } from './OfferResponseDeadline.jsx'
 
 // Informações do serviço of an offer not yet accepted: corrects the client, requester, buyer, piece, request date, requested
 // deadline, quantity and label without creating the offer again (PUT /api/offers/:id). What goes printed on the proposal
 // discards a generated one: the screen says so before saving.
 const printed = ['cnpj', 'company', 'requester', 'buyer', 'service', 'labelNumber', 'deadline', 'quantity', 'quantityUnit']
-const formOf = (offer) => ({ cnpj: maskClientDocument(offer.cnpj || ''), company: offer.company || '', requesters: offerRequesterNames(offer).length ? offerRequesterNames(offer) : [''], buyer: offer.buyer || '', service: offer.service || '', requestedAt: String(offer.requestedAt || '').slice(0, 10), deadline: offer.deadline || '', quantity: offer.quantityPending ? '' : String(offer.quantity ?? ''), quantityPending: Boolean(offer.quantityPending), quantityUnit: quantityUnitOf(offer.quantityUnit), labelNumber: offer.labelNumber || '', notes: offer.notes || '' })
+const formOf = (offer) => ({ responseDays: offer.responseDays ? String(offer.responseDays) : '', cnpj: maskClientDocument(offer.cnpj || ''), company: offer.company || '', requesters: offerRequesterNames(offer).length ? offerRequesterNames(offer) : [''], buyer: offer.buyer || '', service: offer.service || '', requestedAt: String(offer.requestedAt || '').slice(0, 10), deadline: offer.deadline || '', quantity: offer.quantityPending ? '' : String(offer.quantity ?? ''), quantityPending: Boolean(offer.quantityPending), quantityUnit: quantityUnitOf(offer.quantityUnit), labelNumber: offer.labelNumber || '', notes: offer.notes || '' })
 
 export default function OfferInfoEditModal({ offer, onClose, onSaved }) {
   const [form, setForm] = useState(() => formOf(offer)), [busy, setBusy] = useState(false), [error, setError] = useState('')
@@ -66,6 +67,9 @@ export default function OfferInfoEditModal({ offer, onClose, onSaved }) {
           {canLeavePending && <label className="offer-quantity-pending"><input type="checkbox" checked={form.quantityPending} onChange={(event) => update('quantityPending', event.target.checked)} />Sem quantidade definida</label>}
         </div>
         <label>Número da etiqueta<input value={form.labelNumber} onChange={(event) => update('labelNumber', event.target.value)} placeholder="Opcional" /></label>
+        {/* Prazo para resposta do cliente (TCK-0012): not printed, it never discards the proposal. */}
+        {/* The same day the server counts from: the kept request moment (its day in Bahia), or the new day chosen. */}
+        <ResponseDaysField value={form.responseDays} requestedAt={form.requestedAt === String(offer.requestedAt || '').slice(0, 10) ? offer.requestedAt : form.requestedAt} onChange={(value) => update('responseDays', value)} />
         {/* Observação interna (ofertas do site): não sai no PDF da proposta, então mudá-la não descarta a proposta. */}
         <label className="offer-form-field--full">Observação<textarea rows={3} maxLength={2000} value={form.notes} onChange={(event) => update('notes', event.target.value)} placeholder="Interna: não sai na proposta" /></label>
       </div></fieldset>

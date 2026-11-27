@@ -253,7 +253,7 @@
   .offers-table-header { display: none; }
   .offers-table-row:not(.offers-table-header) { grid-template-columns: repeat(2, minmax(0, 1fr)); min-height: 0; gap: 14px 12px; padding: 18px 0; font-size: 14px; }
   .offers-table-row > * { min-width: 0; padding: 0; overflow-wrap: anywhere; }
-  .offer-piece, .offers-table-row > :nth-child(2), .offers-table-row > :nth-child(8), .offer-table-actions { grid-column: 1 / -1; }
+  .offer-piece, .offers-table-row > :nth-child(2), .offers-table-row > :nth-child(9), .offer-table-actions { grid-column: 1 / -1; }
   .offer-piece strong { font-size: 16px; }
   .offer-piece span { font-size: 12px; }
   .offers-table-row > span { display: flex; flex-direction: column; gap: 5px; }

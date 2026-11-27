@@ -88,3 +88,11 @@
   .account-setting-row--child { padding-left: 16px; }
   .account-card > header .admin-tool-button { width: 100%; }
 }
+
+/* Prazo de resposta do cliente (Comercial): switch and days before, side by side. */
+.account-response-control { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; min-width: 0; }
+.account-setting-control .account-response-control select { min-width: 150px; }
+@media (max-width: 760px) {
+  .account-response-control { justify-content: flex-start; width: 100%; }
+  .account-setting-control .account-response-control select { flex: 1 1 160px; width: auto; }
+}

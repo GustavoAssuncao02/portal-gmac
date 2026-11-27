@@ -5,6 +5,7 @@ import { readStore, mutateStore } from './offers.js'
 import { storePool } from './store.js'
 import { notificationDefaults, notificationOptions, notificationSoundDefault, notesPreferenceDefaults, validNotificationSound } from './notificationRules.js'
 import { dueNoticeDays } from './noteRules.js'
+import { responseNoticeDayKeys, responseNoticeDefaults, responseNoticeSwitches, validResponseNoticeDays } from './offerResponseRules.js'
 import { employeeRecords, isStaff, staffAccountId } from './employeeAccess.js'
 import { clientContactKinds, clientRequesters } from './requesters.js'
 import { recordPasswordChange } from './passwordReset.js'
@@ -20,7 +21,10 @@ const digits = (value) => String(value || '').replace(/\D/g, '')
 const fail = (status, message) => { const error = new Error(message); error.status = status; throw error }
 export function notificationSettings(store, userId) {
   const preference = store.adminNotificationPreferences?.find((item) => String(item.userId) === String(userId))
-  return { payableReminderDays: preference?.payableReminderDays ?? 3, receivableReminderDays: preference?.receivableReminderDays ?? 3, sound: validNotificationSound(preference?.sound) ? preference.sound : notificationSoundDefault, emailNotifications: preference?.emailNotifications !== false, ...Object.fromEntries(notificationOptions.map(([key]) => [key,preference?.[key] ?? notificationDefaults[key]])), ...Object.fromEntries(['notesButton', 'notesNotifications', 'notesDueReminder'].map((key) => [key, preference?.[key] ?? notesPreferenceDefaults[key]])), notesDueDays: dueNoticeDays.includes(preference?.notesDueDays) ? preference.notesDueDays : notesPreferenceDefaults.notesDueDays }
+  return { payableReminderDays: preference?.payableReminderDays ?? 3, receivableReminderDays: preference?.receivableReminderDays ?? 3, sound: validNotificationSound(preference?.sound) ? preference.sound : notificationSoundDefault, emailNotifications: preference?.emailNotifications !== false, ...Object.fromEntries(notificationOptions.map(([key]) => [key,preference?.[key] ?? notificationDefaults[key]])), ...Object.fromEntries(['notesButton', 'notesNotifications', 'notesDueReminder'].map((key) => [key, preference?.[key] ?? notesPreferenceDefaults[key]])), notesDueDays: dueNoticeDays.includes(preference?.notesDueDays) ? preference.notesDueDays : notesPreferenceDefaults.notesDueDays,
+    // Prazo de resposta do cliente (TCK-0012): 1º e 2º aviso (dias antes) e o aviso no dia, all on by default.
+    ...Object.fromEntries(responseNoticeSwitches.map((key) => [key, preference?.[key] ?? responseNoticeDefaults[key]])),
+    ...Object.fromEntries(responseNoticeDayKeys.map((key) => [key, validResponseNoticeDays(preference?.[key]) ? preference[key] : responseNoticeDefaults[key]])) }
 }
 // "Notificações do sistema por e-mail": false when the account turned off the e-mails the system sends by itself.
 export const wantsEmail = (store, userId) => notificationSettings(store, userId).emailNotifications
@@ -330,9 +334,10 @@ export function createAccountService(pool, env = process.env) {
   }
   async function updateNotificationSettings(id, fields) {
     // The switches of Anotações e Tarefas are saved like the bell options: true or false.
-    const keys = [...notificationOptions.map(([key]) => key), 'notesButton', 'notesNotifications', 'notesDueReminder']
-    if (!fields || fields.payableReminderDays === undefined && fields.receivableReminderDays === undefined && fields.sound === undefined && fields.emailNotifications === undefined && fields.notesDueDays === undefined && !keys.some((key) => fields[key] !== undefined)) fail(400, 'Informe uma preferencia de notificacoes.')
+    const keys = [...notificationOptions.map(([key]) => key), 'notesButton', 'notesNotifications', 'notesDueReminder', ...responseNoticeSwitches]
+    if (!fields || fields.payableReminderDays === undefined && fields.receivableReminderDays === undefined && fields.sound === undefined && fields.emailNotifications === undefined && fields.notesDueDays === undefined && ![...keys, ...responseNoticeDayKeys].some((key) => fields[key] !== undefined)) fail(400, 'Informe uma preferencia de notificacoes.')
     if (fields.notesDueDays !== undefined && !dueNoticeDays.includes(fields.notesDueDays)) fail(400, 'Escolha 1, 2, 3, 5 ou 7 dias antes.')
+    if (responseNoticeDayKeys.some((key) => fields[key] !== undefined && !validResponseNoticeDays(fields[key]))) fail(400, 'Escolha de 1 a 30 dias antes do prazo de resposta.')
     for (const key of ['payableReminderDays', 'receivableReminderDays']) if (fields[key] !== undefined && ![3, 5, 7, 'never'].includes(fields[key])) fail(400, 'Escolha 3, 5, 7 dias ou nunca.')
     if ([...keys, 'emailNotifications'].some((key) => fields[key] !== undefined && typeof fields[key] !== 'boolean')) fail(400, 'Informe verdadeiro ou falso para as notificacoes.')
     if (fields.sound !== undefined && !validNotificationSound(fields.sound)) fail(400, 'Escolha um dos sons de notificação ou desligue o som.')
@@ -347,6 +352,7 @@ export function createAccountService(pool, env = process.env) {
       if (fields.emailNotifications !== undefined) preference.emailNotifications = fields.emailNotifications
       for (const key of keys) if (fields[key] !== undefined) preference[key] = fields[key]
       if (fields.notesDueDays !== undefined) preference.notesDueDays = fields.notesDueDays
+      for (const key of responseNoticeDayKeys) if (fields[key] !== undefined) preference[key] = fields[key]
       return notificationSettings(store, id)
     })
   }

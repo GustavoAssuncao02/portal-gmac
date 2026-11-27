@@ -15,9 +15,10 @@ export const taskRepeats = [['none', 'Não repete'], ['daily', 'Todo dia'], ['we
 // Each person's own reminder of a task, in minutes before it. A task without a time counts from 08:00 of its day.
 export const taskReminders = [['none', 'Sem lembrete'], ['0', 'Na hora'], ['15', '15 minutos antes'], ['60', '1 hora antes'], ['1440', '1 dia antes']]
 export const defaultReminder = '60'
-// "Notificar tarefa próxima do prazo" (Configurações): how many days before the day of the task, at 08:00.
+// "Notificar tarefa próxima do prazo" (Configurações): how many days before the day of the task, at 07:30 (the company
+// starts at 07:30; until 2026-11-26 it was 08:00). The reminder of a task without a time still counts from 08:00.
 export const dueNoticeDays = [1, 2, 3, 5, 7]
-export const dueNoticeTime = '08:00'
+export const dueNoticeTime = '07:30'
 export const untimedMoment = '08:00'
 
 export const labelOf = (list, key) => list.find(([value]) => value === key)?.[1] || ''

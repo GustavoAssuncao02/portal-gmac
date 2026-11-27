@@ -7555,6 +7555,28 @@
         }
     }
 }
+:root[data-theme="dark"][data-tone="black"] .offer-response-badge--ok {
+    background: #1a3022
+}
+:root[data-theme="dark"][data-tone="black"] .offer-response-badge--soon {
+    background: #30281a
+}
+:root[data-theme="dark"][data-tone="black"] .offer-response-badge--today {
+    background: #30241a
+}
+:root[data-theme="dark"][data-tone="black"] .offer-response-badge--late {
+    background: #301a1c
+}
+:root[data-theme="dark"][data-tone="black"] .offer-response-answered {
+    color: #bec2c5;
+    background: #232425
+}
+:root[data-theme="dark"][data-tone="black"] .offer-response-field small {
+    color: #bec1c5
+}
+:root[data-theme="dark"][data-tone="black"] .offer-response-field small.offer-response-date {
+    color: #ebebec
+}
 @media (min-width: 2200px) {
     :root[data-theme="dark"][data-tone="black"] .proposal-card-column + .proposal-card-column {
         border-top: 1px solid #303133

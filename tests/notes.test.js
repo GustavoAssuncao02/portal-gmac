@@ -195,8 +195,9 @@ test('the reminders and the notice near the day follow each person, once, by bel
     assert.equal(fixture.notesMail[0].to, davi.email)
     fixture.notesMail.length = 0
 
-    assert.deepEqual(await sweep('2026-11-30T07:59:00'), [])
-    assert.deepEqual(await sweep('2026-11-30T08:00:00'), [`due:${davi.id}`], '3 days before, at 08:00')
+    // The notice of a task near its day comes at 07:30 (08:00 until 2026-11-26).
+    assert.deepEqual(await sweep('2026-11-30T07:29:00'), [])
+    assert.deepEqual(await sweep('2026-11-30T07:30:00'), [`due:${davi.id}`], '3 days before, at 07:30')
     assert.deepEqual(await sweep('2026-11-30T09:00:00'), [], 'once')
     assert.deepEqual(await sweep('2026-12-02T08:00:00'), [`due:${ana.id}`, `due:${bia.id}`].sort(), 'the default is 1 day before; Caio is only marked')
     assert.deepEqual(await sweep('2026-12-02T09:00:00'), [`reminder:${bia.id}`], 'her own reminder, 1 day before')

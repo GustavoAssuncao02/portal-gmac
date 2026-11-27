@@ -29,6 +29,7 @@ import { labelEstimate, labelPlaceholderProposal } from './labelQuoteRules.js'
 import { quantityLabel, quantityUnitMessage, quantityUnitOf, validQuantityUnit } from './quantityUnits.js'
 import { todayBahia } from './payableRules.js'
 import { retroactiveOrderDay } from './retroactiveEntry.js'
+import { parseResponseDays, requestDayOf, responseDaysMessage, responseDeadlineOf } from './offerResponseRules.js'
 import { createOfferPresence } from './offerPresence.js'
 
 const filesDirectory = path.join(dataDirectory, 'files')
@@ -151,6 +152,9 @@ router.post('/offers', async (request, response) => {
   if (requestedDay && deadline && deadline < requestedDay) return response.status(400).json({ message: deadlineBeforeRequest })
   // Unidades, pares ou conjuntos (TCK-0009); not sent, it is unidades.
   if (!validQuantityUnit(request.body?.quantityUnit)) return response.status(400).json({ message: quantityUnitMessage })
+  // Prazo para resposta do cliente (TCK-0012): optional days from the Data da solicitação.
+  const responseDays = parseResponseDays(request.body?.responseDays)
+  if (Number.isNaN(responseDays)) return response.status(400).json({ message: responseDaysMessage })
   try {
     // Up to 5 requesters; each new one is registered in the client like a single one was.
     const requesterNames = offerRequesterInput(request.body)
@@ -163,7 +167,7 @@ router.post('/offers', async (request, response) => {
       // A manual offer starts as "Criando oferta": only "Fazer proposta" in its details (POST /offers/:id/finish) puts it
       // in analysis. The person who is creating it (editingBy) and since when are shown on the list.
       const at = new Date().toISOString(), author = { id: request.adminId ?? null, name: request.adminName || 'Administrador' }
-      const item = { id: randomUUID(), code: nextCode('OF', [...store.offers, ...(store.discardedOffers || [])]), createdAt: at, createdBy: author.id, createdByName: author.name, ...(open ? { openForTeam: true } : { editingBy: { ...author, at, active: true, lastActiveAt: at } }), cnpj: clean(cnpj, 18), company: clean(company, 160), ...requesters.fields, buyer: buyerLink.name, buyerId: buyerLink.id, deadline, service: clean(service, 160), quantity: quantityPending ? 1 : Number(quantity), ...(quantityPending ? { quantityPending: true } : {}), quantityUnit: quantityUnitOf(request.body?.quantityUnit), description: clean(description, 5000), labelNumber: clean(labelNumber, 80), requestedAt: requestedDay ? dayMoment(requestedDay, new Date(at)) : at, origin: 'Inserida Manualmente', status: 'creating', attachments: [], resources: { materials: [], laborEntries: [] }, proposal: null, orderCode: null }
+      const item = { id: randomUUID(), code: nextCode('OF', [...store.offers, ...(store.discardedOffers || [])]), createdAt: at, createdBy: author.id, createdByName: author.name, ...(open ? { openForTeam: true } : { editingBy: { ...author, at, active: true, lastActiveAt: at } }), cnpj: clean(cnpj, 18), company: clean(company, 160), ...requesters.fields, buyer: buyerLink.name, buyerId: buyerLink.id, deadline, service: clean(service, 160), quantity: quantityPending ? 1 : Number(quantity), ...(quantityPending ? { quantityPending: true } : {}), quantityUnit: quantityUnitOf(request.body?.quantityUnit), description: clean(description, 5000), labelNumber: clean(labelNumber, 80), requestedAt: requestedDay ? dayMoment(requestedDay, new Date(at)) : at, ...(responseDays ? { responseDays, responseDeadline: responseDeadlineOf(requestedDay || todayBahia(new Date(at)), responseDays), responseSetAt: at } : {}), origin: 'Inserida Manualmente', status: 'creating', attachments: [], resources: { materials: [], laborEntries: [] }, proposal: null, orderCode: null }
       store.offers.unshift(item)
       // An open offer has nobody creating it: it waits on the list, like the offers of the site, and the others are told.
       if (open) addNotification(store, { type: 'open-offer', offerId: item.id, authorId: author.id, title: 'Nova oferta em aberto', description: `${item.code} · ${item.company} · inserida por ${author.name}` })
@@ -422,6 +426,9 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
     }
     if (fields.deadline && !isDay(fields.deadline)) return response.status(400).json({ message: 'Prazo solicitado inválido: escolha uma data ou deixe em branco.' })
     if (!validQuantityUnit(body.quantityUnit)) return response.status(400).json({ message: quantityUnitMessage })
+    // Prazo para resposta do cliente: a screen of the previous version does not send it and keeps it; empty removes it.
+    const responseDays = body.responseDays === undefined ? undefined : parseResponseDays(body.responseDays)
+    if (Number.isNaN(responseDays)) return response.status(400).json({ message: responseDaysMessage })
     try {
       const requesterNames = offerRequesterInput(body)
       const document = documentDigits(fields.cnpj)
@@ -461,7 +468,19 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
         // Observação (interna, das ofertas do site): não sai no PDF da proposta, então mudá-la não descarta a proposta.
         if (body.notes !== undefined) item.notes = clean(body.notes, 2000)
         // The list and the details show the day of the request (UTC): a new day keeps it at noon of that day.
-        if (requestedDay !== String(item.requestedAt || '').slice(0, 10)) item.requestedAt = `${requestedDay}T12:00:00.000Z`
+        const requestDayKept = requestedDay === String(item.requestedAt || '').slice(0, 10)
+        if (!requestDayKept) item.requestedAt = `${requestedDay}T12:00:00.000Z`
+        // Prazo para resposta do cliente (TCK-0012): not printed on the proposal, so it never discards one. Its day follows
+        // the Data da solicitação; a new day (or number of days) starts the notices again.
+        const days = responseDays === undefined ? item.responseDays ?? null : responseDays
+        if (days) {
+          const responseDeadline = responseDeadlineOf(requestDayKept ? requestDayOf(item.requestedAt) : requestedDay, days)
+          if (days !== item.responseDays || responseDeadline !== item.responseDeadline) Object.assign(item, { responseDays: days, responseDeadline, responseSetAt: new Date().toISOString() })
+        } else if (item.responseDays || item.responseDeadline) {
+          delete item.responseDays
+          delete item.responseDeadline
+          delete item.responseSetAt
+        }
         if (quantityChanged) resizePerPiece(store, item, fields.quantity, inventory)
         if (changed && item.proposal) {
           item.proposal = null

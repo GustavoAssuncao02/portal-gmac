@@ -6524,7 +6524,7 @@ button {
 }
 
 .offers-table {
-  min-width: 1420px;
+  min-width: 1540px;
   overflow: hidden;
   border: 1px solid #dfe5ec;
   border-radius: 9px;
@@ -6532,7 +6532,7 @@ button {
 
 .offers-table-row {
   display: grid;
-  grid-template-columns: 1.45fr 1.25fr .95fr .75fr 1.05fr 1.05fr .9fr .95fr 1.75fr;
+  grid-template-columns: 1.45fr 1.25fr .95fr .75fr 1.05fr 1.05fr 1.05fr .9fr .95fr 1.75fr;
   min-height: 72px;
   align-items: center;
   border-top: 1px solid #e2e7ed;
@@ -6735,7 +6735,7 @@ button {
   }
 
   .offers-table {
-    min-width: 1040px;
+    min-width: 1130px;
   }
 
   .offers-table-row {
@@ -7833,7 +7833,7 @@ input.upper-input::placeholder, textarea.upper-input::placeholder { text-transfo
     .offers-board .offers-table-header > * { padding: 0; }
     .offers-board .offers-table-header > :nth-child(3), .offers-board .offers-table-header > :last-child { display: none; }
     .offers-board .offers-table-header .sort-header-button { height: 30px; padding: 0 11px; border: 1px solid #d3deea; border-radius: 999px; background: #ffffff; color: #0c4c91; font-size: 12px; font-weight: 600; white-space: nowrap; }
-    .offers-board .offers-table-row:not(.offers-table-header) { grid-template-columns: minmax(0, 1.3fr) 84px 104px 104px minmax(0, 1fr) 200px; grid-template-areas: "piece piece piece piece piece status" "client quantity requested deadline origin actions"; gap: 10px 0; min-height: 0; padding: 14px 0; align-items: start; font-size: 13px; }
+    .offers-board .offers-table-row:not(.offers-table-header) { grid-template-columns: minmax(0, 1.3fr) 84px 104px 104px 112px minmax(0, 1fr) 200px; grid-template-areas: "piece piece piece piece piece piece status" "client quantity requested deadline response origin actions"; gap: 10px 0; min-height: 0; padding: 14px 0; align-items: start; font-size: 13px; }
     .offers-board .offers-table-row:not(.offers-table-header) > * { padding: 0 10px; overflow-wrap: break-word; }
     .offers-board .offers-table-row:not(.offers-table-header) > :nth-child(1) { grid-area: piece; }
     .offers-board .offers-table-row:not(.offers-table-header) > :nth-child(2) { grid-area: client; }
@@ -7841,9 +7841,10 @@ input.upper-input::placeholder, textarea.upper-input::placeholder { text-transfo
     .offers-board .offers-table-row:not(.offers-table-header) > :nth-child(4) { grid-area: quantity; }
     .offers-board .offers-table-row:not(.offers-table-header) > :nth-child(5) { grid-area: requested; }
     .offers-board .offers-table-row:not(.offers-table-header) > :nth-child(6) { grid-area: deadline; }
-    .offers-board .offers-table-row:not(.offers-table-header) > :nth-child(7) { grid-area: status; }
-    .offers-board .offers-table-row:not(.offers-table-header) > :nth-child(8) { grid-area: origin; }
-    .offers-board .offers-table-row:not(.offers-table-header) > :nth-child(9) { grid-area: actions; padding-right: 10px !important; }
+    .offers-board .offers-table-row:not(.offers-table-header) > :nth-child(7) { grid-area: response; }
+    .offers-board .offers-table-row:not(.offers-table-header) > :nth-child(8) { grid-area: status; }
+    .offers-board .offers-table-row:not(.offers-table-header) > :nth-child(9) { grid-area: origin; }
+    .offers-board .offers-table-row:not(.offers-table-header) > :nth-child(10) { grid-area: actions; padding-right: 10px !important; }
     .offers-board .offers-table-row:not(.offers-table-header) > [data-label]::before { content: attr(data-label); display: block; margin-bottom: 3px; color: #66809b; font-size: 11px; font-weight: 500; }
     .offers-board .offer-piece { flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; }
     .offers-board .offer-piece strong { flex-basis: 100%; font-size: 15px; line-height: 1.35; }
@@ -7859,7 +7860,7 @@ input.upper-input::placeholder, textarea.upper-input::placeholder { text-transfo
   }
   /* Even narrower (iPad standing): the data go to two lines. */
   @container offers-board (max-width: 52rem) {
-    .offers-board .offers-table-row:not(.offers-table-header) { grid-template-columns: repeat(6, minmax(0, 1fr)) 200px; grid-template-areas: "piece piece piece piece piece piece status" "client client client origin origin origin actions" "quantity quantity requested requested deadline deadline actions"; }
+    .offers-board .offers-table-row:not(.offers-table-header) { grid-template-columns: repeat(6, minmax(0, 1fr)) 200px; grid-template-areas: "piece piece piece piece piece piece status" "client client client origin origin origin actions" "quantity quantity requested requested deadline deadline response"; }
   }
 }
 
@@ -7907,3 +7908,17 @@ input.upper-input::placeholder, textarea.upper-input::placeholder { text-transfo
     .admin-os-shell .admin-os-table tbody tr.admin-os-row--reopened { animation: none; background-color: rgba(30, 120, 210, .18); }
   }
 }
+
+/* TCK-0012: prazo para o cliente responder a proposta (lista, Ver oferta e formulários). */
+.offer-response-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.offer-response-badge { display: inline-block; width: fit-content; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 700; line-height: 1.5; white-space: nowrap; text-transform: none; }
+.offer-response-badge--ok { color: #168344; background: #e8f6ed; }
+.offer-response-badge--soon { color: #9c670a; background: #fff2d9; }
+.offer-response-badge--today { color: #b85b08; background: #ffe9d6; }
+.offer-response-badge--late { color: #b42318; background: #fdecee; }
+.offer-response-detail p { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.offer-response-answered { display: inline-block; padding: 1px 7px; border-radius: 999px; color: #4f6377; background: #eef2f6; font-size: 11px; font-weight: 700; }
+.offer-form-grid .offer-response-field { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px 16px; min-width: 0; }
+.offer-form-grid .offer-response-field label { flex: 0 1 300px; min-width: 0; }
+.offer-response-field small { flex: 1 1 220px; padding-bottom: 11px; color: #5b7189; font-size: 12.5px; line-height: 1.4; }
+.offer-response-field small.offer-response-date { color: #0c4c91; font-weight: 700; }
