@@ -2576,6 +2576,20 @@
 :root[data-theme="dark"][data-tone="black"] .payable-iss-mode legend {
     color: #bfc2c5
 }
+:root[data-theme="dark"][data-tone="black"] .excel-menu-list {
+    border: 1px solid #303133;
+    background: #1a1b1c;
+    box-shadow: 0 10px 26px #0a0a0b29
+}
+:root[data-theme="dark"][data-tone="black"] .excel-menu-list button {
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .excel-menu-list button:hover, :root[data-theme="dark"][data-tone="black"] .excel-menu-list button:focus-visible {
+    background: #232425
+}
+:root[data-theme="dark"][data-tone="black"] .excel-menu-list small {
+    color: #bfc2c5
+}
 :root[data-theme="dark"][data-tone="black"] .proposal-model-step > p {
     color: #bfc2c5
 }

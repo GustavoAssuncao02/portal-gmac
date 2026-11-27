@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import ExcelJS from 'exceljs'
 import { createWorkflowFixture } from './workflowFixture.js'
 import { filterPayables, dueLabel, todayBahia } from '../server/payableRules.js'
 
@@ -21,6 +22,45 @@ test('the Tipo da conta filter keeps only normal, installment or recurring accou
   assert.deepEqual(found('normal'), ['PAG-000001', 'PAG-000004'])
   assert.deepEqual(found('installment'), ['PAG-000002'])
   assert.deepEqual(found('recurring'), ['PAG-000003'])
+})
+
+test('the Excel of Contas a Pagar has Completo and Resumo: interest or discount of the payment, net value and a TOTAL line', async () => {
+  const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Gustavo' }
+  const f = await createWorkflowFixture({ accountsEnv: env })
+  try {
+    const token = (await f.request('/auth/login', 'POST', { cpf: env.DEMO_ADMIN_CPF, password: env.DEMO_ADMIN_PASSWORD })).data.token
+    const row = (id, extra) => ({ id, supplierId: 's1', supplierName: 'Fornecedor Teste', classificationId: 'c1', classificationName: 'Aluguel', issueDate: '2026-11-01', kind: 'normal', attachments: [], ...extra })
+    await f.mutateStore((store) => {
+      store.suppliers = [{ id: 's1', name: 'Fornecedor Teste', document: '12345678000190' }]
+      store.payables = [
+        row('PAG-000001', { description: 'Aluguel', documentNumber: 'B1', valueCents: 100000, dueDate: '2026-12-10' }),
+        row('PAG-000002', { description: 'Frete', documentNumber: 'B2', valueCents: 20000, dueDate: '2026-11-05', payment: { date: '2026-11-06', method: 'pix', interestCents: 350, discountCents: 0, finalCents: 20350 } }),
+        row('PAG-000003', { description: 'Chapas', documentNumber: '', valueCents: 50000, dueDate: '2026-11-04', payment: { date: '2026-11-04', method: 'pix', interestCents: 0, discountCents: 1000, finalCents: 49000 } }),
+      ]
+    })
+    const workbook = async (body) => {
+      const response = await fetch(`${f.url}/api/payables/export`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ format: 'xlsx', filters: { status: 'all' }, ...body }) })
+      assert.equal(response.status, 200)
+      const book = new ExcelJS.Workbook(); await book.xlsx.load(Buffer.from(await response.arrayBuffer()))
+      return { sheet: book.worksheets[0], name: response.headers.get('content-disposition') }
+    }
+    const values = (sheet) => sheet.getSheetValues().slice(1).map((line) => line.slice(1))
+    const summary = await workbook({ variant: 'summary' })
+    assert.match(summary.name, /gmac-contas-a-pagar-resumo\.xlsx/)
+    assert.deepEqual(values(summary.sheet), [
+      ['Fornecedor', 'Descrição', 'Documento', 'Valor bruto (R$)', 'Juros/Desconto (R$)', 'Valor líquido (R$)', 'Vencimento'],
+      ['Fornecedor Teste', 'Aluguel', 'B1', 1000, '', 1000, '10/12/2026'],
+      ['Fornecedor Teste', 'Frete', 'B2', 200, 3.5, 203.5, '05/11/2026'],
+      ['Fornecedor Teste', 'Chapas', '', 500, -10, 490, '04/11/2026'],
+      ['TOTAL', '3 contas', '', 1700, -6.5, 1693.5, ''],
+    ])
+    assert.equal(summary.sheet.getRow(5).font.bold, true)
+    assert.deepEqual(values((await workbook({ variant: 'summary', ids: ['PAG-000002'] })).sheet).at(-1), ['TOTAL', '1 conta', '', 200, 3.5, 203.5, ''])
+    const full = await workbook({})
+    assert.match(full.name, /gmac-contas-a-pagar\.xlsx/)
+    assert.equal(values(full.sheet)[0].length, 19, 'Completo keeps every column')
+    assert.equal(values(full.sheet).length, 4, 'no TOTAL line in Completo')
+  } finally { await f.close() }
 })
 
 test('recurring accounts can be generated ahead, OS links are validated and the OS real cost and margin add up', async () => {

@@ -3043,6 +3043,20 @@
 :root[data-theme="dark"] .payable-iss-mode legend {
     color: #b3c3d1
 }
+:root[data-theme="dark"] .excel-menu-list {
+    border: 1px solid #36516f;
+    background: #162b43;
+    box-shadow: 0 10px 26px #06111d29
+}
+:root[data-theme="dark"] .excel-menu-list button {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .excel-menu-list button:hover, :root[data-theme="dark"] .excel-menu-list button:focus-visible {
+    background: #203c59
+}
+:root[data-theme="dark"] .excel-menu-list small {
+    color: #b7c2cd
+}
 :root[data-theme="dark"] .proposal-model-step > p {
     color: #b2c2d2
 }

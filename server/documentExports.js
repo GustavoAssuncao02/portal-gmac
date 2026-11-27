@@ -42,7 +42,8 @@ export async function exportWorkbook(report) {
     sheet.views = [{ state: 'frozen', ySplit: 1, xSplit: 1 }]
     for (const [index, values] of part.rows.entries()) {
       const row = sheet.addRow(values.map((value) => value ?? ''))
-      row.font = { name: 'Calibri', size: 11, color: { argb: 'FF243746' } }
+      // `totalRow`: the last row adds up the others (bold, and outside the filter so sorting never moves it).
+      row.font = { name: 'Calibri', size: 11, color: { argb: 'FF243746' }, ...(part.totalRow && index === part.rows.length - 1 ? { bold: true } : {}) }
       row.alignment = { vertical: 'top', wrapText: true }
       let lines = 1
       row.eachCell({ includeEmpty: true }, (cell, column) => {
@@ -54,7 +55,7 @@ export async function exportWorkbook(report) {
       })
       row.height = Math.min(409, Math.max(24, lines * 15 + 8))
     }
-    sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: Math.max(1, sheet.rowCount), column: part.columns.length } }
+    sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: Math.max(1, sheet.rowCount - (part.totalRow ? 1 : 0)), column: part.columns.length } }
     sheet.pageSetup = { paperSize: 9, orientation: part.columns.length > 5 ? 'landscape' : 'portrait', fitToPage: true, fitToWidth: part.columns.length > 8 ? 0 : 1, fitToHeight: 0, printTitlesRow: '1:1', printTitlesColumn: 'A:A', margins: { left: 0.3, right: 0.3, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 } }
     sheet.headerFooter.oddHeader = `&LGMAC Metalúrgica&R${report.title.replace(/&/g, '&&')}`
     sheet.headerFooter.oddFooter = '&LDocumento gerado pelo portal&R Página &P de &N'

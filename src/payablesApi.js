@@ -36,7 +36,7 @@ export async function uploadPayableFiles(files, accountId) {
 export async function downloadPayables(body) {
   const response = await fetch('/api/payables/export', { method: 'POST', headers: { Authorization: `Bearer ${sessionStorage.getItem('gmac-admin-token') || ''}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
   if (!response.ok) throw new Error((await response.json()).message || 'Falha ao exportar.')
-  downloadBlob(await response.blob(), `gmac-${body.id || 'contas-a-pagar'}.${body.format}`)
+  downloadBlob(await response.blob(), `gmac-${body.id || `contas-a-pagar${body.variant === 'summary' ? '-resumo' : ''}`}.${body.format}`)
 }
 // The name the server gives to the file (for example "Etiqueta-5319.pdf"), when it sends one.
 export function fileNameOf(response) {

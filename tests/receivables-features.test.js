@@ -60,6 +60,47 @@ test('the spreadsheet of Contas a Receber follows the Tipo do recebimento filter
   } finally { await f.close() }
 })
 
+// Excel "Resumo": the columns asked for and a TOTAL line; "Completo" stays as it was; the selection is respected.
+test('the Excel of Contas a Receber has Completo and Resumo, with a TOTAL line in the summary', async () => {
+  const f = await createWorkflowFixture({ accountsEnv: env })
+  try {
+    const token = (await f.request('/auth/login', 'POST', { cpf: env.DEMO_ADMIN_CPF, password: env.DEMO_ADMIN_PASSWORD })).data.token
+    await f.mutateStore((store) => { store.receivables = [
+      { ...filterRows()[0], description: 'Usinagem', documentNumber: 'NF 10', valueCents: 100000, issCents: 5000, dueDate: '2026-12-10' },
+      { ...filterRows()[2], description: 'Contrato', documentNumber: 'NF 11', valueCents: 50050, issCents: 0, dueDate: '2026-12-20' },
+      { ...filterRows()[3], description: 'Parcela', documentNumber: '', valueCents: 30000, issCents: 1500, dueDate: '2026-12-15' },
+    ] })
+    const workbook = async (body) => {
+      const response = await fetch(`${f.url}/api/receivables/export`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ format: 'xlsx', filters: { status: 'all' }, ...body }) })
+      assert.equal(response.status, 200)
+      const book = new ExcelJS.Workbook(); await book.xlsx.load(Buffer.from(await response.arrayBuffer()))
+      return { sheet: book.worksheets[0], name: response.headers.get('content-disposition') }
+    }
+    const values = (sheet) => sheet.getSheetValues().slice(1).map((row) => row.slice(1))
+    const summary = await workbook({ variant: 'summary' })
+    assert.match(summary.name, /gmac-contas-a-receber-resumo\.xlsx/)
+    assert.deepEqual(values(summary.sheet), [
+      ['Cliente', 'Descrição', 'Documento', 'Valor bruto (R$)', 'ISS (R$)', 'Valor líquido (R$)', 'Vencimento'],
+      ['Cliente Alfa', 'Usinagem', 'NF 10', 1000, 50, 950, '10/12/2026'],
+      ['Cliente Beta', 'Contrato', 'NF 11', 500.5, 0, 500.5, '20/12/2026'],
+      ['Cliente Beta', 'Parcela', '', 300, 15, 285, '15/12/2026'],
+      ['TOTAL', '3 contas', '', 1800.5, 65, 1735.5, ''],
+    ])
+    assert.equal(summary.sheet.getRow(5).font.bold, true)
+    assert.equal(summary.sheet.autoFilter, 'A1:G4', 'sorting never moves the TOTAL line')
+    // Selected accounts only.
+    assert.deepEqual(values((await workbook({ variant: 'summary', ids: ['REC-000003'] })).sheet).slice(1), [['Cliente Beta', 'Contrato', 'NF 11', 500.5, 0, 500.5, '20/12/2026'], ['TOTAL', '1 conta', '', 500.5, 0, 500.5, '']])
+    // Completo is the spreadsheet of before: every column, no TOTAL line.
+    const full = await workbook({})
+    assert.match(full.name, /gmac-contas-a-receber\.xlsx/)
+    assert.equal(values(full.sheet)[0].length, 21)
+    assert.deepEqual(values(full.sheet).slice(1).map((row) => row[0]), ['REC-000001', 'REC-000003', 'REC-000004'])
+    // The PDF does not change.
+    const pdf = await fetch(`${f.url}/api/receivables/export`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ format: 'pdf', variant: 'summary', filters: { status: 'all' } }) })
+    assert.match(pdf.headers.get('content-disposition'), /gmac-contas-a-receber\.pdf/)
+  } finally { await f.close() }
+})
+
 test('recurring contracts, attachments, receipts with proof, bulk receipt and bell reminders', async () => {
   const f = await createWorkflowFixture({ accountsEnv: env })
   try {

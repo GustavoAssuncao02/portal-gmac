@@ -349,3 +349,9 @@
 @media (max-width: 760px) { .payable-mode { width:100%; } .payable-mode button { flex:1 1 0; min-height:44px; } }
 .payable-form .payable-iss-mode label { display:flex; flex-direction:row; align-items:center; justify-content:flex-start; gap:8px; text-align:left; font-size:13px; font-weight:400; }
 .payable-form .payable-iss-mode input[type=radio] { flex:0 0 auto; width:16px; height:16px; min-height:0; margin:0; padding:0; }
+/* Excel of the accounts lists: Completo or Resumo. */
+.excel-menu { position:relative; display:inline-flex; }
+.excel-menu-list { position:absolute; top:calc(100% + 4px); right:0; z-index:30; display:grid; min-width:220px; padding:6px; border:1px solid #bfd2e3; border-radius:6px; background:#fff; box-shadow:0 10px 26px rgba(12,76,145,.16); }
+.excel-menu-list button { display:grid; gap:2px; padding:8px 10px; border:0; border-radius:4px; background:none; color:#0c4c91; font:inherit; font-size:13px; font-weight:600; text-align:left; cursor:pointer; }
+.excel-menu-list button:hover,.excel-menu-list button:focus-visible { background:#eef4fb; }
+.excel-menu-list small { color:#5d7186; font-size:12px; font-weight:400; }
