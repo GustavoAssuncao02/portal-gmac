@@ -81,7 +81,7 @@ import RegistryHistoryModal, { RegistryInfoButton } from './RegistryHistoryModal
 import { upper } from './displayCase.js'
 import OfferInfoEditModal from './OfferInfoEditModal.jsx'
 import MachineUsageBI from './MachineUsageBI.jsx'
-import NewVersionPrompt from './NewVersionPrompt.jsx'
+import NewVersionPrompt, { OutdatedVersionButton } from './NewVersionPrompt.jsx'
 import { useMobileModal } from './useMobileModal.js'
 import { ThemeContext, useAccountTheme } from './accountTheme.js'
 import { latestOnly, pollWhileVisible } from './polling.js'
@@ -545,6 +545,7 @@ function WorkspaceTabs({ tabs, activeNav, onNavigate, onCloseTab, onReorderTabs 
     {scrollState.overflow && <button ref={rightArrowRef} className="workspace-tabs-control" type="button" aria-label="Rolar abas para a direita" title="Rolar abas para a direita" disabled={!scrollState.right} onClick={() => scrollTabs(1)}><ChevronRight size={17} aria-hidden="true" /></button>}
     {tabs.length > 3 && <button className="workspace-tabs-control workspace-tabs-close-all" type="button" aria-label="Fechar todas as abas" title="Fechar todas as abas" onClick={closeAllTabs}><X size={17} aria-hidden="true" /></button>}
     <UpdateCountdown />
+    <OutdatedVersionButton />
     <NotificationsButton onOpenAccount={(id) => { sessionStorage.setItem('gmac-payable-open', id); onNavigate('Contas a Pagar'); window.dispatchEvent(new CustomEvent('gmac-payable-open', { detail: id })) }} onOpenReceivable={(id) => { sessionStorage.setItem('gmac-receivable-open', id); onNavigate('Contas a Receber'); window.dispatchEvent(new CustomEvent('gmac-receivable-open', { detail: id })) }} onOpenNotice={(notice) => notice.type === 'system-update' ? (notice.developer ? onNavigate('Desenvolvedor') : undefined) : notice.type === 'note-removed' ? onNavigate('Anotações e Tarefas') : String(notice.type).startsWith('note-') ? (sessionStorage.setItem('gmac-note-open', notice.noteId), onNavigate('Anotações e Tarefas'), window.dispatchEvent(new CustomEvent('gmac-note-open', { detail: notice.noteId }))) : ['ticket-opened', 'ticket-status', 'ticket-comment'].includes(notice.type) ? (sessionStorage.setItem('gmac-ticket-open', notice.ticketId), onNavigate('Ticket'), window.dispatchEvent(new CustomEvent('gmac-ticket-open', { detail: notice.ticketId }))) : String(notice.type).startsWith('proposal-deadline-') ? window.dispatchEvent(new CustomEvent('gmac-offer-open', { detail: notice.offerId })) : notice.type === 'proposal-saved' ? window.dispatchEvent(new CustomEvent('gmac-proposal-open', { detail: notice.offerId })) : notice.type === 'release' ? (sessionStorage.setItem('gmac-release-notes-open', '1'), onNavigate('Configurações'), window.dispatchEvent(new CustomEvent('gmac-release-notes-open'))) : onNavigate(notice.type === 'low-stock' && notice.admin ? 'Estoque Administrativo' : { 'material-request': 'Pedidos', 'low-stock': 'Estoque', 'service-completed': 'Serviços em andamento', 'service-added': 'Serviços em andamento', 'site-offer': 'Ofertas e serviços', 'open-offer': 'Ofertas e serviços' }[notice.type] || 'Dashboard')} />
     <div className="workspace-tabs-clock" aria-label="Data e hora atual"><strong>{currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</strong><span>{currentTime.toLocaleDateString('pt-BR')}</span></div>
   </div>

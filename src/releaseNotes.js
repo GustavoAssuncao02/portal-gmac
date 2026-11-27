@@ -6,6 +6,7 @@ export const releaseNotes = [
     notes: [
       'Ofertas: prazo para enviar a proposta, com destaque na lista, filtro Prazo vencendo e avisos',
       'Início: novo widget de propostas com prazo próximo',
+      'Portal: aviso de versão desatualizada ao lado do sino, com atualização em um clique',
     ],
   },
   {

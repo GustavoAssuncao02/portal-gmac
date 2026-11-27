@@ -2128,6 +2128,18 @@
     background: #3c3320;
     color: #ecc989
 }
+:root[data-theme="dark"] .version-outdated {
+    border: 1px solid #36516f;
+    background: #3c2d20;
+    color: #ecb289
+}
+:root[data-theme="dark"] .version-outdated:hover {
+    border-color: #36516f;
+    background: #3c2d20
+}
+:root[data-theme="dark"] .version-outdated:focus-visible {
+    outline: 2px solid #ae7147
+}
 :root[data-theme="dark"] .dashboard-shell.admin-tools-shell {
     background: #203c59
 }

@@ -364,6 +364,7 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .notifications-error { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .update-countdown { font-size: calc(11.5px * var(--account-font-scale)); }
 @media (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .dashboard-shell .update-countdown { font-size: calc(11px * var(--account-font-scale)); } }
+:root:is([data-font-size="small"], [data-font-size="large"]) .version-outdated { font-size: inherit; font-size: calc(11.5px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .admin-tools-heading h1 { font-size: calc(28px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .admin-tools-main label { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .admin-tools-main input, :root:is([data-font-size="small"], [data-font-size="large"]) .admin-tools-main select { font-size: inherit; }

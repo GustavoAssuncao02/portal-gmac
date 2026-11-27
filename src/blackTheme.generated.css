@@ -1820,6 +1820,14 @@
     border: 1px solid #303133;
     background: #30291a
 }
+:root[data-theme="dark"][data-tone="black"] .version-outdated {
+    border: 1px solid #303133;
+    background: #30241a
+}
+:root[data-theme="dark"][data-tone="black"] .version-outdated:hover {
+    border-color: #303133;
+    background: #30241a
+}
 :root[data-theme="dark"][data-tone="black"] .dashboard-shell.admin-tools-shell {
     background: #232425
 }

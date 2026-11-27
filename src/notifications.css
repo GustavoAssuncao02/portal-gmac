@@ -29,3 +29,16 @@
   .dashboard-shell .update-countdown { grid-column: 4; grid-row: 1; justify-self: center; margin: 0; padding: 0 6px; gap: 3px; font-size: 11px; }
   .dashboard-shell .update-countdown-label { display: none; }
 }
+/* "Versão desatualizada": the page runs an old version; a click opens "Atualizar o portal". The countdown of a scheduled
+   update, when there is one, has the place. */
+.version-outdated { display: inline-flex; flex: 0 0 auto; align-self: center; align-items: center; gap: 5px; height: 24px; margin: 0 2px 0 8px; padding: 0 9px; border: 1px solid #f3c7a6; border-radius: 999px; background: #fff3e8; color: #a14a0c; font: inherit; font-size: 11.5px; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.version-outdated:hover { border-color: #e9a06b; background: #ffe8d4; }
+.version-outdated:focus-visible { outline: 2px solid #d9752f; outline-offset: 2px; }
+.version-outdated svg { flex: 0 0 auto; }
+.workspace-tabs:has(.update-countdown) .version-outdated { display: none; }
+@media (max-width: 760px) {
+  /* Phone: the square left of the bell, only the icon (the hover text and the label for screen readers tell the rest). */
+  .dashboard-shell .workspace-tabs:has(.version-outdated):not(:has(.update-countdown)) .mobile-page-title { grid-column: 1 / 4; }
+  .dashboard-shell .version-outdated { grid-column: 4; grid-row: 1; justify-self: center; margin: 0; padding: 0 7px; }
+  .dashboard-shell .version-outdated-label { display: none; }
+}
