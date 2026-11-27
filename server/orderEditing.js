@@ -13,11 +13,14 @@ const text = (value, limit = 160) => {
   if (typeof value !== 'string' || value.length > limit) fail(400, 'Confira os textos informados e seus limites de tamanho.')
   return value.trim()
 }
-const numeric = (value, label, { integer = false, min = 0, max = 1e12 } = {}) => {
+// `percent` fields say the accepted range in the message.
+const numeric = (value, label, { integer = false, min = 0, max = 1e12, percent = false } = {}) => {
   const result = Number(value)
-  if (value === '' || value == null || !Number.isFinite(result) || result < min || result > max || integer && !Number.isInteger(result)) fail(400, `${label}: informe um valor válido.`)
+  if (value === '' || value == null || !Number.isFinite(result) || result < min || result > max || integer && !Number.isInteger(result)) fail(400, percent ? `${label}: informe um valor de ${min} a ${max}%.` : `${label}: informe um valor válido.`)
   return result
 }
+// Offers accept margins up to 1000% (server/offers.js); the OS keeps the same range so an accepted proposal stays editable.
+const percentLimits = { margin: 1000, discount: 100 }
 const date = (value, label) => {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(Date.parse(value)) || new Date(value).toISOString().slice(0, 10) !== value) fail(400, `${label}: informe uma data válida.`)
   return value
@@ -123,7 +126,7 @@ export function editOrder(order, state, body, catalog = {}) {
   const proposal = source.proposal || {}
   if (!['A', 'B', 'C', 'D'].includes(proposal.key)) fail(400, 'Selecione uma opção de proposta válida.')
   fields.proposal = { ...order.proposal, key: proposal.key, title: text(proposal.title || '', 160), deadline: date(proposal.deadline, 'Prazo acordado'), machine: text(proposal.machine || ''), serviceTime: text(proposal.serviceTime || ''), stages: [...resources.stages], kind: resources.kind, strictProcess: resources.strictProcess }
-  for (const [key, label] of [['serviceValue', 'Valor do serviço'], ['materials', 'Valor de materiais'], ['labor', 'Valor de mão de obra'], ['margin', 'Margem'], ['discount', 'Desconto']]) fields.proposal[key] = numeric(proposal[key], label, { max: ['margin', 'discount'].includes(key) ? 100 : 1e12 })
+  for (const [key, label] of [['serviceValue', 'Valor do serviço'], ['materials', 'Valor de materiais'], ['labor', 'Valor de mão de obra'], ['margin', 'Margem'], ['discount', 'Desconto']]) fields.proposal[key] = numeric(proposal[key], label, percentLimits[key] ? { max: percentLimits[key], percent: true } : {})
   // Proposals with an OS value keep the service value as the cost; the profit is what the customer pays beyond it.
   // Older ones kept the price in the service value.
   if (proposal.osValue != null) fields.proposal.osValue = numeric(proposal.osValue, 'Valor da OS', { max: 1e12 })

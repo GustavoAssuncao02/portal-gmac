@@ -127,6 +127,26 @@ test('editing validates dates, quantities, ordered counts and stages; preserves 
   invalid((item) => { item.order.resources.stages.push('bad') })
   invalid((item) => { item.order.quantity = 20 }, 409)
   invalid((item) => { item.expectedOperation.stageCounts['stage-1'] = 3 }, 409)
+  // Margins follow the offers (0 to 1000%); the discount stays between 0 and 100%.
+  const rejects = (mutate, message) => {
+    const payload = structuredClone(draft)
+    mutate(payload)
+    assert.throws(() => editOrder(structuredClone(order), structuredClone(state), payload), (error) => error.status === 400 && error.message === message)
+  }
+  rejects((item) => { item.order.proposal.margin = 1001 }, 'Margem: informe um valor de 0 a 1000%.')
+  rejects((item) => { item.order.proposal.margin = -1 }, 'Margem: informe um valor de 0 a 1000%.')
+  rejects((item) => { item.order.proposal.discount = 101 }, 'Desconto: informe um valor de 0 a 100%.')
+  const highMargin = structuredClone(draft)
+  highMargin.order.proposal.margin = 118.5
+  highMargin.stageCounts = { turning: 10, painting: 10 }
+  // A manual entry with nobody working: the pieces are saved together with the higher margin.
+  const marginState = { ...structuredClone(state), status: 'paused', activeSession: undefined }
+  highMargin.expectedOperation = operationVersion(marginState)
+  const marginOrder = { ...structuredClone(order), operation: marginState }
+  editOrder(marginOrder, marginState, highMargin)
+  assert.equal(marginOrder.proposal.margin, 118.5)
+  assert.deepEqual(Object.values(marginState.stageCounts), [10, 10])
+  assert.equal(marginState.status, 'paused')
   const copy = structuredClone(order)
   const operation = structuredClone(state)
   draft.order.service = 'Nome atualizado'
