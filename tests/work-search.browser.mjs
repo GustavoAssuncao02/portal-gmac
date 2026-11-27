@@ -39,8 +39,9 @@ try {
   await page.locator('.admin-home-main').waitFor()
 
   // The field sits at the right end of the page header on the three screens.
-  async function headerSearch(header, label) {
-    const field = page.locator(`${header} .global-search`), input = page.getByRole('searchbox', { name: label, exact: true })
+  // On the panels the Modo de exibição sits after the field (2026-11-27): the group of both closes the header.
+  async function headerSearch(header, label, edge = '.global-search') {
+    const field = page.locator(`${header} ${edge}`), input = page.getByRole('searchbox', { name: label, exact: true })
     await input.waitFor()
     const [box, head] = await Promise.all([field.boundingBox(), page.locator(header).boundingBox()])
     assert.ok(Math.abs(box.x + box.width - (head.x + head.width)) < 2, `${label}: at the right of the header`)
@@ -64,7 +65,7 @@ try {
 
   const orderCodes = () => page.locator('.admin-os-table tbody tr td:first-child small').allTextContents().then((rows) => rows.map((text) => text.split(' ·')[0]))
   await openSidebarItem(page, 'Serviços em andamento')
-  const panelSearch = await headerSearch('.dashboard-header', 'Buscar serviços')
+  const panelSearch = await headerSearch('.dashboard-header', 'Buscar serviços', '.admin-os-header-tools')
   await panelSearch.fill('pão de forma')
   await page.waitForFunction(() => document.querySelectorAll('.admin-os-table tbody tr').length === 1)
   assert.deepEqual(await orderCodes(), [order.code])
@@ -72,7 +73,7 @@ try {
   assert.deepEqual(await orderCodes(), [order.code])
 
   await openSidebarItem(page, 'Serviços concluídos')
-  const doneSearch = await headerSearch('.dashboard-header', 'Buscar serviços')
+  const doneSearch = await headerSearch('.dashboard-header', 'Buscar serviços', '.admin-os-header-tools')
   await doneSearch.fill('laudo')
   await page.locator('.admin-os-table tbody tr').filter({ hasText: finishedCode }).waitFor()
   assert.deepEqual(await orderCodes(), [finishedCode])
@@ -81,7 +82,7 @@ try {
 
   // The OS screen: the area is "Anexos administrativos".
   await openSidebarItem(page, 'Serviços em andamento')
-  await (await headerSearch('.dashboard-header', 'Buscar serviços')).fill('')
+  await (await headerSearch('.dashboard-header', 'Buscar serviços', '.admin-os-header-tools')).fill('')
   await page.locator('.admin-os-table tbody tr').filter({ hasText: order.code }).getByRole('button', { name: 'Ver OS', exact: true }).click()
   await page.getByRole('heading', { name: 'Anexos administrativos', exact: true }).waitFor()
   await page.getByRole('button', { name: 'Anexar documento', exact: true }).waitFor()
