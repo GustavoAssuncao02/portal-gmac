@@ -371,3 +371,40 @@
   .home-orders td:first-child::before { display: none; }
   .home-operation-state { margin: 0; }
 }
+/* Anotações e Tarefas on the Início: Minhas tarefas, Anotações recentes, Anotação rápida and Convites pendentes. */
+.home-tasks-section + .home-tasks-section { margin-top: 4px; }
+.home-tasks-heading { display: flex; align-items: center; gap: 6px; margin: 0 0 2px; color: #5b7184; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; }
+.home-tasks-heading span { min-width: 18px; padding: 0 5px; border-radius: 9px; background: #edf2f6; color: #4b6075; font-size: 10px; text-align: center; }
+.home-tasks-heading--late { color: #b84450; }
+.home-tasks-heading--late span { background: #fdebec; color: #b84450; }
+.home-tasks { display: grid; margin: 0; padding: 0; list-style: none; }
+.home-tasks li { display: flex; align-items: flex-start; gap: 10px; padding: 7px 0; }
+.home-tasks li + li { border-top: 1px solid #edf1f4; }
+.home-task-check { display: grid; flex: 0 0 20px; width: 20px; height: 20px; margin-top: 1px; place-items: center; padding: 0; border: 1.5px solid #9fb2c3; border-radius: 5px; background: #fff; color: transparent; cursor: pointer; }
+.home-task-check .icon { width: 13px; height: 13px; }
+.home-task-check:hover { border-color: #1f7f55; color: #1f7f55; }
+.home-task-body { display: grid; gap: 2px; min-width: 0; padding: 0; border: 0; background: transparent; font: inherit; text-align: left; cursor: pointer; }
+.home-task-body strong { color: #2d4f68; font-size: 12px; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.home-task-body small { color: #8294a2; font-size: 10px; }
+.home-task-body:hover strong { color: #0f6199; text-decoration: underline; }
+.home-notes-message { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; color: #1f7f55; font-size: 11px; }
+.home-notes-error { margin: 0; color: #b84450; font-size: 11px; }
+.home-quick-note { display: grid; gap: 8px; }
+.home-quick-note-kind { display: flex; gap: 4px; padding: 3px; border-radius: 7px; background: #eef3f8; }
+.home-quick-note-kind button { flex: 1; min-height: 28px; padding: 4px 8px; border: 0; border-radius: 5px; background: transparent; color: #5b7184; font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
+.home-quick-note-kind button[aria-pressed="true"] { background: #fff; color: #0c4c91; box-shadow: 0 1px 4px #143a651c; }
+.home-quick-note input { width: 100%; min-width: 0; min-height: 34px; padding: 6px 10px; border: 1px solid #d3deea; border-radius: 6px; background: #fff; color: #24465f; font: inherit; font-size: 12px; box-sizing: border-box; }
+.home-quick-note-date { display: grid; gap: 4px; color: #5b7184; font-size: 11px; font-weight: 600; }
+.home-quick-note-save { justify-self: end; min-height: 30px; padding: 5px 12px; border: 1px solid #0c4c91; border-radius: 6px; background: #0c4c91; color: #fff; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
+.home-quick-note-save:disabled { opacity: .55; cursor: default; }
+.home-invites { display: grid; margin: 0; padding: 0; list-style: none; }
+.home-invites li { display: grid; gap: 6px; padding: 8px 0; }
+.home-invites li + li { border-top: 1px solid #edf1f4; }
+.home-invite-body { display: grid; gap: 2px; min-width: 0; padding: 0; border: 0; background: transparent; font: inherit; text-align: left; cursor: pointer; }
+.home-invite-body strong { color: #2d4f68; font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
+.home-invite-body small { color: #8294a2; font-size: 10px; overflow-wrap: anywhere; }
+.home-invite-body:hover strong { color: #0f6199; text-decoration: underline; }
+.home-invite-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.home-invite-actions button { min-height: 28px; padding: 4px 10px; border: 1px solid #c9d7e4; border-radius: 6px; background: #fff; color: #24465f; font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
+.home-invite-actions .home-invite-accept { border-color: #0c4c91; background: #0c4c91; color: #fff; }
+.home-invite-actions button:disabled { opacity: .55; cursor: default; }

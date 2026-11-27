@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Archive, ArrowUpRight, Banknote, Boxes, Building2, Cake, Calculator, CalendarClock, CalendarDays, ChartColumn, CircleCheck, CirclePlay, ClipboardList, Clock, Contact, CreditCard, Factory, FileText, Funnel, Gauge, HandCoins, Hourglass, Landmark, LayoutGrid, LifeBuoy, Moon, Package, PackageMinus, Palette, Receipt, RefreshCw, Ruler, ShoppingCart, Sparkles, Sun, Timer, TrendingDown, TrendingUp, TriangleAlert, Truck, UserCog, UserRoundX, Users, Wallet, Wrench } from 'lucide-react'
+import { Archive, ArrowUpRight, Banknote, Boxes, Building2, Cake, Calculator, CalendarClock, CalendarDays, ChartColumn, CircleCheck, CirclePlay, ClipboardList, Clock, Contact, CreditCard, Factory, FileText, Funnel, Gauge, HandCoins, Hourglass, Landmark, LayoutGrid, LifeBuoy, Moon, Package, PackageMinus, Palette, Receipt, RefreshCw, Ruler, ShoppingCart, Sparkles, Sun, Timer, TrendingDown, TrendingUp, TriangleAlert, Truck, UserCog, ListChecks, StickyNote, MailOpen, NotebookPen, Check, UserRoundX, Users, Wallet, Wrench } from 'lucide-react'
 import { payableOverview, receivableOverview } from './adminOverview.js'
 import { money } from './payablesApi.js'
 import { formatQuantity } from '../server/materialUnits.js'
@@ -14,6 +14,10 @@ import { currentVersion, releaseNotes } from './releaseNotes.js'
 import { DEFAULT_HOME_PERIOD, homePeriods } from '../server/homeWidgets.js'
 import { saveListState } from './savedListState.js'
 import { openDeliveries } from './deliveryCalendar.js'
+import { answerInvite, sortNotes, sortTasks, useTaskToggle } from './notesShared.jsx'
+import { TITLE_MAX, dueLabel as taskDueLabel, taskGroup } from '../server/noteRules.js'
+import { payableRequest } from './payablesApi.js'
+import { upper } from './displayCase.js'
 import { useAccountAppearance } from './accountTheme.js'
 
 // The widgets of the Início (catalog in server/homeWidgets.js). Each one receives `ctx` (the portal data, the sources
@@ -46,6 +50,8 @@ function openReceivables(ctx, filters) {
   saveListState('receivables', 'page', 1)
   ctx.onNavigate('Contas a Receber')
 }
+// Anotações e Tarefas opened on one item (or on the invitations, for an invitation), as the bell does.
+function openNote(ctx, id) { sessionStorage.setItem('gmac-note-open', id); ctx.onNavigate('Anotações e Tarefas'); window.dispatchEvent(new CustomEvent('gmac-note-open', { detail: id })) }
 function openTicket(ctx, id) { sessionStorage.setItem('gmac-ticket-open', id); ctx.onNavigate('Ticket'); window.dispatchEvent(new CustomEvent('gmac-ticket-open', { detail: id })) }
 
 const Expand = () => <ArrowUpRight className="icon" aria-hidden="true" strokeWidth={1.7} />
@@ -244,6 +250,110 @@ function StockValue({ ctx, size }) {
   const source = ctx.sources.inventory, items = source.data || [], stats = stockStats(items)
   return <Card icon={Boxes} tone="teal" title="Valor do estoque" subtitle={source.data ? plural(items.length, 'material cadastrado', 'materiais cadastrados') : 'Carregando...'} action={{ label: 'Ver estoque', onClick: () => ctx.onNavigate('Estoque') }}>
     <SourceState source={source}><Stats columns={size.w >= 2 ? 3 : 1} items={[{ label: 'Valor em estoque', value: money(Math.round(stats.value * 100)), tone: 'teal' }, { label: 'Abaixo do mínimo', value: number(stats.low), tone: 'amber' }, { label: 'Zerados', value: number(stats.zero), tone: 'red' }]} /></SourceState>
+  </Card>
+}
+
+// ——— Anotações e Tarefas ———
+// The person's annotations, tasks and invitations (GET /api/notes); after an action the sources are read again.
+const NOTES_SCREEN = 'Anotações e Tarefas'
+const noteTitle = (item) => item.title || String(item.text || '').split('\n')[0].slice(0, 80) || 'Sem título'
+const noteMoment = (at) => new Date(at).toLocaleString('pt-BR', { timeZone: 'America/Bahia', dateStyle: 'short', timeStyle: 'short' })
+const taskSections = [['late', 'Atrasadas'], ['today', 'Hoje'], ['upcoming', 'Próximos dias']]
+function Feedback({ message, error }) {
+  return <>{message && <p className="home-notes-message" role="status">{message}</p>}{error && <p className="home-notes-error" role="alert">{error}</p>}</>
+}
+// Minhas tarefas: late, today and the next days; the box concludes it (a shared one asks "só para mim" or "para todos").
+function MyTasks({ ctx, size }) {
+  const source = ctx.sources.notes
+  const [message, setMessage] = useState(''), [error, setError] = useState('')
+  const { toggle, dialog } = useTaskToggle({ onChanged: (_item, text) => { setMessage(text || 'Tarefa concluída.'); setError(''); ctx.retry() }, onError: (text) => { setError(text); setMessage('') } })
+  const tasks = sortTasks((source.data?.items || []).filter((item) => item.kind === 'task' && !item.done))
+  const sections = taskSections.map(([key, label]) => [key, label, tasks.filter((item) => taskGroup(item, false, ctx.now) === key)]).filter(([, , rows]) => rows.length)
+  const total = sections.reduce((sum, [, , rows]) => sum + rows.length, 0)
+  const late = sections.find(([key]) => key === 'late')?.[2].length || 0, today = sections.find(([key]) => key === 'today')?.[2].length || 0
+  const limit = rowLimit(size, 5, 11)
+  let shown = 0
+  return <Card icon={ListChecks} tone={late ? 'red' : 'blue'} title="Minhas tarefas" subtitle={source.data === null ? 'Carregando...' : `${plural(late, 'atrasada', 'atrasadas')} · ${number(today)} para hoje`} action={{ label: 'Ver todas', onClick: () => ctx.onNavigate(NOTES_SCREEN) }}>
+    <SourceState source={source} empty={!total && 'Nenhuma tarefa atrasada, para hoje ou para os próximos dias.'}>
+      {sections.map(([key, label, rows]) => {
+        const visible = rows.slice(0, Math.max(0, limit - shown))
+        shown += visible.length
+        return visible.length > 0 && <section key={key} className="home-tasks-section" aria-label={label}>
+          <h3 className={`home-tasks-heading home-tasks-heading--${key}`}>{label}<span>{rows.length}</span></h3>
+          <ul className="home-tasks">{visible.map((item) => <li key={item.id}>
+            <button type="button" role="checkbox" aria-checked="false" className="home-task-check" aria-label={`Concluir ${item.title}`} title="Concluir" onClick={() => toggle(item)}><Check className="icon" aria-hidden="true" strokeWidth={2.4} /></button>
+            <button type="button" className="home-task-body" onClick={() => openNote(ctx, item.id)}><strong>{item.title}</strong><small>{taskDueLabel(item, ctx.now)}{item.shared ? ' · Compartilhada' : ''}{item.priority === 'high' ? ' · Prioridade alta' : ''}</small></button>
+          </li>)}</ul>
+        </section>
+      })}
+      {total > shown && <p className="home-card-more">e mais {plural(total - shown, 'tarefa', 'tarefas')}</p>}
+    </SourceState>
+    <Feedback message={message} error={error} />
+    {dialog}
+  </Card>
+}
+// Anotações recentes: the pinned ones first, then the latest changed; a click opens the annotation.
+function RecentNotes({ ctx, size }) {
+  const source = ctx.sources.notes
+  const notes = sortNotes((source.data?.items || []).filter((item) => item.kind === 'note'))
+  const limit = rowLimit(size, 4, 9)
+  return <Card icon={StickyNote} tone="amber" title="Anotações recentes" subtitle={source.data === null ? 'Carregando...' : plural(notes.length, 'anotação', 'anotações')} action={{ label: 'Ver todas', onClick: () => ctx.onNavigate(NOTES_SCREEN) }}>
+    <SourceState source={source} empty={!notes.length && 'Nenhuma anotação ainda.'}>
+      <Rows rows={notes.slice(0, limit).map((item) => ({ key: item.id, title: noteTitle(item), detail: [item.me?.pinned ? 'Fixada' : '', item.shared ? 'Compartilhada' : '', `Alterada em ${noteMoment(item.updatedAt)}`].filter(Boolean).join(' · ') }))} onSelect={(row) => openNote(ctx, row.key)} />
+      {notes.length > limit && <p className="home-card-more">e mais {plural(notes.length - limit, 'anotação', 'anotações')}</p>}
+    </SourceState>
+  </Card>
+}
+// Anotação rápida: an annotation (or a task, with an optional day) without leaving the Início.
+function QuickNote({ ctx }) {
+  const [kind, setKind] = useState('note'), [text, setText] = useState(''), [dueDate, setDueDate] = useState('')
+  const [busy, setBusy] = useState(false), [saved, setSaved] = useState(null), [error, setError] = useState('')
+  async function save(event) {
+    event.preventDefault()
+    const value = text.trim()
+    if (!value || busy) return
+    setBusy(true); setError(''); setSaved(null)
+    try {
+      const short = value.length <= 80 && !value.includes('\n')
+      const body = kind === 'task' ? { kind, title: value.slice(0, TITLE_MAX), dueDate } : { kind, title: short ? value : '', text: short ? '' : value.slice(0, 5000) }
+      const { item } = await payableRequest('/notes', 'POST', body)
+      setText(''); setDueDate(''); setSaved(item)
+      ctx.retry()
+    } catch (caught) { setError(caught.message) } finally { setBusy(false) }
+  }
+  return <Card icon={NotebookPen} title="Anotação rápida" subtitle="Sem sair do Início">
+    <form className="home-quick-note" onSubmit={save}>
+      <div className="home-quick-note-kind" role="group" aria-label="Criar">{[['note', 'Anotação'], ['task', 'Tarefa']].map(([key, label]) => <button key={key} type="button" aria-pressed={kind === key} disabled={busy} onClick={() => { setKind(key); setSaved(null); setError('') }}>{label}</button>)}</div>
+      <input aria-label={kind === 'task' ? 'Título da tarefa' : 'Anotação'} placeholder={kind === 'task' ? 'O que precisa ser feito?' : 'Escreva e tecle Enter'} value={text} maxLength={kind === 'task' ? TITLE_MAX : 5000} disabled={busy} onChange={(event) => setText(event.target.value)} />
+      {kind === 'task' && <label className="home-quick-note-date">Data<input type="date" aria-label="Data da tarefa" value={dueDate} disabled={busy} onChange={(event) => setDueDate(event.target.value)} /></label>}
+      <button className="home-quick-note-save" type="submit" disabled={busy || !text.trim()}>{busy ? 'Salvando...' : kind === 'task' ? 'Criar tarefa' : 'Salvar anotação'}</button>
+    </form>
+    {saved && <p className="home-notes-message" role="status">{saved.kind === 'task' ? 'Tarefa criada.' : 'Anotação salva.'} <button className="home-text-button" type="button" onClick={() => openNote(ctx, saved.id)}>Abrir<Expand /></button></p>}
+    <Feedback error={error} />
+  </Card>
+}
+// Convites pendentes: accepted or declined here; a click on the invitation opens Anotações e Tarefas on it.
+function NoteInvites({ ctx, size }) {
+  const source = ctx.sources.notes
+  const [busy, setBusy] = useState(null), [message, setMessage] = useState(''), [error, setError] = useState('')
+  const invites = source.data?.invites || []
+  const limit = rowLimit(size, 3, 7)
+  async function answer(item, accept) {
+    setBusy(item.id); setError(''); setMessage('')
+    try { await answerInvite(item, accept); setMessage(accept ? 'Convite aceito.' : 'Convite recusado.'); ctx.retry() } catch (caught) { setError(caught.message) } finally { setBusy(null) }
+  }
+  return <Card icon={MailOpen} tone={invites.length ? 'amber' : 'blue'} title="Convites pendentes" subtitle={source.data === null ? 'Carregando...' : plural(invites.length, 'convite', 'convites')}>
+    <SourceState source={source} empty={!invites.length && 'Nenhum convite esperando resposta.'}>
+      <ul className="home-invites">{invites.slice(0, limit).map((item) => {
+        const owner = item.participants.find((person) => person.role === 'owner')
+        return <li key={item.id}>
+          <button type="button" className="home-invite-body" onClick={() => openNote(ctx, item.id)}><strong>{noteTitle(item)}</strong><small>{upper(owner?.userName)} convidou você · {item.kind === 'task' ? `Tarefa · ${taskDueLabel(item, ctx.now)}` : 'Anotação'}</small></button>
+          <span className="home-invite-actions"><button type="button" disabled={busy === item.id} onClick={() => answer(item, false)} aria-label={`Recusar o convite de ${noteTitle(item)}`}>Recusar</button><button type="button" className="home-invite-accept" disabled={busy === item.id} onClick={() => answer(item, true)} aria-label={`Aceitar o convite de ${noteTitle(item)}`}>Aceitar</button></span>
+        </li>
+      })}</ul>
+      {invites.length > limit && <p className="home-card-more">e mais {plural(invites.length - limit, 'convite', 'convites')}</p>}
+    </SourceState>
+    <Feedback message={message} error={error} />
   </Card>
 }
 
@@ -570,6 +680,10 @@ export const widgetViews = {
   'open-orders': { Component: OpenOrders, icon: ClipboardList },
   'late-orders': { Component: LateOrders, icon: TriangleAlert },
   'upcoming-deliveries': { Component: UpcomingDeliveries, icon: Truck },
+  'my-tasks': { Component: MyTasks, icon: ListChecks, sources: ['notes'] },
+  'recent-notes': { Component: RecentNotes, icon: StickyNote, sources: ['notes'] },
+  'quick-note': { Component: QuickNote, icon: NotebookPen },
+  'note-invites': { Component: NoteInvites, icon: MailOpen, sources: ['notes'] },
   'deadline-health': { Component: DeadlineHealth, icon: Hourglass },
   'order-status': { Component: OrderStatus, icon: ClipboardList },
   'offer-pipeline': { Component: OfferPipeline, icon: Funnel },

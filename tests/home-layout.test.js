@@ -91,3 +91,11 @@ test('Próximas entregas is in Operação, for administrators and administrative
   assert.equal(validHomeLayout([{ id: 'upcoming-deliveries', w: 2, h: 2 }], 'staff'), true)
   assert.ok(!defaultHomeLayout('admin').some((entry) => entry.id === 'upcoming-deliveries'))
 })
+
+test('Anotações e Tarefas has its own module on the Início, for administrators and administrative employees, outside the default', () => {
+  assert.ok(homeModules.some(([key, label]) => key === 'notes' && label === 'Anotações e Tarefas'))
+  const ids = homeWidgets.filter((item) => item.module === 'notes').map((item) => item.id)
+  assert.deepEqual(ids, ['my-tasks', 'recent-notes', 'quick-note', 'note-invites'])
+  assert.equal(validHomeLayout(ids.map((id) => ({ id, w: homeWidgets.find((item) => item.id === id).w, h: 1 })), 'staff'), true)
+  assert.ok(!defaultHomeLayout('admin').some((entry) => ids.includes(entry.id)))
+})

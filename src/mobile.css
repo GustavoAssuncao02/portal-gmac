@@ -455,3 +455,9 @@
   .employee-activity-table-scroll tr, .os-history-table-wrap tr { display: grid; grid-template-columns: minmax(0, 1fr); border-bottom: 1px solid #dce5ee; padding: 14px; gap: 10px; }
   .employee-activity-table-scroll td, .os-history-table-wrap td { padding: 0; border: 0; min-width: 0; font-size: 14px; overflow-wrap: anywhere; }
 }
+
+/* Início, Anotações e Tarefas: the box of a task stays square (the touch area is the row) and the day headings small. */
+@media screen and (max-width: 760px) {
+  .dashboard-shell .home-task-check { flex-basis: 26px; width: 26px; height: 26px; min-height: 26px; }
+  .dashboard-shell .home-tasks-heading { font-size: 12px; }
+}

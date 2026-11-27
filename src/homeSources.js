@@ -24,9 +24,11 @@ export function sourceLoaders({ loadPayables, loadInventory }) {
     employees: { every: 300000, load: async (signal) => (await getJson('/api/employees', signal)).items || [] },
     admins: { every: 300000, load: async (signal) => (await getJson('/api/admins', signal)).items || [] },
     tickets: { every: 60000, topics: ['data', 'notifications'], load: async (signal) => (await getJson('/api/support-tickets', signal)).items || [] },
+    // Anotações e Tarefas of the person: { items, invites }; they come again when someone changes one (topic notes).
+    notes: { every: 60000, topics: ['notes'], load: async (signal) => getJson('/api/notes', signal) },
   }
 }
-export const sourceNames = ['payables', 'receivables', 'inventory', 'adminInventory', 'machines', 'idleEmployees', 'machineUsageMonth', 'employees', 'admins', 'tickets']
+export const sourceNames = ['payables', 'receivables', 'inventory', 'adminInventory', 'machines', 'idleEmployees', 'machineUsageMonth', 'employees', 'admins', 'tickets', 'notes']
 
 // { data, loading, error } of one source; `data` keeps the last good answer when a later read fails.
 function useSource(source, enabled, retry) {

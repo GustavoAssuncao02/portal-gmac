@@ -341,6 +341,21 @@
 @media (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .home-metric strong { font-size: calc(24px * var(--account-font-scale)); } }
 @media (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .home-orders td { font-size: calc(12px * var(--account-font-scale)); } }
 @media (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .home-orders td::before { font-size: calc(10px * var(--account-font-scale)); } }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-tasks-heading { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-tasks-heading span { font-size: calc(10px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-task-body { font-size: inherit; }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-task-body strong { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-task-body small { font-size: calc(10px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-notes-message { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-notes-error { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-quick-note-kind button { font-size: inherit; font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-quick-note input { font-size: inherit; font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-quick-note-date { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-quick-note-save { font-size: inherit; font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-invite-body { font-size: inherit; }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-invite-body strong { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-invite-body small { font-size: calc(10px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .home-invite-actions button { font-size: inherit; font-size: calc(11px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .notifications-popup h2 { font-size: calc(15px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .notifications-empty p { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .notifications-count { font-size: calc(9px * var(--account-font-scale)); }
@@ -1571,5 +1586,6 @@
 @media screen and (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .payable-detail-actions button { font-size: calc(14px * var(--account-font-scale)); } }
 @media screen and (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .employee-activity-heading h2, :root:is([data-font-size="small"], [data-font-size="large"]) .os-history-heading h2 { font-size: calc(18px * var(--account-font-scale)); } }
 @media screen and (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .employee-activity-table-scroll td, :root:is([data-font-size="small"], [data-font-size="large"]) .os-history-table-wrap td { font-size: calc(14px * var(--account-font-scale)); } }
+@media screen and (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .dashboard-shell .home-tasks-heading { font-size: calc(12px * var(--account-font-scale)); } }
 :root:is([data-font-size="small"], [data-font-size="large"]) .account-theme-option { font-size: calc(14px * var(--account-font-scale)); }
 @media (max-width: 760px) { :root[data-font-size="small"] :is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]), select, textarea) { font-size: 16px !important; } }

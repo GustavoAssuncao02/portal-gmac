@@ -1986,6 +1986,92 @@
         color: #c1cfde
     }
 }
+:root[data-theme="dark"] .home-tasks-heading {
+    color: #b7c3cd
+}
+:root[data-theme="dark"] .home-tasks-heading span {
+    background: #203c59;
+    color: #b4c2cf
+}
+:root[data-theme="dark"] .home-tasks-heading--late {
+    color: #da9aa1
+}
+:root[data-theme="dark"] .home-tasks-heading--late span {
+    background: #3c2022;
+    color: #da9aa1
+}
+:root[data-theme="dark"] .home-tasks li + li {
+    border-top: 1px solid #36516f
+}
+:root[data-theme="dark"] .home-task-check {
+    border: 1.5px solid #36516f;
+    background: #162b43
+}
+:root[data-theme="dark"] .home-task-check:hover {
+    border-color: #47ae81;
+    color: #90e4bf
+}
+:root[data-theme="dark"] .home-task-body strong {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .home-task-body small {
+    color: #c1cfde
+}
+:root[data-theme="dark"] .home-task-body:hover strong {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .home-notes-message {
+    color: #90e4bf
+}
+:root[data-theme="dark"] .home-notes-error {
+    color: #da9aa1
+}
+:root[data-theme="dark"] .home-quick-note-kind {
+    background: #203c59
+}
+:root[data-theme="dark"] .home-quick-note-kind button {
+    color: #b7c3cd
+}
+:root[data-theme="dark"] .home-quick-note-kind button[aria-pressed="true"] {
+    background: #162b43;
+    color: #e1ebf6;
+    box-shadow: 0 1px 4px #06111d1c
+}
+:root[data-theme="dark"] .home-quick-note input {
+    border: 1px solid #36516f;
+    background: #162b43;
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .home-quick-note-date {
+    color: #b7c3cd
+}
+:root[data-theme="dark"] .home-quick-note-save {
+    border: 1px solid #4778ae;
+    background: #184c85;
+    color: #f2f6fc
+}
+:root[data-theme="dark"] .home-invites li + li {
+    border-top: 1px solid #36516f
+}
+:root[data-theme="dark"] .home-invite-body strong {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .home-invite-body small {
+    color: #c1cfde
+}
+:root[data-theme="dark"] .home-invite-body:hover strong {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .home-invite-actions button {
+    border: 1px solid #36516f;
+    background: #162b43;
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .home-invite-actions .home-invite-accept {
+    border-color: #4778ae;
+    background: #184c85;
+    color: #f2f6fc
+}
 :root[data-theme="dark"] .notifications-trigger {
     color: #a9c3da
 }

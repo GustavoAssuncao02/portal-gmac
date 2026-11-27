@@ -15,6 +15,7 @@ export const homeModules = [
   ['registrations', 'Cadastros'],
   ['reports', 'Relatórios'],
   ['settings', 'Configurações'],
+  ['notes', 'Anotações e Tarefas'],
 ]
 
 // widths: the sizes the widget accepts (quarters of the row); w/h: its size when added. tall: it may take two rows.
@@ -76,6 +77,11 @@ export const homeWidgets = [
   widget('support-tickets', 'settings', 'Tickets de suporte', 'Chamados abertos e os mais recentes.', { widths: [1, 2], w: 1, tall: true }),
   widget('release-notes', 'settings', 'Novidades do portal', 'O que mudou na última versão.', { widths: [1, 2, 3], w: 2, tall: true }),
   widget('appearance', 'settings', 'Aparência', 'Troque entre claro, escuro e escuro intenso.', { widths: [1, 2], w: 1 }),
+
+  widget('my-tasks', 'notes', 'Minhas tarefas', 'Tarefas atrasadas, de hoje e dos próximos dias, para concluir sem sair do Início.', { widths: [1, 2, 3], w: 2, tall: true }),
+  widget('recent-notes', 'notes', 'Anotações recentes', 'As últimas anotações, as fixadas primeiro.', { widths: [1, 2, 3], w: 2, tall: true }),
+  widget('quick-note', 'notes', 'Anotação rápida', 'Crie uma anotação ou tarefa sem sair do Início.', { widths: [1, 2], w: 1 }),
+  widget('note-invites', 'notes', 'Convites pendentes', 'Convites para anotações e tarefas compartilhadas: aceite ou recuse.', { widths: [1, 2], w: 1, tall: true }),
 ]
 
 const byId = new Map(homeWidgets.map((item) => [item.id, item]))
