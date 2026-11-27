@@ -12,7 +12,7 @@ import { daysUntil, dueLabel, shiftMonth } from '../server/payableRules.js'
 import { calculatorFormats, calculatorMaterials, calculatorWeight, conversionOptions } from './calculatorData.js'
 import { currentVersion, releaseNotes } from './releaseNotes.js'
 import { DEFAULT_HOME_PERIOD, homePeriods } from '../server/homeWidgets.js'
-import { saveListState } from './savedListState.js'
+import { forgetScroll, saveListState } from './savedListState.js'
 import { openDeliveries } from './deliveryCalendar.js'
 import { answerInvite, sortNotes, sortTasks, useTaskToggle } from './notesShared.jsx'
 import { TITLE_MAX, dueLabel as taskDueLabel, taskGroup } from '../server/noteRules.js'
@@ -48,6 +48,7 @@ function openReceivables(ctx, filters) {
   saveListState('receivables', 'filters', { search: '', clientId: '', classificationId: '', bankId: '', kind: '', status: '', start: '', end: '', ...filters })
   saveListState('receivables', 'advanced', Boolean(filters.start || filters.end))
   saveListState('receivables', 'page', 1)
+  forgetScroll('Contas a Receber')
   ctx.onNavigate('Contas a Receber')
 }
 // Anotações e Tarefas opened on one item (or on the invitations, for an invitation), as the bell does.

@@ -64,10 +64,12 @@ try {
   const panelRows = page.locator('.admin-os-table tbody tr')
   assert.equal(await page.locator('.deadline-filters button.selected').innerText().then((text) => text.replace(/\s+/g, ' ').trim()), '! Atrasado 2')
   assert.equal(await panelRows.count(), 2)
-  // From the menu the panel opens on Todos as always.
+  // From the menu the panel continues as it was left, on Atrasado (2026-11-27: going back to a screen keeps it as it was).
   await page.locator('.sidebar').getByRole('button', { name: 'Início', exact: true }).click()
   await page.locator('.sidebar').getByRole('button', { name: 'Serviços em andamento', exact: true }).click()
   await page.getByRole('heading', { name: 'Painel de serviços em andamento' }).waitFor()
+  assert.match(await page.locator('.deadline-filters button.selected').innerText(), /Atrasado/)
+  await page.locator('.deadline-filters').getByRole('button', { name: /Todos/ }).click()
   assert.match(await page.locator('.deadline-filters button.selected').innerText(), /Todos/)
   // OS atrasadas › Ver todas: Atrasado too.
   await page.locator('.sidebar').getByRole('button', { name: 'Início', exact: true }).click()
@@ -85,7 +87,7 @@ try {
     await page.screenshot({ path: `test-results/home-deliveries-${width}.png`, fullPage: true })
   }
   assert.deepEqual(errors, [])
-  console.log('Home deliveries passed: the 5 nearest deliveries from today (no late OS), Emergencial badge, hoje/amanhã/em X dias, row opens the OS, "2 OS atrasadas" and OS atrasadas › Ver todas open the panel on Atrasado, the menu keeps Todos.')
+  console.log('Home deliveries passed: the 5 nearest deliveries from today (no late OS), Emergencial badge, hoje/amanhã/em X dias, row opens the OS, "2 OS atrasadas" and OS atrasadas › Ver todas open the panel on Atrasado, the menu keeps the panel as it was left.')
 } catch (error) {
   await page.screenshot({ path: 'test-results/home-deliveries-failure.png', fullPage: true })
   throw error

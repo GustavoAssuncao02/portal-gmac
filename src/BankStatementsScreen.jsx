@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
+import { useSavedState } from './savedListState.js'
 import { FileUp, Search, TriangleAlert, CircleCheck, Info, Link2, Unlink, ArrowDownLeft, ArrowUpRight, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, ListChecks, Lock, LockOpen, Eye, Trash2 } from 'lucide-react'
 import { ConfirmAction } from './PayablesScreen.jsx'
 import AdminWorkspace from './AdminWorkspace.jsx'
@@ -111,8 +112,8 @@ const columns = [['bankDate', 'Data'], ['memo', 'Histórico'], ['counterpartyNam
 const sortValue = (row, key) => key === 'reconciled' ? row.reconciliation ? 1 : 0 : row[key] ?? ''
 export default function BankStatementsScreen(props) {
   const [data, setData] = useState(null), [error, setError] = useState(''), [importing, setImporting] = useState(false), [results, setResults] = useState([])
-  const [accountId, setAccountId] = useState(''), [filters, setFilters] = useState({ search: '', direction: '', status: '' }), [reconciling, setReconciling] = useState(null), [tolerance, setTolerance] = useState(''), [busyId, setBusyId] = useState(''), [page, setPage] = useState(1)
-  const [sort, setSort] = useState({ key: 'bankDate', direction: 1 }), [confirmAll, setConfirmAll] = useState(false), [notice, setNotice] = useState('')
+  const [accountId, setAccountId] = useSavedState('bank-statements', 'account', ''), [filters, setFilters] = useSavedState('bank-statements', 'filters', { search: '', direction: '', status: '' }), [reconciling, setReconciling] = useState(null), [tolerance, setTolerance] = useState(''), [busyId, setBusyId] = useState(''), [page, setPage] = useState(1)
+  const [sort, setSort] = useSavedState('bank-statements', 'sort', { key: 'bankDate', direction: 1 }), [confirmAll, setConfirmAll] = useState(false), [notice, setNotice] = useState('')
   // `monthChoice` undefined = the latest month of the account; 'all' = every month.
   const [monthChoice, setMonthChoice] = useState(undefined), [closingAction, setClosingAction] = useState(null), [unlinking, setUnlinking] = useState(null), [confirmUndoAll, setConfirmUndoAll] = useState(false), [removingBatch, setRemovingBatch] = useState(null)
   const input = useRef(null)

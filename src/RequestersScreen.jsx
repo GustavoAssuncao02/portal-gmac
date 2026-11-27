@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from 'react'
+import { useSavedState } from './savedListState.js'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
 import AdminWorkspace from './AdminWorkspace.jsx'
 import { PayableModal } from './PayableModal.jsx'
@@ -44,7 +45,7 @@ export default function RequestersScreen({ Sidebar, WorkspaceTabs, navigationPro
     { key: 'phone', label: 'Telefone', value: (row) => row.phone || '', search: true },
   ]
   const rows = items || []
-  const list = useRegistryList(rows, columns, 'name')
+  const list = useRegistryList(rows, columns, 'name', `contacts${kind.endpoint}`)
   async function save(values) {
     await payableRequest(editing.id ? `${kind.endpoint}/${editing.id}` : kind.endpoint, editing.id ? 'PUT' : 'POST', values)
     await load()

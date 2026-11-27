@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useSavedState } from './savedListState.js'
 import { CalendarDays, Inbox, List, Lock, NotebookPen, Plus, Search, UsersRound } from 'lucide-react'
 import AdminWorkspace from './AdminWorkspace.jsx'
 import { payableRequest } from './payablesApi.js'
@@ -26,8 +27,8 @@ export default function NotesScreen({ offers = [], orders = [], onSelectOrder, o
   const now = useNow()
   const [tab, setTab] = useState(readTab)
   const [view, setView] = useState(readView)
-  const [filter, setFilter] = useState('all')
-  const [search, setSearch] = useState('')
+  const [filter, setFilter] = useSavedState('notes', 'filter', 'all')
+  const [search, setSearch] = useSavedState('notes', 'search', '')
   const [editing, setEditing] = useState(null)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')

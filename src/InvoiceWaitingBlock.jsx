@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useSavedState } from './savedListState.js'
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, TriangleAlert } from 'lucide-react'
 import { pendingOrderMaterials } from '../server/pendingMaterials.js'
 import { formatQuantity } from '../server/materialUnits.js'
@@ -20,7 +20,7 @@ const completedLabel = (order) => {
 export default function InvoiceWaitingBlock({ orders, now, open, onToggle, onSelectOrder, onCompletedStatus, onMaterialAlert }) {
   const today = todayBahia(new Date(now))
   // Without a title chosen, the one waiting longest first; numbers and dates start from the largest, text from A.
-  const [sort, setSort] = useState(null)
+  const [sort, setSort] = useSavedState('services-panel', 'invoice-sort', null)
   const values = { code: (order) => order.code, company: (order) => order.company || '', completion: (order) => Date.parse(order.operation.completedAt) || 0, waiting: (order) => invoiceWait(order, today)?.days ?? -1 }
   const sortBy = (key) => setSort((current) => ({ key, direction: current?.key === key ? -current.direction : key === 'company' ? 1 : -1 }))
   const rows = sort ? [...orders].sort((left, right) => { const a = values[sort.key](left), b = values[sort.key](right); return sort.direction * (typeof a === 'number' ? a - b : String(a).localeCompare(String(b), 'pt-BR', { numeric: true })) || left.code.localeCompare(right.code, 'pt-BR', { numeric: true }) }) : byLongestWait(orders)

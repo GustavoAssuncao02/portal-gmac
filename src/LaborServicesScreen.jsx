@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useSavedState } from './savedListState.js'
 import { Plus, Pencil, Trash2, Info, Search, Save, X, Wrench } from 'lucide-react'
 import AdminWorkspace from './AdminWorkspace.jsx'
 import SectorPicker from './SectorPicker.jsx'
@@ -54,7 +55,7 @@ function ServiceDialog({ item, removing, onClose, onSave }) {
 
 export default function LaborServicesScreen(props) {
   const [items, setItems] = useState([])
-  const [search, setSearch] = useState('')
+  const [search, setSearch] = useSavedState('labor-services', 'search', '')
   const [selectedId, setSelectedId] = useState(null)
   const [editing, setEditing] = useState(undefined)
   const [removing, setRemoving] = useState(null)

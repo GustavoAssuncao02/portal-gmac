@@ -10,7 +10,7 @@ import { balanceYears, batchByClassification, monthNames, openBalanceByPeriod, p
 import './batchSettlement.css'
 import BankSelect from './BankSelect.jsx'
 import MoneyInput from './MoneyInput.jsx'
-import { useResetOnChange } from './savedListState.js'
+import { useResetOnChange, useSavedState } from './savedListState.js'
 import ClassificationSelect from './ClassificationSelect.jsx'
 
 const emptyFilters = { supplierId: '', classificationId: '', start: '', end: '', min: '', max: '' }
@@ -80,8 +80,8 @@ function SettleForm({ count, total, onClose, onConfirm }) {
 
 // A single list shared by every administrator: what one person adds, the others see on their next refresh.
 export default function BatchSettlementScreen(props) {
-  const [items, setItems] = useState([]), [batch, setBatch] = useState({ ids: [] }), [loading, setLoading] = useState(true), [error, setError] = useState(''), [search, setSearch] = useState(''), [dueOnly, setDueOnly] = useState(false), [settling, setSettling] = useState(false), [notice, setNotice] = useState(''), [sort, setSort] = useState({ key: 'dueDate', direction: 1 })
-  const [filters, setFilters] = useState(emptyFilters), [page, setPage] = useState(1), pickerScroll = useRef(null), [lists, setLists] = useState({ suppliers: [], classifications: [] })
+  const [items, setItems] = useState([]), [batch, setBatch] = useState({ ids: [] }), [loading, setLoading] = useState(true), [error, setError] = useState(''), [search, setSearch] = useSavedState('batch-settlement', 'search', ''), [dueOnly, setDueOnly] = useSavedState('batch-settlement', 'dueOnly', false), [settling, setSettling] = useState(false), [notice, setNotice] = useState(''), [sort, setSort] = useSavedState('batch-settlement', 'sort', { key: 'dueDate', direction: 1 })
+  const [filters, setFilters] = useSavedState('batch-settlement', 'filters', emptyFilters), [page, setPage] = useSavedState('batch-settlement', 'page', 1), pickerScroll = useRef(null), [lists, setLists] = useState({ suppliers: [], classifications: [] })
   const load = async () => { const [payables, current] = await Promise.all([payableRequest('/payables'), payableRequest('/payables/batch')]); setItems(payables.items); setLists({ suppliers: payables.suppliers || [], classifications: payables.classifications || [] }); setBatch(current); setError('') }
   useEffect(() => {
     let active = true

@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useSavedState } from './savedListState.js'
 import { AlertTriangle, ArrowLeft, CalendarClock, CheckCircle2, ChevronLeft, ChevronRight, FileText, Gauge, ListChecks, Package, Plus, Trash2, Truck, Wrench, X } from 'lucide-react'
 import { PayableModal } from './PayableModal.jsx'
 import { backdropClose } from './dialogBackdrop.js'
@@ -43,17 +44,17 @@ function rangeOf(view, date) {
 // `renderOrder(code, back)` draws the whole OS (the same view of the Ordem de serviço screen) inside the block window.
 // `orders` (the OS of the portal) fill Entregas: the open OS on their delivery day.
 export default function PlanningScreen({ Sidebar, WorkspaceTabs, navigationProps, renderOrder, orders = [], ordersLoading = false }) {
-  const [view, setView] = useState('day')
-  const [date, setDate] = useState(() => localDay(Date.now()))
-  const [sector, setSector] = useState('')
-  const [machine, setMachine] = useState('')
+  const [view, setView] = useSavedState('planning', 'view', 'day')
+  const [date, setDate] = useSavedState('planning', 'date', () => localDay(Date.now()))
+  const [sector, setSector] = useSavedState('planning', 'sector', '')
+  const [machine, setMachine] = useSavedState('planning', 'machine', '')
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
   const [selectedAt, setSelectedAt] = useState(null)
   const [editing, setEditing] = useState(null)
   const [preview, setPreview] = useState('')
   const [fit, setFit] = useState(null)
-  const [kind, setKind] = useState('')
+  const [kind, setKind] = useSavedState('planning', 'kind', '')
   const [orderOpen, setOrderOpen] = useState(null)
   const [from, to] = rangeOf(view, date)
   const request = useRef(0)

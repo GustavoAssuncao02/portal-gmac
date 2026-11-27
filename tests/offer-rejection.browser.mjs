@@ -82,7 +82,8 @@ try {
     assert.equal(await row.locator('.offer-table-status').innerText(), 'Recusada')
     // "Desfazer recusa" asks first; then the offer leaves "Recusadas" and is "Em análise" again, also after a reload.
     const code = (await fixture.adminRequest('/offers')).data.items.find((item) => item.service === service).code
-    await page.getByRole('button', { name: /^Recusadas/ }).click()
+    // The filter chosen is kept, also after reloading (2026-11-27): still on Recusadas.
+    assert.match(await page.getByRole('button', { name: /^Recusadas/ }).getAttribute('class'), /offer-filter--selected/)
     const undo = row.getByRole('button', { name: 'Desfazer recusa', exact: true })
     await undo.click()
     const confirm = page.getByRole('dialog', { name: `Desfazer a recusa da ${code}?` })

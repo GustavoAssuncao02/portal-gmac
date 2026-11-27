@@ -1,4 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useSavedState } from './savedListState.js'
 import { Bell, BellRing, CircleCheck, CircleDot, Clock3, Download, Eye, FilterX, Hourglass, Inbox, Info, Lock, Mail, MessageCircle, Paperclip, RotateCcw, Search, Send } from 'lucide-react'
 import AdminWorkspace from './AdminWorkspace.jsx'
 import { PayableModal, FilePicker, FilePreview, previewable } from './PayableModal.jsx'
@@ -375,7 +376,7 @@ const columns = [
 // Tickets de suporte: anyone of the portal opens a ticket for the developers; every ticket is listed below the form, with
 // filters and charts that follow them. Only the developers close and reopen tickets.
 export default function SupportTicketsScreen(props) {
-  const [data, setData] = useState(null), [error, setError] = useState(''), [filters, setFilters] = useState(noFilters), [openId, setOpenId] = useState(null)
+  const [data, setData] = useState(null), [error, setError] = useState(''), [filters, setFilters] = useSavedState('tickets', 'filters', noFilters), [openId, setOpenId] = useState(null)
   const reader = useMemo(() => latestOnly(() => payableRequest('/support-tickets')), [])
   const load = () => reader((result) => { setData(result); setError('') })
   // A ticket changed here (the bell) shows at once; the reload that follows brings the rest.

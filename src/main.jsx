@@ -98,7 +98,7 @@ import { operationElapsed } from '../server/operationSessions.js'
 import { formatQuantity, materialUnit, materialUnits, quantityStep, unitPriceLabel, wholeUnit } from '../server/materialUnits.js'
 import { currentEntryMode, materialTotal, minutesLabel, switchEntryMode, withEntryMode } from '../server/entryMode.js'
 import EntryModeChoice from './EntryModeChoice.jsx'
-import { clearListStates } from './savedListState.js'
+import { clearListStates, forgetScroll, saveListState, useSavedState, useScreenScroll } from './savedListState.js'
 import './styles.css'
 import './desktop.css'
 import './mobile.css'
@@ -663,8 +663,8 @@ const machineColumns = [
 function Machines({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs }) {
   const [machines, setMachines] = useState([])
   const [selectedId, setSelectedId] = useState(null)
-  const [filter, setFilter] = useState('all')
-  const [search, setSearch] = useState('')
+  const [filter, setFilter] = useSavedState('machines', 'filter', 'all')
+  const [search, setSearch] = useSavedState('machines', 'search', '')
   const [modalMachine, setModalMachine] = useState(undefined)
   const [historyMachine, setHistoryMachine] = useState(null)
   const [maintenanceMachine, setMaintenanceMachine] = useState(null)
@@ -707,7 +707,7 @@ function Machines({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, 
     const query = search.toLowerCase()
     return matchesFilter && (!query || `${machine.name} ${machine.type} ${machine.sector} ${machine.operator}`.toLowerCase().includes(query))
   })
-  const machineList = useTableSort(filteredMachines, machineColumns)
+  const machineList = useTableSort(filteredMachines, machineColumns, null, 'machines')
   const workingCount = machines.filter((machine) => machine.status === 'working').length
   const idleCount = machines.filter((machine) => machine.status === 'idle').length
   const maintenanceCount = machines.filter((machine) => machine.status === 'maintenance').length
@@ -800,8 +800,8 @@ const inventoryColumns = [
 function InventoryScreen({ kind = 'factory', collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, onSelectOrder }) {
   const stock = stockKinds[kind]
   const [items, setItems] = useState([])
-  const [search, setSearch] = useState('')
-  const [iconFilter, setIconFilter] = useState('')
+  const [search, setSearch] = useSavedState(`inventory-${kind}`, 'search', '')
+  const [iconFilter, setIconFilter] = useSavedState(`inventory-${kind}`, 'icon', '')
   const [exitItem, setExitItem] = useState(null)
   const [modalItem, setModalItem] = useState(undefined)
   const [historyItem, setHistoryItem] = useState(null)
@@ -810,7 +810,7 @@ function InventoryScreen({ kind = 'factory', collapsed, onToggle, activeNav, onN
   const [savingInventory, setSavingInventory] = useState(false)
   const [purchase, setPurchase] = useState(null)
   const filteredItems = items.filter((item) => item.name.toLowerCase().includes(search.trim().toLowerCase()) && (!iconFilter || iconIn(stock.iconSet, item.icon).key === iconFilter))
-  const inventoryList = useTableSort(filteredItems, inventoryColumns)
+  const inventoryList = useTableSort(filteredItems, inventoryColumns, null, `inventory-${kind}`)
   // Kilos, metres and units are added up apart: their sum would mean nothing.
   const totals = materialUnits.map(([unit]) => [unit, items.filter((item) => materialUnit(item.unit) === unit).reduce((total, item) => total + Number(item.quantity || 0), 0)]).filter(([unit, total]) => unit === stock.unit || total > 0)
   const lowStock = items.filter((item) => Number(item.quantity) <= Number(item.minimum)).length
@@ -1270,7 +1270,7 @@ function RegistrationScreen({ kind, collapsed, onToggle, activeNav, onNavigate, 
     : [...(isEmployee ? [] : [{ key: 'id', label: 'ID', value: (row) => Number(row.id), numeric: true }]), { key: 'name', label: 'Nome', value: (row) => row.name, search: true },
       ...(isEmployee ? [{ key: 'type', label: 'Tipo', value: (row) => employeeTypeLabel(row.type) }, { key: 'sector', label: 'Setor', value: (row) => row.sectorName || '', search: true }, { key: 'accessCode', label: 'Código', value: (row) => row.accessCode || '', search: true }] : []),
       ...(readOnly ? [] : [{ key: 'cpf', label: 'CPF', value: (row) => row.cpf, search: true }, { key: 'email', label: 'E-mail', value: (row) => row.email || '', search: true }, { key: 'birthDate', label: 'Nascimento', value: (row) => row.birthDate || '' }])]
-  const list = useRegistryList(records, listColumns, 'name')
+  const list = useRegistryList(records, listColumns, 'name', `registration-${kind}`)
   const shownColumns = listColumns.filter((column) => !column.hidden)
   const navigationProps = { collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs }
   // Same pattern as Fornecedores: only the list on screen; adding and editing happen in a modal.
@@ -1373,9 +1373,9 @@ const offerColumns = [
   { key: 'origin', label: 'Origem', value: (offer) => offer.origin || offer.source },
 ]
 function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, offers, orders = [], onRefresh, onSelectOffer, onSelectOrder, workflowError, user }) {
-  const [activeFilter, setActiveFilter] = useState('all')
-  const [search, setSearch] = useState('')
-  const [date, setDate] = useState('')
+  const [activeFilter, setActiveFilter] = useSavedState('offers', 'filter', 'all')
+  const [search, setSearch] = useSavedState('offers', 'search', '')
+  const [date, setDate] = useSavedState('offers', 'date', '')
   const [manualOpen, setManualOpen] = useState(false)
   const [rejectingOffer, setRejectingOffer] = useState(null)
   const [decliningOffer, setDecliningOffer] = useState(null)
@@ -1426,7 +1426,7 @@ function Offers({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, on
       && workSearch.offer(offer, search)
       && (!date || requestDay(offer.requestedAt) === date)
   })
-  const offerList = useTableSort(filteredOffers, offerColumns)
+  const offerList = useTableSort(filteredOffers, offerColumns, null, 'offers')
 
   function updateManualForm(field, value) {
     setManualForm((current) => ({ ...current, [field]: value }))
@@ -2408,11 +2408,13 @@ function OrderScreen({ collapsed, onToggle, activeNav, onNavigate, onLogout, tab
 
 function AdminServicesView({ collapsed, onToggle, activeNav, onNavigate, onLogout, tabs, onCloseTab, onReorderTabs, orders, offers = [], onSelectOrder, onRefresh, workflowError, highlightCode, initialFilter, userId }) {
   const completedView = activeNav === 'Serviços concluídos'
-  const [search, setSearch] = useState('')
+  // Search, filters and order stay as they were when the person comes back (from Ver OS, from another tab).
+  const listScreen = completedView ? 'services-completed' : 'services-panel'
+  const [search, setSearch] = useSavedState(listScreen, 'search', '')
   // The Início may open the panel on a filter (OS atrasadas › Ver todas: Atrasado).
-  const [filter, setFilter] = useState(initialFilter || 'all')
-  const [collaborator, setCollaborator] = useState('')
-  const [sort, setSort] = useState(null)
+  const [filter, setFilter] = useSavedState(listScreen, 'filter', 'all', initialFilter || null)
+  const [collaborator, setCollaborator] = useSavedState(listScreen, 'collaborator', '')
+  const [sort, setSort] = useSavedState(listScreen, 'sort', null)
   const [now, setNow] = useState(Date.now())
   // The block "Aguardando NF-e" starts open; whoever collapses it finds it collapsed again (this browser, this account).
   const invoiceOpenKey = `gmac-invoice-block-open:${userId ?? ''}`
@@ -2645,10 +2647,10 @@ function App() {
     return () => { controller.abort(); window.clearTimeout(retryTimer) }
   }, [])
 
-  // Every screen opens at its top, whatever the scroll of the previous one.
-  useLayoutEffect(() => {
-    if (isDashboard) window.scrollTo({ top: 0, behavior: 'auto' })
-  }, [isDashboard, activeNav, selectedOfferId, selectedOrderCode])
+  // Going back to a screen finds it at the same scroll it was left (src/savedListState.js): the panel after Ver OS, a tab
+  // clicked again. A screen opened for the first time, for another offer or OS or on a filter of the Início starts at its top.
+  const screenDetail = activeNav === 'Ordem de serviço' ? selectedOrderCode : ['Detalhes da oferta', 'Fazer proposta'].includes(activeNav) ? selectedOfferId : ''
+  useScreenScroll(isDashboard ? `${activeNav}|${screenDetail ?? ''}` : null)
 
   async function refreshWorkflow() {
     try {
@@ -2715,13 +2717,14 @@ function App() {
   }, [isDashboard, activeNav])
 
   function selectOffer(id) {
+    forgetScroll('Detalhes da oferta')
     setSelectedOfferId(id)
     navigateTo('Detalhes da oferta')
   }
 
   // The notice of a saved proposal opens it; the offers are read first, so the screen starts from the values just saved.
   useEffect(() => {
-    const openProposal = ({ detail }) => refreshWorkflow().catch(() => {}).then(() => { setSelectedOfferId(detail); navigateTo('Fazer proposta') })
+    const openProposal = ({ detail }) => refreshWorkflow().catch(() => {}).then(() => { forgetScroll('Fazer proposta'); setSelectedOfferId(detail); navigateTo('Fazer proposta') })
     window.addEventListener('gmac-proposal-open', openProposal)
     return () => window.removeEventListener('gmac-proposal-open', openProposal)
   }, [adminUser?.role])
@@ -2733,6 +2736,7 @@ function App() {
   }, [adminUser?.role])
 
   function selectOrder(code) {
+    forgetScroll('Ordem de serviço')
     if (activeNav !== 'Ordem de serviço') setOrderOrigin(activeNav)
     setSelectedOrderCode(code)
     navigateTo('Ordem de serviço')
@@ -2740,6 +2744,10 @@ function App() {
 
   // A reopened OS is back in progress: it goes to the panel of services in progress, highlighted for a few seconds.
   function orderReopened(code) {
+    // The panel opens on all the OS, so the highlighted one is in view, whatever the filter or search kept from before.
+    forgetScroll('Serviços em andamento')
+    saveListState('services-panel', 'filter', 'all')
+    saveListState('services-panel', 'search', '')
     setOpenTabs((current) => { const next = current.filter((tab) => tab !== 'Ordem de serviço'); return next.includes('Serviços em andamento') ? next : [...next, 'Serviços em andamento'] })
     setActiveNav('Serviços em andamento')
     setSelectedOrderCode(null)
@@ -2761,6 +2769,9 @@ function App() {
 
   function navigateTo(label, requestTarget = null) {
     if (adminUser?.role === 'staff' && isFinancialPage(label)) return
+    // Opened on something (a filter of the Início, the request of an OS): the screen starts from it, not from the old scroll.
+    if (requestTarget) forgetScroll(label)
+    if (requestTarget?.panelFilter) saveListState('services-panel', 'search', '')
     setMaterialRequestTarget(label === 'Pedidos' ? requestTarget : null)
     setPanelFilter(label === 'Serviços em andamento' ? requestTarget?.panelFilter || null : null)
     if (label === 'Contas a Pagar') setPayableFilters(null)
@@ -2769,6 +2780,7 @@ function App() {
   }
 
   function openPayables(filters) {
+    forgetScroll('Contas a Pagar')
     navigateTo('Contas a Pagar')
     setPayableFilters(filters)
   }
@@ -2777,11 +2789,13 @@ function App() {
     if (openTabs.length <= 1) return
     const index = openTabs.indexOf(label)
     const nextTabs = openTabs.filter((tab) => tab !== label)
+    forgetScroll(label)
     setOpenTabs(nextTabs)
     if (activeNav === label) setActiveNav(nextTabs[Math.max(0, Math.min(index, nextTabs.length - 1))])
   }
 
   function closeAllTabs() {
+    openTabs.forEach(forgetScroll)
     setOpenTabs(['Dashboard'])
     setActiveNav('Dashboard')
     setSelectedOfferId(null)

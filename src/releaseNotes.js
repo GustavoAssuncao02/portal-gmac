@@ -10,6 +10,7 @@ export const releaseNotes = [
       'Serviços em andamento: concluir atividades do operador, modo de exibição no topo e OS aguardando NF-e em bloco separado',
       'Início: widgets de anotações e tarefas, próximas entregas e período nos resumos de contas',
       'Ordens de serviço: lançamento manual com início e pausa juntos',
+      'Navegação: ao voltar para uma tela, ela continua na mesma posição e com os mesmos filtros e busca',
       'Melhorias gerais: correções de problemas e maior estabilidade do sistema',
     ],
   },

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSavedState } from './savedListState.js'
 import { ChevronLeft, ChevronRight, FileDown, Sheet, TriangleAlert } from 'lucide-react'
 import AdminWorkspace from './AdminWorkspace.jsx'
 import { PayableModal } from './PayableModal.jsx'
@@ -36,7 +37,7 @@ function EntriesModal({ report, target, onClose, onOpen }) {
 // DRE: the result of the month (by default the current one) or of a chosen period, by cash or by competência.
 export default function DreScreen(props) {
   const current = todayBahia().slice(0, 7), banks = useBanks()
-  const [view, setView] = useState('cash'), [range, setRange] = useState('month'), [month, setMonth] = useState(current), [period, setPeriod] = useState({ start: `${current.slice(0, 4)}-01`, end: current })
+  const [view, setView] = useSavedState('dre', 'view', 'cash'), [range, setRange] = useSavedState('dre', 'range', 'month'), [month, setMonth] = useSavedState('dre', 'month', current), [period, setPeriod] = useSavedState('dre', 'period', { start: `${current.slice(0, 4)}-01`, end: current })
   const [report, setReport] = useState(null), [error, setError] = useState(''), [loading, setLoading] = useState(true), [showZero, setShowZero] = useState(false), [target, setTarget] = useState(null), [exporting, setExporting] = useState(false), [bankId, setBankId] = useState('')
   const start = range === 'month' ? month : period.start, end = range === 'month' ? month : period.end
   const valid = /^\d{4}-\d{2}$/.test(start) && /^\d{4}-\d{2}$/.test(end) && start <= end

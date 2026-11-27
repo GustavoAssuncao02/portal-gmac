@@ -86,7 +86,7 @@ export default function PayablesScreen({ mode = 'accounts', accountFilters, ...p
   const [detailId, setDetailId] = useState(() => sessionStorage.getItem('gmac-payable-open') || ''), [form, setForm] = useState(null), [payRows, setPayRows] = useState(null), [confirm, setConfirm] = useState(null), [supplierHistory, setSupplierHistory] = useState(null), [history, setHistory] = useState(null), [registry, setRegistry] = useState(null), [exporting, setExporting] = useState(false), [deleting, setDeleting] = useState(null)
   // Fornecedores: the same list as the other registrations (search, count, sortable headers, formatted document).
   const supplierColumns = [{ key: 'name', label: 'Nome / razão social', value: (row) => row.name, search: true }, { key: 'document', label: 'CPF/CNPJ', value: (row) => row.document, search: true }, { key: 'email', label: 'E-mail', value: (row) => row.email || '', search: true }, { key: 'phone', label: 'Telefone', value: (row) => row.phone || '', search: true }, { key: 'notes', value: (row) => row.notes || '', search: true, hidden: true }]
-  const supplierList = useRegistryList(data.suppliers || [], supplierColumns, 'name')
+  const supplierList = useRegistryList(data.suppliers || [], supplierColumns, 'name', 'suppliers')
   useEffect(() => {
     if (mode !== 'accounts') return
     // A shortcut of the home screen is temporary; the menu goes back to what was chosen in the list.

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useResetOnChange, useSavedState } from './savedListState.js'
 import { Search, ArrowUpDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import AdminWorkspace from './AdminWorkspace.jsx'
 import { money, dateLabel, payableRequest } from './payablesApi.js'
@@ -27,8 +28,8 @@ const periodText = (period) => period.mode === 'month' ? `${monthNames[Number(pe
 export default function CashFlowScreen(props) {
   const banks = useBanks(), today = todayBahia()
   const [data, setData] = useState(null), [error, setError] = useState('')
-  const [mode, setMode] = useState('day'), [anchor, setAnchor] = useState(today), [bankId, setBankId] = useState('')
-  const [filters, setFilters] = useState({ search: '', type: '' }), [page, setPage] = useState(1), [pageSize, setPageSize] = useState(20), [sort, setSort] = useState({ key: 'date', direction: -1 })
+  const [mode, setMode] = useSavedState('cash-flow', 'mode', 'day'), [anchor, setAnchor] = useSavedState('cash-flow', 'anchor', today), [bankId, setBankId] = useSavedState('cash-flow', 'bank', '')
+  const [filters, setFilters] = useSavedState('cash-flow', 'filters', { search: '', type: '' }), [page, setPage] = useSavedState('cash-flow', 'page', 1), [pageSize, setPageSize] = useSavedState('cash-flow', 'pageSize', 20), [sort, setSort] = useSavedState('cash-flow', 'sort', { key: 'date', direction: -1 })
   useEffect(() => {
     let active = true
     const load = () => loadAll().then((result) => { if (active) { setData(result); setError('') } }).catch((caught) => { if (active) setError(caught.message) })
@@ -36,7 +37,8 @@ export default function CashFlowScreen(props) {
     const stopPolling = pollWhileVisible(load, 30000, ['finance'])
     return () => { active = false; stopPolling() }
   }, [])
-  useEffect(() => { setPage(1) }, [filters, pageSize, mode, anchor, bankId])
+  // Back to the first page only when a filter really changes: coming back to the screen keeps the page.
+  useResetOnChange([filters, pageSize, mode, anchor, bankId], () => setPage(1))
 
   const period = cashFlowPeriod(mode, anchor)
   const movements = filterMovements(treasuryMovements(data?.payables.items, data?.receivables.items), { bankId })

@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from 'react'
+import { useSavedState } from './savedListState.js'
 import { Plus, Pencil, Power, Trash2, Save } from 'lucide-react'
 import AdminWorkspace from './AdminWorkspace.jsx'
 import { PayableModal } from './PayableModal.jsx'
@@ -75,13 +76,13 @@ function AutomaticSettings({ settings, items, onSaved }) {
 
 // Grupos de contas and Classificações: the plan of accounts behind the payables, the receivables and the DRE.
 export default function AccountPlanScreen({ mode = 'classifications', ...props }) {
-  const [data, setData] = useState(null), [error, setError] = useState(''), [form, setForm] = useState(null), [confirm, setConfirm] = useState(null), [groupFilter, setGroupFilter] = useState('')
+  const [data, setData] = useState(null), [error, setError] = useState(''), [form, setForm] = useState(null), [confirm, setConfirm] = useState(null), [groupFilter, setGroupFilter] = useSavedState(`account-plan-${mode}`, 'group', '')
   const load = () => payableRequest('/classifications').then((result) => { setData(result); setError('') })
   useEffect(() => { load().catch((caught) => setError(caught.message)) }, [])
   // A classification without its usage (an answer of an older server) counts as unused instead of breaking the screen.
   const groups = data?.groups || [], items = (data?.items || []).map((row) => ({ ...row, usage: { payables: 0, receivables: 0, adjustments: 0, ...row.usage } }))
   const columns = [{ key: 'code', label: 'Código', value: (row) => row.code, search: true }, { key: 'name', label: 'Classificação', value: (row) => row.name, search: true }, { key: 'dreLine', label: 'Linha da DRE', value: (row) => dreLines[row.dreLine]?.label, search: true }, { key: 'behavior', label: 'Fixo / variável', value: (row) => behaviors[row.behavior] || '', search: true }, { key: 'usage', label: 'Lançamentos', value: (row) => row.usage.payables + row.usage.receivables + row.usage.adjustments, numeric: true }, { key: 'status', label: 'Status', value: (row) => row.inactive ? 'Desativada' : 'Ativa' }]
-  const list = useRegistryList(items.filter((row) => !groupFilter || row.groupId === groupFilter), columns, 'code')
+  const list = useRegistryList(items.filter((row) => !groupFilter || row.groupId === groupFilter), columns, 'code', `account-plan-${mode}`)
   const toggle = (kind, row) => setConfirm({ title: `${row.inactive ? 'Reativar' : 'Desativar'} ${kind === 'group' ? 'grupo' : 'classificação'}`, text: `${row.code} · ${row.name}${!row.inactive ? kind === 'group' ? ' deixa de aparecer em novos lançamentos, com todas as suas classificações.' : ' deixa de aparecer em novos lançamentos; os lançamentos que já a usam continuam com ela.' : ''}`, onConfirm: async () => { await payableRequest(`/${kind === 'group' ? 'account-groups' : 'classifications'}/${row.id}`, 'PUT', { inactive: !row.inactive }); await load(); setConfirm(null) } })
   const remove = (kind, row) => setConfirm({ title: `Excluir ${kind === 'group' ? 'grupo' : 'classificação'}`, text: `${row.code} · ${row.name}`, onConfirm: async () => { await payableRequest(`/${kind === 'group' ? 'account-groups' : 'classifications'}/${row.id}`, 'DELETE'); await load(); setConfirm(null) } })
   const actions = (kind, row) => <div className="payable-registry-actions">

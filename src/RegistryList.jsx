@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useSavedState } from './savedListState.js'
 import { ArrowDown, ArrowUp, ArrowUpDown, Search } from 'lucide-react'
 
 // Lists of the registrations (clients, suppliers, employees, administrators): search, count and sortable headers.
@@ -12,9 +12,10 @@ const plain = (value) => String(value ?? '').normalize('NFD').replace(/[̀-ͯ]/g
 
 // The titles of a table order its rows: `columns` are { key, label, value(row) to sort, numeric (starts from the largest;
 // also dates, from the latest) }; text starts from A and a second click reverses. Rows without a value always stay last.
-// With no `initialKey` the rows keep their own order until a title is clicked.
-export function useTableSort(rows, columns, initialKey = null) {
-  const [sort, setSort] = useState({ key: initialKey, direction: 1 })
+// With no `initialKey` the rows keep their own order until a title is clicked. `saveAs`: the screen of a list, whose
+// order is kept when the person leaves it and comes back (src/savedListState.js).
+export function useTableSort(rows, columns, initialKey = null, saveAs = null) {
+  const [sort, setSort] = useSavedState(saveAs, 'sort', { key: initialKey, direction: 1 })
   const column = columns.find((item) => item.key === sort.key)
   const compare = (left, right) => {
     const a = column.value(left), b = column.value(right), emptyA = a == null || a === '', emptyB = b == null || b === ''
@@ -31,12 +32,12 @@ export function SortableRows({ rows, columns, initialKey, children }) {
 export { cellValue } from './tableSort.js'
 
 // `columns`: the same, plus `search`: the columns the search looks in.
-export function useRegistryList(rows, columns, initialKey) {
-  const [query, setQuery] = useState('')
+export function useRegistryList(rows, columns, initialKey, saveAs = null) {
+  const [query, setQuery] = useSavedState(saveAs, 'search', '')
   const term = plain(query.trim()), digits = query.replace(/\D/g, '')
   const searchable = columns.filter((column) => column.search)
   const matches = (row) => !term || searchable.some((column) => plain(column.value(row)).includes(term) || digits.length >= 3 && String(column.value(row) ?? '').replace(/\D/g, '').includes(digits))
-  return { query, setQuery, ...useTableSort(rows.filter(matches), columns, initialKey) }
+  return { query, setQuery, ...useTableSort(rows.filter(matches), columns, initialKey, saveAs) }
 }
 
 export function RegistryToolbar({ list, total, singular, plural, placeholder }) {

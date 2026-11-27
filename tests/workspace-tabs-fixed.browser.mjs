@@ -32,6 +32,8 @@ try {
   // Home scrolled to the bottom: the bar stays visible.
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
   assert.ok(await page.evaluate(() => window.scrollY > 100), 'The home page scrolls')
+  await page.waitForTimeout(150)
+  const homeScroll = await page.evaluate(() => Math.round(window.scrollY))
   await assertBarPinned('Início rolado')
 
   // Opening the calculator from the scrolled home starts at the top of the new screen.
@@ -40,13 +42,14 @@ try {
   assert.equal(await page.evaluate(() => window.scrollY), 0, 'The calculator opens at its top')
   assert.ok((await page.getByRole('heading', { name: 'Calculadora de pesos e medidas', level: 1 }).boundingBox()).y >= 44, 'The title is not hidden behind the bar')
 
-  // Scrolling the calculator keeps the bar; switching tabs also starts at the top.
+  // Scrolling the calculator keeps the bar; going back to the tab of the Início finds it where it was (2026-11-27).
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
   assert.ok(await page.evaluate(() => window.scrollY > 100))
   await assertBarPinned('Calculadora rolada')
   await page.getByRole('tab', { name: 'Início', exact: true }).click()
   await page.locator('.admin-home-main').waitFor()
-  assert.equal(await page.evaluate(() => window.scrollY), 0, 'Switching tabs starts at the top')
+  await page.waitForFunction((target) => Math.abs(window.scrollY - target) <= 2, homeScroll)
+  assert.ok(Math.abs(await page.evaluate(() => window.scrollY) - homeScroll) <= 2, 'Going back to a tab keeps its scroll')
 
   // Collapsing the sidebar and resizing keep the bar aligned with the page area.
   await page.evaluate(() => window.scrollTo(0, 300))
