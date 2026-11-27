@@ -11,6 +11,7 @@ unlockNotificationSound()
 // What the bell already knew in this session (each screen mounts its own bell): only notifications that arrive
 // afterwards play the sound, never the ones found at login or brought back by a change of preferences.
 const heard = { token: null, ids: new Set() }
+const nativePopover = typeof HTMLElement !== 'undefined' && typeof HTMLElement.prototype.showPopover === 'function'
 function announce(token, { items = [], sound }, silent) {
   const ids = items.map((item) => String(item.id))
   if (heard.token !== token) { heard.token = token; heard.ids = new Set(ids); return }
@@ -46,18 +47,43 @@ export default function NotificationsButton({ onOpenAccount, onOpenReceivable, o
   }, [open, token])
   const unreadCount = items.filter((item) => !item.readAt).length
 
+  // Browsers without the Popover API (Chrome 109 is the last one on Windows 7) ignore popover="auto" and would
+  // draw the panel as a plain, always-visible element; there the panel is shown and hidden by React state instead.
+  function hidePanel() {
+    if (nativePopover) panel.current.hidePopover()
+    else setOpen(false)
+  }
+
+  function triggerClick() {
+    if (nativePopover) { position(); return }
+    if (open) { setOpen(false); return }
+    if (position()) setOpen(true)
+  }
+
   function position() {
     const box = button.current.getBoundingClientRect()
     if (box.bottom < 0 || box.top > window.innerHeight) {
-      panel.current.hidePopover()
-      return
+      hidePanel()
+      return false
     }
     const width = Math.min(320, window.innerWidth - 24)
     panel.current.style.left = `${Math.max(12, Math.min(box.right - width, window.innerWidth - width - 12))}px`
     panel.current.style.top = `${box.bottom + 9}px`
+    return true
   }
 
   useEffect(() => {
+    if (nativePopover || !open) return undefined
+    // Same light-dismiss as the native popover: a click outside the bell and the panel, or Esc, closes it.
+    const outside = (event) => { if (!panel.current?.contains(event.target) && !button.current?.contains(event.target)) setOpen(false) }
+    const escape = (event) => { if (event.key === 'Escape') setOpen(false) }
+    document.addEventListener('pointerdown', outside, true)
+    document.addEventListener('keydown', escape)
+    return () => { document.removeEventListener('pointerdown', outside, true); document.removeEventListener('keydown', escape) }
+  }, [open])
+
+  useEffect(() => {
+    if (!nativePopover) return undefined
     const element = panel.current
     const toggle = (event) => setOpen(event.newState === 'open')
     element.addEventListener('toggle', toggle)
@@ -73,11 +99,11 @@ export default function NotificationsButton({ onOpenAccount, onOpenReceivable, o
   }, [open])
 
   return <div className="workspace-notifications">
-    <button ref={button} className="notifications-trigger" type="button" title="Notificações" aria-label="Notificações" aria-haspopup="dialog" aria-expanded={open} aria-controls={id} popovertarget={id} onClick={position}><Bell size={19} strokeWidth={1.7} aria-hidden="true" />{!open && unreadCount > 0 && <span className="notifications-count">{unreadCount}</span>}</button>
-    <div ref={panel} id={id} popover="auto" className="notifications-popup" role="dialog" aria-labelledby={`${id}-title`}>
-      <header><h2 id={`${id}-title`}>Notificações</h2><button className="notifications-close" type="button" title="Fechar notificações" aria-label="Fechar notificações" onClick={() => { panel.current.hidePopover(); button.current.focus({ preventScroll: true }) }}><X size={16} aria-hidden="true" /></button></header>
+    <button ref={button} className="notifications-trigger" type="button" title="Notificações" aria-label="Notificações" aria-haspopup="dialog" aria-expanded={open} aria-controls={id} popovertarget={nativePopover ? id : undefined} onClick={triggerClick}><Bell size={19} strokeWidth={1.7} aria-hidden="true" />{!open && unreadCount > 0 && <span className="notifications-count">{unreadCount}</span>}</button>
+    <div ref={panel} id={id} popover={nativePopover ? 'auto' : undefined} hidden={!nativePopover && !open} className="notifications-popup" role="dialog" aria-labelledby={`${id}-title`}>
+      <header><h2 id={`${id}-title`}>Notificações</h2><button className="notifications-close" type="button" title="Fechar notificações" aria-label="Fechar notificações" onClick={() => { hidePanel(); button.current.focus({ preventScroll: true }) }}><X size={16} aria-hidden="true" /></button></header>
       {error && <p role="alert" className="notifications-error">{error}</p>}
-      {items.length ? <div className="notifications-payables">{items.map((item) => <button type="button" key={item.id} onClick={() => { panel.current.hidePopover(); if (item.type === 'payable') onOpenAccount?.(item.accountId); else if (item.type === 'receivable') onOpenReceivable?.(item.accountId); else onOpenNotice?.(item) }}>
+      {items.length ? <div className="notifications-payables">{items.map((item) => <button type="button" key={item.id} onClick={() => { hidePanel(); if (item.type === 'payable') onOpenAccount?.(item.accountId); else if (item.type === 'receivable') onOpenReceivable?.(item.accountId); else onOpenNotice?.(item) }}>
         {item.type === 'payable' ? <><strong>{item.accountId} · {dueLabel(item.account.daysUntil)}</strong><span>{item.account.supplierName} · {money(item.account.valueCents)}</span><small>{dateLabel(item.dueDate)} · {item.account.description}</small></> : item.type === 'receivable' ? <><strong>A receber · {item.accountId} · {dueLabel(item.account.daysUntil)}</strong><span>{item.account.customerName} · {money(item.account.valueCents)}</span><small>{dateLabel(item.dueDate)}{item.account.description ? ` · ${item.account.description}` : ''}</small></> : <><strong>{item.title}</strong><span>{item.description}</span>{item.type === 'low-stock' && <span>{formatQuantity(item.quantity, item.unit)} disponíveis · mínimo {formatQuantity(item.minimum, item.unit)}</span>}<small>{new Date(item.at).toLocaleString('pt-BR', { timeZone: 'America/Bahia', dateStyle: 'short', timeStyle: 'short' })}{item.orderCode && ` · ${item.orderCode}`}{item.employeeName && ` · ${item.employeeName}`}</small></>}
       </button>)}</div> : <div className="notifications-empty"><Bell size={26} strokeWidth={1.5} aria-hidden="true" /><p>Nenhuma notificação no momento.</p></div>}
     </div>

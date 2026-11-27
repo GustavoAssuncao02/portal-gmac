@@ -19,6 +19,11 @@ async function expectClosed() {
   assert.equal(await bell.getAttribute('aria-expanded'), 'false')
 }
 
+// NOTIFICATIONS_WITHOUT_POPOVER=1 plays an old browser (Chrome 109, the last one on Windows 7) without the Popover API.
+if (process.env.NOTIFICATIONS_WITHOUT_POPOVER === '1') await page.addInitScript(() => {
+  delete HTMLElement.prototype.showPopover; delete HTMLElement.prototype.hidePopover; delete HTMLElement.prototype.togglePopover; delete HTMLElement.prototype.popover
+})
+
 try {
   await page.route('**/api/auth/login', (route) => route.fulfill({ status: 200, json: { user: { id: 1, name: 'Gustavo', cpf: '12345678901' }, token: fixture.adminToken } }))
   await page.goto(fixture.url)
@@ -27,6 +32,7 @@ try {
   await page.getByRole('button', { name: 'Entrar', exact: true }).click()
   await page.getByRole('heading', { name: 'Bem-vindo, Gustavo', exact: true }).waitFor()
   await expectClosed()
+  assert.equal(await page.locator('.notifications-popup').evaluate((element) => element.hasAttribute('popover')), process.env.NOTIFICATIONS_WITHOUT_POPOVER !== '1')
 
   for (const [width, height] of [[1366, 900], [900, 800], [390, 844], [320, 740]]) {
     await page.setViewportSize({ width, height })
