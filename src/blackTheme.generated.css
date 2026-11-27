@@ -2616,6 +2616,16 @@
 :root[data-theme="dark"][data-tone="black"] .bulk-action-notice {
     background: #30261a
 }
+:root[data-theme="dark"][data-tone="black"] .complete-operator-modal .payable-modal-body p {
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .complete-operator-modal .complete-operator-os {
+    color: #bec2c5
+}
+:root[data-theme="dark"][data-tone="black"] .complete-operator-sessions {
+    border: 1px solid #303133;
+    background: #30281a
+}
 :root[data-theme="dark"][data-tone="black"] .proposal-model-step > p {
     color: #bfc2c5
 }
@@ -6928,6 +6938,9 @@
 :root[data-theme="dark"][data-tone="black"] .admin-os-status {
     background: #232425;
     color: #cdcfd2
+}
+:root[data-theme="dark"][data-tone="black"] .admin-os-table td button.admin-os-complete-operator:hover {
+    background: #1a3020
 }
 :root[data-theme="dark"][data-tone="black"] .admin-os-status--deadline-on-time {
     background: #1a3020

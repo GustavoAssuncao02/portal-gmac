@@ -981,6 +981,26 @@ export default function createOperationsRouter(pool) {
     } catch (error) { sendError(response, error) }
   })
 
+  // "Concluir atividades do Operador" on the services panel: the same completion as the operator's, registered from the
+  // portal when the last operator did not complete the OS on the tablet. The OS leaves the operators' panel and the row
+  // waits for the NF-e as usual.
+  router.post('/operations/orders/:code/admin-complete', requireAdmin, async (request, response) => {
+    try {
+      const name = request.adminName || 'Administrador'
+      const result = await changeOperation(request.params.code, (state, order) => {
+        if (state.status === 'completed') throw new OperationError(409, 'Esta OS já foi concluída.')
+        if (!allStagesDone(state, order)) throw new OperationError(409, 'Todas as peças precisam passar por todas as etapas antes da conclusão.')
+        const event = eventFor('completed', null, { employeeName: name, adminId: request.adminId, details: `OS concluída pelo portal por ${name}.` })
+        const events = state.activeSessions.map((item) => ({ ...eventFor('session_ended', item, { reason: 'OS concluída', durationMs: sessionDuration(item, event.at), details: `Sessão encerrada na conclusão registrada pelo portal por ${name}.` }), at: event.at }))
+        for (const item of [...state.activeSessions]) endSession(state, item, event.at)
+        state.status = 'completed'
+        state.completedAt = event.at
+        return [...events, event]
+      })
+      response.json(result)
+    } catch (error) { sendError(response, error) }
+  })
+
   router.post('/operations/orders/:code/interrupt', requireAdmin, async (request, response) => {
     try {
       const reason = clean(request.body?.reason, 250)

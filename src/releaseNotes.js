@@ -6,6 +6,7 @@ export const releaseNotes = [
     notes: [
       'Contas a pagar e a receber: ações em massa, Excel resumido e 500 contas por página',
       'Contas a receber: novos filtros, incluindo tipo do recebimento',
+      'Serviços em andamento: concluir atividades do operador',
       'Ordens de serviço: lançamento manual com início e pausa juntos',
       'Melhorias gerais: correções de problemas e maior estabilidade do sistema',
     ],

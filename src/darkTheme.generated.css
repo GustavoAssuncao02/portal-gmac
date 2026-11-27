@@ -3090,6 +3090,22 @@
     background: #3c3020;
     color: #ecc989
 }
+:root[data-theme="dark"] .complete-operator-modal .payable-modal-body p {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .complete-operator-modal .complete-operator-os {
+    color: #b4c2cf
+}
+:root[data-theme="dark"] .complete-operator-sessions {
+    border: 1px solid #36516f;
+    background: #3c3220
+}
+:root[data-theme="dark"] .payable-modal .complete-operator-sessions h3 {
+    color: #ecc989
+}
+:root[data-theme="dark"] .complete-operator-sessions ul {
+    color: #ecd189
+}
 :root[data-theme="dark"] .proposal-model-step > p {
     color: #b2c2d2
 }
@@ -8116,6 +8132,13 @@
 :root[data-theme="dark"] .admin-os-status {
     background: #203c59;
     color: #c1cfde
+}
+:root[data-theme="dark"] .admin-os-table td button.admin-os-complete-operator {
+    border-color: #47ae76;
+    color: #8aeab6
+}
+:root[data-theme="dark"] .admin-os-table td button.admin-os-complete-operator:hover {
+    background: #203c28
 }
 :root[data-theme="dark"] .admin-os-status--deadline-on-time {
     background: #203c28;

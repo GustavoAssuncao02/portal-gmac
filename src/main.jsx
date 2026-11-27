@@ -55,6 +55,7 @@ import StockPurchaseFinance, { purchasedQuantity } from './StockPurchaseFinance.
 import BankStatementsScreen from './BankStatementsScreen.jsx'
 import ReceivableScheduleModal from './ReceivableScheduleModal.jsx'
 import LabelQuoteModal from './LabelQuoteModal.jsx'
+import CompleteOperatorModal from './CompleteOperatorModal.jsx'
 import EmailTemplatesScreen from './EmailTemplatesScreen.jsx'
 import { labelQuoteOffer, labelQuotePendingText } from '../server/labelQuoteRules.js'
 import { createWorkSearch, workSearchPlaceholder } from './workSearch.js'
@@ -2412,6 +2413,9 @@ function AdminServicesView({ collapsed, onToggle, activeNav, onNavigate, onLogou
   const [displayMode, setDisplayMode] = useState(false)
   const [displayError, setDisplayError] = useState('')
   const [pendingInspectionCode, setPendingInspectionCode] = useState(null)
+  // "Concluir atividades do Operador": the OS whose completion is being confirmed.
+  const [completingCode, setCompletingCode] = useState(null)
+  const completingOrder = orders.find((order) => order.code === completingCode)
   const inspectedOrder = orders.find((order) => order.code === pendingInspectionCode)
   const inspectedMaterials = pendingOrderMaterials(inspectedOrder)
   // An OS that was just reopened is brought into view (once, when the panel opens).
@@ -2453,6 +2457,11 @@ function AdminServicesView({ collapsed, onToggle, activeNav, onNavigate, onLogou
   // A chosen header decides the order (emergencies stay highlighted in their row); without one, emergencies come first
   // while the work is in progress and finished services keep their order.
   const visible = completedView || sort ? sorted : emergenciesFirst(matching)
+  async function completeOperator(code) {
+    await apiRequest(`/api/operations/orders/${encodeURIComponent(code)}/admin-complete`, jsonOptions('POST', {}))
+    setCompletingCode(null)
+    await onRefresh()
+  }
   async function acknowledgeCompletion(code) {
     await apiRequest(`/api/operations/orders/${encodeURIComponent(code)}/acknowledge-completion`, jsonOptions('POST', {}))
     await onRefresh()
@@ -2466,10 +2475,11 @@ function AdminServicesView({ collapsed, onToggle, activeNav, onNavigate, onLogou
       {!completedView && <div className="admin-os-filters deadline-filters">{[['all', 'Todos'], ...deadlineCategories, ['completed', 'Concluídos']].map(([key, label]) => <button className={filter === key ? 'selected' : ''} type="button" key={key} onClick={() => setFilter(key)}><span className={`admin-os-filter-icon admin-os-filter-icon--${key}`} aria-hidden="true">{key === 'all' ? '◉' : ['at-deadline', 'late'].includes(key) ? '!' : key === 'completed' ? '✓' : '●'}</span>{label}<strong>{panelOrders.filter((order) => matchesFilter(order, key)).length}</strong></button>)}</div>}
       {!completedView && <div className="admin-os-filters">{[['open', 'Abertas'], ['waiting', 'Aguardando'], ['running', 'Em execução'], ['paused', 'Pausadas'], ['stage_done', 'Etapa concluída'], ['finalizing', 'Finalizando'], ['completed', 'Concluídas']].map(([key, label]) => <button className={filter === key ? 'selected' : ''} type="button" key={key} onClick={() => setFilter(key)}>{label}<strong>{orders.filter((order) => key === 'open' ? order.operation.status !== 'completed' : order.operation.status === key).length}</strong></button>)}</div>}
       {completedView && <div className="admin-os-collaborator-filter"><label>Colaborador<select aria-label="Filtrar por colaborador" value={collaborator} onChange={(event) => setCollaborator(event.target.value)}><option value="">Todos</option>{collaboratorOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>{collaborator && <span>{visible.length} {visible.length === 1 ? 'serviço' : 'serviços'}</span>}</div>}
-      <div className="admin-os-table-wrap"><table className="admin-os-table"><thead><tr>{header('OS / Serviço', 'code')}{header('Cliente', 'company')}{header(completedView ? 'Colaboradores' : 'Operador', 'collaborators')}{header('Etapa atual', 'stage')}{header('Peças concluídas', 'pieces')}{!completedView && header('Progresso', 'progress')}{header('Tempo ativo', 'active')}{header(completedView ? 'Conclusão' : 'Tempo restante', 'completion')}{header('Status', 'status')}{completedView && header('Anexos administrativos', 'purchase')}<th></th></tr></thead><tbody>{visible.map((order) => <ServicePanelRow key={order.code} order={order} now={now} completedView={completedView} highlighted={order.code === highlightCode} onSelectOrder={onSelectOrder} onMaterialAlert={setPendingInspectionCode} onCompletedStatus={openCompleted} />)}</tbody></table>{!visible.length && <p className="admin-os-empty">{completedView ? 'Nenhum serviço concluído encontrado.' : 'Nenhuma OS real encontrada para este filtro.'}</p>}</div>
+      <div className="admin-os-table-wrap"><table className="admin-os-table"><thead><tr>{header('OS / Serviço', 'code')}{header('Cliente', 'company')}{header(completedView ? 'Colaboradores' : 'Operador', 'collaborators')}{header('Etapa atual', 'stage')}{header('Peças concluídas', 'pieces')}{!completedView && header('Progresso', 'progress')}{header('Tempo ativo', 'active')}{header(completedView ? 'Conclusão' : 'Tempo restante', 'completion')}{header('Status', 'status')}{completedView && header('Anexos administrativos', 'purchase')}<th></th></tr></thead><tbody>{visible.map((order) => <ServicePanelRow key={order.code} order={order} now={now} completedView={completedView} highlighted={order.code === highlightCode} onSelectOrder={onSelectOrder} onMaterialAlert={setPendingInspectionCode} onCompletedStatus={openCompleted} onCompleteOperator={setCompletingCode} />)}</tbody></table>{!visible.length && <p className="admin-os-empty">{completedView ? 'Nenhum serviço concluído encontrado.' : 'Nenhuma OS real encontrada para este filtro.'}</p>}</div>
       {completedView ? <div className="admin-os-summary admin-os-summary--completed"><div><strong>{panelOrders.length}</strong><span>Serviços concluídos</span></div><div><strong>{panelOrders.reduce((total, order) => total + currentPieceProgress(order.operation, order.quantity).completedPieces, 0)}</strong><span>Peças concluídas</span></div><div><strong>{panelDuration(panelOrders.reduce((total, order) => total + totalTime(order.operation), 0))}</strong><span>Tempo ativo somado</span></div></div> : <div className="admin-os-summary"><div><strong>{orders.filter((order) => order.operation.status !== 'completed').length}</strong><span>OS abertas</span></div><div><strong>{orders.filter((order) => order.operation.status === 'running' || order.operation.status === 'finalizing').length}</strong><span>Em execução</span></div><div><strong>{panelDuration(orders.reduce((total, order) => total + totalTime(order.operation), 0))}</strong><span>Tempo ativo somado</span></div><div><strong>{orders.filter((order) => order.operation.status === 'completed').length}</strong><span>Concluídas</span></div></div>}
       {displayError && <p className="workflow-error" role="alert">{displayError}</p>}
       <footer className="admin-os-display-controls">{displayMode && <time>{new Date(now).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })}</time>}<button type="button" onClick={toggleDisplayMode}>{displayMode ? <Minimize2 size={18} /> : <Monitor size={18} />}{displayMode ? 'Sair do modo de exibição' : 'Modo de exibição'}</button></footer>
+      {completingOrder && <CompleteOperatorModal key={completingOrder.code} order={completingOrder} onConfirm={completeOperator} onClose={() => setCompletingCode(null)} />}
       {schedulingCode && <ReceivableScheduleModal key={schedulingCode} orderCode={schedulingCode} onClose={() => setSchedulingCode(null)} onAcknowledge={acknowledgeCompletion} />}
       {labelCode && <LabelQuoteModal key={labelCode} code={labelCode} onClose={() => { setLabelCode(null); onRefresh?.() }} onConclude={(code) => { setLabelCode(null); setSchedulingCode(code) }} />}
       {inspectedOrder && inspectedMaterials.length > 0 && <PendingMaterialsModal orderCode={inspectedOrder.code} materials={inspectedMaterials} onClose={() => setPendingInspectionCode(null)} onOpenRequest={() => { setPendingInspectionCode(null); onNavigate('Pedidos', { orderCode: inspectedOrder.code }) }} />}

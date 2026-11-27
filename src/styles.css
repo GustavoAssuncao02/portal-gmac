@@ -7458,6 +7458,11 @@ button {
 .admin-os-status::before { content: '●'; font-size: 10px; }
 /* "Aguardando NF-e" is longer than the column: it wraps in two lines instead of running over Ver OS. */
 .admin-os-table td button.admin-os-status { min-width: 0; white-space: normal; text-align: left; line-height: 1.2; }
+/* "Concluir atividades do Operador" below Ver OS, when every stage has every piece: wraps inside the narrow column. */
+.admin-os-table td button.admin-os-complete-operator { display: block; width: 100%; margin-top: 6px; padding: 6px 3px; border-color: #188449; color: #188449; font-size: 11px; white-space: normal; line-height: 1.2; text-align: center; }
+/* Below 1800px the column of the actions (5%) is narrower than "atividades": with the button it takes 2% of Progresso. */
+@media (max-width: 1799px) { .admin-os-table:has(.admin-os-complete-operator) th:nth-child(10) { width: 7%; } .admin-os-table:has(.admin-os-complete-operator) th:nth-child(6) { width: 38%; } }
+.admin-os-table td button.admin-os-complete-operator:hover { background: #e8f6ec; }
 .admin-os-status--deadline-on-time { background: #e8f6ec; color: #188449; }
 .admin-os-status--deadline-soon { background: #fff4dc; color: #a56c00; }
 .admin-os-status--deadline-at-deadline { background: #fff0de; color: #b85b08; }

@@ -524,6 +524,7 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .bulk-action-lead { font-size: calc(16px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .bulk-action-blocked h3 { font-size: calc(14px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .bulk-action-blocked ul { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .payable-modal .complete-operator-sessions h3 { font-size: calc(14px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .proposal-model-step > p { font-size: calc(14px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .proposal-model-card { font-size: inherit; }
 :root:is([data-font-size="small"], [data-font-size="large"]) .proposal-model-card strong { font-size: calc(16px * var(--account-font-scale)); }
@@ -1332,6 +1333,7 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .admin-os-material-alert { font-size: calc(11px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .admin-os-table td button { font-size: calc(10px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .admin-os-status::before { font-size: calc(10px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .admin-os-table td button.admin-os-complete-operator { font-size: calc(11px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .admin-os-status--deadline-late::before { font-size: calc(9px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .admin-os-days { font-size: calc(10px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .admin-os-stage-label { font-size: calc(8px * var(--account-font-scale)); line-height: calc(12px * var(--account-font-scale)); }
