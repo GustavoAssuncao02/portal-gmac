@@ -7,7 +7,7 @@ export const releaseNotes = [
       'Ofertas: prazo para o cliente responder a proposta, com avisos',
       'Contas a pagar e a receber: ações em massa, Excel resumido e 500 contas por página',
       'Contas a receber: novos filtros, incluindo tipo do recebimento',
-      'Serviços em andamento: concluir atividades do operador e modo de exibição no topo',
+      'Serviços em andamento: concluir atividades do operador, modo de exibição no topo e OS aguardando NF-e em bloco separado',
       'Início: widgets de anotações e tarefas, próximas entregas e período nos resumos de contas',
       'Ordens de serviço: lançamento manual com início e pausa juntos',
       'Melhorias gerais: correções de problemas e maior estabilidade do sistema',

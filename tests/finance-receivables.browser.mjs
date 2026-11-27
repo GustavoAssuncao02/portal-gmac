@@ -77,7 +77,7 @@ try {
   await dialog.getByRole('button', { name: 'Fechar janela', exact: true }).click()
 
   await navigate('Serviços em andamento')
-  const row = page.locator('.admin-os-table tbody tr').filter({ hasText: order.code })
+  const row = page.locator('.admin-invoice-table tbody tr').filter({ hasText: order.code })
   await row.getByRole('button', { name: 'Aguardando NF-e', exact: true }).click()
   const schedule = page.getByRole('dialog', { name: 'Recebimento do serviço', exact: true })
   await schedule.getByRole('button', { name: /^Ainda vai receber/ }).click()

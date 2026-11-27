@@ -73,7 +73,8 @@ try {
   await button.click()
   await dialog.getByRole('button', { name: 'Concluir OS', exact: true }).click()
   await dialog.waitFor({ state: 'detached' })
-  await finishedRow.getByRole('button', { name: 'Aguardando NF-e', exact: true }).waitFor()
+  // The OS goes to the block "Aguardando NF-e" below the production.
+  await page.locator('.admin-invoice-table tbody tr').filter({ hasText: finished.code }).getByRole('button', { name: 'Aguardando NF-e', exact: true }).waitFor()
   assert.equal(await button.count(), 0)
   const operation = (await fixture.request('/operations/orders', 'GET', undefined, fixture.admin)).data.items.find((item) => item.code === finished.code).operation
   assert.equal(operation.status, 'completed')

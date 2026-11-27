@@ -205,7 +205,7 @@ try {
 
   // Finishing an OS: the administrator says whether the customer still has to pay or has already paid.
   await navigate('Serviços em andamento')
-  const service = page.locator('.admin-os-table tbody tr').filter({ hasText: order.code })
+  const service = page.locator('.admin-invoice-table tbody tr').filter({ hasText: order.code })
   await service.getByRole('button', { name: 'Aguardando NF-e', exact: true }).click()
   const schedule = page.getByRole('dialog', { name: 'Recebimento do serviço', exact: true })
   await schedule.getByText('O cliente já pagou este serviço?', { exact: true }).waitFor()

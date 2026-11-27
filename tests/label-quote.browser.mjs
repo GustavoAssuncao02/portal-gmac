@@ -55,7 +55,7 @@ try {
   await page.locator('.sidebar').waitFor()
 
   await openSidebarItem(page, 'Serviços em andamento')
-  const row = page.locator('.admin-os-table tbody tr').filter({ hasText: order.code })
+  const row = page.locator('.admin-invoice-table tbody tr').filter({ hasText: order.code })
   await row.getByRole('button', { name: 'Aguardando NF-e', exact: true }).waitFor()
   await row.screenshot({ path: 'test-results/label-quote-row.png' })
   await row.getByRole('button', { name: 'Aguardando NF-e', exact: true }).click()

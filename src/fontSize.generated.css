@@ -1449,6 +1449,19 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .offer-response-badge { font-size: calc(11px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .offer-response-answered { font-size: calc(11px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .offer-response-field small { font-size: calc(12.5px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .admin-invoice-heading { font-size: inherit; }
+:root:is([data-font-size="small"], [data-font-size="large"]) .admin-invoice-title { font-size: calc(15px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .admin-invoice-heading > strong { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .admin-invoice-heading > small { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .admin-invoice-toggle-text { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .admin-invoice-table th { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .admin-invoice-table td { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .admin-invoice-table td:first-child small { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .admin-invoice-quote { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .admin-invoice-actions button { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .admin-invoice-actions .admin-os-status--completed { font-size: inherit; font-size: calc(12px * var(--account-font-scale)); }
+@media (max-width: 1150px) {:root:is([data-font-size="small"], [data-font-size="large"]) .admin-invoice-table td[data-label]::before { font-size: calc(11px * var(--account-font-scale)); } }
+@media (max-width: 760px) {:root:is([data-font-size="small"], [data-font-size="large"]) .admin-invoice-actions button { font-size: calc(14px * var(--account-font-scale)); } }
 @media (min-width: 1101px) {:root:is([data-font-size="small"], [data-font-size="large"]) .sidebar .nav-item { font-size: calc(14px * var(--account-font-scale)); } }
 @media (min-width: 1101px) {:root:is([data-font-size="small"], [data-font-size="large"]) .sidebar .sidebar-submenu .nav-item { font-size: calc(13px * var(--account-font-scale)); } }
 @media (min-width: 1101px) {:root:is([data-font-size="small"], [data-font-size="large"]) .offers-board .offers-search input { font-size: calc(14px * var(--account-font-scale)); } }
