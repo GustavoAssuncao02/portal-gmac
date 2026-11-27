@@ -80,6 +80,13 @@ try {
     }
     await navigate('Servi\u00e7os em andamento')
     assert.deepEqual(await codes(), [activeCode, pendingCode])
+    if (viewport.width === 1920) {
+      // The headers of the services in progress sort the table too (emergencies only lead while no header is chosen).
+      const sortBy = async (name) => { await page.locator('.admin-os-table thead').getByRole('button', { name, exact: true }).click(); return codes() }
+      assert.deepEqual(await sortBy('OS / Servi\u00e7o'), [activeCode, pendingCode], 'largest code first')
+      assert.deepEqual(await sortBy('OS / Servi\u00e7o'), [pendingCode, activeCode], 'a second click inverts in progress too')
+      assert.equal(await page.locator('.admin-os-table thead th', { hasText: 'OS / Servi\u00e7o' }).getAttribute('aria-sort'), 'ascending')
+    }
     const pendingRow = page.locator('.admin-os-table tbody tr').filter({ hasText: pendingCode })
     const schedule = page.getByRole('dialog', { name: 'Recebimento do serviço', exact: true })
     if (viewport.width === 1920) {

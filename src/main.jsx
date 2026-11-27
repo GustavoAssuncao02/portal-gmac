@@ -2450,8 +2450,9 @@ function AdminServicesView({ collapsed, onToggle, activeNav, onNavigate, onLogou
   const sortBy = (key) => setSort((current) => ({ key, direction: current?.key === key ? -current.direction : largestFirst.has(key) ? -1 : 1 }))
   const sorted = sort ? [...matching].sort((left, right) => { const a = sortValues[sort.key](left), b = sortValues[sort.key](right); return sort.direction * (typeof a === 'number' ? a - b : String(a).localeCompare(String(b), 'pt-BR', { numeric: true })) || left.code.localeCompare(right.code) }) : matching
   const header = (label, key) => key ? <th key={label} aria-sort={sort?.key === key ? sort.direction === 1 ? 'ascending' : 'descending' : 'none'}><button className="admin-os-sort" type="button" onClick={() => sortBy(key)}>{label}{sort?.key !== key ? <ArrowUpDown size={12} aria-hidden="true" /> : sort.direction === 1 ? <ArrowUp size={12} aria-hidden="true" /> : <ArrowDown size={12} aria-hidden="true" />}</button></th> : <th key={label}>{label}</th>
-  // Emergencies come first while the work is in progress; finished services keep their order unless a header is chosen.
-  const visible = completedView ? sorted : emergenciesFirst(matching)
+  // A chosen header decides the order (emergencies stay highlighted in their row); without one, emergencies come first
+  // while the work is in progress and finished services keep their order.
+  const visible = completedView || sort ? sorted : emergenciesFirst(matching)
   async function acknowledgeCompletion(code) {
     await apiRequest(`/api/operations/orders/${encodeURIComponent(code)}/acknowledge-completion`, jsonOptions('POST', {}))
     await onRefresh()
