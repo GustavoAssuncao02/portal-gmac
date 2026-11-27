@@ -14,10 +14,10 @@ function inputsOf(ms) {
   const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bahia', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(ms)).map((part) => [part.type, part.value]))
   return { date: `${parts.year}-${parts.month}-${parts.day}`, time: `${parts.hour}:${parts.minute}` }
 }
-// Today at 19:00 (the usual hour), or tomorrow when 19:00 is less than 10 minutes away.
+// Today at 19:00 (the usual hour), or tomorrow when 19:00 has passed.
 function defaultDraft() {
   const today = todayBahia(), evening = Date.parse(`${today}T19:00:00-03:00`)
-  return { date: evening - Date.now() >= 10 * 60000 ? today : inputsOf(evening + 24 * 3600000).date, time: '19:00', message: '' }
+  return { date: evening > Date.now() ? today : inputsOf(evening + 24 * 3600000).date, time: '19:00', message: '' }
 }
 
 function UpdateForm({ initial, submitLabel, busy, onSubmit, onCancel }) {
@@ -54,7 +54,7 @@ export default function UpdateSchedule({ refreshKey }) {
   return <section className="developer-section developer-update" aria-labelledby="developer-update-title">
     <div className="developer-section-heading"><h2 id="developer-update-title">Programar atualização</h2>
       {data && <small className={`developer-update-mode${data.automatic ? ' developer-update-mode--auto' : ''}`}>{data.automatic ? 'Modo automático (SaveInCloud)' : 'Modo manual'}</small>}</div>
-    <p className="developer-update-note">Todos do portal administrativo recebem um aviso no sino quando a atualização é programada, remarcada ou cancelada, e de novo 5 minutos antes. Nos 2 minutos finais aparece uma contagem discreta no topo das telas. Vai para o ar o que estiver no <code>main</code> do GitHub no horário.</p>
+    <p className="developer-update-note">Todos do portal administrativo recebem um aviso no sino quando a atualização é programada, remarcada ou cancelada, e de novo 5 minutos antes. Pode ser programada para qualquer horário a partir de agora. Nos 2 minutos finais aparece uma contagem discreta no topo das telas. Vai para o ar o que estiver no <code>main</code> do GitHub no horário.</p>
     {data && <p className="developer-update-note">{data.automatic ? `No horário, o portal pede ao SaveInCloud a atualização do ambiente ${data.environment}, o mesmo que Implementações › ROOT › Atualizar.` : 'No horário, os desenvolvedores recebem um aviso no sino para atualizar pelo SaveInCloud (Implementações › ROOT › Atualizar). Para ser automática, configure SAVEINCLOUD_TOKEN e SAVEINCLOUD_ENV no servidor.'}</p>}
     {error && <p className="admin-tool-error" role="alert">{error}</p>}
     {!data ? !error && <p className="developer-empty" role="status">Carregando...</p> : active ? <article className={`developer-update-active developer-update-active--${active.status}`}>

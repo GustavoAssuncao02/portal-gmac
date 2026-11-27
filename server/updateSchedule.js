@@ -10,14 +10,14 @@ import { addNotification } from './notificationEvents.js'
 const MINUTE = 60000
 export const WARN_BEFORE_MS = 5 * MINUTE
 export const COUNTDOWN_MS = 2 * MINUTE
-// At least 10 minutes ahead, so both notices (on scheduling and 5 minutes before) reach people in time.
-export const MIN_LEAD_MS = 10 * MINUTE
 export const MAX_AHEAD_MS = 90 * 24 * 60 * MINUTE
 // A server that was down at the hour does not update by surprise when it comes back: after 10 minutes it is not run.
 export const LATE_LIMIT_MS = 10 * MINUTE
 const BAHIA_OFFSET = '-03:00'
 const DEPLOY_TIMEOUT_MS = 2 * MINUTE
 
+// Scheduled 5 minutes or less ahead: the notice of scheduling already gives the hour, so no "em 5 minutos" one follows.
+const skipLateWarning = (row, ms, at) => { if (ms - at <= WARN_BEFORE_MS) row.warnedAt = new Date(at).toISOString() }
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), { status }) }
 const clean = (value, max) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max)
 
@@ -78,7 +78,8 @@ export function createUpdateScheduler({ readStore, mutateStore, developerIds = a
   function validMoment(date, time, at = now()) {
     const ms = scheduleMoment(date, time)
     if (ms == null) fail('Informe uma data e uma hora válidas.')
-    if (ms - at < MIN_LEAD_MS) fail('Programe a atualização com pelo menos 10 minutos de antecedência, para os avisos chegarem a tempo.')
+    // Any hour from the current minute on (2026-11-27: no minimum notice); the current minute starts it right away.
+    if (ms < at - (at % MINUTE)) fail('Escolha um horário a partir de agora.')
     if (ms - at > MAX_AHEAD_MS) fail('Programe a atualização para no máximo 90 dias a partir de hoje.')
     return ms
   }
@@ -97,6 +98,7 @@ export function createUpdateScheduler({ readStore, mutateStore, developerIds = a
       const current = activeSchedule(store)
       if (current) fail(`Já existe uma atualização ${current.status === 'started' ? 'em andamento' : `programada para ${momentLabel(Date.parse(current.at))}`}. Remarque ou cancele a atual.`, 409)
       const row = { id: randomUUID(), at: new Date(ms).toISOString(), message, status: 'scheduled', createdAt: new Date(at).toISOString(), createdBy: actorOf(actor), version, history: [] }
+      skipLateWarning(row, ms, at)
       store.updateSchedules.push(row)
       if (store.updateSchedules.length > 60) store.updateSchedules.splice(0, store.updateSchedules.length - 60)
       noticeAll(store, row, 'scheduled', 'Atualização do portal programada', `O portal será atualizado em ${momentLabel(ms)} e pode ficar fora do ar por alguns minutos.${publicMessage(row)}`, at)
@@ -116,6 +118,7 @@ export function createUpdateScheduler({ readStore, mutateStore, developerIds = a
         row.history.push({ at: new Date(at).toISOString(), by: actorOf(actor).name, from: row.at, to: new Date(ms).toISOString() })
         row.at = new Date(ms).toISOString()
         delete row.warnedAt
+        skipLateWarning(row, ms, at)
         noticeAll(store, row, `rescheduled-${row.history.length}`, 'Atualização do portal remarcada', `A atualização de ${momentLabel(before)} passou para ${momentLabel(ms)}.${publicMessage(row)}`, at)
       }
       return scheduleView(row)

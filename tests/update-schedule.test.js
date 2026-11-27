@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { createUpdateScheduler, scheduleMoment, momentLabel, deployConfig, requestDeploy, nextUpdateView, MIN_LEAD_MS } from '../server/updateSchedule.js'
+import { createUpdateScheduler, scheduleMoment, momentLabel, deployConfig, requestDeploy, nextUpdateView} from '../server/updateSchedule.js'
 import { alwaysShownNotices } from '../server/notificationRules.js'
 
 const MINUTE = 60000
@@ -34,10 +34,10 @@ test('the date and hour are read in Bahia and shown as people say them', () => {
   assert.ok(alwaysShownNotices.has('system-update'), 'everybody sees the update notices, whatever the preferences')
 })
 
-test('scheduling tells everybody, needs 10 minutes of notice and allows one update at a time', async () => {
+test('scheduling tells everybody, takes any hour from now on and allows one update at a time', async () => {
   const { scheduler, memory, clock } = setup()
-  clock.now = AT - MIN_LEAD_MS + MINUTE
-  await assert.rejects(scheduler.create({ date: '2026-11-26', time: '19:00' }, developer), /10 minutos/)
+  clock.now = AT + MINUTE
+  await assert.rejects(scheduler.create({ date: '2026-11-26', time: '19:00' }, developer), /a partir de agora/)
   clock.now = AT - 60 * MINUTE
   await assert.rejects(scheduler.create({ date: '2027-06-01', time: '19:00' }, developer), /90 dias/)
   const item = await scheduler.create({ date: '2026-11-26', time: '19:00', message: '  Melhorias   no Contas a Receber ' }, developer)
@@ -60,7 +60,7 @@ test('rescheduling and canceling tell everybody; a new hour gets its own 5-minut
   clock.now = AT - 4 * MINUTE
   await scheduler.sweep()
   assert.equal(notices(memory).filter((notice) => /5 minutos/.test(notice.title)).length, 1)
-  await assert.rejects(scheduler.reschedule(item.id, { date: '2026-11-26', time: '19:05' }, developer), /10 minutos/)
+  await assert.rejects(scheduler.reschedule(item.id, { date: '2026-11-26', time: '18:55' }, developer), /a partir de agora/)
   const moved = await scheduler.reschedule(item.id, { date: '2026-11-26', time: '20:00' }, developer)
   assert.equal(moved.at, new Date(AT + 60 * MINUTE).toISOString())
   assert.match(notices(memory).at(-1).description, /19:00 passou para 26\/11 às 20:00/)
@@ -204,4 +204,19 @@ test('the routes: every administrative session reads the countdown; only develop
   assert.equal((await call(`/developer/updates/${next.id}/cancel`, 2, 'POST')).status, 403)
   assert.equal((await call(`/developer/updates/${next.id}/cancel`, 1, 'POST')).data.item.status, 'canceled')
   assert.equal((await call('/update-schedule', 2)).data.item, null)
+})
+
+test('an update a few minutes ahead, or in the current minute, is accepted without a wrong "em 5 minutos" notice', async () => {
+  const { scheduler, memory, clock } = setup()
+  clock.now = AT - 2 * MINUTE
+  const soon = await scheduler.create({ date: '2026-11-26', time: '19:00' }, developer)
+  assert.equal(soon.status, 'scheduled')
+  await scheduler.sweep()
+  assert.equal(notices(memory).filter((notice) => /5 minutos/.test(notice.title)).length, 0)
+  await scheduler.cancel(soon.id, developer)
+  clock.now = AT + 20 * 1000
+  const now = await scheduler.create({ date: '2026-11-26', time: '19:00' }, developer)
+  await scheduler.sweep()
+  assert.equal(memory.current().updateSchedules.find((row) => row.id === now.id).status, 'started')
+  assert.equal(notices(memory).filter((notice) => /5 minutos/.test(notice.title)).length, 0)
 })
