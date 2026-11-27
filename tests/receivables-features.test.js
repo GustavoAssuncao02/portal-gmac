@@ -163,3 +163,56 @@ test('recurring contracts, attachments, receipts with proof, bulk receipt and be
     assert.equal((await request('/notifications')).data.items.filter((item) => item.type === 'receivable').length, 0)
   } finally { await f.close() }
 })
+
+test('bulk actions in Contas a Receber: gross, ISS and net in the preview, received accounts kept, plans numbered again', async () => {
+  const f = await createWorkflowFixture({ accountsEnv: env })
+  try {
+    const token = (await f.request('/auth/login', 'POST', { cpf: env.DEMO_ADMIN_CPF, password: env.DEMO_ADMIN_PASSWORD })).data.token
+    const bulk = (body) => f.request('/receivables/bulk', 'POST', body, { Authorization: `Bearer ${token}` })
+    const received = (finalCents, issCents = 0, date = '2026-11-05') => ({ date, method: 'pix', interestCents: 0, discountCents: 0, issCents, finalCents, bankName: 'Banco Teste', receipts: [] })
+    const row = (id, extra) => ({ id, clientId: '1', customerName: 'Cliente Alfa', classificationId: 'r1', classificationName: 'Receita de serviços', description: id, documentNumber: '', issueDate: '2026-11-01', dueDate: '2026-12-01', kind: 'single', valueCents: 10000, issCents: 0, attachments: [], ...extra })
+    await f.mutateStore((store) => {
+      store.classifications = [{ id: 'r1', name: 'Receita de serviços', dreLine: 'gross_revenue' }, { id: 'r2', name: 'Receita de contratos', dreLine: 'gross_revenue' }, { id: 'c1', name: 'Despesa' }]
+      store.receivables = [
+        row('REC-000001', { issCents: 500 }),
+        row('REC-000002', { kind: 'installment', groupId: 'plano', installmentNumber: 1, installmentCount: 3, originalTotalCents: 30000, issCents: 300 }),
+        row('REC-000003', { kind: 'installment', groupId: 'plano', installmentNumber: 2, installmentCount: 3, originalTotalCents: 30000, dueDate: '2027-01-01' }),
+        row('REC-000004', { kind: 'installment', groupId: 'plano', installmentNumber: 3, installmentCount: 3, originalTotalCents: 30000, dueDate: '2027-02-01' }),
+        row('REC-000005', { receipt: received(9500, 500) }),
+        row('REC-000006', { treasury: true, receipt: received(10000) }),
+        row('REC-000007', { valueCents: 6000, partialPaidCents: 4000, partialIssCents: 0, partialIds: ['REC-000008'], receipt: received(6000, 0, '2026-11-10') }),
+        row('REC-000008', { valueCents: 4000, partialOf: 'REC-000007', receipt: received(4000, 0, '2026-11-03') }),
+      ]
+    })
+    const ids = (...numbers) => numbers.map((number) => `REC-${String(number).padStart(6, '0')}`)
+    const preview = async (body) => { const response = await bulk({ ...body, preview: true }); assert.equal(response.status, 200, JSON.stringify(response.data)); return response.data.preview }
+
+    const deletion = await preview({ action: 'delete', ids: ids(1, 2, 3, 5) })
+    assert.deepEqual([deletion.count, deletion.amounts], [3, { grossCents: 30000, issCents: 800, netCents: 29200 }])
+    assert.deepEqual(deletion.blocked.map((item) => [item.id, item.name, item.reason]), [['REC-000005', 'Cliente Alfa', 'Conta com recebimento: preserve o histórico.']])
+    assert.ok(deletion.facts.includes('Tipo: Recebimento parcelado (2), Parcela única (1)'), deletion.facts.join(' | '))
+    assert.equal((await bulk({ action: 'delete', ids: ids(1, 2, 3, 5), token: deletion.token })).data.count, 3)
+    let store = await f.mutateStore((current) => structuredClone(current))
+    const last = store.receivables.find((item) => item.id === 'REC-000004')
+    assert.deepEqual([last.installmentNumber, last.installmentCount, last.originalTotalCents], [1, 1, 10000])
+    assert.ok(store.receivableEvents.filter((item) => item.type === 'deleted').every((item) => item.details.bulk && item.details.text === 'Exclusão em massa (3 contas)'))
+
+    const classify = await preview({ action: 'classify', ids: ids(4, 5, 6), classificationId: 'r2' })
+    assert.deepEqual([classify.ids, classify.blocked.map((item) => item.reason)], [ids(4), ['Conta recebida: desfaça o recebimento antes de alterar a classificação.', 'Lançamento da Tesouraria: altere na conta.']])
+    assert.equal((await bulk({ action: 'classify', ids: ids(4), classificationId: 'c1', preview: true })).status, 400, 'an expense classification does not fit money in')
+    assert.equal((await bulk({ action: 'classify', ids: ids(4, 5, 6), classificationId: 'r2', token: classify.token })).data.count, 1)
+    assert.equal((await f.mutateStore((current) => structuredClone(current))).receivables.find((item) => item.id === 'REC-000004').classificationId, 'r2')
+
+    const reason = 'Recebimentos lançados em duplicidade'
+    assert.deepEqual((await preview({ action: 'reverse', ids: ids(8), reason })).blocked.map((item) => item.reason), ['Recebimento parcial de REC-000007: desfaça antes o recebimento final de REC-000007.'])
+    const reverse = await preview({ action: 'reverse', ids: ids(5, 7, 8), reason })
+    assert.deepEqual([reverse.ids, reverse.amounts], [ids(5, 7, 8), { grossCents: 20000, issCents: 500, netCents: 19500 }])
+    assert.equal((await bulk({ action: 'reverse', ids: ids(5, 7, 8), reason, token: reverse.token })).status, 200)
+    store = await f.mutateStore((current) => structuredClone(current))
+    const parent = store.receivables.find((item) => item.id === 'REC-000007')
+    assert.deepEqual([parent.receipt, parent.valueCents, parent.partialPaidCents, store.receivables.some((item) => item.id === 'REC-000008'), store.receivables.find((item) => item.id === 'REC-000005').receipt], [null, 10000, undefined, false, null])
+    assert.deepEqual(store.receivableEvents.filter((item) => item.type === 'reversed').map((item) => [item.accountId, item.details.bulk]), [['REC-000005', true], ['REC-000007', true], ['REC-000008', true]])
+    // The bulk receipt of before keeps working.
+    assert.equal((await bulk({ action: 'receive', ids: ids(4), date: todayBahia(), method: 'pix' })).status, 200)
+  } finally { await f.close() }
+})

@@ -13,6 +13,7 @@ import { settlementBank, bankFilterNote } from './banks.js'
 import { classificationList, entryClassification } from './accountPlan.js'
 import { sortedByName } from './byName.js'
 import { materialCostDeltaCents } from './orderMaterials.js'
+import { bulkActions, bulkIds, planBulk, previewOf, assertSamePreview, countsLine, dateRangeLine } from './bulkAccounts.js'
 
 const directory = path.join(dataDirectory, 'payable-files')
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), { status }) }
@@ -144,11 +145,11 @@ function view(row, store) {
 // reconciliation) the account is open again and can be deleted; its history keeps the payment, the reversal and the deletion.
 const paidHistory = (store, row) => Boolean(row.payment || row.partialPaidCents)
 const relatedPayables = (store, row) => row.groupId ? store.payables.filter((r) => r.groupId === row.groupId) : row.seriesId ? store.payables.filter((r) => r.seriesId === row.seriesId) : [row]
-function payableDeleteBlock(store, row) {
+function payableDeleteBlock(store, row, leaving = new Set()) {
   if (row.partialPaidCents) return 'Conta com baixa parcial: estorne as baixas parciais antes de excluir.'
   if (!row.treasury && paidHistory(store, row)) return 'Conta com pagamento: preserve o histórico; desative quando paga.'
   if (!row.treasury && row.groupId && relatedPayables(store, row).some((r) => paidHistory(store, r))) return 'Há parcela paga neste parcelamento: preserve o histórico; desative quando paga.'
-  if (!row.treasury && store.payables.some((r) => r.previousId === row.id)) return 'Conta com recorrência seguinte vinculada: exclua antes a conta seguinte.'
+  if (!row.treasury && store.payables.some((r) => r.previousId === row.id && !leaving.has(r.id))) return 'Conta com recorrência seguinte vinculada: exclua antes a conta seguinte.'
   if (reconciledTransaction(store, 'payable', row.id)) return 'Lançamento conciliado: desfaça antes a conciliação em Conciliação bancária.'
   return null
 }
@@ -163,14 +164,17 @@ function removePayables(store, actor, row, all) {
   for (const item of targets) event(store, actor, 'deleted', item.id, { details: { account: item, text: plan && targets.length > 1 ? `${plan} excluído (${targets.length} contas)` : plan ? `${plan}: só esta conta excluída` : '' } })
   const ids = new Set(targets.map((r) => r.id))
   store.payables = store.payables.filter((r) => !ids.has(r.id))
-  // What remains of the plan is numbered again, so "parcela x de y" and the total stay right.
-  const rest = relatedPayables(store, row).filter((r) => r !== row && !ids.has(r.id))
+  renumberPayables(store, row)
+  return [...ids]
+}
+// What remains of the plan of a removed account is numbered again, so "parcela x de y" and the total stay right.
+function renumberPayables(store, row) {
+  const rest = relatedPayables(store, row).filter((r) => r !== row)
   if (row.groupId && rest.length) {
     rest.sort((a, b) => a.installmentNumber - b.installmentNumber).forEach((r, index) => { r.installmentNumber = index + 1; r.installmentCount = rest.length; r.originalTotalCents = rest.reduce((sum, item) => sum + item.valueCents, 0) })
   } else if (row.seriesId && rest.length) {
     rest.sort((a, b) => a.dueDate.localeCompare(b.dueDate)).forEach((r, index) => { r.seriesIndex = index + 1; r.seriesCount = rest.length })
   }
-  return [...ids]
 }
 
 // The material is counted at its real cost: what already left the stock for the OS at the stock price of that moment,
@@ -216,6 +220,90 @@ function report(rows, store, individual = false, filters = {}, variant = 'full')
   const notes = individual ? [] : [`Situação: ${{ all: 'Todas', inactive: 'Desativadas', ...statusLabel }[filters.status] || (filters.bankId ? 'Pagas' : 'Pendentes e vencidas')}`, ...bankFilterNote(store, filters.bankId), ...(filters.search ? [`Busca: ${filters.search}`] : []), ...(filters.supplierId ? [`Fornecedor: ${store.suppliers?.find((row) => row.id === filters.supplierId)?.name || filters.supplierId}`] : []), ...(filters.classificationId ? [`Classificação: ${store.classifications.find((row) => row.id === filters.classificationId)?.name || filters.classificationId}`] : []), ...(payableKindLabels[filters.kind] ? [`Tipo da conta: ${payableKindLabels[filters.kind]}`] : [])]
   const full = { title: individual ? `Conta ${rows[0]?.id || ''}` : 'Contas a pagar', eyebrow: 'Financeiro', generatedAt: new Date().toISOString(), start: filters.start, end: filters.end, summary: [['Contas', rows.length], ['Valor original', money(rows.reduce((sum, r) => sum + r.valueCents, 0))]], notes, sections }
   return variant === 'summary' ? { ...full, title: 'Contas a pagar · Resumo', sections: [payablesSummary(rows.map((raw) => view(raw, store)))] } : full
+}
+
+// Estorno of a payment (individual or in bulk, `mark` tags the history of a bulk action). A partial payment: its value goes
+// back to the balance of the account it came from and the record leaves the lists (its history stays).
+function reversePayable(store, actor, row, reason, mark = {}) {
+  if (!row.payment || row.inactive) fail('Reative a conta antes de estornar.', 409)
+  assertNotReconciled(store, 'payable', row.id, 'estornar')
+  if (reason.length < 10) fail('Informe um motivo com pelo menos 10 caracteres.')
+  const parent = row.partialOf ? store.payables.find((item) => item.id === row.partialOf) : null
+  if (parent) {
+    if (parent.payment || parent.inactive) fail(`Estorne a baixa final de ${parent.id} (ou reative a conta) antes de estornar esta baixa parcial.`, 409)
+    assertNotReconciled(store, 'payable', parent.id, 'estornar baixa parcial de')
+    const merged = mergeDivision(parent, row)
+    parent.valueCents += row.valueCents
+    if (merged) Object.assign(parent, applyDivision(parent, merged))
+    parent.partialPaidCents = (parent.partialPaidCents || 0) - row.valueCents
+    parent.partialIds = (parent.partialIds || []).filter((id) => id !== row.id)
+    if (!parent.partialPaidCents) { delete parent.partialPaidCents; delete parent.partialIds }
+    event(store, actor, 'reversed', row.id, { reason, details: { ...mark, payment: row.payment, partialOf: parent.id, text: `Baixa parcial estornada: ${money(row.valueCents)} voltaram ao saldo de ${parent.id}` } })
+    event(store, actor, 'partial_reversed', parent.id, { reason, details: { ...mark, partialId: row.id, valueCents: row.valueCents, balanceCents: parent.valueCents } })
+    store.payables = store.payables.filter((r) => r.id !== row.id)
+    parent.lastStatus = payableStatus(parent)
+    return parent
+  }
+  event(store, actor, 'reversed', row.id, { reason, details: { ...mark, payment: row.payment } }); row.payment = null; row.lastStatus = payableStatus(row); return row
+}
+
+// Ações em massa (server/bulkAccounts.js): each account follows the rule of the individual action.
+const reconciledBlock = (store, id) => reconciledTransaction(store, 'payable', id) ? 'Lançamento conciliado: desfaça antes a conciliação em Conciliação bancária.' : null
+function payableBulkPlan(store, body) {
+  const rows = bulkIds(body, fail).map((id) => find(store, id))
+  const target = body.action === 'classify' ? entryClassification(store, body.classificationId, 'payable') : null
+  if (body.action === 'classify' && !target) fail('Selecione uma classificação ativa de despesa.')
+  const blocks = {
+    delete: (row, allowed) => payableDeleteBlock(store, row, allowed),
+    reverse: (row, allowed) => {
+      if (!row.payment) return 'Conta sem baixa.'
+      if (row.inactive) return 'Conta desativada: reative antes de desfazer a baixa.'
+      const parent = row.partialOf ? store.payables.find((item) => item.id === row.partialOf) : null
+      if (parent?.inactive) return `Baixa parcial de ${parent.id}, que está desativada: reative a conta antes.`
+      if (parent?.payment && !allowed.has(parent.id)) return `Baixa parcial de ${parent.id}: desfaça antes a baixa final de ${parent.id}.`
+      return reconciledBlock(store, row.id) || (parent && reconciledBlock(store, parent.id))
+    },
+    classify: (row) => {
+      if (row.treasury) return 'Lançamento da Tesouraria: altere na conta.'
+      if (row.payment || row.inactive) return 'Conta paga: desfaça a baixa antes de alterar a classificação.'
+      if (row.partialPaidCents) return 'Conta com baixa parcial: estorne as baixas parciais antes de alterar.'
+      if (row.classificationSplit?.length) return 'Classificação dividida: altere na conta.'
+      if (row.classificationId === target.id) return `Já está em ${target.name}.`
+      return reconciledBlock(store, row.id)
+    },
+  }
+  const plan = planBulk(rows, blocks[body.action])
+  const nameOf = (row) => view(row, store).supplierName
+  const facts = {
+    delete: (rows) => {
+      const kept = new Set(rows.map((row) => row.id))
+      const series = [...new Set(rows.filter((row) => row.seriesId).map((row) => row.seriesId))].filter((id) => !store.payables.some((row) => row.seriesId === id && !kept.has(row.id) && !row.payment && !row.inactive))
+      return [dateRangeLine('Vencimentos', rows.map((row) => row.dueDate)), countsLine('Fornecedor', rows.map(nameOf)), countsLine('Tipo', rows.map((row) => payableKindLabels[row.kind || 'normal'])), series.length ? `${series.length} ${series.length === 1 ? 'recorrência fica' : 'recorrências ficam'} sem lançamentos em aberto` : null]
+    },
+    reverse: (rows) => [dateRangeLine('Baixas', rows.map((row) => row.payment?.date)), countsLine('Banco', rows.map((row) => row.payment?.bankName || 'Sem banco')), countsLine('Fornecedor', rows.map(nameOf))],
+    classify: (rows) => [`Nova classificação: ${target.name}`, countsLine('Classificação atual', rows.map((row) => classificationView(row, store).classificationName)), countsLine('Fornecedor', rows.map(nameOf))],
+  }
+  const preview = previewOf(body.action, plan, { name: nameOf, amounts: (rows) => ({ totalCents: rows.reduce((sum, row) => sum + row.valueCents, 0) }), facts: facts[body.action], signature: (row) => [row.id, row.valueCents, row.dueDate, row.payment?.date ?? null, row.payment?.finalCents ?? null, row.inactive ?? false, row.partialPaidCents ?? 0, row.classificationId ?? null] })
+  return { plan, preview, target }
+}
+function applyPayableBulk(store, actor, body, { plan, target }) {
+  const rows = plan.allowed, count = rows.length
+  if (body.action === 'delete') {
+    const ids = new Set(rows.map((row) => row.id))
+    for (const row of rows) event(store, actor, 'deleted', row.id, { details: { account: row, bulk: true, text: `Exclusão em massa (${count} ${count === 1 ? 'conta' : 'contas'})` } })
+    store.payables = store.payables.filter((row) => !ids.has(row.id))
+    // Each plan that lost accounts is numbered again once.
+    const plans = new Map(rows.filter((row) => row.groupId || row.seriesId).map((row) => [row.groupId || row.seriesId, row]))
+    for (const row of plans.values()) renumberPayables(store, row)
+  }
+  // A final payment goes back before the partial ones of the same account.
+  if (body.action === 'reverse') for (const row of [...rows].sort((left, right) => Number(Boolean(left.partialOf)) - Number(Boolean(right.partialOf)))) reversePayable(store, actor, row, clean(body.reason), { bulk: true, text: 'Baixa desfeita em massa' })
+  if (body.action === 'classify') for (const row of rows) {
+    const before = { ...row }, from = classificationView(row, store).classificationName
+    Object.assign(row, { classificationId: target.id, classificationName: target.name })
+    event(store, actor, 'edited', row.id, { changes: { before, after: { ...row } }, details: { bulk: true, text: `Classificação alterada em massa: ${from} → ${target.name}` } })
+  }
+  return { ok: true, count, ids: rows.map((row) => row.id) }
 }
 
 export default function createPayablesRouter(accounts, requireAdmin) {
@@ -390,6 +478,11 @@ export default function createPayablesRouter(accounts, requireAdmin) {
     }); res.json({ items: result })
   }))
   router.post('/payables/bulk', handle(async (req, res) => {
+    // Excluir, Desfazer baixa and Alterar classificação: preview first, then the confirmation with the preview token.
+    if (bulkActions.includes(req.body.action)) {
+      if (req.body.preview === true) { const store = await readStore(); init(store); return res.json({ preview: payableBulkPlan(store, req.body).preview }) }
+      return res.json(await mutateStore((store) => { init(store); const planned = payableBulkPlan(store, req.body); assertSamePreview(req.body, planned.preview, fail); return applyPayableBulk(store, req.actor, req.body, planned) }))
+    }
     const result = await mutateStore((store) => {
       init(store)
       if (!Array.isArray(req.body.ids) || !req.body.ids.length || new Set(req.body.ids).size !== req.body.ids.length) fail('Selecione contas válidas.')
@@ -408,25 +501,7 @@ export default function createPayablesRouter(accounts, requireAdmin) {
     }); res.json({ items: result })
   }))
   router.post('/payables/:id/pay', handle(async (req, res) => { const item = await mutateStore((store) => { init(store); const row = find(store, req.params.id); editable(row); const data = payment(req.body, row.valueCents, false, billMethods, store); data.receipts = claimFiles(store, req.body.fileIds || [], req.actor); row.payment = data; row.lastStatus = 'paid'; event(store, req.actor, 'paid', row.id, { details: row.payment }); for (const file of data.receipts) event(store, req.actor, 'attachment_added', row.id, { details: { name: file.name, receipt: true } }); return row }); res.json({ item }) }))
-  router.post('/payables/:id/reverse', handle(async (req, res) => { const item = await mutateStore((store) => { init(store); const row = find(store, req.params.id); if (!row.payment || row.inactive) fail('Reative a conta antes de estornar.', 409); assertNotReconciled(store, 'payable', row.id, 'estornar'); const reason = clean(req.body.reason); if (reason.length < 10) fail('Informe um motivo com pelo menos 10 caracteres.')
-    // A partial payment: its value goes back to the balance of the account it came from and the record leaves the lists (its history stays).
-    const parent = row.partialOf ? store.payables.find((item) => item.id === row.partialOf) : null
-    if (parent) {
-      if (parent.payment || parent.inactive) fail(`Estorne a baixa final de ${parent.id} (ou reative a conta) antes de estornar esta baixa parcial.`, 409)
-      assertNotReconciled(store, 'payable', parent.id, 'estornar baixa parcial de')
-      const merged = mergeDivision(parent, row)
-      parent.valueCents += row.valueCents
-      if (merged) Object.assign(parent, applyDivision(parent, merged))
-      parent.partialPaidCents = (parent.partialPaidCents || 0) - row.valueCents
-      parent.partialIds = (parent.partialIds || []).filter((id) => id !== row.id)
-      if (!parent.partialPaidCents) { delete parent.partialPaidCents; delete parent.partialIds }
-      event(store, req.actor, 'reversed', row.id, { reason, details: { payment: row.payment, partialOf: parent.id, text: `Baixa parcial estornada: ${money(row.valueCents)} voltaram ao saldo de ${parent.id}` } })
-      event(store, req.actor, 'partial_reversed', parent.id, { reason, details: { partialId: row.id, valueCents: row.valueCents, balanceCents: parent.valueCents } })
-      store.payables = store.payables.filter((r) => r.id !== row.id)
-      parent.lastStatus = payableStatus(parent)
-      return parent
-    }
-    event(store, req.actor, 'reversed', row.id, { reason, details: { payment: row.payment } }); row.payment = null; row.lastStatus = payableStatus(row); return row }); res.json({ item }) }))
+  router.post('/payables/:id/reverse', handle(async (req, res) => { const item = await mutateStore((store) => { init(store); return reversePayable(store, req.actor, find(store, req.params.id), clean(req.body.reason)) }); res.json({ item }) }))
   // Baixa parcial: pays part of an open account; the balance stays open (with the due date the user gives it) and the part
   // becomes a paid account linked to it. Interest and discount only come with the final settlement.
   router.post('/payables/:id/partial', handle(async (req, res) => {

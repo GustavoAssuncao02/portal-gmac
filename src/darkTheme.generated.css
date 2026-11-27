@@ -3057,6 +3057,39 @@
 :root[data-theme="dark"] .excel-menu-list small {
     color: #b7c2cd
 }
+:root[data-theme="dark"] .bulk-action label {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .bulk-action-lead {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .bulk-action-amounts {
+    border: 1px solid #36516f;
+    background: #203c59
+}
+:root[data-theme="dark"] .bulk-action-amounts dt {
+    color: #b4c2cf
+}
+:root[data-theme="dark"] .bulk-action-amounts dd {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .bulk-action-facts {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .bulk-action-blocked {
+    border: 1px solid #36516f;
+    background: #3c3220
+}
+:root[data-theme="dark"] .bulk-action-blocked h3 {
+    color: #ecc989
+}
+:root[data-theme="dark"] .bulk-action-blocked ul {
+    color: #ecd189
+}
+:root[data-theme="dark"] .bulk-action-notice {
+    background: #3c3020;
+    color: #ecc989
+}
 :root[data-theme="dark"] .proposal-model-step > p {
     color: #b2c2d2
 }

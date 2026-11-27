@@ -7,7 +7,7 @@ import path from 'node:path'
 import { dataDirectory } from './dataDirectory.js'
 import { readStore, mutateStore } from './offers.js'
 import { exportPdf, exportWorkbook } from './reports.js'
-import { cents, validDate, todayBahia, daysUntil, makeInstallments, shiftMonth, matchesSearch, treasuryEntry, duplicateError, duplicateAccepted, MAX_SERIES, receivableDetailMatch, receivableKindLabels } from './payableRules.js'
+import { cents, validDate, todayBahia, daysUntil, makeInstallments, shiftMonth, matchesSearch, treasuryEntry, duplicateError, duplicateAccepted, MAX_SERIES, receivableDetailMatch, receivableKindLabels, receivableKindOf } from './payableRules.js'
 import { notificationSettings } from './accounts.js'
 import { assertNotReconciled, reconciledTransaction } from './bankStatements.js'
 import { normalizeText } from './ofx.js'
@@ -16,6 +16,7 @@ import { labelQuoteRequired } from './labelQuoteRules.js'
 import { operationStates } from './reportData.js'
 import { settlementBank, bankFilterNote } from './banks.js'
 import { classificationList, entryClassification } from './accountPlan.js'
+import { bulkActions, bulkIds, planBulk, previewOf, assertSamePreview, countsLine, dateRangeLine } from './bulkAccounts.js'
 
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), { status }) }
 const clean = (value, limit = 1000) => String(value ?? '').trim().slice(0, limit)
@@ -237,6 +238,93 @@ export function receivablesReport(rows, filters = {}, individual = false, store 
   return variant === 'summary' ? { ...full, title: 'Contas a receber · Resumo', sections: [receivablesSummary(rows)] } : full
 }
 
+// What remains of the plan of a removed account is numbered again, so "parcela x de y" and the total stay right.
+function renumberReceivables(store, row) {
+  const rest = row.groupId ? store.receivables.filter((item) => item.groupId === row.groupId) : row.seriesId ? store.receivables.filter((item) => item.seriesId === row.seriesId) : []
+  if (row.groupId) rest.sort((a, b) => a.installmentNumber - b.installmentNumber).forEach((item, index) => { item.installmentNumber = index + 1; item.installmentCount = rest.length; item.originalTotalCents = rest.reduce((sum, other) => sum + other.valueCents, 0) })
+  else rest.sort((a, b) => a.dueDate.localeCompare(b.dueDate)).forEach((item, index) => { item.seriesIndex = index + 1; item.seriesCount = rest.length })
+}
+// Estorno of a receipt (individual or in bulk, `mark` tags the history of a bulk action). A partial receipt: its value (and
+// the ISS it took) goes back to the balance of the account it came from, and the record leaves the lists (its history stays).
+function reverseReceivable(store, actor, row, reason, mark = {}) {
+  if (!row.receipt) fail('Esta conta não possui recebimento.', 409)
+  assertNotReconciled(store, 'receivable', row.id, 'estornar')
+  if (reason.length < 10) fail('Informe um motivo com pelo menos 10 caracteres.')
+  const parent = row.partialOf ? store.receivables.find((item) => item.id === row.partialOf) : null
+  if (parent) {
+    if (parent.receipt || parent.inactive) fail(`Estorne o recebimento final de ${parent.id} (ou reative a conta) antes de estornar este recebimento parcial.`, 409)
+    assertNotReconciled(store, 'receivable', parent.id, 'estornar recebimento parcial de')
+    parent.valueCents += row.valueCents
+    parent.issCents = (parent.issCents || 0) + (row.issCents || 0)
+    parent.partialPaidCents = (parent.partialPaidCents || 0) - row.valueCents
+    parent.partialIssCents = (parent.partialIssCents || 0) - (row.issCents || 0)
+    parent.partialIds = (parent.partialIds || []).filter((id) => id !== row.id)
+    if (!parent.partialPaidCents) { delete parent.partialPaidCents; delete parent.partialIssCents; delete parent.partialIds }
+    event(store, actor, 'reversed', row.id, { reason, details: { ...mark, receipt: row.receipt, partialOf: parent.id, text: `Recebimento parcial estornado: ${money(row.valueCents)} voltaram ao saldo de ${parent.id}` } })
+    event(store, actor, 'partial_reversed', parent.id, { reason, details: { ...mark, partialId: row.id, valueCents: row.valueCents, balanceCents: parent.valueCents } })
+    store.receivables = store.receivables.filter((item) => item.id !== row.id)
+    parent.lastStatus = receivableStatus(parent)
+    return parent
+  }
+  event(store, actor, 'reversed', row.id, { reason, details: { ...mark, receipt: row.receipt } }); row.receipt = null; row.lastStatus = receivableStatus(row)
+  return row
+}
+
+// Ações em massa (server/bulkAccounts.js): each account follows the rule of the individual action.
+const reconciledBlock = (store, id) => reconciledTransaction(store, 'receivable', id) ? 'Lançamento conciliado: desfaça antes a conciliação em Conciliação bancária.' : null
+const grossNet = (rows) => ({ grossCents: rows.reduce((sum, row) => sum + row.valueCents, 0), issCents: rows.reduce((sum, row) => sum + issOf(row), 0), netCents: rows.reduce((sum, row) => sum + netOf(row), 0) })
+function receivableBulkPlan(store, body) {
+  const rows = bulkIds(body, fail).map((id) => find(store, id))
+  const target = body.action === 'classify' ? entryClassification(store, body.classificationId, 'receivable') : null
+  if (body.action === 'classify' && !target) fail('Selecione a classificação da receita.')
+  const blocks = {
+    delete: (row) => deletionBlock(store, row)?.message || null,
+    reverse: (row, allowed) => {
+      if (!row.receipt) return 'Conta sem recebimento.'
+      const parent = row.partialOf ? store.receivables.find((item) => item.id === row.partialOf) : null
+      if (parent?.inactive) return `Recebimento parcial de ${parent.id}, que está desativada: reative a conta antes.`
+      if (parent?.receipt && !allowed.has(parent.id)) return `Recebimento parcial de ${parent.id}: desfaça antes o recebimento final de ${parent.id}.`
+      return reconciledBlock(store, row.id) || (parent && reconciledBlock(store, parent.id))
+    },
+    classify: (row) => {
+      if (row.treasury) return 'Lançamento da Tesouraria: altere na conta.'
+      if (row.receipt) return 'Conta recebida: desfaça o recebimento antes de alterar a classificação.'
+      if (row.classificationId === target.id) return `Já está em ${target.name}.`
+      return reconciledBlock(store, row.id)
+    },
+  }
+  const plan = planBulk(rows, blocks[body.action])
+  const nameOf = (row) => row.customerName
+  const facts = {
+    delete: (rows) => {
+      const kept = new Set(rows.map((row) => row.id))
+      const series = [...new Set(rows.filter((row) => row.seriesId).map((row) => row.seriesId))].filter((id) => !store.receivables.some((row) => row.seriesId === id && !kept.has(row.id) && !row.receipt && !row.inactive))
+      return [dateRangeLine('Vencimentos', rows.map((row) => row.dueDate)), countsLine('Cliente', rows.map(nameOf)), countsLine('Tipo', rows.map((row) => receivableKindLabels[receivableKindOf(row)])), series.length ? `${series.length} ${series.length === 1 ? 'contrato recorrente fica' : 'contratos recorrentes ficam'} sem lançamentos em aberto` : null]
+    },
+    reverse: (rows) => [dateRangeLine('Recebimentos', rows.map((row) => row.receipt?.date)), countsLine('Banco', rows.map((row) => row.receipt?.bankName || 'Sem banco')), countsLine('Cliente', rows.map(nameOf))],
+    classify: (rows) => [`Nova classificação: ${target.name}`, countsLine('Classificação atual', rows.map((row) => classificationNameOf(store, row) || 'Sem classificação')), countsLine('Cliente', rows.map(nameOf))],
+  }
+  const preview = previewOf(body.action, plan, { name: nameOf, amounts: grossNet, facts: facts[body.action], signature: (row) => [row.id, row.valueCents, row.issCents ?? 0, row.dueDate, row.receipt?.date ?? null, row.receipt?.finalCents ?? null, row.partialPaidCents ?? 0, row.classificationId ?? null] })
+  return { plan, preview, target }
+}
+function applyReceivableBulk(store, actor, body, { plan, target }) {
+  const rows = plan.allowed, count = rows.length
+  if (body.action === 'delete') {
+    for (const row of rows) event(store, actor, 'deleted', row.id, { details: { account: row, bulk: true, text: `Exclusão em massa (${count} ${count === 1 ? 'conta' : 'contas'})` } })
+    store.receivables = store.receivables.filter((row) => !rows.includes(row))
+    // Each plan that lost accounts is numbered again once.
+    for (const row of new Map(rows.filter((row) => row.groupId || row.seriesId).map((row) => [row.groupId || row.seriesId, row])).values()) renumberReceivables(store, row)
+  }
+  // A final receipt goes back before the partial ones of the same account.
+  if (body.action === 'reverse') for (const row of [...rows].sort((left, right) => Number(Boolean(left.partialOf)) - Number(Boolean(right.partialOf)))) reverseReceivable(store, actor, row, clean(body.reason), { bulk: true, text: 'Recebimento desfeito em massa' })
+  if (body.action === 'classify') for (const row of rows) {
+    const before = { ...row }, from = classificationNameOf(store, row) || 'Sem classificação'
+    Object.assign(row, { classificationId: target.id, classificationName: target.name })
+    event(store, actor, 'edited', row.id, { changes: { before, after: { ...row } }, details: { bulk: true, text: `Classificação alterada em massa: ${from} → ${target.name}` } })
+  }
+  return { ok: true, count, ids: rows.map((row) => row.id) }
+}
+
 // The number of an invoice as it may have been typed: without dots and leading zeros; an NFS-e number (2026000000451)
 // also as the year followed by its sequence (2026451), the way the company names the files.
 const plainNumber = (value) => String(value || '').replace(/\D/g, '').replace(/^0+/, '')
@@ -456,6 +544,11 @@ export default function createReceivablesRouter(accounts, requireAdmin, pool = n
     res.status(201).json(result)
   }))
   router.post('/receivables/bulk', handle(async (req, res) => {
+    // Excluir, Desfazer baixa and Alterar classificação: preview first, then the confirmation with the preview token.
+    if (bulkActions.includes(req.body.action)) {
+      if (req.body.preview === true) { const store = await readStore(); init(store); return res.json({ preview: receivableBulkPlan(store, req.body).preview }) }
+      return res.json(await mutateStore((store) => { init(store); const planned = receivableBulkPlan(store, req.body); assertSamePreview(req.body, planned.preview, fail); return applyReceivableBulk(store, req.actor, req.body, planned) }))
+    }
     const items = await mutateStore((store) => {
       init(store)
       if (req.body.action !== 'receive') fail('Ação inválida.')
@@ -552,31 +645,7 @@ export default function createReceivablesRouter(accounts, requireAdmin, pool = n
     res.json({ ok: true })
   }))
   router.post('/receivables/:id/reverse', handle(async (req, res) => {
-    const item = await mutateStore((store) => {
-      init(store); const row = find(store, req.params.id)
-      if (!row.receipt) fail('Esta conta não possui recebimento.', 409)
-      assertNotReconciled(store, 'receivable', row.id, 'estornar')
-      const reason = clean(req.body.reason); if (reason.length < 10) fail('Informe um motivo com pelo menos 10 caracteres.')
-      // A partial receipt: its value (and the ISS it took) goes back to the balance of the account it came from, and the record leaves the lists (its history stays).
-      const parent = row.partialOf ? store.receivables.find((item) => item.id === row.partialOf) : null
-      if (parent) {
-        if (parent.receipt || parent.inactive) fail(`Estorne o recebimento final de ${parent.id} (ou reative a conta) antes de estornar este recebimento parcial.`, 409)
-        assertNotReconciled(store, 'receivable', parent.id, 'estornar recebimento parcial de')
-        parent.valueCents += row.valueCents
-        parent.issCents = (parent.issCents || 0) + (row.issCents || 0)
-        parent.partialPaidCents = (parent.partialPaidCents || 0) - row.valueCents
-        parent.partialIssCents = (parent.partialIssCents || 0) - (row.issCents || 0)
-        parent.partialIds = (parent.partialIds || []).filter((id) => id !== row.id)
-        if (!parent.partialPaidCents) { delete parent.partialPaidCents; delete parent.partialIssCents; delete parent.partialIds }
-        event(store, req.actor, 'reversed', row.id, { reason, details: { receipt: row.receipt, partialOf: parent.id, text: `Recebimento parcial estornado: ${money(row.valueCents)} voltaram ao saldo de ${parent.id}` } })
-        event(store, req.actor, 'partial_reversed', parent.id, { reason, details: { partialId: row.id, valueCents: row.valueCents, balanceCents: parent.valueCents } })
-        store.receivables = store.receivables.filter((item) => item.id !== row.id)
-        parent.lastStatus = receivableStatus(parent)
-        return view(parent, store)
-      }
-      event(store, req.actor, 'reversed', row.id, { reason, details: { receipt: row.receipt } }); row.receipt = null; row.lastStatus = receivableStatus(row)
-      return view(row, store)
-    })
+    const item = await mutateStore((store) => { init(store); return view(reverseReceivable(store, req.actor, find(store, req.params.id), clean(req.body.reason)), store) })
     res.json({ item })
   }))
   router.delete('/receivables/:id', handle(async (req, res) => {
@@ -590,10 +659,7 @@ export default function createReceivablesRouter(accounts, requireAdmin, pool = n
       const plan = row.groupId ? 'Parcelamento' : row.seriesId ? 'Recorrência' : ''
       for (const item of targets) event(store, req.actor, 'deleted', item.id, { details: { account: item, text: plan && targets.length > 1 ? `${plan} excluído (${targets.length} contas)` : plan ? `${plan}: só esta conta excluída` : '' } })
       store.receivables = store.receivables.filter((item) => !targets.includes(item))
-      // What remains of the plan is numbered again, so "parcela x de y" and the total stay right.
-      const rest = row.groupId ? store.receivables.filter((item) => item.groupId === row.groupId) : row.seriesId ? store.receivables.filter((item) => item.seriesId === row.seriesId) : []
-      if (row.groupId) rest.sort((a, b) => a.installmentNumber - b.installmentNumber).forEach((item, index) => { item.installmentNumber = index + 1; item.installmentCount = rest.length; item.originalTotalCents = rest.reduce((sum, other) => sum + other.valueCents, 0) })
-      else rest.sort((a, b) => a.dueDate.localeCompare(b.dueDate)).forEach((item, index) => { item.seriesIndex = index + 1; item.seriesCount = rest.length })
+      renumberReceivables(store, row)
       return targets.map((item) => item.id)
     })
     res.json({ ok: true, removed })

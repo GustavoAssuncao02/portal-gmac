@@ -521,6 +521,9 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .payable-form .payable-iss-mode label { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .excel-menu-list button { font-size: inherit; font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .excel-menu-list small { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .bulk-action-lead { font-size: calc(16px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .bulk-action-blocked h3 { font-size: calc(14px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .bulk-action-blocked ul { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .proposal-model-step > p { font-size: calc(14px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .proposal-model-card { font-size: inherit; }
 :root:is([data-font-size="small"], [data-font-size="large"]) .proposal-model-card strong { font-size: calc(16px * var(--account-font-scale)); }

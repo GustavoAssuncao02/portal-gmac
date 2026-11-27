@@ -4,7 +4,7 @@ export const releaseNotes = [
     version: '1.0.26',
     date: '2026-11-27',
     notes: [
-      'Contas a pagar e a receber: Excel resumido',
+      'Contas a pagar e a receber: ações em massa, Excel resumido e 500 contas por página',
       'Contas a receber: novos filtros, incluindo tipo do recebimento',
       'Ordens de serviço: lançamento manual com início e pausa juntos',
       'Melhorias gerais: correções de problemas e maior estabilidade do sistema',

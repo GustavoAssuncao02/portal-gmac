@@ -134,3 +134,92 @@ test('a payable is deleted alone or with the rest of its installment plan / recu
     assert.ok(!(await ids()).some((id) => parts.some((row) => row.id === id)))
   } finally { await f.close() }
 })
+
+// Ações em massa: Excluir, Desfazer baixa e Alterar classificação, each account with the rule of the individual action.
+test('bulk actions in Contas a Pagar: preview with the blocked accounts and why, all or nothing, history marked', async () => {
+  const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Gustavo' }
+  const f = await createWorkflowFixture({ accountsEnv: env })
+  try {
+    const token = (await f.request('/auth/login', 'POST', { cpf: env.DEMO_ADMIN_CPF, password: env.DEMO_ADMIN_PASSWORD })).data.token
+    const bulk = (body) => f.request('/payables/bulk', 'POST', body, { Authorization: `Bearer ${token}` })
+    const paid = (finalCents, date = '2026-11-05') => ({ date, method: 'pix', interestCents: 0, discountCents: 0, finalCents, bankName: 'Banco Teste', receipts: [] })
+    const row = (id, extra) => ({ id, supplierId: 's1', supplierName: 'Fornecedor Teste', classificationId: 'c1', classificationName: 'Juros de tributos', description: id, documentNumber: '', issueDate: '2026-11-01', dueDate: '2026-12-01', kind: 'normal', valueCents: 10000, attachments: [], ...extra })
+    await f.mutateStore((store) => {
+      store.suppliers = [{ id: 's1', name: 'Fornecedor Teste', document: '12345678000190' }]
+      store.classifications = [{ id: 'c1', name: 'Juros de tributos' }, { id: 'c2', name: 'Parcelamentos tributários' }, { id: 'r1', name: 'Receita', dreLine: 'gross_revenue' }]
+      store.payables = [
+        row('PAG-000001'),
+        row('PAG-000002', { kind: 'recurring', seriesId: 'serie', seriesIndex: 1, seriesCount: 2, dueDate: '2026-12-10' }),
+        row('PAG-000003', { kind: 'recurring', seriesId: 'serie', seriesIndex: 2, seriesCount: 2, dueDate: '2027-01-10', previousId: 'PAG-000002' }),
+        row('PAG-000004', { payment: paid(10000) }),
+        row('PAG-000005', { kind: 'installment', groupId: 'plano', installmentNumber: 1, installmentCount: 2, originalTotalCents: 30000, valueCents: 15000 }),
+        row('PAG-000006', { kind: 'installment', groupId: 'plano', installmentNumber: 2, installmentCount: 2, originalTotalCents: 30000, valueCents: 15000, dueDate: '2027-01-01' }),
+        row('PAG-000007', { classificationSplit: [{ classificationId: 'c1', classificationName: 'Juros de tributos', valueCents: 6000 }, { classificationId: 'c2', classificationName: 'Parcelamentos tributários', valueCents: 4000 }] }),
+        row('PAG-000008', { treasury: true, payment: paid(10000) }),
+        // A final payment of PAG-000009 and its partial payment PAG-000010.
+        row('PAG-000009', { valueCents: 6000, partialPaidCents: 4000, partialIds: ['PAG-000010'], payment: paid(6000, '2026-11-10') }),
+        row('PAG-000010', { valueCents: 4000, partialOf: 'PAG-000009', payment: paid(4000, '2026-11-03') }),
+      ]
+    })
+    const ids = (...numbers) => numbers.map((number) => `PAG-${String(number).padStart(6, '0')}`)
+    const preview = async (body) => { const response = await bulk({ ...body, preview: true }); assert.equal(response.status, 200, JSON.stringify(response.data)); return response.data.preview }
+
+    // Excluir: the paid account and the recurring one whose next account stays are listed with the reason.
+    const deletion = await preview({ action: 'delete', ids: ids(1, 2, 4, 5) })
+    assert.deepEqual([deletion.total, deletion.count, deletion.ids, deletion.amounts], [4, 2, ids(1, 5), { totalCents: 25000 }])
+    assert.deepEqual(deletion.blocked.map((item) => [item.id, item.name, item.valueCents, item.reason]), [
+      ['PAG-000002', 'Fornecedor Teste', 10000, 'Conta com recorrência seguinte vinculada: exclua antes a conta seguinte.'],
+      ['PAG-000004', 'Fornecedor Teste', 10000, 'Conta com pagamento: preserve o histórico; desative quando paga.'],
+    ])
+    // With the next account in the selection too, the recurrence leaves in the right order.
+    const series = await preview({ action: 'delete', ids: ids(1, 2, 3, 4, 5) })
+    assert.deepEqual(series.ids, ids(1, 2, 3, 5))
+    assert.ok(series.facts.includes('1 recorrência fica sem lançamentos em aberto'), series.facts.join(' | '))
+    assert.ok(series.facts.includes('Vencimentos de 01/12/2026 a 10/01/2027'))
+    assert.ok(series.facts.includes('Fornecedor: Fornecedor Teste (4)'))
+    // A confirmation of another preview saves nothing and brings the current one.
+    const stale = await bulk({ action: 'delete', ids: ids(1, 2, 3, 4, 5), token: deletion.token })
+    assert.deepEqual([stale.status, stale.data.code, stale.data.preview.token], [409, 'BULK_CHANGED', series.token])
+    assert.equal((await f.request('/payables', 'GET', undefined, { Authorization: `Bearer ${token}` })).data.items.length, 10, 'nothing deleted')
+    const deleted = await bulk({ action: 'delete', ids: ids(1, 2, 3, 4, 5), token: series.token })
+    assert.deepEqual([deleted.status, deleted.data.count, deleted.data.ids], [200, 4, ids(1, 2, 3, 5)])
+    let store = await f.mutateStore((current) => structuredClone(current))
+    assert.deepEqual(store.payables.map((item) => item.id), ids(4, 6, 7, 8, 9, 10))
+    const rest = store.payables.find((item) => item.id === 'PAG-000006')
+    assert.deepEqual([rest.installmentNumber, rest.installmentCount, rest.originalTotalCents], [1, 1, 15000], 'the plan is numbered again')
+    const deletedEvents = store.payableEvents.filter((item) => item.type === 'deleted')
+    assert.deepEqual(deletedEvents.map((item) => [item.accountId, item.details.bulk, item.details.text, item.userName]), ids(1, 2, 3, 5).map((id) => [id, true, 'Exclusão em massa (4 contas)', 'Gustavo']))
+
+    // Alterar classificação: split and Tesouraria accounts stay as they are; an account changed after the preview stops it.
+    assert.equal((await bulk({ action: 'classify', ids: ids(6), classificationId: 'r1', preview: true })).status, 400, 'a revenue classification does not fit money out')
+    const classify = await preview({ action: 'classify', ids: ids(4, 6, 7, 8), classificationId: 'c2' })
+    assert.deepEqual([classify.ids, classify.blocked.map((item) => [item.id, item.reason])], [ids(6), [['PAG-000004', 'Conta paga: desfaça a baixa antes de alterar a classificação.'], ['PAG-000007', 'Classificação dividida: altere na conta.'], ['PAG-000008', 'Lançamento da Tesouraria: altere na conta.']]])
+    assert.deepEqual(classify.facts.slice(0, 2), ['Nova classificação: Parcelamentos tributários', 'Classificação atual: Juros de tributos (1)'])
+    await f.mutateStore((current) => { current.payables.find((item) => item.id === 'PAG-000006').valueCents = 15500 })
+    const changed = await bulk({ action: 'classify', ids: ids(4, 6, 7, 8), classificationId: 'c2', token: classify.token })
+    assert.deepEqual([changed.status, changed.data.code], [409, 'BULK_CHANGED'])
+    assert.equal((await f.mutateStore((current) => structuredClone(current))).payables.find((item) => item.id === 'PAG-000006').classificationId, 'c1')
+    const classified = await bulk({ action: 'classify', ids: ids(4, 6, 7, 8), classificationId: 'c2', token: changed.data.preview.token })
+    assert.deepEqual([classified.status, classified.data.ids], [200, ids(6)])
+    store = await f.mutateStore((current) => structuredClone(current))
+    assert.deepEqual(store.payables.filter((item) => ['PAG-000006', 'PAG-000007'].includes(item.id)).map((item) => [item.classificationId, item.classificationName]), [['c2', 'Parcelamentos tributários'], ['c1', 'Juros de tributos']])
+    assert.equal(store.payableEvents.at(-1).details.text, 'Classificação alterada em massa: Juros de tributos → Parcelamentos tributários')
+
+    // Desfazer baixa: a reason for all; a partial payment waits for the final payment of its account, unless both go.
+    assert.equal((await bulk({ action: 'reverse', ids: ids(4), reason: 'curto', token: 'qualquer' })).status, 400)
+    assert.equal((await bulk({ action: 'reverse', ids: ids(4), preview: true })).status, 200, 'the preview comes before the reason')
+    const reason = 'Baixas lançadas no banco errado'
+    const alone = await preview({ action: 'reverse', ids: ids(6, 10), reason })
+    assert.deepEqual([alone.count, alone.blocked.map((item) => [item.id, item.reason])], [0, [['PAG-000006', 'Conta sem baixa.'], ['PAG-000010', 'Baixa parcial de PAG-000009: desfaça antes a baixa final de PAG-000009.']]])
+    assert.equal((await bulk({ action: 'reverse', ids: ids(6, 10), reason, token: alone.token })).status, 409, 'nothing to do')
+    const both = await preview({ action: 'reverse', ids: ids(4, 9, 10), reason })
+    assert.deepEqual([both.ids, both.amounts.totalCents], [ids(4, 9, 10), 20000])
+    assert.ok(both.facts.includes('Baixas de 03/11/2026 a 10/11/2026'))
+    assert.ok(both.facts.includes('Banco: Banco Teste (3)'))
+    assert.equal((await bulk({ action: 'reverse', ids: ids(4, 9, 10), reason, token: both.token })).status, 200)
+    store = await f.mutateStore((current) => structuredClone(current))
+    const parent = store.payables.find((item) => item.id === 'PAG-000009')
+    assert.deepEqual([parent.payment, parent.valueCents, parent.partialPaidCents, store.payables.some((item) => item.id === 'PAG-000010'), store.payables.find((item) => item.id === 'PAG-000004').payment], [null, 10000, undefined, false, null])
+    assert.deepEqual(store.payableEvents.filter((item) => item.type === 'reversed').map((item) => [item.accountId, item.reason, item.details.bulk]), [['PAG-000004', reason, true], ['PAG-000009', reason, true], ['PAG-000010', reason, true]])
+  } finally { await f.close() }
+})
