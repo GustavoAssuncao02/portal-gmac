@@ -1,5 +1,5 @@
 // Início personalizado: the widgets each account can place on its home screen, shared by the API (validation of the
-// saved layout) and the screen (catalog, sizes, defaults). A layout is a list of { id, w, h }: the widget, its width in
+// saved layout) and the screen (catalog, sizes, defaults). A layout is a list of { id, w, h, period? }: the widget, its width in
 // quarters of the row (1 to 4) and its height in rows (1 or 2). Each widget appears at most once.
 //
 // `finance` widgets show Gestão Financeira data: administrative employees (role "staff") have no access to it, so the
@@ -18,7 +18,13 @@ export const homeModules = [
 ]
 
 // widths: the sizes the widget accepts (quarters of the row); w/h: its size when added. tall: it may take two rows.
-const widget = (id, module, title, description, { widths = [1, 2], w = widths[0], h = 1, tall = false, finance = false } = {}) => ({ id, module, title, description, widths, w, h, tall, finance })
+// periods: the widget has a period of its own (Contas a pagar / a receber), saved in its entry of the layout.
+const widget = (id, module, title, description, { widths = [1, 2], w = widths[0], h = 1, tall = false, finance = false, periods = false } = {}) => ({ id, module, title, description, widths, w, h, tall, finance, periods })
+
+// Period of "Total em aberto" / "Total a receber": what is overdue plus what falls due up to so many months ahead, or
+// everything ('all'). The default (12 months) is not written in the layout.
+export const homePeriods = [1, 3, 6, 12, 24, 'all']
+export const DEFAULT_HOME_PERIOD = 12
 
 export const homeWidgets = [
   widget('quick-access', 'dashboard', 'Acesso rápido', 'Botões para as telas mais usadas do portal.', { widths: [1, 2, 4], w: 2 }),
@@ -39,8 +45,8 @@ export const homeWidgets = [
   widget('material-requests', 'operational', 'Pedidos de material', 'Materiais a comprar para as ofertas e OS.', { widths: [1, 2, 3], w: 2, tall: true }),
   widget('stock-value', 'operational', 'Valor do estoque', 'Valor total, materiais cadastrados, zerados e abaixo do mínimo.', { widths: [1, 2], w: 1 }),
 
-  widget('payables-summary', 'finance', 'Contas a pagar', 'Total em aberto, vencidas, vencem hoje e próximos 7 dias.', { widths: [2, 4], w: 4, finance: true }),
-  widget('receivables-summary', 'finance', 'Contas a receber', 'Total a receber, vencidas, vencem hoje e próximos 7 dias.', { widths: [2, 4], w: 4, finance: true }),
+  widget('payables-summary', 'finance', 'Contas a pagar', 'Total em aberto, vencidas, vencem hoje e próximos 7 dias.', { widths: [2, 4], w: 4, finance: true, periods: true }),
+  widget('receivables-summary', 'finance', 'Contas a receber', 'Total a receber, vencidas, vencem hoje e próximos 7 dias.', { widths: [2, 4], w: 4, finance: true, periods: true }),
   widget('month-cash', 'finance', 'Caixa do mês', 'Entradas, saídas e saldo do mês, comparados ao mês passado.', { widths: [1, 2, 4], w: 2, finance: true }),
   widget('week-cash-flow', 'finance', 'Fluxo de caixa da semana', 'Entradas e saídas de cada dia da semana atual.', { widths: [2, 3, 4], w: 2, finance: true }),
   widget('upcoming-payments', 'finance', 'Próximos pagamentos', 'Contas a pagar vencidas e as próximas a vencer.', { widths: [1, 2, 3], w: 2, tall: true, finance: true }),
@@ -98,7 +104,8 @@ export function normalizeHomeLayout(layout, role) {
     seen.add(item.id)
     const width = Number(entry.w)
     const w = item.widths.includes(width) ? width : item.widths.reduce((best, option) => Math.abs(option - width) < Math.abs(best - width) ? option : best, item.w)
-    result.push({ id: item.id, w, h: item.tall && Number(entry.h) === 2 ? 2 : 1 })
+    const period = item.periods && homePeriods.includes(entry.period) && entry.period !== DEFAULT_HOME_PERIOD ? { period: entry.period } : {}
+    result.push({ id: item.id, w, h: item.tall && Number(entry.h) === 2 ? 2 : 1, ...period })
   }
   return result
 }
@@ -113,6 +120,7 @@ export function validHomeLayout(layout, role) {
     const item = homeWidget(entry.id)
     if (!widgetAllowed(item, role) || seen.has(item.id)) return false
     if (!item.widths.includes(entry.w) || ![1, 2].includes(entry.h) || entry.h === 2 && !item.tall) return false
+    if (entry.period !== undefined && !(item.periods && homePeriods.includes(entry.period))) return false
     seen.add(item.id)
   }
   return true

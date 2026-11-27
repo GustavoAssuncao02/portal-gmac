@@ -3,7 +3,7 @@ import { DndContext, DragOverlay, KeyboardSensor, MeasuringStrategy, MouseSensor
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable } from '@dnd-kit/sortable'
 import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, FileText, GripVertical, MoveVertical, Pencil, Plus, RefreshCw, RotateCcw, Search, Trash2, X } from 'lucide-react'
 import { adminFirstName, adminOverview } from './adminOverview.js'
-import { defaultHomeLayout, homeModules, homeWidget, homeWidgets, widgetAllowed } from '../server/homeWidgets.js'
+import { DEFAULT_HOME_PERIOD, defaultHomeLayout, homeModules, homeWidget, homeWidgets, widgetAllowed } from '../server/homeWidgets.js'
 import { todayBahia } from '../server/payableRules.js'
 import { useHomeLayout } from './homeLayout.js'
 import { sourceLoaders, useHomeSources } from './homeSources.js'
@@ -142,6 +142,17 @@ export default function AdminHome({ user, orders, offers, workflowError, workflo
   const remove = (id) => setDraft((current) => current.filter((entry) => entry.id !== id))
   const move = (id, step) => setDraft((current) => { const from = current.findIndex((entry) => entry.id === id), to = from + step; return to < 0 || to >= current.length ? current : arrayMove(current, from, to) })
   const add = (item) => setDraft((current) => current.some((entry) => entry.id === item.id) ? current : [...current, { id: item.id, w: item.w, h: item.h }])
+  // A setting chosen inside a widget (the period of Contas a pagar / a receber) is saved at once with the layout; the
+  // default period is not written, so the default layout stays "nothing customized".
+  async function saveWidget(id, fields) {
+    const next = home.layout.map((entry) => {
+      if (entry.id !== id) return entry
+      const { period, ...rest } = { ...entry, ...fields }
+      return period === undefined || period === DEFAULT_HOME_PERIOD ? rest : { ...rest, period }
+    })
+    setEditError('')
+    try { await home.save(sameLayout(next, defaultHomeLayout(role)) ? null : next, { optimistic: true }) } catch (caught) { setEditError(caught.message) }
+  }
   async function save() {
     if (saving) return
     setSaving(true); setEditError('')
@@ -194,7 +205,7 @@ export default function AdminHome({ user, orders, offers, workflowError, workflo
           <div ref={gridRef} className={`home-grid${editing ? ' home-grid--editing' : ''}`}>
             {layout.map((entry, index) => {
               const View = widgetViews[entry.id].Component
-              return <WidgetSlot key={entry.id} entry={entry} index={index} count={layout.length} editing={editing} arrows={arrows[entry.id]} onChange={(fields) => change(entry.id, fields)} onRemove={() => remove(entry.id)} onMove={(step) => move(entry.id, step)}><View ctx={ctx} size={entry} /></WidgetSlot>
+              return <WidgetSlot key={entry.id} entry={entry} index={index} count={layout.length} editing={editing} arrows={arrows[entry.id]} onChange={(fields) => change(entry.id, fields)} onRemove={() => remove(entry.id)} onMove={(step) => move(entry.id, step)}><View ctx={ctx} size={entry} onSettings={editing ? undefined : (fields) => saveWidget(entry.id, fields)} /></WidgetSlot>
             })}
             {editing && <button className="home-add-tile" type="button" onClick={() => setCatalogOpen(true)}><Plus className="icon" aria-hidden="true" /><strong>Adicionar widget</strong><small>Operação, financeiro, estoque, cadastros e mais</small></button>}
           </div>

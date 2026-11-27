@@ -78,3 +78,38 @@ test('home payable dates follow Bahia midnight and seven days may cross months a
   assert.equal(midnight.find((item) => item.key === 'today').valueCents, 102)
   assert.equal(midnight.find((item) => item.key === 'overdue').valueCents, 101)
 })
+
+test('the period of the home cards changes only Total em aberto / Total a receber: overdue plus what falls due up to X months', async () => {
+  const { receivableOverview, periodEnd } = await import('../src/adminOverview.js')
+  const { filterReceivables } = await import('../server/receivables.js')
+  // Today is 2026-10-03.
+  const rows = [
+    { id: 1, dueDate: '2026-09-01', valueCents: 100 },
+    { id: 2, dueDate: '2026-10-03', valueCents: 200 },
+    { id: 3, dueDate: '2026-11-03', valueCents: 400 },
+    { id: 4, dueDate: '2026-11-04', valueCents: 800 },
+    { id: 5, dueDate: '2027-10-03', valueCents: 1600 },
+    { id: 6, dueDate: '2027-10-04', valueCents: 3200 },
+    { id: 7, dueDate: '2028-10-04', valueCents: 6400 },
+  ]
+  const open = (period) => payableOverview(rows, now, period).find((item) => item.key === 'open')
+  assert.equal(periodEnd('2026-10-03', 1), '2026-11-03')
+  assert.equal(periodEnd('2026-10-03', 'all'), '')
+  assert.deepEqual([1, 3, 12, 24, 'all'].map((period) => [open(period).count, open(period).valueCents]), [[3, 700], [4, 1500], [5, 3100], [6, 6300], [7, 12700]])
+  assert.equal(payableOverview(rows, now).find((item) => item.key === 'open').valueCents, 3100, '12 months by default')
+  assert.deepEqual(open(12).filters, { end: '2027-10-03' })
+  assert.deepEqual(open('all').filters, {})
+  // The other cards are the same whatever the period.
+  assert.deepEqual(payableOverview(rows, now, 1).slice(1), payableOverview(rows, now, 'all').slice(1))
+
+  // Contas a receber: the same period, and each card opens the screen on the same accounts.
+  const receivables = [...rows, { id: 8, dueDate: '2026-10-01', valueCents: 12800, receipt: { finalCents: 12800 } }]
+  const cards = receivableOverview(receivables, now, 3)
+  assert.deepEqual(cards.map((item) => [item.key, item.count, item.valueCents]), [['open', 4, 1500], ['overdue', 1, 100], ['today', 1, 200], ['upcoming', 0, 0]])
+  for (const item of cards) {
+    const selected = filterReceivables(receivables, item.filters, '2026-10-03')
+    assert.equal(selected.length, item.count, item.key)
+    assert.equal(selected.reduce((sum, row) => sum + row.valueCents, 0), item.valueCents, item.key)
+  }
+  assert.equal(receivableOverview(receivables, now, 'all')[0].valueCents, 12700)
+})

@@ -39,12 +39,19 @@ export function useHomeLayout(user) {
       .finally(() => { if (!controller.signal.aborted) setLoading(false) })
     return () => controller.abort()
   }, [user?.id, role])
-  // `next` null restores the default home screen.
-  async function save(next) {
-    const id = user?.id
-    const data = await request('PUT', { layout: next })
-    if (identity.current === id) { setLayout(data.layout); setCustomized(Boolean(data.customized)); remember(id, data.layout) }
-    return data.layout
+  // `next` null restores the default home screen. `optimistic`: the screen changes at once (a setting chosen inside a
+  // widget) and goes back when the server refuses it.
+  async function save(next, { optimistic = false } = {}) {
+    const id = user?.id, previous = layout
+    if (optimistic) setLayout(next ?? defaultHomeLayout(role))
+    try {
+      const data = await request('PUT', { layout: next })
+      if (identity.current === id) { setLayout(data.layout); setCustomized(Boolean(data.customized)); remember(id, data.layout) }
+      return data.layout
+    } catch (error) {
+      if (optimistic && identity.current === id) setLayout(previous)
+      throw error
+    }
   }
   return { layout, customized, loading, save }
 }

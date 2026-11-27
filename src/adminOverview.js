@@ -1,12 +1,17 @@
 import { deliveryTimestamp, serviceDeadline } from './serviceDeadline.js'
 import { purchaseMaterialRequests } from './offerResources.js'
-import { DAY, filterPayables, todayBahia } from '../server/payableRules.js'
+import { DAY, filterPayables, shiftMonth, todayBahia } from '../server/payableRules.js'
 
-export function payableOverview(rows, now = Date.now()) {
+// The period of the widget (1, 3, 6, 12 or 24 months, or 'all'): "Total em aberto" / "Total a receber" is what is overdue
+// plus what falls due up to that many months from today. The other cards do not change.
+export const periodEnd = (today, period) => period === 'all' ? '' : shiftMonth(today, Number(period) || 12)
+
+export function payableOverview(rows, now = Date.now(), period = 12) {
   const today = todayBahia(new Date(now))
   const shiftDay = (days) => new Date(Date.parse(`${today}T12:00:00Z`) + days * DAY).toISOString().slice(0, 10)
+  const end = periodEnd(today, period)
   return [
-    { key: 'open', label: 'Total em aberto', filters: {} },
+    { key: 'open', label: 'Total em aberto', filters: end ? { end } : {} },
     { key: 'overdue', label: 'Contas vencidas', filters: { status: 'overdue' } },
     { key: 'today', label: 'Vencem hoje', filters: { status: 'pending', start: today, end: today } },
     { key: 'upcoming', label: 'Próximos 7 dias', filters: { status: 'pending', start: shiftDay(1), end: shiftDay(7) } },
@@ -17,15 +22,17 @@ export function payableOverview(rows, now = Date.now()) {
 }
 
 // Same four cards for what the customers owe: still open (not received, not cancelled), late, due today, next 7 days.
-export function receivableOverview(rows, now = Date.now()) {
+// `filters` open Contas a Receber on the same accounts.
+export function receivableOverview(rows, now = Date.now(), period = 12) {
   const today = todayBahia(new Date(now))
   const shiftDay = (days) => new Date(Date.parse(`${today}T12:00:00Z`) + days * DAY).toISOString().slice(0, 10)
+  const end = periodEnd(today, period)
   const open = rows.filter((row) => !row.receipt && !row.inactive)
   return [
-    { key: 'open', label: 'Total a receber', match: () => true },
-    { key: 'overdue', label: 'Recebimentos vencidos', match: (row) => row.dueDate < today },
-    { key: 'today', label: 'Vencem hoje', match: (row) => row.dueDate === today },
-    { key: 'upcoming', label: 'Próximos 7 dias', match: (row) => row.dueDate >= shiftDay(1) && row.dueDate <= shiftDay(7) },
+    { key: 'open', label: 'Total a receber', match: (row) => !end || row.dueDate <= end, filters: end ? { end } : {} },
+    { key: 'overdue', label: 'Recebimentos vencidos', match: (row) => row.dueDate < today, filters: { status: 'overdue' } },
+    { key: 'today', label: 'Vencem hoje', match: (row) => row.dueDate === today, filters: { status: 'pending', start: today, end: today } },
+    { key: 'upcoming', label: 'Próximos 7 dias', match: (row) => row.dueDate >= shiftDay(1) && row.dueDate <= shiftDay(7), filters: { status: 'pending', start: shiftDay(1), end: shiftDay(7) } },
   ].map(({ match, ...item }) => {
     const selected = open.filter(match)
     return { ...item, count: selected.length, valueCents: selected.reduce((sum, row) => sum + row.valueCents, 0) }

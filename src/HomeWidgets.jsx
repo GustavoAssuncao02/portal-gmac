@@ -11,6 +11,8 @@ import { receivableForecast } from './receivableForecast.js'
 import { daysUntil, dueLabel, shiftMonth } from '../server/payableRules.js'
 import { calculatorFormats, calculatorMaterials, calculatorWeight, conversionOptions } from './calculatorData.js'
 import { currentVersion, releaseNotes } from './releaseNotes.js'
+import { DEFAULT_HOME_PERIOD, homePeriods } from '../server/homeWidgets.js'
+import { saveListState } from './savedListState.js'
 import { useAccountAppearance } from './accountTheme.js'
 
 // The widgets of the Início (catalog in server/homeWidgets.js). Each one receives `ctx` (the portal data, the sources
@@ -35,6 +37,14 @@ const changeText = (change) => change === null || !Number.isFinite(change) ? 'se
 
 function openPayable(ctx, id) { sessionStorage.setItem('gmac-payable-open', id); ctx.onNavigate('Contas a Pagar'); window.dispatchEvent(new CustomEvent('gmac-payable-open', { detail: id })) }
 function openReceivable(ctx, id) { sessionStorage.setItem('gmac-receivable-open', id); ctx.onNavigate('Contas a Receber'); window.dispatchEvent(new CustomEvent('gmac-receivable-open', { detail: id })) }
+// Contas a Receber opens on the accounts of the card: the screen keeps its filters in the list state, so they are written
+// there before it opens (the other filters go back to empty, as in Contas a Pagar).
+function openReceivables(ctx, filters) {
+  saveListState('receivables', 'filters', { search: '', clientId: '', classificationId: '', bankId: '', kind: '', status: '', start: '', end: '', ...filters })
+  saveListState('receivables', 'advanced', Boolean(filters.start || filters.end))
+  saveListState('receivables', 'page', 1)
+  ctx.onNavigate('Contas a Receber')
+}
 function openTicket(ctx, id) { sessionStorage.setItem('gmac-ticket-open', id); ctx.onNavigate('Ticket'); window.dispatchEvent(new CustomEvent('gmac-ticket-open', { detail: id })) }
 
 const Expand = () => <ArrowUpRight className="icon" aria-hidden="true" strokeWidth={1.7} />
@@ -219,13 +229,19 @@ function StockValue({ ctx, size }) {
 }
 
 // ——— Gestão Financeira ———
-function PayablesSummary({ ctx }) {
+// Period of "Total em aberto" / "Total a receber", saved with the layout of the account.
+const periodLabel = (period) => period === 'all' ? 'Tudo' : period === 1 ? '1 mês' : `${period} meses`
+function PeriodSelect({ period, label, onChange }) {
+  return <select className="home-period-select" aria-label={label} title={label} value={String(period)} disabled={!onChange} onChange={(event) => onChange({ period: event.target.value === 'all' ? 'all' : Number(event.target.value) })}>{homePeriods.map((value) => <option key={value} value={String(value)}>{periodLabel(value)}</option>)}</select>
+}
+function PayablesSummary({ ctx, size, onSettings }) {
   const source = ctx.sources.payables
   const loading = source.loading && source.data === null
-  const cards = payableOverview(source.data || [], ctx.now)
+  const period = size?.period ?? DEFAULT_HOME_PERIOD
+  const cards = payableOverview(source.data || [], ctx.now, period)
   const icons = { open: CreditCard, overdue: TriangleAlert, today: CalendarDays, upcoming: CalendarClock }
   return <section className="home-payables" aria-labelledby="home-payables-title">
-    <div className="home-section-heading"><h2 id="home-payables-title">Contas a pagar</h2><button className="home-text-button" type="button" onClick={() => ctx.onOpenPayables({})}>Ver contas<Expand /></button></div>
+    <div className="home-section-heading"><h2 id="home-payables-title">Contas a pagar</h2><div className="home-section-tools"><PeriodSelect period={period} label="Período do total em aberto" onChange={onSettings} /><button className="home-text-button" type="button" onClick={() => ctx.onOpenPayables({})}>Ver contas<Expand /></button></div></div>
     <div className="home-payables-metrics">{cards.map((item) => { const Icon = icons[item.key]; return <button className={`home-payable home-payable--${item.key}`} key={item.key} type="button" disabled={loading} onClick={() => ctx.onOpenPayables(item.filters)}>
       <span className="home-payable-heading"><Icon className="icon" aria-hidden="true" strokeWidth={1.7} /><span>{item.label}</span><Expand /></span>
       <strong>{source.data === null ? '—' : money(item.valueCents)}</strong><small>{loading ? 'Carregando...' : source.data === null ? 'Indisponível' : `${plural(item.count, 'conta', 'contas')}${source.error ? ' · Dados não atualizados' : ''}`}</small>
@@ -234,14 +250,15 @@ function PayablesSummary({ ctx }) {
   </section>
 }
 
-function ReceivablesSummary({ ctx }) {
+function ReceivablesSummary({ ctx, size, onSettings }) {
   const source = ctx.sources.receivables
   const loading = source.loading && source.data === null
-  const cards = receivableOverview(source.data?.items || [], ctx.now)
+  const period = size?.period ?? DEFAULT_HOME_PERIOD
+  const cards = receivableOverview(source.data?.items || [], ctx.now, period)
   const icons = { open: HandCoins, overdue: TriangleAlert, today: CalendarDays, upcoming: CalendarClock }
   return <section className="home-payables home-receivables" aria-labelledby="home-receivables-title">
-    <div className="home-section-heading"><h2 id="home-receivables-title">Contas a receber</h2><button className="home-text-button" type="button" onClick={() => ctx.onNavigate('Contas a Receber')}>Ver contas<Expand /></button></div>
-    <div className="home-payables-metrics">{cards.map((item) => { const Icon = icons[item.key]; return <button className={`home-payable home-payable--${item.key === 'upcoming' ? 'upcoming' : item.key}`} key={item.key} type="button" disabled={loading} onClick={() => ctx.onNavigate('Contas a Receber')}>
+    <div className="home-section-heading"><h2 id="home-receivables-title">Contas a receber</h2><div className="home-section-tools"><PeriodSelect period={period} label="Período do total a receber" onChange={onSettings} /><button className="home-text-button" type="button" onClick={() => openReceivables(ctx, {})}>Ver contas<Expand /></button></div></div>
+    <div className="home-payables-metrics">{cards.map((item) => { const Icon = icons[item.key]; return <button className={`home-payable home-payable--${item.key === 'upcoming' ? 'upcoming' : item.key}`} key={item.key} type="button" disabled={loading} onClick={() => openReceivables(ctx, item.filters)}>
       <span className="home-payable-heading"><Icon className="icon" aria-hidden="true" strokeWidth={1.7} /><span>{item.label}</span><Expand /></span>
       <strong>{source.data === null ? '—' : money(item.valueCents)}</strong><small>{loading ? 'Carregando...' : source.data === null ? 'Indisponível' : `${plural(item.count, 'conta', 'contas')}${source.error ? ' · Dados não atualizados' : ''}`}</small>
     </button> })}</div>

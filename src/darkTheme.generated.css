@@ -1445,6 +1445,11 @@
 :root[data-theme="dark"] .home-section-heading > div > span {
     color: #c1cfde
 }
+:root[data-theme="dark"] .home-period-select {
+    border: 1px solid #36516f;
+    background: #162b43;
+    color: #e1ebf6
+}
 :root[data-theme="dark"] .home-text-button {
     color: #a9c6da
 }

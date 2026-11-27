@@ -61,3 +61,25 @@ test('each account saves its own home layout; invalid layouts are refused and nu
   assert.deepEqual((await fixture.request(route, 'PUT', { layout: null }, admin)).data, { layout: original, customized: false })
   assert.deepEqual((await fixture.request(route, 'GET', undefined, staff)).data.layout, [{ id: 'low-stock', w: 2, h: 2 }])
 })
+
+test('Contas a pagar / a receber keep a period of their own in the layout; 12 months is the default and is not written', async (t) => {
+  // Only these two widgets accept it, with the values of the list.
+  assert.equal(validHomeLayout([{ id: 'payables-summary', w: 4, h: 1, period: 6 }, { id: 'receivables-summary', w: 2, h: 1, period: 'all' }], 'admin'), true)
+  for (const period of [12, 1, 3, 24]) assert.equal(validHomeLayout([{ id: 'payables-summary', w: 4, h: 1, period }], 'admin'), true, String(period))
+  for (const period of [0, 5, '12', 'Tudo', null, 36]) assert.equal(validHomeLayout([{ id: 'payables-summary', w: 4, h: 1, period }], 'admin'), false, JSON.stringify(period))
+  assert.equal(validHomeLayout([{ id: 'month-cash', w: 2, h: 1, period: 6 }], 'admin'), false, 'a widget without a period')
+  assert.deepEqual(normalizeHomeLayout([{ id: 'payables-summary', w: 4, h: 1, period: 12 }, { id: 'receivables-summary', w: 4, h: 1, period: 3 }, { id: 'month-cash', w: 2, h: 1, period: 6 }], 'admin'),
+    [{ id: 'payables-summary', w: 4, h: 1 }, { id: 'receivables-summary', w: 4, h: 1, period: 3 }, { id: 'month-cash', w: 2, h: 1 }])
+  assert.deepEqual(normalizeHomeLayout([{ id: 'payables-summary', w: 4, h: 1, period: 7 }], 'admin'), [{ id: 'payables-summary', w: 4, h: 1 }], 'an unknown period goes back to the default')
+
+  // Saved with the account, the same on every computer.
+  const fixture = await createWorkflowFixture({ accountsEnv: env })
+  t.after(() => fixture.close())
+  const admin = { Authorization: `Bearer ${(await fixture.request('/auth/login', 'POST', { cpf: env.DEMO_ADMIN_CPF, password: env.DEMO_ADMIN_PASSWORD })).data.token}` }
+  const route = '/account/home-layout'
+  const layout = original.map((entry) => entry.id === 'payables-summary' ? { ...entry, period: 'all' } : entry)
+  assert.deepEqual((await fixture.request(route, 'PUT', { layout }, admin)).data, { layout, customized: true })
+  assert.deepEqual((await fixture.request(route, 'GET', undefined, admin)).data.layout.find((entry) => entry.id === 'payables-summary'), { id: 'payables-summary', w: 4, h: 1, period: 'all' })
+  assert.equal((await fixture.request(route, 'PUT', { layout: original.map((entry) => entry.id === 'payables-summary' ? { ...entry, period: 5 } : entry) }, admin)).status, 400)
+  assert.equal((await fixture.request(route, 'GET', undefined, admin)).data.layout.find((entry) => entry.id === 'payables-summary').period, 'all', 'a refused save keeps the period')
+})

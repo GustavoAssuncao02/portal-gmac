@@ -381,7 +381,7 @@ export function createAccountService(pool, env = process.env) {
     if (!await account(id)) fail(404, 'Conta não encontrada.')
     return mutateStore((store) => {
       store.adminHomeLayouts = (store.adminHomeLayouts || []).filter((item) => String(item.userId) !== String(id))
-      if (layout !== null) store.adminHomeLayouts.push({ userId: id, layout: layout.map(({ id: widget, w, h }) => ({ id: widget, w, h })), updatedAt: new Date().toISOString() })
+      if (layout !== null) store.adminHomeLayouts.push({ userId: id, layout: layout.map(({ id: widget, w, h, period }) => ({ id: widget, w, h, ...(period !== undefined ? { period } : {}) })), updatedAt: new Date().toISOString() })
       return homeLayoutSettings(store, id, role)
     })
   }

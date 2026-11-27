@@ -81,6 +81,9 @@
 .home-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
 .home-section-heading h2 { margin: 0; color: #24465f; font-size: 17px; }
 .home-section-heading > div > span { display: block; margin-top: 6px; color: #7a8c9a; font-size: 11px; }
+/* The period of Contas a pagar / a receber, beside Ver contas. */
+.home-section-tools { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+.home-period-select { height: 28px; padding: 0 6px; border: 1px solid #d3deea; border-radius: 6px; background: #fff; color: #24465f; font: inherit; font-size: 12px; cursor: pointer; }
 .home-text-button { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; padding: 5px 0; border: 0; background: transparent; color: #226391; font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
 .home-text-button .icon { width: 14px; height: 14px; }
 .home-text-button:hover { color: #0b416a; }
