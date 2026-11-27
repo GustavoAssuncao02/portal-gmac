@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
 import { todayBahia } from '../server/payableRules.js'
+import { requestDay } from '../server/retroactiveEntry.js'
 
 // Lançamento retroativo (2026-11-25): "Inserir oferta manualmente" takes the day of the request (today by default),
 // which cannot be after today, and the deadline cannot come before it. A retroactive offer opens its OS on that same
@@ -67,4 +68,29 @@ test('a manual offer and its OS can be entered with earlier dates', async (t) =>
   assert.equal(current.registeredAt, undefined)
   assert.ok(Date.now() - Date.parse(current.createdAt) < 60000, 'the real moment of the acceptance')
   assert.doesNotMatch(current.auditEvents.at(-1).details, /retroativo/)
+})
+
+// 2026-11-27: the screens showed the day of the request in UTC, so an offer entered from 21:00 on (Bahia) appeared on the
+// next day in the list, in Ver oferta and in Editar. The day of the request is the day in Bahia everywhere.
+test('the day of the request is the day in Bahia, also for an offer entered at night', async (t) => {
+  assert.equal(requestDay('2026-11-27T02:50:00.000Z'), '2026-11-26', '23:50 in Bahia')
+  assert.equal(requestDay('2026-11-27T03:00:00.000Z'), '2026-11-27')
+  assert.equal(requestDay('2026-11-20T12:00:00.000Z'), '2026-11-20', 'a retroactive day')
+  assert.equal(requestDay('2026-11-26'), '2026-11-26')
+  assert.deepEqual([requestDay(''), requestDay(undefined), requestDay('ontem')], ['', '', ''])
+
+  const fixture = await createWorkflowFixture()
+  t.after(() => fixture.close())
+  const today = todayBahia(), night = new Date(Date.parse(`${today}T23:50:00-03:00`)).toISOString()
+  const offer = (await fixture.adminRequest('/offers', 'POST', { ...offerDraft, deadline: '' })).data.item
+  await fixture.mutateStore((store) => Object.assign(store.offers.find((item) => item.id === offer.id), { createdAt: night, requestedAt: night }))
+  const base = { cnpj: offer.cnpj, company: offer.company, service: offer.service, quantity: offer.quantity, quantityUnit: 'un', labelNumber: '', requesters: [''], buyer: '', deadline: '' }
+  // Editar sends the day it shows (today in Bahia): the real moment of the entry stays, it is not a new day.
+  const kept = await fixture.adminRequest(`/offers/${offer.id}`, 'PUT', { ...base, requestedAt: today, responseDays: 2 })
+  assert.equal(kept.status, 200, JSON.stringify(kept.data))
+  assert.equal(kept.data.item.requestedAt, night)
+  assert.equal(kept.data.item.responseDeadline, new Date(Date.parse(`${today}T12:00:00Z`) + 2 * 86400000).toISOString().slice(0, 10))
+  // The day in UTC (what the screens showed before) is tomorrow in Bahia: refused like any future day.
+  const utc = await fixture.adminRequest(`/offers/${offer.id}`, 'PUT', { ...base, requestedAt: night.slice(0, 10) })
+  assert.deepEqual([utc.status, utc.data.message], [400, 'A data da solicitação não pode ser depois de hoje.'])
 })

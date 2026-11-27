@@ -28,7 +28,7 @@ import { formatQuantity, materialUnit, validMaterialUnit, validQuantityFor } fro
 import { labelEstimate, labelPlaceholderProposal } from './labelQuoteRules.js'
 import { quantityLabel, quantityUnitMessage, quantityUnitOf, validQuantityUnit } from './quantityUnits.js'
 import { todayBahia } from './payableRules.js'
-import { retroactiveOrderDay } from './retroactiveEntry.js'
+import { requestDay, retroactiveOrderDay } from './retroactiveEntry.js'
 import { parseResponseDays, requestDayOf, responseDaysMessage, responseDeadlineOf } from './offerResponseRules.js'
 import { createOfferPresence } from './offerPresence.js'
 
@@ -447,7 +447,7 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
         if (!fields.deadline && item.proposal) throw Object.assign(new Error('Com o PDF da proposta gerado, o prazo solicitado não pode ficar em branco: troque a data se precisar.'), { status: 400 })
         if (quantityPending && (item.proposal || item.proposalDraft)) throw Object.assign(new Error('Esta oferta já tem proposta: a quantidade não pode voltar para "a definir".'), { status: 400 })
         // The same rules as a new offer, only for a date that changes: an older offer with dates out of order still saves.
-        const dayChanged = requestedDay !== String(item.requestedAt || '').slice(0, 10)
+        const dayChanged = requestedDay !== requestDay(item.requestedAt)
         if (dayChanged && afterToday(requestedDay)) throw Object.assign(new Error(requestedDayFuture), { status: 400 })
         if (fields.deadline && fields.deadline < requestedDay && (dayChanged || fields.deadline !== String(item.deadline || ''))) throw Object.assign(new Error(deadlineBeforeRequest), { status: 400 })
         // A screen of the previous version (a tab not reloaded yet) sends the names joined in one field: unchanged, the list
@@ -467,8 +467,8 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
         else delete item.quantityPending
         // Observação (interna, das ofertas do site): não sai no PDF da proposta, então mudá-la não descarta a proposta.
         if (body.notes !== undefined) item.notes = clean(body.notes, 2000)
-        // The list and the details show the day of the request (UTC): a new day keeps it at noon of that day.
-        const requestDayKept = requestedDay === String(item.requestedAt || '').slice(0, 10)
+        // The screens show the day of the request in Bahia (requestDay): a new day keeps it at noon UTC of that day.
+        const requestDayKept = !dayChanged
         if (!requestDayKept) item.requestedAt = `${requestedDay}T12:00:00.000Z`
         // Prazo para resposta do cliente (TCK-0012): not printed on the proposal, so it never discards one. Its day follows
         // the Data da solicitação; a new day (or number of days) starts the notices again.

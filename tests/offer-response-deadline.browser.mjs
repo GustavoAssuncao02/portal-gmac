@@ -43,6 +43,10 @@ try {
   const refused = await create({ service: 'Eixo resposta recusado', responseDays: 4 })
   assert.equal((await fixture.adminRequest(`/offers/${refused.id}/reject`, 'POST', {})).status, 200)
   // The 1º aviso (3 days before) of this one comes today at 07:30; it was set the day before.
+  // Entered at 23:50 (already the next day in UTC): the screens show the day in Bahia.
+  const night = await create({ service: 'Eixo resposta noite', responseDays: 2 })
+  const nightAt = new Date(Date.parse(`${today}T23:50:00-03:00`)).toISOString()
+  await fixture.mutateStore((store) => Object.assign(store.offers.find((item) => item.id === night.id), { createdAt: nightAt, requestedAt: nightAt }))
   const noticed = await create({ service: 'Eixo resposta aviso', responseDays: 3 })
   await fixture.mutateStore((store) => { store.offers.find((item) => item.id === noticed.id).responseSetAt = `${shiftDay(today, -1)}T15:00:00.000Z` })
   const sent = await fixture.offerResponseSweep(Date.parse(`${today}T07:30:00-03:00`))
@@ -108,6 +112,20 @@ try {
   const sorted = await order()
   const position = (name) => sorted.findIndex((text) => text.includes(name))
   assert.ok(position('vencido') < position('perto') && position('perto') < position('aviso') && position('aviso') < position('novo') && position('novo') < position('sem prazo'), JSON.stringify(sorted))
+
+  // The offer entered at 23:50: today in the list, in the filter by day, in Ver oferta and in Editar.
+  assert.equal(await row(page, 'Eixo resposta noite').locator('[data-label="Solicitação"]').innerText(), br(today))
+  await page.locator('.offers-date input').fill(today)
+  await row(page, 'Eixo resposta noite').waitFor()
+  await page.locator('.offers-date input').fill('')
+  await row(page, 'Eixo resposta noite').getByRole('button', { name: 'Em análise', exact: true }).click()
+  await page.locator('.offer-details-header').getByText(night.code).waitFor()
+  assert.equal(await page.locator('.offer-detail-facts > div').filter({ hasText: 'Data da solicitação' }).locator('strong').innerText(), br(today))
+  await page.locator('.offer-information-heading').getByRole('button', { name: 'Editar', exact: true }).click()
+  assert.equal(await edit.getByLabel('Data da solicitação *', { exact: true }).inputValue(), today)
+  await edit.getByText(`Resposta até ${responseDateLabel(shiftDay(today, 2))}`, { exact: true }).waitFor()
+  await edit.getByRole('button', { name: 'Cancelar', exact: true }).click()
+  await edit.waitFor({ state: 'detached' })
 
   // The bell: the notice opens the offer.
   await page.reload()

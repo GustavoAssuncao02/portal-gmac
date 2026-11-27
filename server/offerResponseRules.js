@@ -1,4 +1,5 @@
 import { addDays, bahiaDay, dateLabel } from './noteRules.js'
+import { requestDay } from './retroactiveEntry.js'
 
 // TCK-0012 (2026-11-26): "Prazo para resposta do cliente". How many calendar days the client has to accept or refuse the
 // proposal, counted from the Data da solicitação (today for a new offer, the informed day for a retroactive one). The
@@ -23,8 +24,8 @@ export function parseResponseDays(value) {
   return Number.isInteger(days) && days >= 1 && days <= RESPONSE_DAYS_MAX ? days : Number.NaN
 }
 // The day of the request in Bahia, and the day the client has to answer by.
-export const requestDayOf = (requestedAt) => { const ms = Date.parse(requestedAt); return Number.isFinite(ms) ? bahiaDay(ms) : '' }
-export const responseDeadlineOf = (requestedAt, days) => { const day = typeof requestedAt === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(requestedAt) ? requestedAt : requestDayOf(requestedAt); return day && days ? addDays(day, days) : '' }
+export const requestDayOf = requestDay
+export const responseDeadlineOf = (requestedAt, days) => { const day = requestDay(requestedAt); return day && days ? addDays(day, days) : '' }
 // The client answered: the offer was accepted (it became an OS) or refused.
 export const responseAnswered = (offer) => Boolean(offer?.orderCode) || ['accepted', 'rejected'].includes(offer?.status)
 

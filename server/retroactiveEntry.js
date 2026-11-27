@@ -3,6 +3,16 @@ import { todayBahia } from './payableRules.js'
 // Lançamento retroativo: a manual offer entered with a "Data da solicitação" before the day it was typed in the system.
 // Its OS opens on that same day, so the acceptance asks nothing again. An offer requested and entered on the same day
 // (and every site offer) gives ''. Shared by the server and the screens (no Node imports here).
+// The day of the request, in Bahia (the day the screens show, filter and edit). An offer entered today keeps the real
+// moment, and from 21:00 on that moment is already the next day in UTC; a retroactive day is noon UTC of that day. A
+// plain day (AAAA-MM-DD) is kept as it is.
+export function requestDay(requestedAt) {
+  const text = String(requestedAt || '')
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text
+  const at = Date.parse(text)
+  return Number.isFinite(at) ? todayBahia(new Date(at)) : ''
+}
+
 export function retroactiveOrderDay(offer) {
   if (offer?.origin !== 'Inserida Manualmente') return ''
   const requested = Date.parse(offer.requestedAt), entered = Date.parse(offer.createdAt)
