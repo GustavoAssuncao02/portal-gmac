@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import express from 'express'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import createDeveloperRouter from '../server/developer.js'
 import { isDeveloper } from '../server/developers.js'
-import { createSystemLog, routeKey, safePath } from '../server/systemLog.js'
+import { apiErrorHandler, createSystemLog, routeKey, safePath } from '../server/systemLog.js'
 import { createTestDatabase } from './workflowFixture.js'
 
 // Tela Desenvolvedor: only the two developer CPFs open it (the server checks, the menu only hides the item); every
@@ -20,12 +20,14 @@ test('only the developer CPFs open the screen and the logs never keep a secret o
   assert.equal(routeKey('PUT', '/api/operations/orders/OS-0012'), 'PUT /api/operations/orders/:id')
 })
 
-async function developerServer(t) {
+// `build`: the interface published now (dist/version.json); `store`: the portal data; `now`: the clock of the logs.
+async function developerServer(t, { build = null, store = null, now = Date.now } = {}) {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'gmac-developer-'))
+  if (build) await writeFile(path.join(directory, 'version.json'), `${JSON.stringify({ version: build })}\n`)
   const people = { 1: { id: 1, name: 'Dev', cpf: '02427847550' }, 2: { id: 2, name: 'Financeiro', cpf: '11122233344' } }
   // As in server/index.js, who made the request comes from its session header (any route, with or without the guard).
   const identify = (request) => { const id = Number(request.headers['x-admin']); return people[id] ? { key: `admin:${id}`, name: people[id].name, role: 'admin' } : null }
-  const systemLog = createSystemLog({ identify })
+  const systemLog = createSystemLog({ identify, now })
   const session = (request, response, next) => {
     const id = Number(request.headers['x-admin'])
     if (!people[id]) return response.status(401).json({ message: 'Sessão expirada.' })
@@ -36,13 +38,18 @@ async function developerServer(t) {
   const app = express()
   app.use(express.json())
   app.use('/api', systemLog.requestLogger)
-  app.use('/api', createDeveloperRouter({ accounts: { account: (id) => people[id] }, requireAdmin: session, requireSession: session, systemLog, live, pool: null, readStore: async () => ({ offers: [{}, {}], orders: [{}], supportTickets: [{ status: 'open' }, { status: 'closed' }] }), dataDirectory: directory, config: () => ({ mail: true }), version: '1.0.21' }))
+  app.use('/api', createDeveloperRouter({ accounts: { account: (id) => people[id] }, requireAdmin: session, requireSession: session, systemLog, live, pool: null, readStore: async () => store || ({ offers: [{}, {}], orders: [{}], supportTickets: [{ status: 'open' }, { status: 'closed' }] }), dataDirectory: directory, interfaceDirectory: build ? directory : null, config: () => ({ mail: true }), version: '1.0.21', now }))
   app.get('/api/broken', (_request, response) => response.status(500).json({ message: 'Falha de teste' }))
+  // A refusal with the record it involved, a session refused, and errors thrown to the last handler of the API.
+  app.post('/api/refused', (_request, response) => { response.locals.logDetails = { conflito: { motivo: 'período sobreposto', registro: { sessao: 's1', inicio: '2026-10-01T08:00:00.000Z' } } }; response.status(409).json({ message: 'OS-2026-0007: Ana já tem um período.' }) })
+  app.get('/api/expired', (_request, response) => response.status(401).json({ message: 'Entre novamente como administrador.' }))
+  app.get('/api/thrown/:status', (request, _response, next) => { const error = new Error(`Recusa ${request.params.status}`); if (request.params.status !== '500') error.status = Number(request.params.status); error.logDetails = { validacao: { campo: 'Margem', recebido: 1001, aceito: 'número de 0 a 1000%' } }; next(error) })
+  app.use('/api', apiErrorHandler)
   const server = await new Promise((resolve) => { const item = app.listen(0, '127.0.0.1', () => resolve(item)) })
   t.after(async () => { await new Promise((resolve) => server.close(resolve)); await rm(directory, { recursive: true, force: true }) })
   const url = `http://127.0.0.1:${server.address().port}/api`
-  const call = async (route, { admin = 1, method = 'GET', body } = {}) => {
-    const response = await fetch(`${url}${route}`, { method, headers: { 'Content-Type': 'application/json', ...(admin ? { 'x-admin': String(admin) } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) })
+  const call = async (route, { admin = 1, method = 'GET', body, headers = {} } = {}) => {
+    const response = await fetch(`${url}${route}`, { method, headers: { 'Content-Type': 'application/json', ...(admin ? { 'x-admin': String(admin) } : {}), ...headers }, body: body === undefined ? undefined : JSON.stringify(body) })
     const text = await response.text()
     return { status: response.status, headers: response.headers, data: text && response.headers.get('content-type')?.includes('json') ? JSON.parse(text) : text }
   }
@@ -124,4 +131,88 @@ test('the logs are saved in MySQL, paged from the newest and kept for 30 days', 
   clock += 31 * 86400000
   assert.equal(await systemLog.prune(), 6)
   assert.equal((await systemLog.list()).length, 0)
+})
+
+// Logs mais completos (1.0.26): what a refusal involved, 401 grouped, 4xx without "Falha na API", the version of each
+// browser (Usuários online and the logs) and the diagnosis of the OS in the export.
+test('the logs keep what a refusal involved, group repeated 401 and know the version of each browser', async (t) => {
+  let clock = Date.parse('2026-11-26T15:00:00Z')
+  const now = () => clock
+  const store = {
+    offers: [{ id: 'of1', code: 'OF-2026-0003' }],
+    orders: [{ code: 'OS-2026-0007', offerId: 'of1', service: 'Corte de chapas', company: 'Cliente Teste', quantity: 10, createdAt: '2026-11-20T11:00:00.000Z', deadline: '2026-12-01', resources: { stages: ['cut-bend'], urgency: 'normal' }, proposal: { serviceValue: 900 },
+      operation: { status: 'running', stages: [{ key: 'stage-1', name: 'Corte' }], stageCounts: { 'stage-1': 2 }, activeSessions: [{ id: 's1', employeeId: 3, employeeName: 'Ana', tokenHash: 'hash-secreto', deviceTokenHashes: ['outro-hash'] }] },
+      operationEvents: [{ id: 'e1', type: 'started', at: '2026-11-26T11:00:00.000Z', sessionId: 's1', employeeId: 3, employeeName: 'Ana' }] }],
+    supportTickets: [],
+  }
+  const { call, settle, systemLog } = await developerServer(t, { build: 'build-novo', store, now })
+  const current = { 'X-Portal-Release': '1.0.26', 'X-Portal-Version': 'build-novo' }
+
+  // (1, 2, 6) The refusal keeps the record it involved and the version of the portal that asked.
+  assert.equal((await call('/refused', { admin: 2, method: 'POST', body: {}, headers: current })).status, 409)
+  // (5) An expected refusal is a warning of the request, not "Falha na API"; a real failure still is.
+  const said = [], consoleError = console.error
+  console.error = (...args) => said.push(args.join(' '))
+  try { assert.equal((await call('/thrown/400', { admin: 2 })).status, 400); assert.equal((await call('/thrown/500', { admin: 2 })).status, 500) } finally { console.error = consoleError }
+  assert.deepEqual(said.filter((line) => line.startsWith('Falha na API')), ['Falha na API: Recusa 500'])
+  await settle()
+  const [refused] = await systemLog.list({ search: '/api/refused' })
+  assert.equal(refused.level, 'warn')
+  assert.deepEqual(refused.details.conflito, { motivo: 'período sobreposto', registro: { sessao: 's1', inicio: '2026-10-01T08:00:00.000Z' } })
+  assert.deepEqual([refused.details.version, refused.details.build], ['1.0.26', 'build-novo'])
+  const thrown = await systemLog.list({ search: '/api/thrown' })
+  assert.deepEqual(thrown.map((item) => [item.level, item.details.validacao?.campo]), [['error', 'Margem'], ['warn', 'Margem']])
+  assert.deepEqual(thrown[1].details.validacao, { campo: 'Margem', recebido: 1001, aceito: 'número de 0 a 1000%' })
+  // A version that is not a version (spaces, symbols) is not kept.
+  await call('/refused', { admin: 2, method: 'POST', body: {}, headers: { 'X-Portal-Release': '<b>1.0</b>', 'X-Portal-Version': 'a b' } })
+  await settle()
+  assert.deepEqual([(await systemLog.list({ search: '/api/refused' }))[0].details.version, (await systemLog.list({ search: '/api/refused' }))[0].details.build], [undefined, undefined])
+
+  // (4) The same session refused again and again (same route, address and device): the first one, then the count.
+  for (let index = 0; index < 5; index += 1) { clock += 15000; await call('/expired', { admin: null }) }
+  await call('/thrown/401', { admin: null })
+  await settle()
+  assert.equal((await systemLog.list({ search: '/api/expired' })).length, 1, 'only the first one while it repeats')
+  assert.equal((await systemLog.list({ search: '/api/thrown/401' })).length, 1, 'another route is another group')
+  const open = (await call('/developer/export?days=1')).data.sessoesRecusadasEmAndamento.find((group) => group.route === '/api/expired')
+  assert.deepEqual([open.repeats, open.message], [4, 'Entre novamente como administrador.'])
+  // Ten quiet minutes: one record with how many times and when.
+  clock += 11 * 60000
+  const grouped = await systemLog.list({ search: '/api/expired' })
+  assert.equal(grouped.length, 2)
+  assert.match(grouped[0].message, /^GET \/api\/expired → 401 repetido mais 4 vezes \(de 26\/11 12:00 a 26\/11 12:01\): Entre novamente como administrador\.$/)
+  assert.deepEqual([grouped[0].level, grouped[0].details.repeticoes, grouped[0].details.status], ['warn', 4, 401])
+  // After that a new refusal starts again with its own record.
+  await call('/expired', { admin: null })
+  await settle()
+  assert.equal((await systemLog.list({ search: '/api/expired' })).length, 3)
+
+  // (12) Usuários online: the version open in each browser; without the build of the published interface, outdated.
+  await call('/developer/overview', { admin: 1, headers: { 'X-Portal-Release': '1.0.25', 'X-Portal-Version': 'build-antigo' } })
+  await call('/client-logs', { admin: 2, method: 'POST', body: { entries: [] }, headers: current })
+  await settle()
+  const online = (await call('/developer/overview', { admin: 1, headers: { 'X-Portal-Release': '1.0.25', 'X-Portal-Version': 'build-antigo' } })).data.online
+  const row = (name) => online.people.find((person) => person.name === name)
+  assert.equal(online.build, 'build-novo')
+  assert.deepEqual([row('Financeiro').version, row('Financeiro').outdated], ['1.0.26', false])
+  assert.deepEqual([row('Dev').version, row('Dev').outdated], ['1.0.25', true])
+  assert.deepEqual(online.outdated, { people: 1, tablets: 0 })
+
+  // (3) The export brings the diagnosis of each OS of the warnings and errors, without any secret of the sessions.
+  const exported = (await call('/developer/export?days=1')).data
+  const diagnosis = exported.diagnosticos.find((item) => item.codigo === 'OS-2026-0007')
+  assert.deepEqual([diagnosis.encontrada, diagnosis.os.offerCode, diagnosis.os.service, diagnosis.os.quantity, diagnosis.totalEventos, diagnosis.eventos[0].id], [true, 'OF-2026-0003', 'Corte de chapas', 10, 1, 'e1'])
+  assert.deepEqual(diagnosis.operacao.activeSessions, [{ id: 's1', employeeId: 3, employeeName: 'Ana' }])
+  assert.equal(diagnosis.os.proposal, undefined, 'no prices in the diagnosis')
+  assert.ok(diagnosis.mencoesNosLogs >= 2)
+  assert.doesNotMatch(JSON.stringify(exported), /hash-secreto|outro-hash|tokenHash/)
+  // The diagnosis of one OS chosen on the screen.
+  const single = await call('/developer/diagnostics/os-2026-0007')
+  assert.equal(single.status, 200)
+  assert.match(single.headers.get('content-disposition'), /^attachment; filename="diagnostico-OS-2026-0007-\d{4}-\d{2}-\d{2}-\d{4}\.json"$/)
+  assert.deepEqual([single.data.diagnostico.codigo, single.data.diagnostico.operacao.stageCounts['stage-1']], ['OS-2026-0007', 2])
+  assert.ok(single.data.logs.some((entry) => entry.message.includes('OS-2026-0007: Ana já tem um período')))
+  assert.doesNotMatch(JSON.stringify(single.data), /hash-secreto|outro-hash/)
+  assert.deepEqual([(await call('/developer/diagnostics/qualquer')).status, (await call('/developer/diagnostics/OS-2026-9999')).data.message], [400, 'OS-2026-9999 não encontrada.'])
+  assert.equal((await call('/developer/diagnostics/OS-2026-0007', { admin: 2 })).status, 403)
 })

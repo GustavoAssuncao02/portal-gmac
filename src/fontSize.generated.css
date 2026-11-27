@@ -845,6 +845,8 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .developer-update-status { font-size: calc(11px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .developer-update-error { font-size: calc(12px * var(--account-font-scale)) !important; }
 :root:is([data-font-size="small"], [data-font-size="large"]) .developer-update-row-message { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .developer-section-heading h2 .developer-outdated-count { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .developer-outdated { font-size: calc(10px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .notes-chip { font-size: inherit; font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .notes-group h2 { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .notes-group h2 span { font-size: calc(11px * var(--account-font-scale)); }

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { addManualEvent, addManualPeriod } from '../server/operationManualEvents.js'
+import { editEventTime } from '../server/operationEventTime.js'
 import { operationElapsed } from '../server/operationSessions.js'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
 
@@ -177,4 +178,32 @@ test('a period of work is compared with the periods of the operator screen too',
   const result = addManualPeriod(state, events, order, period('10:00:00', '11:00:00'), admin, now)
   assert.deepEqual(result.events.map((event) => event.type), ['resumed', 'paused'])
   assert.equal(state.status, 'running', 'someone still working keeps the OS running')
+})
+
+test('a refusal keeps, for the system logs, the records it involved', () => {
+  const live = { id: 's-now', employeeId: 2, employeeName: 'Bia', startedAt: at('12:00:00'), stageKey: 'stage-1', stageName: 'Plaina', stageSince: at('12:00:00') }
+  const state = { ...waiting(), status: 'running', startedAt: at('08:00:00'), activeSessions: [live], activeSince: at('12:00:00') }
+  const events = [
+    { id: 'e1', type: 'started', at: at('08:00:00'), sessionId: 's-old', employeeId: 2, employeeName: 'Bia', workStageKey: 'stage-1', workStageName: 'Plaina' },
+    { id: 'e2', type: 'paused', at: at('10:00:00'), sessionId: 's-old', employeeId: 2, employeeName: 'Bia', reason: 'Descanso' },
+    { id: 'e3', type: 'resumed', at: at('12:00:00'), sessionId: 's-now', employeeId: 2, employeeName: 'Bia', workStageKey: 'stage-2', workStageName: 'Pintura', manual: { adminId: 7, adminName: 'Gilson', recordedAt: at('12:05:00') } },
+  ]
+  const caught = (run) => { try { run() } catch (error) { return error.logDetails } }
+  const period = (from, to) => ({ type: 'start', at: at(from), endAt: at(to), reason: 'Descanso', employee: bia, stageKey: 'stage-1' })
+  // The period it touched: ids, times, stage and where it came from.
+  assert.deepEqual(caught(() => addManualPeriod(state, events, order, period('09:00:00', '09:30:00'), admin, now)), { conflito: {
+    motivo: 'período sobreposto', tentativa: { tipo: 'period', inicio: at('09:00:00'), fim: at('09:30:00'), funcionarioId: 2, etapa: 'stage-1' },
+    registro: { sessao: 's-old', evento: 'e1', inicio: at('08:00:00'), fim: at('10:00:00'), etapa: 'stage-1', origem: 'tablet', lancadoPor: null, lancadoEm: null },
+  } })
+  assert.deepEqual(caught(() => addManualPeriod(state, events, order, period('11:00:00', '13:00:00'), admin, now)).conflito.registro, { sessao: 's-now', evento: 'e3', inicio: at('12:00:00'), fim: 'em andamento', etapa: 'stage-2', origem: 'lançamento manual', lancadoPor: 'Gilson', lancadoEm: at('12:05:00') })
+  // Pieces beyond the total of the OS: the counts.
+  assert.deepEqual(caught(() => addManualEvent(state, events, order, { type: 'pieces', at: at('09:00:00'), employee: bia, stageKey: 'stage-1', quantity: 21 }, admin, now)).conflito, { motivo: 'passa do total da OS', tentativa: { tipo: 'pieces', em: at('09:00:00'), funcionarioId: 2, etapa: 'stage-1' }, quantidade: 21, pecasNaEtapa: 0, totalDaOS: 20 })
+  // A time correction out of the sequence: the event and its neighbour.
+  assert.deepEqual(caught(() => editEventTime(state, events, 'e2', at('07:00:00'), admin, now)).conflito, {
+    motivo: 'antes da operação anterior', tentativa: { evento: 'e2', de: at('10:00:00'), para: at('07:00:00') },
+    registro: { evento: 'e2', tipo: 'paused', em: at('10:00:00'), sessao: 's-old', etapa: null, lancadoPor: null },
+    anterior: { evento: 'e1', tipo: 'started', em: at('08:00:00'), sessao: 's-old', etapa: 'stage-1', lancadoPor: null },
+  })
+  // Nothing of it reaches the message on the screen.
+  assert.throws(() => addManualPeriod(state, events, order, period('09:00:00', '09:30:00'), admin, now), /^Error: Bia já tem um período em 01\/10 das 05:00:00 às 07:00:00 \(Plaina, registrado no tablet\)\.$/)
 })

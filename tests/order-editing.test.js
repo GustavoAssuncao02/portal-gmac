@@ -136,6 +136,11 @@ test('editing validates dates, quantities, ordered counts and stages; preserves 
   rejects((item) => { item.order.proposal.margin = 1001 }, 'Margem: informe um valor de 0 a 1000%.')
   rejects((item) => { item.order.proposal.margin = -1 }, 'Margem: informe um valor de 0 a 1000%.')
   rejects((item) => { item.order.proposal.discount = 101 }, 'Desconto: informe um valor de 0 a 100%.')
+  // The system logs keep the field, the value received and the accepted range; a typed text only says its size.
+  const refusal = (mutate) => { const payload = structuredClone(draft); mutate(payload); try { editOrder(structuredClone(order), structuredClone(state), payload) } catch (error) { return error.logDetails } }
+  assert.deepEqual(refusal((item) => { item.order.proposal.margin = 1001 }), { validacao: { campo: 'Margem', recebido: 1001, aceito: 'número de 0 a 1000%' } })
+  assert.deepEqual(refusal((item) => { item.order.quantity = 'dez peças' }), { validacao: { campo: 'Quantidade da OS', recebido: '(texto com 9 caracteres)', aceito: 'inteiro de 1 a 1000000000' } })
+  assert.deepEqual(refusal((item) => { item.order.deadline = '2026-02-30' }), { validacao: { campo: 'Prazo solicitado', recebido: '2026-02-30', aceito: 'data AAAA-MM-DD' } })
   const highMargin = structuredClone(draft)
   highMargin.order.proposal.margin = 118.5
   highMargin.stageCounts = { turning: 10, painting: 10 }

@@ -39,14 +39,31 @@ export function deviceOf(userAgent) {
   const system = /iPad/.test(ua) ? 'iPad' : /iPhone/.test(ua) ? 'iPhone' : /Android/.test(ua) ? (/Mobile/.test(ua) ? 'Android (celular)' : 'Android (tablet)') : /Windows/.test(ua) ? 'Windows' : /Mac OS X/.test(ua) ? 'macOS' : /Linux/.test(ua) ? 'Linux' : 'Outro sistema'
   return browser ? `${browser[1]} ${ua.match(browser[0])[1]} · ${system}` : system
 }
+// The version of the portal a browser sends with each request (src/apiSession.js): only letters, digits, dots and dashes.
+export const headerValue = (value, limit) => { const text = String(value || ''); return text && text.length <= limit && /^[\w.+-]+$/.test(text) ? text : null }
+// Repeated 401 (same route, address and device) become one record: the first one as always, then the count.
+const UNAUTHORIZED_IDLE_MS = 10 * MINUTE, UNAUTHORIZED_WINDOW_MS = 60 * MINUTE
+const shortMoment = (ms) => `${new Date(ms).toLocaleDateString('pt-BR', { timeZone: 'America/Bahia', day: '2-digit', month: '2-digit' })} ${new Date(ms).toLocaleTimeString('pt-BR', { timeZone: 'America/Bahia', hour: '2-digit', minute: '2-digit' })}`
 const percentile = (values, share) => { if (!values.length) return 0; const sorted = [...values].sort((a, b) => a - b); return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * share))] }
+
+// The last handler of the API. An expected refusal (4xx) answers its message and is already in the request log as a
+// warning; only what really failed (5xx or no status) is also written as an error ("Falha na API").
+export function apiErrorHandler(error, _request, response, _next) {
+  if (!error.status || error.status >= 500) console.error('Falha na API:', error.message)
+  // What the refusal involved (field and range, conflicting record): saved with the request.
+  if (error.logDetails) response.locals.logDetails = error.logDetails
+  // The request log keeps the whole error (stack included) with the request that failed.
+  response.locals.logError = error
+  // `extra`: data an expected refusal sends with its message (the accounts of a possible duplicate, for example).
+  response.status(error.status || 500).json({ message: error.status ? error.message : 'Não foi possível concluir a operação.', ...(error.status && error.extra ? error.extra : {}) })
+}
 
 // `identify(request)`: who made a request ({ key, name, role } or null); `crashFile`: where the last words of a process
 // that stops go (read back on the next start).
 export function createSystemLog({ pool: database = null, identify = () => null, crashFile = null, now = Date.now } = {}) {
   let pool = database
   const startedAt = now()
-  const memory = [], requests = [], seen = new Map()
+  const memory = [], requests = [], seen = new Map(), unauthorized = new Map()
   let queue = [], timer = null, chain = Promise.resolve(), table = null, sequence = 0, failing = false
   const original = Object.fromEntries(['log', 'info', 'warn', 'error'].map((method) => [method, console[method].bind(console)]))
   const keep = (list, item) => { list.push(item); if (list.length > MEMORY) list.splice(0, list.length - MEMORY) }
@@ -121,17 +138,53 @@ export function createSystemLog({ pool: database = null, identify = () => null, 
     response.once('finish', () => { try { finished(request, response, Number(process.hrtime.bigint() - started) / 1e6) } catch { /* a log never breaks a request */ } })
     next()
   }
+  // The groups of repeated 401 that went quiet (or that have been going on for an hour) become one record with the count.
+  function sweepUnauthorized() {
+    const at = now()
+    for (const [key, group] of unauthorized) {
+      const idle = at - group.lastAt >= UNAUTHORIZED_IDLE_MS
+      if (!idle && at - group.windowStart < UNAUTHORIZED_WINDOW_MS) continue
+      if (group.repeats) record({
+        level: 'warn', source: 'request', user: group.user,
+        message: `${group.method} ${group.route} → 401 repetido mais ${group.repeats} ${group.repeats === 1 ? 'vez' : 'vezes'} (de ${shortMoment(group.windowFirst)} a ${shortMoment(group.lastAt)})${group.message ? `: ${group.message}` : ''}`,
+        details: { method: group.method, route: group.route, status: 401, repeticoes: group.repeats, primeira: group.windowFirst, ultima: group.lastAt, role: group.role, ip: group.ip, device: group.device, userAgent: group.userAgent, ...(group.version ? { version: group.version } : {}), ...(group.build ? { build: group.build } : {}) },
+      })
+      if (idle) unauthorized.delete(key)
+      else Object.assign(group, { repeats: 0, windowStart: at, windowFirst: null })
+    }
+  }
+  const sweeper = setInterval(() => { try { sweepUnauthorized() } catch { /* a log never breaks the server */ } }, MINUTE)
+  sweeper.unref?.()
+  // The groups still counting (the export shows them too).
+  const unauthorizedGroups = () => [...unauthorized.values()].map(({ windowStart, windowFirst, ...group }) => group)
+
   function finished(request, response, elapsed) {
     const url = request.originalUrl || request.url
     // The live connection stays open for as long as the tab: it is not a request to measure.
     if (/^\/api\/live(\?|$)/.test(url)) return
+    sweepUnauthorized()
     const ms = Math.round(elapsed), status = response.statusCode, route = safePath(url), method = request.method
     const who = (() => { try { return identify(request) } catch { return null } })()
     const userAgent = String(request.headers['user-agent'] || '')
-    keep(requests, { at: now(), method, route, key: routeKey(method, url), status, ms, user: who?.name || null, role: who?.role || null })
+    // The version of the portal open in the browser that made the request (absent in a tab opened before it was sent).
+    const version = headerValue(request.headers['x-portal-release'], 20), build = headerValue(request.headers['x-portal-version'], 40)
+    keep(requests, { at: now(), method, route, key: routeKey(method, url), status, ms, user: who?.name || null, role: who?.role || null, ...(version ? { version } : {}) })
     if (who?.key && status < 400) {
       const previous = seen.get(who.key)
-      seen.set(who.key, { ...who, firstAt: previous?.firstAt || now(), lastAt: now(), requests: (previous?.requests || 0) + 1, ip: request.ip, userAgent: cut(userAgent, 300) })
+      seen.set(who.key, { ...who, firstAt: previous?.firstAt || now(), lastAt: now(), requests: (previous?.requests || 0) + 1, ip: request.ip, userAgent: cut(userAgent, 300), version, build })
+    }
+    // A session refused again and again (a tab left open after it expired): only the first one is recorded, the next
+    // ones are counted (sweepUnauthorized).
+    if (status === 401) {
+      const device = deviceOf(userAgent), key = `${routeKey(method, url)}|${request.ip}|${device}`
+      const group = unauthorized.get(key)
+      if (group) {
+        group.repeats += 1
+        group.lastAt = now()
+        group.windowFirst ??= group.lastAt
+        return
+      }
+      unauthorized.set(key, { method, route, ip: request.ip, device, userAgent: cut(userAgent, 300), user: who?.name || null, role: who?.role || null, version, build, message: response.locals.logMessage || '', firstAt: now(), lastAt: now(), repeats: 0, windowStart: now(), windowFirst: null })
     }
     const write = !['GET', 'HEAD', 'OPTIONS'].includes(method)
     const level = status >= 500 ? 'error' : status >= 400 || ms >= SLOW_MS ? 'warn' : 'info'
@@ -140,7 +193,12 @@ export function createSystemLog({ pool: database = null, identify = () => null, 
     const said = response.locals.logMessage ? `: ${response.locals.logMessage}` : status < 400 && ms >= SLOW_MS ? ' (resposta lenta)' : ''
     record({
       level, source: 'request', user: who?.name || null, message: `${method} ${route} → ${status} em ${ms} ms${said}`,
-      details: { method, route, status, ms, role: who?.role || null, ip: request.ip, ...(level !== 'info' ? { device: deviceOf(userAgent), userAgent: cut(userAgent, 300) } : {}), ...(response.locals.logError ? { error: errorDetails(response.locals.logError) } : {}) },
+      details: {
+        method, route, status, ms, role: who?.role || null, ip: request.ip, ...(level !== 'info' ? { device: deviceOf(userAgent), userAgent: cut(userAgent, 300) } : {}), ...(version ? { version } : {}), ...(build ? { build } : {}),
+        // What a refusal involved (the field and its range, the conflicting record), set by the route: never free text.
+        ...(response.locals.logDetails && typeof response.locals.logDetails === 'object' ? response.locals.logDetails : {}),
+        ...(response.locals.logError ? { error: errorDetails(response.locals.logError) } : {}),
+      },
     })
   }
 
@@ -168,6 +226,7 @@ export function createSystemLog({ pool: database = null, identify = () => null, 
     && (!search || `${entry.message} ${entry.user || ''} ${JSON.stringify(entry.details || '')}`.toLocaleLowerCase('pt-BR').includes(search.toLocaleLowerCase('pt-BR')))
   // Newest first. `before`: the id of the last row already shown (the next page).
   async function list({ levels = [], source = '', search = '', since = 0, until = 0, before = null, limit = 200 } = {}) {
+    sweepUnauthorized()
     const size = Math.max(1, Math.min(20000, Number(limit) || 200))
     if (!pool) return memory.filter((entry) => matches(entry, { levels, source, search, since, until })).reverse().slice(0, size)
     await flush()
@@ -184,6 +243,7 @@ export function createSystemLog({ pool: database = null, identify = () => null, 
   }
   // How many errors and warnings came in a period, by origin.
   async function summary(since) {
+    sweepUnauthorized()
     const counts = { error: 0, warn: 0, info: 0, bySource: {} }
     const rows = pool ? (await flush(), await ready(), (await pool.query('SELECT level, source, COUNT(*) AS total FROM system_logs WHERE at >= ? GROUP BY level, source', [since]))[0])
       : Object.values(memory.filter((entry) => entry.at >= since).reduce((all, entry) => { const key = `${entry.level}|${entry.source}`; all[key] ||= { level: entry.level, source: entry.source, total: 0 }; all[key].total += 1; return all }, {}))
@@ -232,5 +292,5 @@ export function createSystemLog({ pool: database = null, identify = () => null, 
   // Who made requests in the last `minutes` (accounts and the operator's tablets).
   const activity = (minutes) => [...seen.values()].filter((item) => item.lastAt >= now() - minutes * MINUTE)
 
-  return { startedAt, record, flush, connect, captureConsole, requestLogger, watchProcess, importLastWords, list, summary, prune, traffic, recentRequests, activity, original }
+  return { startedAt, record, flush, connect, captureConsole, requestLogger, watchProcess, importLastWords, list, summary, prune, traffic, recentRequests, activity, unauthorizedGroups, original }
 }

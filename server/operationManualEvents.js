@@ -8,7 +8,12 @@ import { serviceDetails } from './serviceStages.js'
 
 export const manualEventTypes = ['start', 'pieces', 'pause']
 
-const fail = (status, message) => { const error = new Error(message); error.status = status; throw error }
+// `logDetails`: the records a refusal involved, for the system logs (never shown on the screen).
+const fail = (status, message, logDetails) => { const error = new Error(message); error.status = status; if (logDetails) error.logDetails = logDetails; throw error }
+const iso = (ms) => Number.isFinite(ms) ? new Date(ms).toISOString() : null
+// A recorded period in the logs: its ids, times, stage and who typed it in.
+const periodLog = (session) => ({ sessao: session.id, evento: session.start.id, inicio: iso(session.from), fim: session.end === Infinity ? 'em andamento' : session.end == null ? 'sem pausa' : iso(session.end), etapa: session.start.workStageKey ?? null, origem: session.start.manual ? 'lançamento manual' : 'tablet', lancadoPor: session.start.manual ? session.start.manual.adminName || 'Administrador' : null, lancadoEm: session.start.manual?.recordedAt || null })
+const conflict = (motivo, tentativa, fields = {}) => ({ conflito: { motivo, tentativa, ...fields } })
 const moment = (ms) => new Date(ms).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })
 const day = (ms) => new Date(ms).toLocaleDateString('pt-BR', { timeZone: 'America/Bahia', day: '2-digit', month: '2-digit' })
 const clock = (ms) => new Date(ms).toLocaleTimeString('pt-BR', { timeZone: 'America/Bahia' })
@@ -56,7 +61,8 @@ export function addManualEvent(state, events, order, input, editor = {}, now = D
   if (!Number.isFinite(time)) fail(400, 'Informe a data e a hora da operação.')
   if (time > now) fail(400, 'O horário não pode estar no futuro.')
   if (!state.stages?.length) fail(409, 'Defina as etapas da OS antes de lançar operações.')
-  if (state.status === 'completed' && state.completedAt && time >= Date.parse(state.completedAt)) fail(409, `A OS foi concluída em ${moment(Date.parse(state.completedAt))}. Lance operações anteriores à conclusão.`)
+  const attempt = { tipo: input.type, em: iso(time), funcionarioId: input.employee?.id ?? null, ...(input.stageKey ? { etapa: input.stageKey } : {}) }
+  if (state.status === 'completed' && state.completedAt && time >= Date.parse(state.completedAt)) fail(409, `A OS foi concluída em ${moment(Date.parse(state.completedAt))}. Lance operações anteriores à conclusão.`, conflict('depois da conclusão da OS', attempt, { concluidaEm: state.completedAt }))
   const { employee } = input
   const openIds = new Set((state.activeSessions || []).map((session) => session.id))
   const sessions = employeeSessions(events, employee.id, openIds)
@@ -68,9 +74,9 @@ export function addManualEvent(state, events, order, input, editor = {}, now = D
 
   if (input.type === 'start') {
     const pending = sessions.find((session) => session.end === null)
-    if (pending) fail(409, `Lance a pausa do início de ${moment(pending.from)} de ${employee.name} antes de um novo início.`)
+    if (pending) fail(409, `Lance a pausa do início de ${moment(pending.from)} de ${employee.name} antes de um novo início.`, conflict('início ainda sem pausa', attempt, { registro: periodLog(pending) }))
     const busy = sessions.find((session) => session.from <= time && time < session.end)
-    if (busy) fail(409, `${employee.name} ${periodText(busy)}.`)
+    if (busy) fail(409, `${employee.name} ${periodText(busy)}.`, conflict('dentro de outro período', attempt, { registro: periodLog(busy) }))
     const stage = state.stages.find((item) => item.key === input.stageKey)
     if (!stage) fail(400, 'Selecione uma etapa desta OS.')
     // The first start of the OS is "Início"; a start typed before it turns the former first one into a resumption.
@@ -84,10 +90,10 @@ export function addManualEvent(state, events, order, input, editor = {}, now = D
 
   if (input.type === 'pause') {
     const session = sessions.find((item) => item.end === null)
-    if (!session) fail(409, `Lance o início da operação de ${employee.name} antes da pausa.`)
-    if (time <= session.last) fail(409, `A pausa precisa ser posterior à última operação desse período (${moment(session.last)}).`)
+    if (!session) fail(409, `Lance o início da operação de ${employee.name} antes da pausa.`, conflict('pausa sem início', attempt))
+    if (time <= session.last) fail(409, `A pausa precisa ser posterior à última operação desse período (${moment(session.last)}).`, conflict('pausa antes da última operação do período', attempt, { registro: { ...periodLog(session), ultimaOperacao: iso(session.last) } }))
     const next = sessions.filter((item) => item.from > session.from).sort((left, right) => left.from - right.from)[0]
-    if (next && time >= next.from) fail(409, `A pausa precisa ser anterior ao início seguinte de ${employee.name} (${moment(next.from)}).`)
+    if (next && time >= next.from) fail(409, `A pausa precisa ser anterior ao início seguinte de ${employee.name} (${moment(next.from)}).`, conflict('pausa depois do início seguinte', attempt, { registro: periodLog(session), seguinte: periodLog(next) }))
     if (!input.reason) fail(400, 'Selecione o motivo da pausa.')
     const stageBefore = sessionStageTimes(events, session.id)
     event = { ...base, type: 'paused', ...sessionAt(events, session, time).fields, reason: input.reason, durationMs: time - session.from }
@@ -102,16 +108,16 @@ export function addManualEvent(state, events, order, input, editor = {}, now = D
 
   if (input.type === 'pieces') {
     const session = sessions.find((item) => item.from < time && (item.end === null || time < item.end))
-    if (!session) fail(409, `${employee.name} não estava trabalhando nesta OS nesse horário. Lance o início da operação antes das peças.`)
+    if (!session) fail(409, `${employee.name} não estava trabalhando nesta OS nesse horário. Lance o início da operação antes das peças.`, conflict('peças fora de um período', attempt))
     const index = state.stages.findIndex((item) => item.key === input.stageKey)
     if (index < 0) fail(400, 'Selecione uma etapa desta OS.')
     const stage = state.stages[index], context = sessionAt(events, session, time)
-    if (context.stageKey && context.stageKey !== stage.key) fail(409, `Nesse horário ${employee.name} estava na etapa ${context.stageName}.`)
+    if (context.stageKey && context.stageKey !== stage.key) fail(409, `Nesse horário ${employee.name} estava na etapa ${context.stageName}.`, conflict('outra etapa nesse horário', attempt, { registro: { ...periodLog(session), etapaNoHorario: context.stageKey } }))
     const quantity = Number(input.quantity)
     if (!Number.isInteger(quantity) || quantity < 1) fail(400, 'Informe uma quantidade inteira de peças.')
     const current = Number(state.stageCounts?.[stage.key] || 0), count = current + quantity
-    if (count > Number(order.quantity)) fail(409, `A quantidade passa do total da OS: ${stage.name} já tem ${current}/${Number(order.quantity)} peças.`)
-    if (serviceDetails(order.resources).strictProcess && index > 0 && count > Number(state.stageCounts?.[state.stages[index - 1].key] || 0)) fail(409, 'As peças precisam passar pela etapa anterior antes desta etapa.')
+    if (count > Number(order.quantity)) fail(409, `A quantidade passa do total da OS: ${stage.name} já tem ${current}/${Number(order.quantity)} peças.`, conflict('passa do total da OS', attempt, { quantidade: quantity, pecasNaEtapa: current, totalDaOS: Number(order.quantity) }))
+    if (serviceDetails(order.resources).strictProcess && index > 0 && count > Number(state.stageCounts?.[state.stages[index - 1].key] || 0)) fail(409, 'As peças precisam passar pela etapa anterior antes desta etapa.', conflict('passa da etapa anterior', attempt, { quantidade: quantity, pecasNaEtapa: current, etapaAnterior: state.stages[index - 1].key, pecasNaEtapaAnterior: Number(state.stageCounts?.[state.stages[index - 1].key] || 0) }))
     // Registrations made after this moment already had these pieces: their running totals go up.
     const later = events.filter((item) => item.type === 'stage_progress' && item.stageKey === stage.key && Date.parse(item.at) > time)
     for (const item of later) { item.stageTotal = Number(item.stageTotal || 0) + quantity; changed.add(item) }
@@ -143,9 +149,10 @@ export function addManualPeriod(state, events, order, input, editor = {}, now = 
   const openIds = new Set((state.activeSessions || []).map((session) => session.id))
   const sessions = employeeSessions(events, input.employee.id, openIds)
   const pending = sessions.find((session) => session.end === null)
-  if (pending) fail(409, `Lance a pausa do início de ${moment(pending.from)} de ${input.employee.name} antes de um novo período.`)
-  const conflict = sessions.find((session) => from < session.end && session.from <= to)
-  if (conflict) fail(409, `${input.employee.name} ${periodText(conflict)}.`)
+  const attempt = { tipo: 'period', inicio: iso(from), fim: iso(to), funcionarioId: input.employee?.id ?? null, ...(input.stageKey ? { etapa: input.stageKey } : {}) }
+  if (pending) fail(409, `Lance a pausa do início de ${moment(pending.from)} de ${input.employee.name} antes de um novo período.`, conflict('início ainda sem pausa', attempt, { registro: periodLog(pending) }))
+  const overlapping = sessions.find((session) => from < session.end && session.from <= to)
+  if (overlapping) fail(409, `${input.employee.name} ${periodText(overlapping)}.`, conflict('período sobreposto', attempt, { registro: periodLog(overlapping) }))
   // Both records are made on copies; the real state and history only change when the two are accepted.
   const draftState = structuredClone(state), draftEvents = structuredClone(events)
   const start = addManualEvent(draftState, draftEvents, order, { ...input, type: 'start' }, editor, now)

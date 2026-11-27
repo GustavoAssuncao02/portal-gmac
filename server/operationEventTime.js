@@ -6,7 +6,9 @@ export const sessionEnds = ['paused', 'stage_completed', 'completed', 'session_e
 export const resourceChanges = ['machine_changed', 'labor_service_changed', 'resource_changed']
 export const timeEditableEvents = [...sessionStarts, ...sessionEnds, ...resourceChanges, 'stage_progress']
 
-const fail = (status, message) => { const error = new Error(message); error.status = status; throw error }
+// `logDetails`: the records a refusal involved, for the system logs (never shown on the screen).
+const fail = (status, message, logDetails) => { const error = new Error(message); error.status = status; if (logDetails) error.logDetails = logDetails; throw error }
+const eventLog = (event) => event ? { evento: event.id, tipo: event.type, em: event.at, sessao: event.sessionId ?? null, etapa: event.workStageKey ?? event.stageKey ?? null, lancadoPor: event.manual ? event.manual.adminName || 'Administrador' : null } : null
 const moment = (ms) => new Date(ms).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })
 export const chronological = (events) => [...events].sort((a, b) => Date.parse(a.at) - Date.parse(b.at))
 
@@ -109,7 +111,7 @@ export function pieceWorkTimes(events) {
 export function editEventTime(state, events, eventId, at, editor = {}, now = Date.now()) {
   const event = events.find((item) => item.id === eventId)
   if (!event) fail(404, 'Operação não encontrada no histórico desta OS.')
-  if (!timeEditableEvents.includes(event.type) || !event.sessionId) fail(409, 'O horário desta operação não pode ser editado.')
+  if (!timeEditableEvents.includes(event.type) || !event.sessionId) fail(409, 'O horário desta operação não pode ser editado.', { conflito: { motivo: 'operação sem horário editável', registro: eventLog(event) } })
   const time = typeof at === 'string' ? Date.parse(at) : NaN
   if (!Number.isFinite(time)) fail(400, 'Informe uma data e hora válidas.')
   const previous = Date.parse(event.at)
@@ -124,8 +126,9 @@ export function editEventTime(state, events, eventId, at, editor = {}, now = Dat
   const sequence = chronological(events.filter(sameEmployee))
   const index = sequence.indexOf(event)
   const before = sequence[index - 1], after = sequence[index + 1]
-  if (before && time <= Date.parse(before.at)) fail(409, `O horário precisa ser posterior à operação anterior do funcionário (${moment(Date.parse(before.at))}).`)
-  if (after && time >= Date.parse(after.at)) fail(409, `O horário precisa ser anterior à operação seguinte do funcionário (${moment(Date.parse(after.at))}).`)
+  const attempt = { evento: event.id, de: event.at, para: new Date(time).toISOString() }
+  if (before && time <= Date.parse(before.at)) fail(409, `O horário precisa ser posterior à operação anterior do funcionário (${moment(Date.parse(before.at))}).`, { conflito: { motivo: 'antes da operação anterior', tentativa: attempt, registro: eventLog(event), anterior: eventLog(before) } })
+  if (after && time >= Date.parse(after.at)) fail(409, `O horário precisa ser anterior à operação seguinte do funcionário (${moment(Date.parse(after.at))}).`, { conflito: { motivo: 'depois da operação seguinte', tentativa: attempt, registro: eventLog(event), seguinte: eventLog(after) } })
 
   const openIds = new Set((state.activeSessions || []).map((session) => session.id))
   const timeBefore = projectTime(sessionSpans(events, openIds))

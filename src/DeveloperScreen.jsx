@@ -41,15 +41,22 @@ function Facts({ title, icon: Icon, rows }) {
   return <section className="developer-card"><h3><Icon size={16} aria-hidden="true" />{title}</h3><dl>{rows.filter(Boolean).map(([label, value, tone]) => <div key={label}><dt>{label}</dt><dd className={tone ? `developer-tone--${tone}` : undefined}>{value ?? '—'}</dd></div>)}</dl></section>
 }
 
+// "2 pessoas e 1 tablet em versão antiga": who is online with a build different from the one published now.
+function outdatedText(outdated) {
+  const parts = [outdated?.people ? `${integer(outdated.people)} ${outdated.people === 1 ? 'pessoa' : 'pessoas'}` : '', outdated?.tablets ? `${integer(outdated.tablets)} ${outdated.tablets === 1 ? 'tablet' : 'tablets'}` : ''].filter(Boolean)
+  return parts.length ? `${parts.join(' e ')} em versão antiga` : ''
+}
 function OnlineUsers({ online }) {
   const people = online?.people || []
+  const outdated = outdatedText(online?.outdated)
   return <section className="developer-section" aria-labelledby="developer-online-title">
-    <div className="developer-section-heading"><h2 id="developer-online-title">Usuários online</h2><small>{online?.rule}</small></div>
-    {people.length ? <div className="developer-table-wrap"><table className="developer-table developer-online-table"><thead><tr><th>Nome</th><th>Tipo</th><th>Situação</th><th>Desde</th><th>Dispositivo</th><th>IP</th></tr></thead>
+    <div className="developer-section-heading"><h2 id="developer-online-title">Usuários online{outdated && <span className="developer-outdated-count"><AlertTriangle size={13} aria-hidden="true" />{outdated}</span>}</h2><small>{online?.rule} Versão: a que está aberta em cada navegador; "desatualizada" precisa recarregar a página.</small></div>
+    {people.length ? <div className="developer-table-wrap"><table className="developer-table developer-online-table"><thead><tr><th>Nome</th><th>Tipo</th><th>Situação</th><th>Desde</th><th>Dispositivo</th><th>Versão</th><th>IP</th></tr></thead>
       <tbody>{people.map((person) => <tr key={person.key} className={person.online ? '' : 'developer-row--idle'}>
         <td data-label="Nome"><strong>{person.name}</strong></td><td data-label="Tipo">{roleNames[person.role] || person.role}</td>
         <td data-label="Situação"><span className={`developer-presence${person.online ? ' developer-presence--on' : ''}`}><i aria-hidden="true" />{person.tabs ? `Portal aberto (${person.tabs} ${person.tabs === 1 ? 'aba' : 'abas'})` : person.online ? `Ativo ${ago(person.lastAt)}` : `Visto ${ago(person.lastAt)}`}</span></td>
-        <td data-label="Desde">{moment(person.since)}</td><td data-label="Dispositivo">{person.device || '—'}</td><td data-label="IP">{person.ip || '—'}</td>
+        <td data-label="Desde">{moment(person.since)}</td><td data-label="Dispositivo">{person.device || '—'}</td>
+        <td data-label="Versão"><span className="developer-version">{person.version || '—'}{person.outdated && <span className="developer-outdated">desatualizada</span>}</span></td><td data-label="IP">{person.ip || '—'}</td>
       </tr>)}</tbody></table></div> : <p className="developer-empty">Ninguém com o portal aberto agora.</p>}
   </section>
 }
@@ -171,6 +178,7 @@ function SystemDetails({ data }) {
 export default function DeveloperScreen(props) {
   const [data, setData] = useState(null), [error, setError] = useState(''), [refreshKey, setRefreshKey] = useState(0), [busy, setBusy] = useState(false)
   const [exportDays, setExportDays] = useState(7), [exporting, setExporting] = useState(false)
+  const [diagnosticCode, setDiagnosticCode] = useState(''), [diagnosing, setDiagnosing] = useState(false)
   const latest = useRef(0)
   const load = useCallback(async () => {
     const id = ++latest.current
@@ -187,6 +195,14 @@ export default function DeveloperScreen(props) {
     setExporting(true); setError('')
     try { await downloadFile(`/api/developer/export?days=${exportDays}`, 'logs-portal-gmac.json') } catch (caught) { setError(caught.message) } finally { setExporting(false) }
   }
+  // Diagnóstico de uma OS: its data, the state of the operation, every event and the logs that mention it.
+  async function exportDiagnostic(event) {
+    event.preventDefault()
+    const code = diagnosticCode.trim().toUpperCase()
+    if (!/^OS-\d{4}-[0-9A-Z]{3,}$/.test(code)) return setError('Informe o código da OS, por exemplo OS-2026-0001.')
+    setDiagnosing(true); setError('')
+    try { await downloadFile(`/api/developer/diagnostics/${encodeURIComponent(code)}`, `diagnostico-${code}.json`) } catch (caught) { setError(caught.message) } finally { setDiagnosing(false) }
+  }
   const day = data?.logs.day, hour = data?.logs.hour, traffic = data?.traffic
   return <AdminWorkspace title="Desenvolvedor" {...props}>
     <div className="developer-toolbar">
@@ -196,6 +212,8 @@ export default function DeveloperScreen(props) {
         <button className="admin-tool-button" type="button" onClick={refresh} disabled={busy}><RefreshCw size={15} aria-hidden="true" />Atualizar</button>
         <span className="developer-export"><label>Período da exportação<select value={exportDays} onChange={(event) => setExportDays(Number(event.target.value))}>{exportPeriods.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
           <button className="admin-tool-button admin-tool-button--primary" type="button" onClick={exportLogs} disabled={exporting}><Download size={15} aria-hidden="true" />{exporting ? 'Exportando...' : 'Exportar logs'}</button></span>
+        <form className="developer-export developer-diagnostic" onSubmit={exportDiagnostic}><label>Diagnóstico de uma OS<input value={diagnosticCode} onChange={(event) => setDiagnosticCode(event.target.value)} placeholder="OS-2026-0001" maxLength={20} autoComplete="off" spellCheck={false} /></label>
+          <button className="admin-tool-button" type="submit" disabled={diagnosing}><Download size={15} aria-hidden="true" />{diagnosing ? 'Exportando...' : 'Exportar diagnóstico'}</button></form>
       </div>
     </div>
     {error && <p className="admin-tool-error" role="alert">{error}</p>}

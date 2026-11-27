@@ -50,7 +50,7 @@ import { missingFilesReport, missingStoredFiles, storedFileInventory } from './s
 import { configureStore, importJsonStore, onStoreChange, readStore } from './store.js'
 import { createLiveUpdates } from './liveUpdates.js'
 import { requireAdminOrOperator } from './access.js'
-import { createSystemLog } from './systemLog.js'
+import { apiErrorHandler, createSystemLog } from './systemLog.js'
 import createDeveloperRouter from './developer.js'
 import { createUpdateScheduler } from './updateSchedule.js'
 import { developerCpfs } from './developers.js'
@@ -178,7 +178,7 @@ const updateScheduler = createUpdateScheduler({ readStore, mutateStore, version:
   developerIds: async () => (await Promise.all(developerCpfs.map((cpf) => accounts.accountByCpf(cpf)))).filter(Boolean).map((account) => account.id) })
 await updateScheduler.boot().catch((error) => console.error('Falha ao conferir a atualização programada:', error.message))
 setInterval(() => updateScheduler.sweep().catch((error) => console.error('Falha ao verificar a atualização programada:', error.message)), 15000).unref()
-app.use('/api', createDeveloperRouter({ accounts, requireAdmin, requireSession: requireAdminOrOperator, systemLog, live, pool, readStore, dataDirectory, updates: updateScheduler, version: releaseNotes[0] ? { version: releaseNotes[0].version, date: releaseNotes[0].date } : null, config: () => ({
+app.use('/api', createDeveloperRouter({ accounts, requireAdmin, requireSession: requireAdminOrOperator, systemLog, live, pool, readStore, dataDirectory, interfaceDirectory: path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist'), updates: updateScheduler, version: releaseNotes[0] ? { version: releaseNotes[0].version, date: releaseNotes[0].date } : null, config: () => ({
   environment: production ? 'produção' : 'desenvolvimento', nodeEnv: process.env.NODE_ENV || '', host, port, database: `${process.env.DB_HOST}:${process.env.DB_PORT || 3306}/${process.env.DB_NAME}`,
   dataDir: Boolean(process.env.DATA_DIR), smtp: ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'MAIL_FROM'].every((key) => process.env[key]?.trim()), turnstile: Boolean(process.env.TURNSTILE_SECRET_KEY), testLogin: testLoginEnabled(),
   corsOrigins: corsOrigins.length, apiRateLimit: Number(process.env.API_RATE_LIMIT) || 200, trustProxy: process.env.TRUST_PROXY || '(padrão)', fiscalCatalogSync: flag(process.env.FISCAL_CATALOG_SYNC) !== 'off',
@@ -218,13 +218,7 @@ app.use('/api', createAdminInventoryRouter(pool, requireAdmin, { recordInventory
 
 const interfacePublished = serveInterface(app, path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist'))
 
-app.use((error, _request, response, _next) => {
-  console.error('Falha na API:', error.message)
-  // The request log keeps the whole error (stack included) with the request that failed.
-  response.locals.logError = error
-  // `extra`: data an expected refusal sends with its message (the accounts of a possible duplicate, for example).
-  response.status(error.status || 500).json({ message: error.status ? error.message : 'Não foi possível concluir a operação.', ...(error.status && error.extra ? error.extra : {}) })
-})
+app.use(apiErrorHandler)
 
 const server = app.listen(port, host, () => {
   console.log(`API GMAC disponível em http://${host}:${port}`)

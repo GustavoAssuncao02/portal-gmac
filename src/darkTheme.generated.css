@@ -5109,6 +5109,14 @@
 :root[data-theme="dark"] .developer-update-row-message {
     color: #b7c2cc
 }
+:root[data-theme="dark"] .developer-section-heading h2 .developer-outdated-count {
+    color: #ecc889;
+    background: #3c3220
+}
+:root[data-theme="dark"] .developer-outdated {
+    color: #ecc889;
+    background: #3c3220
+}
 :root[data-theme="dark"] .notes-count--alert {
     background: #98571b !important;
     color: #f2f6fc !important

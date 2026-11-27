@@ -297,6 +297,8 @@ export default function createOperationsRouter(pool) {
 
   function sendError(response, error) {
     if (!error.status) console.error('Falha na operação da OS:', error)
+    // What the refusal involved (field and range, conflicting record): saved with the request in the system logs.
+    if (error.logDetails) response.locals.logDetails = error.logDetails
     response.status(error.status || 500).json({ message: error.status ? error.message : 'Não foi possível registrar a operação.', ...(error.code === 'PENDING_MATERIALS' ? { code: error.code, pendingMaterials: error.pendingMaterials } : {}), ...(error.code === 'COMPLETED_BY_REQUIRED' ? { code: error.code } : {}), ...(error.code === 'WORKING_ELSEWHERE' ? { code: error.code, busyOrder: error.busyOrder } : {}), ...(['MACHINE_BUSY', 'MACHINE_MAINTENANCE'].includes(error.code) ? { code: error.code } : {}) })
   }
 

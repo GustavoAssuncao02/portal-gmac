@@ -50,6 +50,7 @@ import DeveloperScreen from './DeveloperScreen.jsx'
 import { isDeveloper } from '../server/developers.js'
 import { todayBahia } from '../server/payableRules.js'
 import { installClientLog } from './clientLog.js'
+import { SESSION_EXPIRED_EVENT, installApiSession } from './apiSession.js'
 import CashFlowScreen from './CashFlowScreen.jsx'
 import StockPurchaseFinance, { purchasedQuantity } from './StockPurchaseFinance.jsx'
 import BankStatementsScreen from './BankStatementsScreen.jsx'
@@ -2548,6 +2549,33 @@ function App() {
   // when they change.
   const [, setStageVersion] = useState(0)
   useEffect(() => onStageCatalogChange(() => setStageVersion((value) => value + 1)), [])
+  // The API refused the session of this tab (it ended or expired, src/apiSession.js): back to the login, which stops
+  // every screen from asking again. Only the token still in use counts (an old request after a new login does not).
+  useEffect(() => {
+    function expired(event) {
+      const token = event.detail?.token
+      if (!token) return
+      if (token === window.sessionStorage.getItem('gmac-admin-token')) {
+        window.sessionStorage.removeItem('gmac-admin-token')
+        window.sessionStorage.removeItem('gmac-admin-workspace')
+        clearListStates()
+        setRestoringSession(false)
+        setIsDashboard(false)
+        setAdminUser(null)
+        setPassword('')
+        setMessageError(false)
+        setMessage('Sua sessão expirou. Entre novamente.')
+      } else if (token === window.sessionStorage.getItem('gmac-operator-token')) {
+        window.sessionStorage.removeItem('gmac-operator-token')
+        window.sessionStorage.removeItem(operatorEmployeeKey)
+        setOperatorToken(null)
+        setMessageError(false)
+        setMessage('Sua sessão expirou. Entre novamente.')
+      }
+    }
+    window.addEventListener(SESSION_EXPIRED_EVENT, expired)
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, expired)
+  }, [])
   useEffect(() => { if (isDashboard) cachedResource('/stages', setStageCatalog).catch(() => {}) }, [isDashboard])
   useEffect(() => {
     if (!operatorToken) return
@@ -2905,6 +2933,8 @@ function App() {
 
 // Errors of this browser go to the system logs (Desenvolvedor), on every screen.
 installClientLog()
+// Each request says the version of the portal open here; a refused session goes back to the login.
+installApiSession()
 
 // The new version notice covers every screen: login, administrative portal and the operator's tablet.
 createRoot(document.getElementById('root')).render(

@@ -21,3 +21,7 @@ video-institucional/
 # Tokens e chaves de acesso nunca vao para o repositorio (publico)
 access-token*
 *.token
+
+# Logs exportados na tela Desenvolvedor (dados reais de uso).
+logs-portal-gmac-*.json
+diagnostico-OS-*.json

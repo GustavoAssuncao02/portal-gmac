@@ -4327,6 +4327,12 @@
 :root[data-theme="dark"][data-tone="black"] .developer-update-row-message {
     color: #bec2c5
 }
+:root[data-theme="dark"][data-tone="black"] .developer-section-heading h2 .developer-outdated-count {
+    background: #30281a
+}
+:root[data-theme="dark"][data-tone="black"] .developer-outdated {
+    background: #30281a
+}
 :root[data-theme="dark"][data-tone="black"] .notes-chip {
     border: 1px solid #303133;
     background: #1a1b1c;

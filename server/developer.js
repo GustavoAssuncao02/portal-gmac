@@ -1,4 +1,5 @@
 import express from 'express'
+import { readFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { readdir, stat, statfs } from 'node:fs/promises'
@@ -19,11 +20,36 @@ const extraOf = (value) => {
   try { const text = JSON.stringify(value); return text.length > 3000 ? { texto: cut(text, 3000) } : value } catch { return undefined }
 }
 const bahia = (ms) => new Date(ms).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })
+// The codes of OS mentioned in a log ("OS-2026-0019", "OS-2026-TREINO").
+const orderCodes = /\bOS-\d{4}-[0-9A-Z]{3,}\b/g
+export const validOrderCode = (code) => /^OS-\d{4}-[0-9A-Z]{3,}$/.test(String(code || ''))
+const DIAGNOSTIC_LIMIT = 30
+// Nothing secret goes into a diagnosis: the hashes of the tablet sessions and anything named like a token or password.
+const secretField = /token|hash|password|senha|secret/i
+export function withoutSecrets(value) {
+  if (Array.isArray(value)) return value.map(withoutSecrets)
+  if (!value || typeof value !== 'object') return value
+  return Object.fromEntries(Object.entries(value).filter(([key]) => !secretField.test(key)).map(([key, item]) => [key, withoutSecrets(item)]))
+}
+const parseJson = (value) => { if (value && typeof value === 'object') return value; try { return JSON.parse(value) } catch { return null } }
+// The fields of an OS a diagnosis needs (no prices, no attachments).
+const orderFields = ['code', 'offerId', 'createdAt', 'registeredAt', 'deadline', 'quantity', 'quantityUnit', 'service', 'company', 'entryMode', 'status', 'completedAt', 'acknowledgedAt', 'reopenedAt']
 
 // `live`: the live updates (who holds a connection); `readStore`: the portal data; `config()`: the settings in force,
 // without the value of any secret; `version`: the newest entry of the release notes.
-export default function createDeveloperRouter({ accounts, requireAdmin, requireSession, systemLog, live, pool, readStore, dataDirectory, config = () => ({}), version = null, updates = null, now = Date.now }) {
+// `interfaceDirectory`: the built interface (dist/), whose version.json says the version the server publishes now.
+export default function createDeveloperRouter({ accounts, requireAdmin, requireSession, systemLog, live, pool, readStore, dataDirectory, interfaceDirectory = null, config = () => ({}), version = null, updates = null, now = Date.now }) {
   const router = express.Router()
+  // The build of the interface published now (the same one "Nova versão" compares), read again once a minute.
+  let buildCache = null
+  function currentBuild() {
+    if (!interfaceDirectory) return null
+    if (buildCache && now() - buildCache.at < MINUTE) return buildCache.value
+    let value = null
+    try { value = JSON.parse(readFileSync(path.join(interfaceDirectory, 'version.json'), 'utf8')).version || null } catch { value = null }
+    buildCache = { at: now(), value }
+    return value
+  }
   const handle = (fn) => async (request, response, next) => { try { await fn(request, response) } catch (error) { next(error) } }
 
   // Programar atualização: every screen of the administrative portal reads the next update for its countdown.
@@ -70,22 +96,30 @@ export default function createDeveloperRouter({ accounts, requireAdmin, requireS
     const keyOf = (item) => item.role === 'operator' ? `operator:${item.ip}|${item.userAgent}` : `${item.role}:${item.userId}`
     for (const peer of live?.peers || []) {
       const key = keyOf(peer)
-      const row = people.get(key) || { key, name: peer.name || (peer.role === 'operator' ? 'Operador (tablet)' : 'Sem nome'), role: peer.role, tabs: 0, since: peer.since, lastAt: null, ip: peer.ip, device: deviceOf(peer.userAgent), requests: 0 }
+      const row = people.get(key) || { key, name: peer.name || (peer.role === 'operator' ? 'Operador (tablet)' : 'Sem nome'), role: peer.role, tabs: 0, since: peer.since, lastAt: null, ip: peer.ip, device: deviceOf(peer.userAgent), requests: 0, version: null, build: null }
       row.tabs += 1
       row.since = Math.min(row.since, peer.since)
+      if (peer.build) Object.assign(row, { version: peer.version || null, build: peer.build })
       people.set(key, row)
     }
     for (const item of systemLog.activity(60)) {
-      const row = people.get(item.key) || { key: item.key, name: item.name, role: item.role, tabs: 0, since: item.firstAt, lastAt: null, ip: item.ip, device: deviceOf(item.userAgent), requests: 0 }
+      const row = people.get(item.key) || { key: item.key, name: item.name, role: item.role, tabs: 0, since: item.firstAt, lastAt: null, ip: item.ip, device: deviceOf(item.userAgent), requests: 0, version: null, build: null }
       row.lastAt = item.lastAt
       row.requests = item.requests
+      // The latest request says the version open now (a reload after an update changes it).
+      if (item.build || !row.build) Object.assign(row, { version: item.version || null, build: item.build || null })
       people.set(item.key, row)
     }
-    const at = now()
-    const rows = [...people.values()].map((row) => ({ ...row, online: row.tabs > 0 || (row.lastAt != null && at - row.lastAt <= ONLINE_MS) }))
+    const at = now(), build = currentBuild()
+    // Outdated: a build different from the one published now, or none at all (a tab opened before the version was sent).
+    const rows = [...people.values()].map((row) => ({ ...row, online: row.tabs > 0 || (row.lastAt != null && at - row.lastAt <= ONLINE_MS), outdated: Boolean(build) && row.build !== build }))
       .sort((a, b) => Number(b.online) - Number(a.online) || (b.lastAt || b.since) - (a.lastAt || a.since))
     const online = rows.filter((row) => row.online)
-    return { people: rows, online: online.filter((row) => row.role !== 'operator').length, tablets: online.filter((row) => row.role === 'operator').length, connections: live?.connections || 0, rule: 'Online: com o portal aberto e visível (conexão ao vivo) ou com atividade nos últimos 5 minutos.' }
+    const outdated = online.filter((row) => row.outdated)
+    return {
+      people: rows, online: online.filter((row) => row.role !== 'operator').length, tablets: online.filter((row) => row.role === 'operator').length, connections: live?.connections || 0, rule: 'Online: com o portal aberto e visível (conexão ao vivo) ou com atividade nos últimos 5 minutos.',
+      build, outdated: { people: outdated.filter((row) => row.role !== 'operator').length, tablets: outdated.filter((row) => row.role === 'operator').length },
+    }
   }
 
   async function databaseInfo() {
@@ -181,6 +215,48 @@ export default function createDeveloperRouter({ accounts, requireAdmin, requireS
       response.json({ item })
     }))
   }
+  // Diagnóstico da OS: its basic data, the state of the operation and every event (MySQL or the portal data), to find
+  // out why something about it was refused or failed.
+  async function orderDiagnostic(code, store) {
+    const order = (store.orders || []).find((item) => item.code === code)
+    if (!order) return { codigo: code, encontrada: false }
+    let operation = order.operation || null, events = order.operationEvents || []
+    if (pool) {
+      const [[stored]] = await pool.execute('SELECT data FROM order_operations WHERE order_code = ?', [code]).catch(() => [[]])
+      operation = stored ? parseJson(stored.data) : null
+      events = (await pool.execute('SELECT data FROM order_operation_events WHERE order_code = ? ORDER BY seq', [code]).catch(() => [[]]))[0].map((row) => parseJson(row.data)).filter(Boolean)
+    }
+    const offer = (store.offers || []).find((item) => item.id === order.offerId)
+    return {
+      codigo: code, encontrada: true,
+      os: { ...Object.fromEntries(orderFields.filter((key) => order[key] !== undefined).map((key) => [key, order[key]])), offerCode: offer?.code || null, stages: order.resources?.stages || [], urgency: order.resources?.urgency || null },
+      operacao: withoutSecrets(operation), totalEventos: events.length, eventos: withoutSecrets(events),
+    }
+  }
+  // The OS that appear in the warnings and errors of the period, the most mentioned first.
+  async function diagnostics(logs, store) {
+    const counts = new Map()
+    for (const entry of logs) {
+      if (entry.level === 'info') continue
+      for (const code of new Set(`${entry.message} ${JSON.stringify(entry.details || '')}`.match(orderCodes) || [])) counts.set(code, (counts.get(code) || 0) + 1)
+    }
+    const codes = [...counts].sort((a, b) => b[1] - a[1]).slice(0, DIAGNOSTIC_LIMIT)
+    return Promise.all(codes.map(async ([code, mentions]) => ({ ...(await orderDiagnostic(code, store)), mencoesNosLogs: mentions })))
+  }
+  const stampOf = (at) => new Date(at - 3 * HOUR).toISOString().slice(0, 16).replace('T', '-').replace(':', '')
+  router.get('/developer/diagnostics/:code', handle(async (request, response) => {
+    const code = String(request.params.code || '').trim().toUpperCase()
+    if (!validOrderCode(code)) return response.status(400).json({ message: 'Informe o código da OS, por exemplo OS-2026-0001.' })
+    const at = now(), store = await readStore()
+    const item = await orderDiagnostic(code, store)
+    if (!item.encontrada) return response.status(404).json({ message: `${code} não encontrada.` })
+    const logs = (await systemLog.list({ search: code, since: at - 30 * DAY, limit: 500 })).map((entry) => ({ quando: bahia(entry.at), ...entry }))
+    systemLog.record({ level: 'info', source: 'system', user: request.developer.name, message: `Diagnóstico da ${code} exportado na tela Desenvolvedor.` })
+    response.set({ 'Cache-Control': 'no-store', 'Content-Disposition': `attachment; filename="diagnostico-${code}-${stampOf(at)}.json"` }).type('application/json').send(JSON.stringify({
+      about: `Diagnóstico da ${code} exportado na tela Desenvolvedor: dados básicos da OS, estado da operação, todos os eventos e os logs dos últimos 30 dias que citam a OS. Horários em ISO (UTC) ou milissegundos desde 1970; "quando" traz o horário da Bahia.`,
+      exportedAt: at, exportedAtBahia: bahia(at), exportedBy: request.developer.name, version, diagnostico: item, logs,
+    }, null, 2))
+  }))
   router.get('/developer/requests', handle(async (_request, response) => {
     response.set('Cache-Control', 'no-store').json({ items: systemLog.recentRequests(300) })
   }))
@@ -188,12 +264,16 @@ export default function createDeveloperRouter({ accounts, requireAdmin, requireS
   router.get('/developer/export', handle(async (request, response) => {
     const days = Math.min(30, Math.max(1, Number(request.query.days) || 7)), at = now()
     systemLog.record({ level: 'info', source: 'system', user: request.developer.name, message: `Logs exportados na tela Desenvolvedor (últimos ${days} ${days === 1 ? 'dia' : 'dias'}).` })
-    const [state, logs] = await Promise.all([overview({ fresh: true }), systemLog.list({ since: at - days * DAY, limit: 20000 })])
-    const stamp = new Date(at - 3 * HOUR).toISOString().slice(0, 16).replace('T', '-').replace(':', '')
+    const [state, logs, store] = await Promise.all([overview({ fresh: true }), systemLog.list({ since: at - days * DAY, limit: 20000 }), readStore()])
+    const stamp = stampOf(at)
     response.set({ 'Cache-Control': 'no-store', 'Content-Disposition': `attachment; filename="logs-portal-gmac-${stamp}.json"` }).type('application/json').send(JSON.stringify({
       about: 'Logs do Portal GMAC exportados na tela Desenvolvedor. Horários em milissegundos desde 1970 (UTC); "quando" traz o horário da Bahia. Senhas, tokens e o conteúdo das requisições nunca são registrados.',
       exportedAt: at, exportedAtBahia: bahia(at), exportedBy: request.developer.name, period: { days, since: at - days * DAY },
-      system: state, logs: logs.map((entry) => ({ quando: bahia(entry.at), ...entry })), recentRequests: systemLog.recentRequests(3000).map((item) => ({ quando: bahia(item.at), ...item })),
+      system: state, logs: logs.map((entry) => ({ quando: bahia(entry.at), ...entry })),
+      // Sessions still refused again and again (counted, not yet in the logs above).
+      sessoesRecusadasEmAndamento: systemLog.unauthorizedGroups().map((group) => ({ desde: bahia(group.firstAt), ultima: bahia(group.lastAt), ...group })),
+      diagnosticos: await diagnostics(logs, store),
+      recentRequests: systemLog.recentRequests(3000).map((item) => ({ quando: bahia(item.at), ...item })),
     }, null, 2))
   }))
   return router

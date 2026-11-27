@@ -153,3 +153,16 @@
   .developer-update-buttons { width: 100%; margin-left: 0; }
   .developer-update-buttons > button { flex: 1 1 0; }
 }
+
+/* Versão de cada usuário online e o diagnóstico de uma OS. */
+.developer-section-heading h2 .developer-outdated-count { display: inline-flex; align-items: center; gap: 5px; margin-left: 12px; padding: 3px 9px; border-radius: 999px; color: #9c670a; background: #fff2d9; font-size: 12px; font-weight: 700; vertical-align: 2px; }
+.developer-version { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.developer-outdated { padding: 1px 7px; border-radius: 4px; color: #9c670a; background: #fff2d9; font-size: 10px; font-weight: 700; white-space: nowrap; }
+.developer-diagnostic input { width: 150px; height: 38px; text-transform: uppercase; }
+.developer-diagnostic input::placeholder { text-transform: none; }
+@media (max-width: 760px) {
+  .developer-diagnostic { width: 100%; }
+  .developer-diagnostic label { flex: 1 1 140px; }
+  .developer-diagnostic input { width: 100%; }
+  .developer-section-heading h2 .developer-outdated-count { margin: 6px 0 0; display: flex; width: fit-content; }
+}

@@ -1,4 +1,5 @@
 import express from 'express'
+import { headerValue } from './systemLog.js'
 
 // Live updates: instead of every open screen asking the server every 10 seconds whether something changed, each tab keeps
 // one connection open (GET /api/live, Server-Sent Events) and the server tells it, in a fraction of a second, which kind
@@ -83,7 +84,7 @@ export function createLiveUpdates({ coalesceMs = COALESCE_MS, heartbeatMs = HEAR
       const send = (text) => response.write(text)
       send(': aberto\n\n')
       clients.add(send)
-      const peer = { since: Date.now(), userId: request.adminId ?? null, name: request.adminName ?? null, role: request.adminRole ?? (request.adminId == null ? 'operator' : 'admin'), ip: request.ip, userAgent: String(request.headers['user-agent'] || '').slice(0, 300) }
+      const peer = { since: Date.now(), userId: request.adminId ?? null, name: request.adminName ?? null, role: request.adminRole ?? (request.adminId == null ? 'operator' : 'admin'), ip: request.ip, userAgent: String(request.headers['user-agent'] || '').slice(0, 300), version: headerValue(request.headers['x-portal-release'], 20), build: headerValue(request.headers['x-portal-version'], 40) }
       peers.add(peer)
       // A comment every 25 s keeps the hosting balancer from closing a connection that has been quiet.
       const beat = setInterval(() => send(': ok\n\n'), heartbeatMs)

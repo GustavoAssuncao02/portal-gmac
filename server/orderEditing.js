@@ -8,7 +8,10 @@ import { isClientDocument } from './clientDocument.js'
 import { invalidUnitMessage, materialUnit, unitPriceLabel, validMaterialUnit, validQuantityFor } from './materialUnits.js'
 import { quantityUnitMessage, quantityUnitOf, validQuantityUnit } from './quantityUnits.js'
 
-const fail = (status, message) => { const error = new Error(message); error.status = status; throw error }
+// `logDetails`: what the refusal involved, for the system logs (never shown on the screen).
+const fail = (status, message, logDetails) => { const error = new Error(message); error.status = status; if (logDetails) error.logDetails = logDetails; throw error }
+// The value received by a field, for the logs: numbers and dates only, never a typed text.
+const logValue = (value) => typeof value === 'number' || typeof value === 'boolean' || value == null ? value ?? null : typeof value === 'string' ? (/^[\d\s.,:+%eE-]{0,30}$/.test(value) ? value : `(texto com ${value.length} caracteres)`) : `(${Array.isArray(value) ? 'lista' : typeof value})`
 const text = (value, limit = 160) => {
   if (typeof value !== 'string' || value.length > limit) fail(400, 'Confira os textos informados e seus limites de tamanho.')
   return value.trim()
@@ -16,13 +19,13 @@ const text = (value, limit = 160) => {
 // `percent` fields say the accepted range in the message.
 const numeric = (value, label, { integer = false, min = 0, max = 1e12, percent = false } = {}) => {
   const result = Number(value)
-  if (value === '' || value == null || !Number.isFinite(result) || result < min || result > max || integer && !Number.isInteger(result)) fail(400, percent ? `${label}: informe um valor de ${min} a ${max}%.` : `${label}: informe um valor válido.`)
+  if (value === '' || value == null || !Number.isFinite(result) || result < min || result > max || integer && !Number.isInteger(result)) fail(400, percent ? `${label}: informe um valor de ${min} a ${max}%.` : `${label}: informe um valor válido.`, { validacao: { campo: label, recebido: logValue(value), aceito: `${integer ? 'inteiro' : 'número'} de ${min} a ${max}${percent ? '%' : ''}` } })
   return result
 }
 // Offers accept margins up to 1000% (server/offers.js); the OS keeps the same range so an accepted proposal stays editable.
 const percentLimits = { margin: 1000, discount: 100 }
 const date = (value, label) => {
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(Date.parse(value)) || new Date(value).toISOString().slice(0, 10) !== value) fail(400, `${label}: informe uma data válida.`)
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(Date.parse(value)) || new Date(value).toISOString().slice(0, 10) !== value) fail(400, `${label}: informe uma data válida.`, { validacao: { campo: label, recebido: logValue(value), aceito: 'data AAAA-MM-DD' } })
   return value
 }
 
