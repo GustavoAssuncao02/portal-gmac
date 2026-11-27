@@ -72,15 +72,15 @@ try {
   await signIn(page)
   await openOffers(page)
 
-  // The filters: Em aberto first (the site offer counted), no "Site", Prazo vencendo last (3 days before to late).
+  // The filters: Em aberto first (the site offer counted), no "Site", Prazo vencendo last (2 days before to late).
   const chips = page.locator('.offer-filter')
   assert.deepEqual(await chips.locator('span').allInnerTexts(), ['Em aberto', 'Em análise', 'Propostas', 'Aceitas', 'Recusadas', 'Prazo vencendo'])
   assert.equal(await page.locator('.offer-filter--new strong').innerText(), '1')
-  assert.equal(await page.locator('.offer-filter--late strong').innerText(), '4')
+  assert.equal(await page.locator('.offer-filter--late strong').innerText(), '3')
 
-  // The default order: late, today, tomorrow, in 3 days first; then the others as before. Highlight and badge on each.
+  // The default order: late, today, tomorrow first; then the others as before. Highlight and badge on each.
   const order = (await pieces(page)).filter((text) => text.includes('eixo prazo'))
-  assert.deepEqual(order.slice(0, 4), ['eixo prazo atrasado', 'eixo prazo hoje', 'eixo prazo amanhã', 'eixo prazo aviso'], JSON.stringify(order))
+  assert.deepEqual(order.slice(0, 3), ['eixo prazo atrasado', 'eixo prazo hoje', 'eixo prazo amanhã'], JSON.stringify(order))
   assert.equal(await row(page, 'Eixo prazo atrasado').getAttribute('class'), 'offers-table-row offers-table-row--deadline-late')
   assert.equal(await row(page, 'Eixo prazo hoje').getAttribute('class'), 'offers-table-row offers-table-row--deadline-today')
   assert.equal(await row(page, 'Eixo prazo amanhã').getAttribute('class'), 'offers-table-row offers-table-row--deadline-soon')
@@ -103,9 +103,9 @@ try {
   await header.getByRole('button').click()
   await header.getByRole('button').click()
 
-  // Prazo vencendo: from 3 days before to late (not the one 10 days away); Em aberto: the site offer.
+  // Prazo vencendo: from 2 days before to late (not the ones 3 and 10 days away); Em aberto: the site offer.
   await page.locator('.offer-filter--late').click()
-  assert.deepEqual((await pieces(page)).sort(), ['eixo prazo amanhã', 'eixo prazo atrasado', 'eixo prazo aviso', 'eixo prazo hoje'])
+  assert.deepEqual((await pieces(page)).sort(), ['eixo prazo amanhã', 'eixo prazo atrasado', 'eixo prazo hoje'])
   await page.locator('.offer-filter--new').click()
   assert.deepEqual(await pieces(page), ['eixo prazo do site'])
   await page.locator('.offer-filter--new').click()
@@ -135,11 +135,11 @@ try {
   await form.getByRole('button', { name: 'Adicionar solicitação', exact: true }).click()
   await form.waitFor({ state: 'detached' })
 
-  // Ver oferta: the day; 3 days away it is already "Prazo vencendo", with its badge.
+  // Ver oferta: the day, without a badge while it is 3 days away.
   const detail = page.locator('.offer-response-detail')
   await detail.getByText(`até ${deadlineDateLabel(shiftDay(today, 3))}`).waitFor()
   assert.equal(await detail.locator('h3').textContent(), 'Prazo para enviar a proposta')
-  assert.equal(await detail.locator('.offer-response-badge').innerText(), 'em 3 dias')
+  assert.equal(await detail.locator('.offer-response-badge').count(), 0)
   const created = (await fixture.adminRequest('/offers')).data.items.find((item) => item.service === 'Eixo prazo novo')
   assert.equal(created.proposalDeadline, shiftDay(today, 3))
 
@@ -216,7 +216,7 @@ try {
   await page.locator('.sidebar').getByRole('button', { name: 'Início', exact: true }).click()
   await widget.getByRole('button', { name: 'Ver todas', exact: true }).click()
   await page.locator('.offer-filter--late.offer-filter--selected').waitFor()
-  assert.deepEqual((await pieces(page)).sort(), ['eixo prazo amanhã', 'eixo prazo atrasado', 'eixo prazo aviso', 'eixo prazo hoje', 'eixo prazo novo'])
+  assert.deepEqual((await pieces(page)).sort(), ['eixo prazo amanhã', 'eixo prazo atrasado', 'eixo prazo hoje', 'eixo prazo novo'])
   await page.close()
   assert.deepEqual(errors, [])
 

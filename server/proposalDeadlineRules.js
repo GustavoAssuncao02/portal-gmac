@@ -9,9 +9,9 @@ import { requestDay } from './retroactiveEntry.js'
 // and it comes back if the proposal is discarded. Shared by the server and the screens (no Node imports here).
 export const proposalDeadlineMessage = 'Prazo para enviar a proposta: escolha uma data a partir da data da solicitação ou deixe em branco.'
 export const proposalNoticeTime = '07:30'
-// From 3 days before the deadline an offer is urgent (2026-11-27): yellow, at the top of the list and in "Prazo vencendo",
+// From 2 days before the deadline an offer is urgent (2026-11-27): yellow, at the top of the list and in "Prazo vencendo",
 // with the ones of today and the late ones.
-export const PROPOSAL_URGENT_DAYS = 3
+export const PROPOSAL_URGENT_DAYS = 2
 
 // Configurações › Notificações › Comercial: the 1st and 2nd notice some days before (1 to 30) and the notice on the day
 // it falls due, each one with its switch. Off by default; on by default for the CPFs of PROPOSAL_DEADLINE_NOTICE_CPFS
@@ -42,7 +42,7 @@ export const daysBetween = (from, to) => Math.round((Date.parse(`${to}T12:00:00Z
 // Days until the deadline of an offer still waiting for its proposal (negative: late); null without one.
 export const proposalDaysLeft = (offer, today) => offer?.proposalDeadline && proposalPending(offer) ? daysBetween(today, offer.proposalDeadline) : null
 
-// The badge of the list, of Ver oferta and of the Início: only from 3 days before ("amanhã", "em 3 dias"), on the day
+// The badge of the list, of Ver oferta and of the Início: only from 2 days before ("amanhã", "em 2 dias"), on the day
 // ("vence hoje") and late ("atrasada há 3 dias"). Further away the date is enough.
 export function proposalDeadlineBadge(offer, today) {
   const days = proposalDaysLeft(offer, today)
@@ -51,10 +51,10 @@ export function proposalDeadlineBadge(offer, today) {
   if (days === 0) return { days, label: 'vence hoje', tone: 'today' }
   return { days, label: `atrasada há ${-days} ${days === -1 ? 'dia' : 'dias'}`, tone: 'late' }
 }
-// "Prazo vencendo" (filter of Ofertas, Início): every highlighted offer, from 3 days before the deadline to late.
+// "Prazo vencendo" (filter of Ofertas, Início): every highlighted offer, from 2 days before the deadline to late.
 export const proposalDue = (offer, today) => { const days = proposalDaysLeft(offer, today); return days != null && days <= PROPOSAL_URGENT_DAYS }
 // The order of the list when no title was chosen: the urgent offers first (the most late first, then today, then the
-// next 3 days, the nearest first); the others keep their order.
+// next 2 days, the nearest first); the others keep their order.
 export function urgentFirst(offers, today) {
   const urgent = [], rest = []
   for (const offer of offers) { const days = proposalDaysLeft(offer, today); (days != null && days <= PROPOSAL_URGENT_DAYS ? urgent : rest).push(offer) }

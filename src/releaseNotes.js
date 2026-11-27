@@ -7,7 +7,7 @@ export const releaseNotes = [
       'Ofertas: prazo para enviar a proposta, com destaque na lista, filtro Prazo vencendo e avisos',
       'Início: novo widget de propostas com prazo próximo',
       'Portal: aviso de versão desatualizada ao lado do sino, com atualização em um clique',
-      'Ofertas: Prazo vencendo passa a contar as propostas a partir de 3 dias antes do prazo, além das de hoje e das atrasadas',
+      'Ofertas: Prazo vencendo passa a contar as propostas a partir de 2 dias antes do prazo, além das de hoje e das atrasadas',
       'Correção de problemas: o painel de notificações ficava sempre aberto, sem conseguir fechar, em computadores com navegador antigo (Windows 7)',
     ],
   },
