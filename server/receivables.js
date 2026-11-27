@@ -7,7 +7,7 @@ import path from 'node:path'
 import { dataDirectory } from './dataDirectory.js'
 import { readStore, mutateStore } from './offers.js'
 import { exportPdf, exportWorkbook } from './reports.js'
-import { cents, validDate, todayBahia, daysUntil, makeInstallments, shiftMonth, matchesSearch, treasuryEntry, duplicateError, duplicateAccepted, MAX_SERIES } from './payableRules.js'
+import { cents, validDate, todayBahia, daysUntil, makeInstallments, shiftMonth, matchesSearch, treasuryEntry, duplicateError, duplicateAccepted, MAX_SERIES, receivableDetailMatch, receivableKindLabels } from './payableRules.js'
 import { notificationSettings } from './accounts.js'
 import { assertNotReconciled, reconciledTransaction } from './bankStatements.js'
 import { normalizeText } from './ofx.js'
@@ -127,6 +127,7 @@ export function filterReceivables(rows, filters = {}, today = todayBahia()) {
   return rows.filter((row) => {
     if (filters.start && row.dueDate < filters.start || filters.end && row.dueDate > filters.end) return false
     if (!matchesReceivable(row, filters.search)) return false
+    if (!receivableDetailMatch(row, filters)) return false
     // Only received accounts have a bank: filtering by bank lists the receipts that entered it.
     if (filters.bankId && row.receipt?.bankId !== filters.bankId) return false
     const status = receivableStatus(row, today)
@@ -224,9 +225,9 @@ export function receivableNotificationItems(store, userId) {
 // The ISS of an open account is the one expected; of a received one, the one actually withheld. Net = value − ISS.
 const issOf = (row) => row.receipt ? row.receipt.issCents || 0 : row.issCents || 0
 const netOf = (row) => row.valueCents - issOf(row)
-function report(rows, filters = {}, individual = false, store = {}) {
+export function receivablesReport(rows, filters = {}, individual = false, store = {}) {
   const columns = ['ID', 'Cliente', 'CPF/CNPJ', 'Descrição', 'Classificação', 'Origem', 'Documento', 'Parcela', 'Emissão', 'Valor bruto (R$)', 'ISS retido (R$)', 'Valor líquido (R$)', 'Vencimento', 'Status', 'Recebimento', 'Forma', 'Banco', 'Juros (R$)', 'Desconto (R$)', 'Recebido (R$)', 'Observação']
-  return { title: individual ? `Conta ${rows[0]?.id || ''}` : 'Contas a receber', eyebrow: 'Financeiro', generatedAt: new Date().toISOString(), start: filters.start, end: filters.end, summary: [['Contas', rows.length], ['Valor bruto', money(rows.reduce((sum, row) => sum + row.valueCents, 0))], ['Valor líquido', money(rows.reduce((sum, row) => sum + netOf(row), 0))]], notes: individual ? [] : [`Situação: ${{ all: 'Todas', ...statusLabel }[filters.status] || (filters.bankId ? 'Recebidas' : 'Pendentes e vencidas')}`, ...bankFilterNote(store, filters.bankId), ...(filters.search ? [`Busca: ${filters.search}`] : [])], sections: [{ name: 'Contas a receber', columns, rows: rows.map((row) => { const r = row.receipt; return [row.id, row.customerName, row.customerDocument, row.description, row.classificationName || '', row.orderCode || 'Manual', row.documentNumber, row.groupId ? `${row.installmentNumber} de ${row.installmentCount}` : '', row.issueDate, row.valueCents / 100, issOf(row) / 100, netOf(row) / 100, row.dueDate, statusLabel[receivableStatus(row)], r?.date, receiptMethods[r?.method] || '', r?.bankName || '', (r?.interestCents || 0) / 100, (r?.discountCents || 0) / 100, r ? r.finalCents / 100 : '', r?.note] }) }] }
+  return { title: individual ? `Conta ${rows[0]?.id || ''}` : 'Contas a receber', eyebrow: 'Financeiro', generatedAt: new Date().toISOString(), start: filters.start, end: filters.end, summary: [['Contas', rows.length], ['Valor bruto', money(rows.reduce((sum, row) => sum + row.valueCents, 0))], ['Valor líquido', money(rows.reduce((sum, row) => sum + netOf(row), 0))]], notes: individual ? [] : [`Situação: ${{ all: 'Todas', ...statusLabel }[filters.status] || (filters.bankId ? 'Recebidas' : 'Pendentes e vencidas')}`, ...bankFilterNote(store, filters.bankId), ...(filters.search ? [`Busca: ${filters.search}`] : []), ...(filters.clientId ? [`Cliente: ${(store.receivables || []).find((row) => String(row.clientId) === String(filters.clientId))?.customerName || filters.clientId}`] : []), ...(filters.classificationId ? [`Classificação: ${(store.classifications || []).find((row) => row.id === filters.classificationId)?.name || filters.classificationId}`] : []), ...(receivableKindLabels[filters.kind] ? [`Tipo do recebimento: ${receivableKindLabels[filters.kind]}`] : [])], sections: [{ name: 'Contas a receber', columns, rows: rows.map((row) => { const r = row.receipt; return [row.id, row.customerName, row.customerDocument, row.description, row.classificationName || '', row.orderCode || 'Manual', row.documentNumber, row.groupId ? `${row.installmentNumber} de ${row.installmentCount}` : '', row.issueDate, row.valueCents / 100, issOf(row) / 100, netOf(row) / 100, row.dueDate, statusLabel[receivableStatus(row)], r?.date, receiptMethods[r?.method] || '', r?.bankName || '', (r?.interestCents || 0) / 100, (r?.discountCents || 0) / 100, r ? r.finalCents / 100 : '', r?.note] }) }] }
 }
 
 // The number of an invoice as it may have been typed: without dots and leading zeros; an NFS-e number (2026000000451)
@@ -595,7 +596,7 @@ export default function createReceivablesRouter(accounts, requireAdmin, pool = n
     if (!['pdf', 'xlsx'].includes(req.body.format)) fail('Formato inválido.')
     if (req.body.ids !== undefined && !Array.isArray(req.body.ids)) fail('Seleção inválida.')
     const rows = req.body.id ? [find(store, req.body.id)] : filterReceivables(store.receivables, req.body.filters).filter((row) => !req.body.ids || req.body.ids.includes(row.id))
-    const data = report(rows.map((row) => ({ ...row, classificationName: classificationNameOf(store, row) })), req.body.filters, Boolean(req.body.id), store)
+    const data = receivablesReport(rows.map((row) => ({ ...row, classificationName: classificationNameOf(store, row) })), req.body.filters, Boolean(req.body.id), store)
     const output = req.body.format === 'pdf' ? await exportPdf(data) : await exportWorkbook(data)
     res.setHeader('Content-Type', req.body.format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     res.setHeader('Content-Disposition', `attachment; filename="gmac-contas-a-receber.${req.body.format}"`)

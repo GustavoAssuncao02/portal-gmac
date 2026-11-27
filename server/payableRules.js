@@ -87,6 +87,11 @@ export const duplicateAccepted = (ids = [], fields) => ids.length ? `Possível d
 export const treasuryEntry =(row) => row?.treasury === true && Boolean(row.payment || row.receipt) && !row.inactive
 // Tipo da conta, as chosen when it was created (the partial payment of an account is a normal account of its own).
 export const payableKindLabels = { normal: 'Normal', installment: 'Parcelada', recurring: 'Recorrente' }
+// Tipo do recebimento in Contas a Receber, as chosen when it was created (the installments of an agreement share a group).
+export const receivableKindLabels = { single: 'Parcela única', installment: 'Recebimento parcelado', recurring: 'Contrato recorrente' }
+export const receivableKindOf = (row) => row.kind === 'recurring' ? 'recurring' : row.groupId || row.kind === 'installment' ? 'installment' : 'single'
+// Cliente, Classificação and Tipo do recebimento of the Filtros panel: the same on the screen, in the PDF and in the spreadsheet.
+export const receivableDetailMatch = (row, filters = {}) => (!filters.clientId || String(row.clientId) === String(filters.clientId)) && (!filters.classificationId || row.classificationId === filters.classificationId) && (!filters.kind || receivableKindOf(row) === filters.kind)
 export function filterPayables(rows, filters = {}, today = todayBahia(), useStatus = true) {
   return rows.filter((row) => {
     if (filters.kind && (row.kind || 'normal') !== filters.kind) return false

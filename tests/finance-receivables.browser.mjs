@@ -107,6 +107,18 @@ try {
   await receipt.getByRole('button', { name: 'Confirmar recebimento', exact: true }).click()
   await details.getByText('Recebimento baixado', { exact: true }).waitFor()
   await details.getByRole('button', { name: 'Fechar janela', exact: true }).click()
+  // Filtros, as in Contas a Pagar: the bank of the receipt moved into the panel, with client, classification and type.
+  assert.equal(await page.getByLabel('Banco do recebimento', { exact: true }).count(), 0)
+  await page.getByRole('button', { name: 'Filtros', exact: true }).click()
+  assert.deepEqual(await page.locator('.payable-advanced > label').evaluateAll((labels) => labels.map((label) => label.firstChild.textContent)), ['Banco do recebimento', 'Cliente', 'Classificação', 'Tipo do recebimento', 'Status', 'Vencimento inicial', 'Vencimento final'])
+  const kind = page.getByLabel('Tipo do recebimento', { exact: true })
+  assert.deepEqual(await kind.locator('option').allTextContents(), ['Todos', 'Parcela única', 'Recebimento parcelado', 'Contrato recorrente'])
+  await kind.selectOption({ label: 'Contrato recorrente' })
+  await page.locator('.receivable-table').getByText('Nenhuma conta encontrada.', { exact: true }).waitFor()
+  await kind.selectOption({ label: 'Parcela única' })
+  await receivable.waitFor()
+  await page.getByRole('button', { name: 'Limpar filtros', exact: true }).click()
+  assert.equal(await kind.inputValue(), '')
   await page.screenshot({ path: 'test-results/finance-receivables.png', fullPage: true })
 
   await navigate('Business Intelligence')

@@ -32,7 +32,8 @@ try {
   const dialog = page.getByRole('dialog')
   const add = dialog.getByRole('button', { name: 'Adicionar operação', exact: true })
   const form = dialog.getByRole('form', { name: 'Adicionar operação' })
-  const field = (name) => form.getByLabel(name, { exact: true })
+  // The label of a list also reads its options: the field is found by the start of its label.
+  const field = (name) => form.getByLabel(new RegExp(`^${name.replace(/[()]/g, (character) => `\\${character}`)}`))
   const save = form.getByRole('button', { name: 'Salvar operação', exact: true })
   const row = (text) => dialog.locator('tbody tr').filter({ hasText: text })
 

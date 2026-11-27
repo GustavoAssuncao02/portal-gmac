@@ -2,7 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createWorkflowFixture } from './workflowFixture.js'
 import { todayBahia, shiftMonth } from '../server/payableRules.js'
-import { filterReceivables } from '../server/receivables.js'
+import ExcelJS from 'exceljs'
+import { filterReceivables, receivablesReport } from '../server/receivables.js'
 
 const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Gustavo' }
 const day = (offset) => new Date(Date.parse(todayBahia()) + offset * 86400000).toISOString().slice(0, 10)
@@ -13,6 +14,50 @@ test('receivables search by value as typed in Brazil and by the payer CPF/CNPJ',
   assert.deepEqual(ids('1.500,00'), ['REC-000001']); assert.deepEqual(ids('1500.00'), ['REC-000001'])
   assert.deepEqual(ids('08.334.818/0001-52'), ['REC-000001']); assert.deepEqual(ids('07857217'), ['REC-000002'])
   assert.deepEqual(ids('nestle'), ['REC-000001'])
+})
+
+// Filtros panel (same as Contas a Pagar): Cliente, Classificação and Tipo do recebimento, also in the PDF and the spreadsheet.
+const filterRows = () => [
+  { id: 'REC-000001', clientId: '1', customerName: 'Cliente Alfa', classificationId: 'c-servico', kind: 'single', valueCents: 1000, dueDate: '2026-11-10' },
+  { id: 'REC-000002', clientId: '1', customerName: 'Cliente Alfa', classificationId: 'c-servico', kind: 'installment', groupId: 'g1', installmentNumber: 1, installmentCount: 2, valueCents: 500, dueDate: '2026-11-10' },
+  { id: 'REC-000003', clientId: '2', customerName: 'Cliente Beta', classificationId: 'c-aluguel', kind: 'recurring', seriesId: 's1', recurrence: 'monthly', valueCents: 700, dueDate: '2026-11-10' },
+  // Older installments may lack the kind: the group says it.
+  { id: 'REC-000004', clientId: '2', customerName: 'Cliente Beta', classificationId: 'c-servico', groupId: 'g2', installmentNumber: 1, installmentCount: 3, valueCents: 300, dueDate: '2026-11-10' },
+].map((row) => ({ description: '', documentNumber: '', issueDate: '2026-11-01', ...row }))
+
+test('the Filtros panel of Contas a Receber filters by client, classification and Tipo do recebimento', () => {
+  const ids = (filters) => filterReceivables(filterRows(), { status: 'all', ...filters }, '2026-11-01').map((row) => row.id)
+  assert.deepEqual(ids({}), ['REC-000001', 'REC-000002', 'REC-000003', 'REC-000004'])
+  assert.deepEqual(ids({ kind: 'single' }), ['REC-000001'])
+  assert.deepEqual(ids({ kind: 'installment' }), ['REC-000002', 'REC-000004'])
+  assert.deepEqual(ids({ kind: 'recurring' }), ['REC-000003'])
+  assert.deepEqual(ids({ clientId: '2' }), ['REC-000003', 'REC-000004'])
+  assert.deepEqual(ids({ classificationId: 'c-servico', clientId: '2' }), ['REC-000004'])
+  assert.deepEqual(ids({ classificationId: 'c-servico', kind: 'installment', clientId: '1' }), ['REC-000002'])
+  // The filters that existed keep working as before: without a situation, received accounts stay out.
+  assert.deepEqual(filterReceivables([...filterRows(), { ...filterRows()[0], id: 'REC-000005', receipt: { date: '2026-11-01', finalCents: 1000 } }], {}, '2026-11-01').map((row) => row.id), ['REC-000001', 'REC-000002', 'REC-000003', 'REC-000004'])
+  const store = { receivables: filterRows(), classifications: [{ id: 'c-servico', name: 'Receita de serviços' }] }
+  const notes = receivablesReport([], { kind: 'recurring', clientId: '2', classificationId: 'c-servico' }, false, store).notes
+  assert.deepEqual(notes.slice(1), ['Cliente: Cliente Beta', 'Classificação: Receita de serviços', 'Tipo do recebimento: Contrato recorrente'])
+  assert.deepEqual(receivablesReport([], {}, false, store).notes, ['Situação: Pendentes e vencidas'], 'no filter, no extra note')
+})
+
+test('the spreadsheet of Contas a Receber follows the Tipo do recebimento filter', async () => {
+  const f = await createWorkflowFixture({ accountsEnv: env })
+  try {
+    const token = (await f.request('/auth/login', 'POST', { cpf: env.DEMO_ADMIN_CPF, password: env.DEMO_ADMIN_PASSWORD })).data.token
+    await f.mutateStore((store) => { store.receivables = filterRows().map((row) => ({ ...row, dueDate: day(10) })) })
+    const exported = async (filters) => {
+      const response = await fetch(`${f.url}/api/receivables/export`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ format: 'xlsx', filters }) })
+      assert.equal(response.status, 200)
+      const workbook = new ExcelJS.Workbook(); await workbook.xlsx.load(Buffer.from(await response.arrayBuffer()))
+      const sheet = workbook.worksheets[0]
+      return Array.from({ length: sheet.rowCount - 1 }, (_, index) => sheet.getCell(`A${index + 2}`).value)
+    }
+    assert.deepEqual(await exported({ kind: 'installment' }), ['REC-000002', 'REC-000004'])
+    assert.deepEqual(await exported({ kind: 'recurring', clientId: '2' }), ['REC-000003'])
+    assert.equal((await exported({})).length, 4)
+  } finally { await f.close() }
 })
 
 test('recurring contracts, attachments, receipts with proof, bulk receipt and bell reminders', async () => {
