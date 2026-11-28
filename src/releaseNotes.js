@@ -12,6 +12,7 @@ export const releaseNotes = [
       'Ordem de serviço: nova seção NF-e; o botão Aguardando NF-e pede o PDF da nota, gera a conta a receber e conclui a OS, também pelo funcionário administrativo',
       'Ordem de serviço: opção Concluir sem NF-e, com a marca Sem NF-e em Serviços concluídos (a nota pode ser importada depois)',
       'Reabrir OS: caixas para escolher se a NF-e e a conta a receber saem junto',
+      'Contas a Pagar e a Receber: parcelamentos com a numeração real do acordo (ex.: parcela 54 de 188), também nos já lançados; excluir uma parcela não muda o número das outras',
     ],
   },
   {

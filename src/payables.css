@@ -55,7 +55,7 @@
 .payable-modal fieldset { min-width:0; border:0; padding:0; margin:0; }.payable-form > fieldset { display:flex; flex-direction:column; gap:20px; }.payable-form { max-width:750px; margin:auto; }
 .payable-modal .payable-type { display:flex; gap:18px; flex-wrap:wrap; padding:0; }.payable-type legend { margin-bottom:12px; font-size:13px; }
 .payable-modal .payable-type .payable-radio { flex-direction:row; align-items:center; gap:7px; }.payable-modal .payable-radio input[type=radio] { height:16px; min-height:0; width:16px; accent-color:#0c4c91; padding:0; }
-.payable-installments { border-top:1px solid #e0e8f0; padding-top:18px; }.payable-installment { display:grid; grid-template-columns:50px 1fr 1fr; align-items:center; gap:12px; margin-top:16px; }.payable-sum { font-weight:bold; color:#0c4c91; }
+.payable-installments { border-top:1px solid #e0e8f0; padding-top:18px; }.payable-installment { display:grid; grid-template-columns:64px 1fr 1fr; align-items:center; gap:12px; margin-top:16px; }.payable-sum { font-weight:bold; color:#0c4c91; }
 .payable-files { padding-top:18px; border-top:1px solid #e0e8f0; }.payable-drop { display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:16px; padding:20px; background:#f8fbfe; border:1px dashed #b3cce3; border-radius:5px; color:#537493; }
 .payable-modal input[hidden] { display:none; }.payable-files ul,.payable-attachments { list-style:none; margin:12px 0 0; padding:0; }.payable-files li,.payable-attachments li { display:flex; align-items:center; gap:8px; border-bottom:1px solid #e5edf4; padding:12px 0; }.payable-files li > span,.payable-attachments li > span { flex:1; min-width:0; overflow-wrap:anywhere; }.payable-files small,.payable-attachments small { display:block; margin-top:4px; color:#748699; font-size:11px; }
 .payable-facts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px 28px; margin:0 0 24px; }.payable-facts dt { font-size:12px; color:#6b7f92; margin-bottom:5px; }.payable-facts dd { margin:0; font-size:14px; line-height:1.5; overflow-wrap:anywhere; white-space:pre-wrap; }
@@ -320,6 +320,9 @@
 .invoice-import-net { display:flex; flex-direction:column; justify-content:flex-end; gap:4px; margin:0; font-size:12px; color:#5c7288; }.invoice-import-net strong { color:#1d6341; font-size:18px; font-variant-numeric:tabular-nums; }
 .invoice-import-installments { display:grid; gap:8px; font-size:13px; }.invoice-import-installments > div { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
 .invoice-import-problems { display:grid; gap:6px; margin:0; padding:0; list-style:none; }.invoice-import-problems li { display:flex; align-items:flex-start; gap:6px; padding:8px 10px; border-left:3px solid #c2483f; background:#fdeeed; color:#8a2a22; font-size:12.5px; overflow-wrap:anywhere; }
+/* Numeração real de um parcelamento (src/InstallmentNumbering.jsx): first installment and total of the agreement. */
+.installment-numbering { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px 16px; margin-top:14px; }.installment-numbering .payable-hint { grid-column:1/-1; margin:0; }
+@media(max-width:760px) { .installment-numbering { grid-template-columns:minmax(0,1fr); } }
 /* NF-e da OS (src/OrderInvoiceModal.jsx): the PDF is chosen, each note read is checked like in Importar notas (PDF). */
 .order-invoice-pick { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
 .order-invoice-attached { display:grid; gap:6px; padding:10px 12px; border:1px solid #d7e3ef; border-radius:8px; background:#f7f9fb; font-size:13px; }.order-invoice-attached > span { color:#5c7288; font-size:12px; font-weight:600; }

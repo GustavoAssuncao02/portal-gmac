@@ -5,7 +5,7 @@ import path from 'node:path'
 import { dataDirectory } from './dataDirectory.js'
 import { readStore, mutateStore } from './offers.js'
 import { exportPdf, exportWorkbook } from './reports.js'
-import { cents, validDate, todayBahia, payableStatus, daysUntil, makeInstallments, shiftMonth, filterPayables, settlementMethods, treasuryEntry, classificationParts, splitInstallments, duplicateError, duplicateAccepted, MAX_SERIES, scaleSplit, splitPartial, applyDivision, mergeDivision, payableKindLabels } from './payableRules.js'
+import { planNumbering, planNumbers, currentNumbering, cents, validDate, todayBahia, payableStatus, daysUntil, makeInstallments, shiftMonth, filterPayables, settlementMethods, treasuryEntry, classificationParts, splitInstallments, duplicateError, duplicateAccepted, MAX_SERIES, scaleSplit, splitPartial, applyDivision, mergeDivision, payableKindLabels } from './payableRules.js'
 import { notificationSettings } from './accounts.js'
 import { assertNotReconciled, reconciledTransaction } from './bankStatements.js'
 import { orderValue } from './receivables.js'
@@ -17,6 +17,10 @@ import { bulkActions, bulkIds, planBulk, previewOf, assertSamePreview, countsLin
 
 const directory = path.join(dataDirectory, 'payable-files')
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), { status }) }
+// The rules of payableRules.js throw plain errors: here they are answers to the user (400).
+const checked = (task) => { try { return task() } catch (error) { fail(error.message) } }
+// The numbering asked in an edit; without the fields (older screens) the plan keeps the one it has.
+const numberingAsked = (body, launched, group) => body && Object.hasOwn(body, 'installmentStart') ? checked(() => planNumbering(body, launched)) : currentNumbering(group)
 const clean = (value, limit = 1000) => String(value ?? '').trim().slice(0, limit)
 const money = (value) => (value / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const statusLabel = { pending: 'Pendente', overdue: 'Vencido', paid: 'Pago' }
@@ -171,7 +175,9 @@ function removePayables(store, actor, row, all) {
 function renumberPayables(store, row) {
   const rest = relatedPayables(store, row).filter((r) => r !== row)
   if (row.groupId && rest.length) {
-    rest.sort((a, b) => a.installmentNumber - b.installmentNumber).forEach((r, index) => { r.installmentNumber = index + 1; r.installmentCount = rest.length; r.originalTotalCents = rest.reduce((sum, item) => sum + item.valueCents, 0) })
+    // A plan with the real numbering (a DAS "parcela 54/188") keeps the numbers: the installment 60 is still the 60.
+    const real = rest.some((r) => r.realNumbering)
+    rest.sort((a, b) => a.installmentNumber - b.installmentNumber).forEach((r, index) => { if (!real) { r.installmentNumber = index + 1; r.installmentCount = rest.length } r.originalTotalCents = rest.reduce((sum, item) => sum + item.valueCents, 0) })
   } else if (row.seriesId && rest.length) {
     rest.sort((a, b) => a.dueDate.localeCompare(b.dueDate)).forEach((r, index) => { r.seriesIndex = index + 1; r.seriesCount = rest.length })
   }
@@ -410,7 +416,8 @@ export default function createPayablesRouter(accounts, requireAdmin) {
       const step = common.recurrence === 'yearly' ? 12 : 1
       const occurrences = ahead ? Array.from({ length: ahead + 1 }, (_, index) => ({ valueCents: common.valueCents, issueDate: shiftMonth(common.issueDate, index * step), dueDate: shiftMonth(common.dueDate, index * step) })) : parts
       const splits = common.kind === 'installment' ? splitInstallments(common.classificationSplit, occurrences.map((part) => part.valueCents)) : occurrences.map(() => common.classificationSplit)
-      const proposed = occurrences.map((part, index) => ({ ...common, ...part, classificationSplit: splits[index], groupId, installmentNumber: seriesId ? 1 : index + 1, installmentCount: seriesId ? 1 : parts.length, seriesId, seriesIndex: seriesId ? index + 1 : null, seriesCount: seriesId ? occurrences.length : null, originalTotalCents: common.valueCents, previousId: index === 0 ? previous?.id || null : null, inactive: false, payment: null, attachments: [], createdAt: new Date().toISOString() }))
+      const plan = groupId ? checked(() => planNumbers(parts.length, planNumbering(body, parts.length))) : null
+      const proposed = occurrences.map((part, index) => ({ ...common, ...part, classificationSplit: splits[index], groupId, installmentNumber: seriesId ? 1 : plan ? plan.numbers[index] : index + 1, installmentCount: seriesId ? 1 : plan ? plan.total : parts.length, realNumbering: Boolean(plan?.real), seriesId, seriesIndex: seriesId ? index + 1 : null, seriesCount: seriesId ? occurrences.length : null, originalTotalCents: common.valueCents, previousId: index === 0 ? previous?.id || null : null, inactive: false, payment: null, attachments: [], createdAt: new Date().toISOString() }))
       const accepted = treasury ? [] : duplicates(store, proposed, [], req.body.allowDuplicate === true)
       const attachments = claimFiles(store, req.body.fileIds || [], req.actor)
       for (const [index, row] of proposed.entries()) {
@@ -443,12 +450,20 @@ export default function createPayablesRouter(accounts, requireAdmin) {
         const siblings = store.payables.filter((r) => r.groupId === row.groupId).sort((a, b) => a.installmentNumber - b.installmentNumber)
         if (common.kind !== 'installment' || common.valueCents !== row.originalTotalCents) fail('Preserve o parcelamento e o valor total original.')
         const parts = installments(req.body, row.originalTotalCents, common.dueDate)
+        const plan = checked(() => planNumbers(parts.length, numberingAsked(req.body, parts.length, siblings), siblings))
         if (siblings.some((r) => r.payment || r.partialPaidCents)) {
           if (parts.length !== siblings.length || parts.some((p, i) => p.valueCents !== siblings[i].valueCents + (siblings[i].partialPaidCents || 0) || p.dueDate !== siblings[i].dueDate) || common.dueDate !== row.dueDate) fail('Existe parcela paga. A estrutura do parcelamento está bloqueada.', 409)
-          const before = { ...row }; Object.assign(row, common, { valueCents: row.valueCents, originalTotalCents: row.originalTotalCents }); event(store, req.actor, 'edited', row.id, { changes: { before, after: { ...row } } }); addAttachments(row); return [row]
+          const before = { ...row }; Object.assign(row, common, { valueCents: row.valueCents, originalTotalCents: row.originalTotalCents })
+          // Values and dates stay, but the numbering of the whole plan can still be set (a plan already in progress).
+          for (const [index, sibling] of siblings.entries()) {
+            const previous = { ...sibling }
+            Object.assign(sibling, { installmentNumber: plan.numbers[index], installmentCount: plan.total, realNumbering: plan.real })
+            if (sibling !== row && (previous.installmentNumber !== sibling.installmentNumber || previous.installmentCount !== sibling.installmentCount)) event(store, req.actor, 'edited', sibling.id, { changes: { before: previous, after: { ...sibling } }, details: { text: `Numeração do parcelamento alterada em ${row.id}` } })
+          }
+          event(store, req.actor, 'edited', row.id, { changes: { before, after: { ...row } } }); addAttachments(row); return [row, ...siblings.filter((sibling) => sibling !== row)]
         }
         const splits = splitInstallments(common.classificationSplit, parts.map((part) => part.valueCents))
-        const proposed = parts.map((part, index) => ({ ...(siblings[index] || row), ...common, ...part, classificationSplit: splits[index], originalTotalCents: row.originalTotalCents, installmentNumber: index + 1, installmentCount: parts.length, attachments: siblings[index]?.attachments || [], id: siblings[index]?.id }))
+        const proposed = parts.map((part, index) => ({ ...(siblings[index] || row), ...common, ...part, classificationSplit: splits[index], originalTotalCents: row.originalTotalCents, installmentNumber: plan.numbers[index], installmentCount: plan.total, realNumbering: plan.real, attachments: siblings[index]?.attachments || [], id: siblings[index]?.id }))
         const accepted = duplicates(store, proposed, siblings.map((r) => r.id), req.body.allowDuplicate === true)
         if (siblings.slice(parts.length).some((r) => r.attachments.length || store.payables.some((p) => p.previousId === r.id) || store.payableEvents.some((e) => e.accountId === r.id && ['paid', 'reversed'].includes(e.type)))) fail('Não é possível remover parcelas com anexos, pagamentos anteriores ou vínculos.', 409)
         store.payables = store.payables.filter((r) => r.groupId !== row.groupId)
@@ -462,8 +477,9 @@ export default function createPayablesRouter(accounts, requireAdmin) {
       }
       if (common.kind === 'installment') {
         const parts = installments(req.body, common.valueCents, common.dueDate), groupId = randomUUID(), before = { ...row }
+        const plan = checked(() => planNumbers(parts.length, numberingAsked(req.body, parts.length, [])))
         const splits = splitInstallments(common.classificationSplit, parts.map((part) => part.valueCents))
-        const proposed = parts.map((part, index) => ({ ...row, ...common, ...part, classificationSplit: splits[index], id: index === 0 ? row.id : undefined, groupId, installmentNumber: index + 1, installmentCount: parts.length, originalTotalCents: common.valueCents, previousId: index === 0 ? row.previousId : null, attachments: index === 0 ? [...row.attachments] : [], createdAt: index === 0 ? row.createdAt : new Date().toISOString() }))
+        const proposed = parts.map((part, index) => ({ ...row, ...common, ...part, classificationSplit: splits[index], id: index === 0 ? row.id : undefined, groupId, installmentNumber: plan.numbers[index], installmentCount: plan.total, realNumbering: plan.real, originalTotalCents: common.valueCents, previousId: index === 0 ? row.previousId : null, attachments: index === 0 ? [...row.attachments] : [], createdAt: index === 0 ? row.createdAt : new Date().toISOString() }))
         const accepted = duplicates(store, proposed, [row.id], req.body.allowDuplicate === true)
         store.payables = store.payables.filter((r) => r.id !== row.id)
         for (const [index, updated] of proposed.entries()) {

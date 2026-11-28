@@ -7,7 +7,7 @@ import path from 'node:path'
 import { dataDirectory } from './dataDirectory.js'
 import { readStore, mutateStore } from './offers.js'
 import { exportPdf, exportWorkbook } from './reports.js'
-import { cents, validDate, todayBahia, daysUntil, makeInstallments, shiftMonth, matchesSearch, treasuryEntry, duplicateError, duplicateAccepted, MAX_SERIES, receivableDetailMatch, receivableKindLabels, receivableKindOf } from './payableRules.js'
+import { planNumbering, planNumbers, currentNumbering, cents, validDate, todayBahia, daysUntil, makeInstallments, shiftMonth, matchesSearch, treasuryEntry, duplicateError, duplicateAccepted, MAX_SERIES, receivableDetailMatch, receivableKindLabels, receivableKindOf } from './payableRules.js'
 import { notificationSettings } from './accounts.js'
 import { assertNotReconciled, reconciledTransaction } from './bankStatements.js'
 import { normalizeText } from './ofx.js'
@@ -19,6 +19,10 @@ import { classificationList, entryClassification } from './accountPlan.js'
 import { bulkActions, bulkIds, planBulk, previewOf, assertSamePreview, countsLine, dateRangeLine } from './bulkAccounts.js'
 
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), { status }) }
+// The rules of payableRules.js throw plain errors: here they are answers to the user (400).
+const checked = (task) => { try { return task() } catch (error) { fail(error.message) } }
+// The numbering asked in an edit ("numeração real" of a plan); without the fields (older screens) the plan keeps its own.
+const numberingAsked = (body, launched, group) => body && Object.hasOwn(body, 'installmentStart') ? checked(() => planNumbering(body, launched)) : currentNumbering(group)
 const clean = (value, limit = 1000) => String(value ?? '').trim().slice(0, limit)
 const money = (value) => (value / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 export const receiptMethods = { pix: 'Pix', boleto: 'Boleto', transfer: 'Transferência', card: 'Cartão', cash: 'Dinheiro' }
@@ -241,7 +245,9 @@ export function receivablesReport(rows, filters = {}, individual = false, store 
 // What remains of the plan of a removed account is numbered again, so "parcela x de y" and the total stay right.
 function renumberReceivables(store, row) {
   const rest = row.groupId ? store.receivables.filter((item) => item.groupId === row.groupId) : row.seriesId ? store.receivables.filter((item) => item.seriesId === row.seriesId) : []
-  if (row.groupId) rest.sort((a, b) => a.installmentNumber - b.installmentNumber).forEach((item, index) => { item.installmentNumber = index + 1; item.installmentCount = rest.length; item.originalTotalCents = rest.reduce((sum, other) => sum + other.valueCents, 0) })
+  // A plan with the real numbering (an agreement running elsewhere, "parcela 54/188") keeps the numbers of the others.
+  const real = rest.some((item) => item.realNumbering)
+  if (row.groupId) rest.sort((a, b) => a.installmentNumber - b.installmentNumber).forEach((item, index) => { if (!real) { item.installmentNumber = index + 1; item.installmentCount = rest.length } item.originalTotalCents = rest.reduce((sum, other) => sum + other.valueCents, 0) })
   else rest.sort((a, b) => a.dueDate.localeCompare(b.dueDate)).forEach((item, index) => { item.seriesIndex = index + 1; item.seriesCount = rest.length })
 }
 // Estorno of a receipt (individual or in bulk, `mark` tags the history of a bulk action). A partial receipt: its value (and
@@ -486,7 +492,8 @@ export default function createReceivablesRouter(accounts, requireAdmin, pool = n
       assertDueDates(parts, common.issueDate)
       const recurring = common.kind === 'recurring'
       const groupId = parts.length > 1 && !recurring ? randomUUID() : null, seriesId = recurring && parts.length > 1 ? randomUUID() : null, createdAt = new Date().toISOString()
-      const rows = parts.map((part, index) => ({ origin, orderCode: order?.code || null, offerId: order?.offerId || null, ...common, ...part, kind: recurring ? 'recurring' : groupId ? 'installment' : 'single', groupId, installmentNumber: groupId ? index + 1 : 1, installmentCount: groupId ? parts.length : 1, seriesId, seriesIndex: seriesId ? index + 1 : null, seriesCount: seriesId ? parts.length : null, originalTotalCents: groupId ? common.valueCents : part.valueCents, receipt: null, inactive: false, createdAt }))
+      const plan = groupId ? checked(() => planNumbers(parts.length, planNumbering(body, parts.length))) : null
+      const rows = parts.map((part, index) => ({ origin, orderCode: order?.code || null, offerId: order?.offerId || null, ...common, ...part, kind: recurring ? 'recurring' : groupId ? 'installment' : 'single', groupId, installmentNumber: plan ? plan.numbers[index] : 1, installmentCount: plan ? plan.total : 1, realNumbering: Boolean(plan?.real), seriesId, seriesIndex: seriesId ? index + 1 : null, seriesCount: seriesId ? parts.length : null, originalTotalCents: groupId ? common.valueCents : part.valueCents, receipt: null, inactive: false, createdAt }))
       // An OS is unique by its code; equal client/value/date across different OSs is legitimate.
       const accepted = origin === 'manual' && !treasury ? duplicates(store, rows, [], req.body.allowDuplicate === true) : []
       const attachments = claimFiles(store, req.body.fileIds || [], req.actor)
@@ -498,7 +505,7 @@ export default function createReceivablesRouter(accounts, requireAdmin, pool = n
         row.id = `REC-${String(store.receivableSequence).padStart(6, '0')}`
         row.lastStatus = receivableStatus(row)
         store.receivables.push(row)
-        event(store, req.actor, 'created', row.id, { details: { valueCents: row.valueCents, dueDate: row.dueDate, text: [treasury ? `Entrada lançada na Tesouraria, já recebida${order ? `, na conclusão da ${order.code}` : ''}` : order ? `Programada na conclusão da ${order.code}` : '', groupId ? `Parcela ${row.installmentNumber} de ${rows.length} de ${money(common.valueCents)}` : '', seriesId ? `Contrato recorrente: ocorrência ${row.seriesIndex} de ${rows.length}` : '', acceptedText(accepted[index] || [])].filter(Boolean).join(' · ') } })
+        event(store, req.actor, 'created', row.id, { details: { valueCents: row.valueCents, dueDate: row.dueDate, text: [treasury ? `Entrada lançada na Tesouraria, já recebida${order ? `, na conclusão da ${order.code}` : ''}` : order ? `Programada na conclusão da ${order.code}` : '', groupId ? `Parcela ${row.installmentNumber} de ${row.installmentCount} de ${money(common.valueCents)}` : '', seriesId ? `Contrato recorrente: ocorrência ${row.seriesIndex} de ${rows.length}` : '', acceptedText(accepted[index] || [])].filter(Boolean).join(' · ') } })
         if (treasury) event(store, req.actor, 'received', row.id, { details: { ...row.receipt, treasury: true } })
         for (const file of row.attachments) event(store, req.actor, 'attachment_added', row.id, { details: { name: file.name } })
       }
@@ -527,6 +534,15 @@ export default function createReceivablesRouter(accounts, requireAdmin, pool = n
       if (group.some((item) => item.receipt || item.partialPaidCents)) {
         const { valueCents, dueDate, kind, issCents, ...descriptive } = common
         const before = { ...row }; Object.assign(row, descriptive); row.lastStatus = receivableStatus(row)
+        // Values and dates stay, but the numbering of the whole plan can still be set (a plan already in progress).
+        if (row.groupId) {
+          const plan = checked(() => planNumbers(group.length, numberingAsked(req.body, group.length, group), group))
+          for (const [index, sibling] of group.entries()) {
+            const previous = { ...sibling }
+            Object.assign(sibling, { installmentNumber: plan.numbers[index], installmentCount: plan.total, realNumbering: plan.real })
+            if (sibling !== row && (previous.installmentNumber !== sibling.installmentNumber || previous.installmentCount !== sibling.installmentCount)) event(store, req.actor, 'edited', sibling.id, { changes: { before: previous, after: { ...sibling } }, details: { text: `Numeração do parcelamento alterada em ${row.id}` } })
+          }
+        }
         event(store, req.actor, 'edited', row.id, { changes: { before, after: { ...row } }, details: { text: 'Parcelamento com parcela recebida: valores e datas preservados.' } })
         return [view(row, store)]
       }
@@ -536,7 +552,8 @@ export default function createReceivablesRouter(accounts, requireAdmin, pool = n
       const removed = group.slice(parts.length)
       if (removed.some((item) => hasReceiptHistory(store, item))) fail('Não é possível remover parcelas com histórico de recebimento.', 409)
       const groupId = parts.length > 1 ? row.groupId || randomUUID() : null, ids = group.map((item) => item.id)
-      const updated = parts.map((part, index) => ({ target: group[index], data: { ...common, ...part, kind: groupId ? 'installment' : common.kind === 'recurring' ? 'recurring' : 'single', groupId, installmentNumber: index + 1, installmentCount: parts.length, originalTotalCents: common.valueCents } }))
+      const plan = groupId ? checked(() => planNumbers(parts.length, numberingAsked(req.body, parts.length, row.groupId ? group : []), row.groupId ? group : [])) : null
+      const updated = parts.map((part, index) => ({ target: group[index], data: { ...common, ...part, kind: groupId ? 'installment' : common.kind === 'recurring' ? 'recurring' : 'single', groupId, installmentNumber: plan ? plan.numbers[index] : index + 1, installmentCount: plan ? plan.total : parts.length, realNumbering: Boolean(plan?.real), originalTotalCents: common.valueCents } }))
       const accepted = row.origin === 'manual' ? duplicates(store, updated.map(({ data }) => data), ids, req.body.allowDuplicate === true) : []
       const result = []
       for (const [index, { target, data }] of updated.entries()) {
@@ -549,7 +566,7 @@ export default function createReceivablesRouter(accounts, requireAdmin, pool = n
           store.receivableSequence = (store.receivableSequence || 0) + 1
           const created = { origin: row.origin, orderCode: row.orderCode, offerId: row.offerId, ...data, id: `REC-${String(store.receivableSequence).padStart(6, '0')}`, attachments: [...(row.attachments || [])], receipt: null, inactive: false, createdAt: row.createdAt }
           created.lastStatus = receivableStatus(created); store.receivables.push(created)
-          event(store, req.actor, 'created', created.id, { details: { valueCents: created.valueCents, dueDate: created.dueDate, text: [`Parcela ${created.installmentNumber} de ${parts.length}, criada ao editar o parcelamento`, acceptance].filter(Boolean).join(' · ') } })
+          event(store, req.actor, 'created', created.id, { details: { valueCents: created.valueCents, dueDate: created.dueDate, text: [`Parcela ${created.installmentNumber} de ${created.installmentCount}, criada ao editar o parcelamento`, acceptance].filter(Boolean).join(' · ') } })
           result.push(created)
         }
       }

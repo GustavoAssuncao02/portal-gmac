@@ -52,6 +52,29 @@ export function makeInstallments(valueCents, dueDate, count) {
   const base = Math.floor(valueCents / count)
   return Array.from({ length: count }, (_, index) => ({ valueCents: base + (index < valueCents % count ? 1 : 0), dueDate: shiftMonth(dueDate, index) }))
 }
+// Numeração real (2026-11-28): an installment plan already running elsewhere (a DAS "parcela 54/188") is launched with
+// the number of its first installment and the total of the agreement; only the numbering changes (values, dates and
+// settlements do not). Without them the plan is numbered 1..n of n, as always: then this returns null.
+const given = (value) => value !== undefined && value !== null && value !== ''
+export function planNumbering(body, launched) {
+  const start = given(body?.installmentStart) ? Number(body.installmentStart) : 1
+  if (!Number.isInteger(start) || start < 1 || start > MAX_SERIES) throw new Error('Informe um número válido para a primeira parcela.')
+  const last = start + launched - 1, total = given(body?.installmentTotal) ? Number(body.installmentTotal) : last
+  if (!Number.isInteger(total) || total < last || total > MAX_SERIES) throw new Error(`O total de parcelas do acordo deve ser de pelo menos ${last}.`)
+  return start === 1 && total === launched ? null : { start, total }
+}
+// The numbering a plan already has (`group` in order): real or null.
+export const currentNumbering = (group) => group[0]?.realNumbering ? { start: group[0].installmentNumber, total: group[0].installmentCount } : null
+// The numbers of the `count` installments of a plan. With the real numbering and the same installments as before
+// (`previous`, in order), their numbers move with the start, keeping the gaps of installments removed from the plan.
+export function planNumbers(count, numbering, previous = []) {
+  if (!numbering) return { numbers: Array.from({ length: count }, (_, index) => index + 1), total: count, real: false }
+  const first = previous[0]?.installmentNumber
+  const numbers = previous.length === count && count ? previous.map((row) => row.installmentNumber - first + numbering.start) : Array.from({ length: count }, (_, index) => numbering.start + index)
+  const last = Math.max(...numbers)
+  if (numbering.total < last) throw new Error(`O total de parcelas do acordo deve ser de pelo menos ${last}.`)
+  return { numbers, total: numbering.total, real: true }
+}
 export const daysUntil = (date, today = todayBahia()) => Math.round((Date.parse(date) - Date.parse(today)) / DAY)
 const days = (count) => `${count} ${count === 1 ? 'dia' : 'dias'}`
 export const dueLabel = (daysLeft) => daysLeft < 0 ? `Vencida há ${days(-daysLeft)}` : daysLeft === 0 ? 'Vence hoje' : `Vence em ${days(daysLeft)}`
