@@ -87,7 +87,7 @@ for (const device of ['desktop', 'iPhone 15', 'iPhone 15 Pro Max']) {
     await dialog.getByRole('alert').getByText('A OS foi salva, mas um anexo não foi enviado. Falha simulada no anexo.').waitFor()
     await dialog.getByRole('button', { name: 'Reenviar anexos', exact: true }).click()
     await dialog.waitFor({ state: 'detached' })
-    await article.getByRole('heading', { name: 'OS revisada pelo administrador', exact: true }).waitFor()
+    await article.getByRole('heading', { name: 'OS REVISADA PELO ADMINISTRADOR', exact: true }).waitFor()
     let current = (await fixture.request('/operations/orders', 'GET', undefined, fixture.admin)).data.items[0]
     assert.equal(current.operation.status, 'completed')
     assert.deepEqual(current.operation.stageCounts, { 'stage-1': 8, 'stage-2': 10 })

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Hash, X } from 'lucide-react'
 import { backdropClose } from './dialogBackdrop.js'
 import { quantityLabel, quantityUnitOf, quantityUnits } from '../server/quantityUnits.js'
+import { upper } from './displayCase.js'
 
 // "Sem quantidade definida" (TCK-0005): the request arrived before anyone counted the pieces at the client. The offer shows
 // "A definir" and, before the proposal options (or the OS of an etiqueta), this dialog asks the quantity
@@ -39,7 +40,7 @@ export default function OfferQuantityModal({ offer, onConfirm, onClose }) {
     try { await onConfirm(quantity) } catch (caught) { setError(caught.message) } finally { pending.current = false; setBusy(false) }
   }
   return <dialog ref={dialog} className="os-history-modal os-action-modal offer-creating-modal offer-quantity-modal" aria-labelledby="offer-quantity-title" onCancel={(event) => { event.preventDefault(); close() }} {...backdropClose(close)}>
-    <header className="os-history-heading"><div><h2 id="offer-quantity-title">Quantidade de peças</h2><p>{offer.code} · {offer.service}</p></div><button className="os-icon-button" type="button" disabled={busy} onClick={close} aria-label="Fechar" title="Fechar"><X size={18} /></button></header>
+    <header className="os-history-heading"><div><h2 id="offer-quantity-title">Quantidade de peças</h2><p>{offer.code} · {upper(offer.service)}</p></div><button className="os-icon-button" type="button" disabled={busy} onClick={close} aria-label="Fechar" title="Fechar"><X size={18} /></button></header>
     <form className="os-action-content" onSubmit={confirm}>
       <p>Esta oferta foi inserida <strong>sem quantidade definida</strong>. Informe quantas peças serão feitas antes de montar a proposta.</p>
       <label className="offer-quantity-field">Quantidade *<input ref={input} type="number" min="1" step="1" inputMode="numeric" value={value} disabled={busy} onChange={(event) => setValue(event.target.value)} required /></label>

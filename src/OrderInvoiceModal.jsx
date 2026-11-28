@@ -6,6 +6,7 @@ import { cents } from '../server/payableRules.js'
 import { InvoiceCard, blockOf, documentLabel, invoiceDrafts } from './ReceivableInvoiceImport.jsx'
 import ClientQuickForm from './ClientQuickForm.jsx'
 import './payables.css'
+import { upper } from './displayCase.js'
 
 // NF-e da OS (server/orderInvoices.js): "Aguardando NF-e" and Ver OS › NF-e open this window. The PDF of the invoice is read
 // in the layouts Contas a Receber already reads; the user checks each note (as in "Importar notas (PDF)") and "Concluir
@@ -136,7 +137,7 @@ export default function OrderInvoiceModal({ code, onClose, onDone }) {
   return <PayableModal title={`NF-e · ${code}`} className="payable-modal--form invoice-import-modal order-invoice-modal" wide={rows.length > 0} busy={busy} onClose={close} footer={footer}>
     {loadError && <p className="admin-tool-error" role="alert">{loadError}</p>}
     {!info ? !loadError && <p role="status">Carregando OS...</p> : <>
-      <dl className="payable-facts receivable-order-facts">{[['OS', order.code], ['Cliente', order.company || '—'], ['Serviço', order.service || '—'], ['Valor da OS', order.valueCents ? money(order.valueCents) : '—']].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+      <dl className="payable-facts receivable-order-facts">{[['OS', order.code], ['Cliente', order.company || '—'], ['Serviço', upper(order.service) || '—'], ['Valor da OS', order.valueCents ? money(order.valueCents) : '—']].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
       {!order.completed ? <p className="bank-warning bank-warning--warning" role="alert"><TriangleAlert size={16} aria-hidden="true" />{invoiceNotCompleted}</p>
         : order.labelQuotePending ? <p className="bank-warning bank-warning--warning" role="alert"><TriangleAlert size={16} aria-hidden="true" />Gere o orçamento da etiqueta antes de importar a NF-e.</p> : <>
           <p className="payable-hint">{order.concluded ? 'Anexe o PDF da NF-e emitida para este serviço: cada nota vira uma conta a receber da OS, com o PDF anexado.' : 'Anexe o PDF da NF-e emitida para este serviço. Cada nota vira uma conta a receber da OS, com o PDF anexado, e a OS é concluída.'}</p>

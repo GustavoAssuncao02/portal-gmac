@@ -18,7 +18,7 @@ export default function DeclineProposalModal({ offer, onConfirm, onClose }) {
   }
   return <PayableModal title="Tem certeza que deseja recusar a oferta?" busy={busy} onClose={onClose} footer={<><button className="admin-tool-button" type="button" disabled={busy} onClick={onClose}>Cancelar</button><button className="admin-tool-button admin-tool-button--primary admin-tool-button--danger" type="submit" form={formId} disabled={busy}>Sim, recusar</button></>}>
     <form id={formId} className="payable-form" onSubmit={submit}><fieldset disabled={busy}>
-      <p><strong>{offer.code} · {offer.service} · Proposta {offer.proposal?.key}</strong></p>
+      <p><strong>{offer.code} · {upper(offer.service)} · Proposta {offer.proposal?.key}</strong></p>
       <p>O cliente recusou esta proposta. A oferta vai para "Recusadas" e não poderá gerar uma OS enquanto estiver recusada. A recusa entra na taxa de aceite da opção {offer.proposal?.key}. Se for um engano, dá para desfazer depois.</p>
       <label>Motivo (opcional)<select value={reason} onChange={(event) => setReason(event.target.value)}><option value="">Não informado</option>{declineReasons.map((item) => <option key={item}>{item}</option>)}</select></label>
       <label>Observação (opcional)<textarea rows={3} maxLength={1000} value={note} onChange={(event) => setNote(event.target.value)} /></label>
@@ -35,7 +35,7 @@ export function UndoDeclineModal({ offer, onConfirm, onClose }) {
     try { await onConfirm(); onClose() } catch (caught) { setError(caught.message) } finally { setBusy(false) }
   }
   return <PayableModal title="Tem certeza que deseja desfazer a recusa?" busy={busy} onClose={onClose} footer={<><button className="admin-tool-button" type="button" disabled={busy} onClick={onClose}>Cancelar</button><button className="admin-tool-button admin-tool-button--primary" type="button" disabled={busy} onClick={confirm}>Sim, desfazer</button></>}>
-    <p><strong>{offer.code} · {offer.service} · Proposta {offer.proposalDecline?.key || offer.proposal?.key}</strong></p>
+    <p><strong>{offer.code} · {upper(offer.service)} · Proposta {offer.proposalDecline?.key || offer.proposal?.key}</strong></p>
     <p>A oferta volta para "Proposta gerada" e poderá ser aceita ou recusada de novo. A recusa deixa de contar na taxa de aceite{offer.proposalDecline?.reason ? ` (motivo registrado: ${offer.proposalDecline.reason})` : ''}.</p>
     {error && <p className="admin-tool-error" role="alert">{error}</p>}
   </PayableModal>
@@ -91,7 +91,7 @@ export function AcceptOfferModal({ offer, onConfirm, onAccepted, onClose }) {
   const footer = opened ? <button className="admin-tool-button admin-tool-button--primary" type="button" onClick={finish}>Fechar</button>
     : <><button className="admin-tool-button" type="button" disabled={busy} onClick={onClose}>Cancelar</button><button className="admin-tool-button" type="button" disabled={busy} title="Gera a OS com o que foi preenchido. O que faltar pode ser informado depois em Ver OS." onClick={accept}>{pendingLabel}</button><button className="admin-tool-button admin-tool-button--primary" type="submit" form={formId} disabled={busy}>{busy ? (label ? 'Abrindo...' : 'Aceitando...') : label ? 'Sim, abrir a OS' : 'Sim, aceitar e gerar a OS'}</button></>
   return <PayableModal title={label ? 'Abrir a OS da etiqueta?' : 'Tem certeza que deseja aceitar a oferta?'} busy={busy} onClose={opened ? finish : onClose} footer={footer}>
-    <p><strong>{offer.code} · {offer.service}</strong></p>
+    <p><strong>{offer.code} · {upper(offer.service)}</strong></p>
     {label ? <dl className="offer-decision-facts"><div><dt>Etiqueta</dt><dd>{offer.labelNumber}</dd></div><div><dt>Valor da OS</dt><dd>Orçamento pendente</dd></div><div><dt>Quantidade</dt><dd>{quantityLabel(offer.quantity, offer.quantityUnit, { short: true })}</dd></div></dl>
       : <dl className="offer-decision-facts"><div><dt>Opção</dt><dd>Proposta {offer.proposal?.key}</dd></div><div><dt>Valor da OS</dt><dd>{brl(osValueOf(offer.proposal))}</dd></div><div><dt>Quantidade</dt><dd>{quantityLabel(offer.quantity, offer.quantityUnit, { short: true })}</dd></div></dl>}
     <form id={formId} className="payable-form offer-accept-po" onSubmit={submit}><fieldset disabled={busy || Boolean(opened)}>

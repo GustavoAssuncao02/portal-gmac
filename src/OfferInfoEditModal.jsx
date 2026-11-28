@@ -62,7 +62,7 @@ export default function OfferInfoEditModal({ offer, onClose, onSaved }) {
         <label>Empresa *<ClientNameInput label="Empresa *" value={form.company} documentValue={form.cnpj} clients={clients} onChange={(value) => update('company', value)} onSelect={(chosen) => setForm((current) => ({ ...current, company: chosen.name, cnpj: maskClientDocument(chosen.document) }))} required /></label>
         <RequesterListInput values={form.requesters} client={client} requesters={requesters} onChange={(value) => update('requesters', value)} />
         <label>Comprador<RequesterNameInput label="Comprador" kind={contactKinds.buyers} who="quem compra o serviço" value={form.buyer} client={client} requesters={buyers} onChange={(value) => update('buyer', value)} /></label>
-        <label>Peça/Serviço *<PieceNameInput label="Peça/Serviço *" value={form.service} onChange={(value) => update('service', value)} pieces={pieces} historyHint={false} required /></label>
+        <label>Peça/Serviço *<PieceNameInput label="Peça/Serviço *" value={form.service} onChange={(value) => update('service', value)} pieces={pieces} historyHint={false} required upperCase /></label>
         <label>Data da solicitação *<input type="date" value={form.requestedAt} onChange={(event) => update('requestedAt', event.target.value)} required /></label>
         {/* Optional until the proposal PDF, which asks for it; after the PDF it can be changed but not left empty. */}
         <label>{offer.proposal ? 'Prazo solicitado *' : 'Prazo solicitado'}<input type="date" value={form.deadline} onChange={(event) => update('deadline', event.target.value)} required={Boolean(offer.proposal)} /></label>

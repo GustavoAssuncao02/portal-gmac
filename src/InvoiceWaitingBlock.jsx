@@ -7,6 +7,7 @@ import { todayBahia } from '../server/payableRules.js'
 import { missingPurchaseInfo } from './purchaseOrders.js'
 import { isEmergency } from './serviceProgress.js'
 import { byLongestWait, invoiceWait } from './invoiceWaiting.js'
+import { upper } from './displayCase.js'
 
 const completedLabel = (order) => {
   const at = Date.parse(order.operation.completedAt)
@@ -39,7 +40,7 @@ export default function InvoiceWaitingBlock({ orders, now, open, onToggle, onSel
       const missing = missingPurchaseInfo(order)
       const quote = labelQuotePending(order)
       return <tr key={order.code} className={isEmergency(order) ? 'admin-invoice-row--emergency' : undefined}>
-        <td><strong>{order.service}</strong><small>{order.code}{order.labelNumber ? ` · Etiqueta ${order.labelNumber}` : ''}{isEmergency(order) && <> · <span className="os-emergency-label">Emergencial</span></>}</small></td>
+        <td><strong>{upper(order.service)}</strong><small>{order.code}{order.labelNumber ? ` · Etiqueta ${order.labelNumber}` : ''}{isEmergency(order) && <> · <span className="os-emergency-label">Emergencial</span></>}</small></td>
         <td data-label="Cliente">{order.company}</td>
         <td data-label="Concluída em">{completedLabel(order)}</td>
         <td data-label="Esperando">{wait ? <span className={`admin-invoice-wait admin-invoice-wait--${wait.tone}`}>{wait.label}</span> : '—'}</td>

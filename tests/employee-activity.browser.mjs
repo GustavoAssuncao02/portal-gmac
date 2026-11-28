@@ -62,7 +62,7 @@ try {
   assert.ok(content.includes('Soldagem: +3 peças (7/10 no total)'))
   assert.ok(content.includes('Tempo da sessão: 01:01:01'))
   assert.ok(content.includes('Encerrada pelo administrador'))
-  assert.ok(content.includes('OS-2026-0001') && content.includes('Estrutura metalica'))
+  assert.ok(content.includes('OS-2026-0001') && content.includes('ESTRUTURA METALICA'))
   const period = dialog.getByLabel('Período', { exact: true })
   for (const [value, count] of [['yesterday', 1], ['7days', 6], ['30days', 7], ['all', 8]]) {
     await period.selectOption(value)

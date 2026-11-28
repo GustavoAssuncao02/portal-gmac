@@ -45,7 +45,7 @@ try {
   await widget.getByRole('heading', { name: 'Próximas entregas', exact: true }).waitFor()
   const rows = widget.locator('.home-rows li')
   await rows.first().waitFor()
-  assert.deepEqual(await rows.locator('.home-rows-main strong').evaluateAll((items) => items.map((item) => item.firstChild.textContent)), ['Entrega hoje', 'Entrega amanha', 'Entrega urgente', 'Entrega cinco', 'Entrega nove'], 'the 5 nearest from today, without the late ones')
+  assert.deepEqual(await rows.locator('.home-rows-main strong').evaluateAll((items) => items.map((item) => item.firstChild.textContent)), ['ENTREGA HOJE', 'ENTREGA AMANHA', 'ENTREGA URGENTE', 'ENTREGA CINCO', 'ENTREGA NOVE'], 'the 5 nearest from today, without the late ones')
   assert.equal(await rows.nth(2).locator('.home-rows-badge').innerText(), 'Emergencial')
   assert.deepEqual(await rows.locator('.home-rows-value').evaluateAll((items) => items.map((item) => item.innerText.replace(/\s+/g, ' ').trim())), [`${shortDate(inDays(0))} hoje`, `${shortDate(inDays(1))} amanhã`, `${shortDate(inDays(2))} em 2 dias`, `${shortDate(inDays(5))} em 5 dias`, `${shortDate(inDays(9))} em 9 dias`])
   assert.match(await rows.first().locator('small').first().innerText(), new RegExp(`^${codes['Entrega hoje']} · Teste de fluxo · peças 0/10$`))

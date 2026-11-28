@@ -189,7 +189,7 @@ export function NoteEditor({ kind, item, draft, offers = [], orders = [], onClos
   const set = (key, value) => setForm((previous) => ({ ...previous, [key]: value }))
   const participants = current?.participants || []
   const statusOf = (id) => participants.find((person) => same(person.userId, id))
-  const links = useMemo(() => [...orders.filter((order) => order.code).map((order) => [order.code, [order.service, order.company].filter(Boolean).join(' · ')]), ...offers.filter((offer) => offer.code).map((offer) => [offer.code, [offer.service, offer.company].filter(Boolean).join(' · ')])], [offers, orders])
+  const links = useMemo(() => [...orders.filter((order) => order.code).map((order) => [order.code, [upper(order.service), order.company].filter(Boolean).join(' · ')]), ...offers.filter((offer) => offer.code).map((offer) => [offer.code, [offer.service, offer.company].filter(Boolean).join(' · ')])], [offers, orders])
 
   function addEntry() {
     const text = newEntry.trim().slice(0, CHECKLIST_TEXT_MAX)

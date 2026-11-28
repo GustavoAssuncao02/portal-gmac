@@ -56,7 +56,7 @@ function Details({ station, now }) {
       <strong>{session.employeeName || 'Operador não identificado'}</strong>
       <span>{upper(station.machineName)}</span>
       <em>Trabalhando há {elapsedLabel(now - sessionStart(session))}</em>
-      {session.orderCode && <small>{session.orderCode}{session.workStageName || session.stageName ? ` · ${session.workStageName || session.stageName}` : ''}{session.orderService ? ` · ${session.orderService}` : ''}</small>}
+      {session.orderCode && <small>{session.orderCode}{session.workStageName || session.stageName ? ` · ${session.workStageName || session.stageName}` : ''}{session.orderService ? ` · ${upper(session.orderService)}` : ''}</small>}
     </div>) : <div><strong>{upper(station.machineName)}</strong><span>{station.service ? 'Bancada de serviços livre' : statusText[status]}</span>{status === 'maintenance' && station.maintenance.reason && <small>{station.maintenance.reason}</small>}{station.art === 'booth' && <small>Os postos são preenchidos pela ordem de quem está no serviço de pintura.</small>}</div>}
   </div>
 }

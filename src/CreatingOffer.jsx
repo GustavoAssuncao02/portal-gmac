@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Inbox, PencilLine, Trash2, X } from 'lucide-react'
 import { backdropClose } from './dialogBackdrop.js'
+import { upper } from './displayCase.js'
 
 // A manual offer starts as "Criando oferta" (status 'creating'): the list shows who is creating it and for how long, and
 // only "Fazer proposta" in its details puts it in analysis (server/offers.js).
@@ -82,18 +83,18 @@ function ConfirmDialog({ title, subtitle, children, confirmLabel, busyLabel, ico
 export function TakeOverOfferModal({ offer, onConfirm, onClose }) {
   const name = offer.editingBy?.name || offer.createdByName || 'Outro administrador'
   // Stopped: the person is not on it anymore, so it is only a matter of going on with it.
-  if (stoppedCreating(offer)) return <ConfirmDialog title="Oferta em aberto" subtitle={`${offer.code} · ${offer.service}`} tone="take-over" icon={<PencilLine size={16} />} confirmLabel="Continuar a oferta" busyLabel="Abrindo..." onConfirm={onConfirm} onClose={onClose}>
+  if (stoppedCreating(offer)) return <ConfirmDialog title="Oferta em aberto" subtitle={`${offer.code} · ${upper(offer.service)}`} tone="take-over" icon={<PencilLine size={16} />} confirmLabel="Continuar a oferta" busyLabel="Abrindo..." onConfirm={onConfirm} onClose={onClose}>
     <p><strong>{name}</strong> começou esta oferta e parou de editar {creatingSinceText(lastActive(offer))}. Deseja continuar a criação?</p>
     <p className="offer-creating-note">A oferta passa a aparecer na lista como criada por você.</p>
   </ConfirmDialog>
-  return <ConfirmDialog title="Oferta sendo criada" subtitle={`${offer.code} · ${offer.service}`} tone="take-over" icon={<PencilLine size={16} />} confirmLabel="Editar mesmo assim" busyLabel="Abrindo..." onConfirm={onConfirm} onClose={onClose}>
+  return <ConfirmDialog title="Oferta sendo criada" subtitle={`${offer.code} · ${upper(offer.service)}`} tone="take-over" icon={<PencilLine size={16} />} confirmLabel="Editar mesmo assim" busyLabel="Abrindo..." onConfirm={onConfirm} onClose={onClose}>
     <p><strong>{name}</strong> está criando esta oferta agora ({creatingSinceText(creatingSince(offer))}). Deseja editar mesmo assim?</p>
     <p className="offer-creating-note">A oferta passa a aparecer na lista como criada por você.</p>
   </ConfirmDialog>
 }
 
 export function DiscardOfferModal({ offer, onConfirm, onClose }) {
-  return <ConfirmDialog title="Descartar oferta?" subtitle={`${offer.code} · ${offer.service}`} tone="discard" icon={<Trash2 size={16} />} confirmLabel="Descartar oferta" busyLabel="Descartando..." onConfirm={onConfirm} onClose={onClose}>
+  return <ConfirmDialog title="Descartar oferta?" subtitle={`${offer.code} · ${upper(offer.service)}`} tone="discard" icon={<Trash2 size={16} />} confirmLabel="Descartar oferta" busyLabel="Descartando..." onConfirm={onConfirm} onClose={onClose}>
     <p>A oferta e os anexos dela serão apagados. O número {offer.code} não será usado de novo.</p>
     {offer.siteRequest?.preRegisteredClientId != null && <p>O pré-cadastro de <strong>{offer.company}</strong> também será apagado se ninguém o tiver editado.</p>}
   </ConfirmDialog>

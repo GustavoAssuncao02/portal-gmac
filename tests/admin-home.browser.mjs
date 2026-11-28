@@ -60,7 +60,7 @@ try {
   assert.equal(await metric('Em execução'), '1')
   assert.equal(await metric('OS atrasadas'), '1')
   assert.equal(await metric('Ofertas em análise'), '2')
-  assert.deepEqual(await home.locator('.home-order-link strong').allTextContents(), ['Atrasada prioritaria', 'Entrega hoje', 'Entrega proxima', 'Entrega distante', 'Sem prazo'])
+  assert.deepEqual(await home.locator('.home-order-link strong').allTextContents(), ['ATRASADA PRIORITARIA', 'ENTREGA HOJE', 'ENTREGA PROXIMA', 'ENTREGA DISTANTE', 'SEM PRAZO'])
   assert.match(await home.locator('.home-orders tbody tr').first().innerText(), /02\/10\/2026/)
   assert.deepEqual(await home.locator('.home-stock-item strong').allTextContents(), ['Inox zerado', 'Ferro critico', 'Aco no minimo'])
   assert.equal(await home.locator('.home-stock-title small').innerText(), '3 materiais')

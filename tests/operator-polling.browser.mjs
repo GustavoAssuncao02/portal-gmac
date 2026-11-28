@@ -49,7 +49,7 @@ try {
   for (const deadline = Date.now() + 15000; !requests.some((at) => at - baseline >= 9500) && Date.now() < deadline;) await new Promise((resolve) => setTimeout(resolve, 200))
   assert.ok(requests.some((at) => at - baseline >= 9500 && at - baseline <= 13000), 'A real ten-second polling tick runs while the OS is open')
   assert.equal(documentLoads, 1, 'The page never reloads')
-  assert.equal(await page.locator('.operator-detail-heading h2').innerText(), first.service)
+  assert.equal(await page.locator('.operator-detail-heading h2').innerText(), first.service.toLocaleUpperCase('pt-BR'))
   assert.equal(await quantities.first().inputValue(), '3')
   assert.deepEqual(await page.evaluate((code) => JSON.parse(sessionStorage.getItem(`gmac-operator-session-${code}`)), first.code), session)
   const operation = (await fixture.request('/operations/orders', 'GET', undefined, fixture.admin)).data.items.find((order) => order.code === first.code).operation

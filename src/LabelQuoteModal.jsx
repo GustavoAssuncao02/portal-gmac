@@ -8,6 +8,7 @@ import ProposalEmailModal from './ProposalEmailModal.jsx'
 import { formatQuantity, validQuantityFor } from '../server/materialUnits.js'
 import './labelQuote.css'
 import { quantityLabel } from '../server/quantityUnits.js'
+import { upper } from './displayCase.js'
 
 // "Aguardando NF-e" of an etiqueta OS (server/labelQuotes.js): the OS, the hours really worked against the estimate and
 // the material used, which is corrected here (less returns to the stock, more leaves it). Then the quote is generated,
@@ -49,7 +50,7 @@ export default function LabelQuoteModal({ code, onClose, onConclude }) {
     <PayableModal title={data ? `Aguardando NF-e · ${data.order.code}` : 'Aguardando NF-e'} wide busy={busy} onClose={onClose} footer={footer} className="label-quote-modal">
       {!data && !error && <p className="payable-muted">Carregando OS...</p>}
       {data && <>
-        <dl className="payable-facts receivable-order-facts">{[['OS', data.order.code], ['Etiqueta', data.order.labelNumber], ['Cliente', data.order.company], ['Serviço', data.order.service], ['Quantidade', quantityLabel(data.order.quantity, data.order.quantityUnit, { short: true })], ['Prazo acordado', day(data.order.deadline)]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || '—'}</dd></div>)}</dl>
+        <dl className="payable-facts receivable-order-facts">{[['OS', data.order.code], ['Etiqueta', data.order.labelNumber], ['Cliente', data.order.company], ['Serviço', upper(data.order.service)], ['Quantidade', quantityLabel(data.order.quantity, data.order.quantityUnit, { short: true })], ['Prazo acordado', day(data.order.deadline)]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || '—'}</dd></div>)}</dl>
 
         <section className="label-quote-section" aria-labelledby="label-quote-hours"><h3 id="label-quote-hours">Horas trabalhadas</h3>
           <div className="payable-table-scroll"><table className="payable-table label-quote-table"><thead><tr><th>Etapa</th><th>Máquina ou serviço</th><th>Previsto</th><th>Real</th></tr></thead>

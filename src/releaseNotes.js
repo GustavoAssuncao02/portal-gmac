@@ -13,6 +13,7 @@ export const releaseNotes = [
       'Ordem de serviço: opção Concluir sem NF-e, com a marca Sem NF-e em Serviços concluídos (a nota pode ser importada depois)',
       'Reabrir OS: caixas para escolher se a NF-e e a conta a receber saem junto',
       'Contas a Pagar e a Receber: parcelamentos com a numeração real do acordo (ex.: parcela 54 de 188), também nos já lançados; excluir uma parcela não muda o número das outras',
+      'Ofertas e serviços: o nome da peça/serviço e a descrição do serviço aparecem sempre em maiúsculo nas telas (andamento, concluídos, ofertas, Ver OS, planejamento, Início, tablet e TV), e esses campos já ficam em maiúsculo ao digitar',
     ],
   },
   {

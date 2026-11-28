@@ -26,7 +26,7 @@ async function createOrder(service, resources) {
 async function viewOrder(service) {
   await page.locator('.sidebar').getByRole('button', { name: 'Serviços em andamento', exact: true }).click()
   await page.locator('.admin-os-table tbody tr').filter({ hasText: service }).getByRole('button', { name: 'Ver OS', exact: true }).click()
-  await page.locator('.os-detail-title h2').getByText(service, { exact: true }).waitFor()
+  await page.locator('.os-detail-title h2').getByText(service.toLocaleUpperCase('pt-BR'), { exact: true }).waitFor()
 }
 
 try {
