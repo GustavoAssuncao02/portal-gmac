@@ -5,6 +5,7 @@ import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
 import { todayBahia, shiftMonth } from '../server/payableRules.js'
 import { stageLabel } from '../server/serviceStages.js'
 import { sampleOfx, sampleRows } from './ofxSample.js'
+import { attachOrderInvoice } from './orderInvoiceSteps.js'
 
 const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Gustavo' }
 const fixture = await createWorkflowFixture({ accountsEnv: env })
@@ -78,15 +79,8 @@ try {
 
   await navigate('Serviços em andamento')
   const row = page.locator('.admin-invoice-table tbody tr').filter({ hasText: order.code })
-  await row.getByRole('button', { name: 'Aguardando NF-e', exact: true }).click()
-  const schedule = page.getByRole('dialog', { name: 'Recebimento do serviço', exact: true })
-  await schedule.getByRole('button', { name: /^Ainda vai receber/ }).click()
-  await schedule.getByLabel('Valor a receber', { exact: true }).waitFor()
-  assert.equal(await schedule.getByLabel('Valor a receber', { exact: true }).inputValue(), '1.125,45', 'Defaults to the OS value after discount')
-  await schedule.getByLabel('Valor a receber', { exact: true }).fill('1100')
-  await schedule.getByLabel('Data prevista de recebimento', { exact: true }).fill(nextMonth)
-  await schedule.getByLabel('Classificação da receita', { exact: true }).selectOption({ label: '98.01 · Receita de teste' })
-  await schedule.getByRole('button', { name: 'Programar e concluir', exact: true }).click()
+  // The NF-e of the OS becomes its account receivable (the value of the note wins over the value of the OS).
+  await attachOrderInvoice({ fixture, page, open: () => row.getByRole('button', { name: 'Aguardando NF-e', exact: true }).click(), code: order.code, cnpj: offerDraft.cnpj, company: offerDraft.company, valueCents: 110000, issued: todayBahia(), due: nextMonth, classification: '98.01 · Receita de teste', headers: { Authorization: `Bearer ${token}` } })
   await row.waitFor({ state: 'detached' })
 
   await navigate('Contas a Receber')

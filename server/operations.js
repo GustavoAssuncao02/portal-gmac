@@ -24,6 +24,7 @@ import { editEventTime } from './operationEventTime.js'
 import { addManualEvent, addManualPeriod, manualEventTypes } from './operationManualEvents.js'
 import { blockedMessage, createLoginThrottle } from './loginThrottle.js'
 import { removeOrderReceivables } from './receivables.js'
+import { removeInvoiceFiles } from './orderInvoices.js'
 import { pauseReasonNames, sectorRows, SWITCH_PAUSE_REASON } from './registries.js'
 import { formatQuantity } from './materialUnits.js'
 import { recordPasswordChange } from './passwordReset.js'
@@ -658,11 +659,18 @@ export default function createOperationsRouter(pool) {
     // What to do with the accounts receivable posted for the OS (scheduled or already received in Tesouraria): the user chooses.
     const receivables = request.body?.receivables ?? 'keep'
     if (!['keep', 'delete'].includes(receivables)) return response.status(400).json({ message: 'Informe se o contas a receber vinculado deve ser mantido ou excluído.' })
+    // The NF-e attached to the OS (server/orderInvoices.js): kept or removed, as the user marks.
+    const invoices = request.body?.invoices ?? 'keep'
+    if (!['keep', 'remove'].includes(invoices)) return response.status(400).json({ message: 'Informe se a NF-e da OS deve ser mantida ou removida.' })
+    let removedInvoices = []
     try {
       const result = await changeOperation(request.params.code, (state, order, store) => {
         if (state.status !== 'completed') throw new OperationError(409, 'Somente uma OS finalizada pode ser reaberta.')
         // Validated and removed before the state changes, so a blocked deletion leaves the OS completed.
         const removedReceivables = receivables === 'delete' ? removeOrderReceivables(store, { id: request.adminId, name: request.adminName || 'Administrador' }, order.code) : []
+        if (invoices === 'remove' && order.invoices?.length) { removedInvoices = order.invoices; order.invoices = [] }
+        // Concluded without NF-e: the choice is made again when the OS is concluded again.
+        delete order.invoiceSkipped
         const previousCompletedAt = state.completedAt
         state.status = state.startedAt ? 'paused' : 'waiting'
         state.completedAt = null
@@ -671,8 +679,9 @@ export default function createOperationsRouter(pool) {
         state.reopenedAt = new Date().toISOString()
         order.status = 'Em andamento'
         order.updatedAt = state.reopenedAt
-        return eventFor('order_reopened', null, { employeeName: request.adminName || 'Administrador', adminId: request.adminId, previousCompletedAt, removedReceivables, details: `OS reaberta com as quantidades produzidas e o histórico preservados.${removedReceivables.length ? ` Contas a receber excluídas: ${removedReceivables.join(', ')}.` : ''}` })
+        return eventFor('order_reopened', null, { employeeName: request.adminName || 'Administrador', adminId: request.adminId, previousCompletedAt, removedReceivables, details: `OS reaberta com as quantidades produzidas e o histórico preservados.${removedReceivables.length ? ` Contas a receber excluídas: ${removedReceivables.join(', ')}.` : ''}${removedInvoices.length ? ` NF-e removida: ${removedInvoices.map((file) => `${file.label} ${file.number}`).join(', ')}.` : ''}` })
       }, true)
+      await removeInvoiceFiles(removedInvoices)
       response.json({ item: { ...result.order, operation: result.operation }, event: result.event })
     } catch (error) { sendError(response, error) }
   })
@@ -1030,17 +1039,21 @@ export default function createOperationsRouter(pool) {
     } catch (error) { sendError(response, error) }
   })
 
+  // Concluding the OS: with its NF-e (server/orderInvoices.js, which generated the account receivable) or, with
+  // `withoutInvoice`, without one: no account is generated and the OS is marked "Sem NF-e" until a note is imported.
   router.post('/operations/orders/:code/acknowledge-completion', requireAdmin, async (request, response) => {
+    const withoutInvoice = request.body?.withoutInvoice === true
     try {
       const result = await changeOperation(request.params.code, (state, order) => {
         if (state.status !== 'completed') throw new OperationError(409, 'Esta OS ainda não foi concluída.')
         if (state.completionAcknowledgedAt) return null
         // An etiqueta is concluded with its quote: the receivable and the NF-e come from it.
         if (order?.labelQuote?.pending) throw new OperationError(409, labelQuoteRequired)
-        const event = eventFor('completion_acknowledged', null, { employeeName: 'Administrador' })
+        const event = eventFor('completion_acknowledged', null, { employeeName: 'Administrador', ...(withoutInvoice && !order?.invoices?.length ? { details: 'OS concluída sem NF-e: nenhuma conta a receber foi gerada.' } : {}) })
         state.completionAcknowledgedAt = event.at
+        if (withoutInvoice && !order?.invoices?.length) { order.invoiceSkipped = { at: event.at, by: request.adminName || 'Administrador' }; order.updatedAt = event.at }
         return event
-      })
+      }, withoutInvoice)
       response.json(result)
     } catch (error) { sendError(response, error) }
   })

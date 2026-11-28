@@ -234,6 +234,7 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .os-history-changes { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .os-atypical { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .os-atypical-tip { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .os-invoice-skipped { font-size: calc(12.5px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .os-location-options label { font-size: calc(14px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .os-location-times dt { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .os-location-times dd { font-size: calc(16px * var(--account-font-scale)); }
@@ -531,6 +532,11 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .invoice-import-net strong { font-size: calc(18px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .invoice-import-installments { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .invoice-import-problems li { font-size: calc(12.5px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .order-invoice-attached { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .order-invoice-attached > span { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .order-invoice-mode { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .order-invoice-matches li { font-size: calc(13px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .order-invoice-remove small { font-size: calc(12.5px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .duplicate-warning { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .duplicate-confirm { font-size: calc(14px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .duplicate-matches small { font-size: calc(12.5px * var(--account-font-scale)); }
@@ -1396,6 +1402,7 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .weight-result--length small { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .calculator-contact-prompt { font-size: calc(14px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .admin-os-po::before { font-size: calc(10px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .admin-os-no-invoice { font-size: calc(11px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .admin-os-po-missing { font-size: calc(10.5px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .admin-os-sort { font-size: inherit; }
 :root:is([data-font-size="small"], [data-font-size="large"]) .admin-os-collaborator-filter label { font-size: calc(13px * var(--account-font-scale)); }

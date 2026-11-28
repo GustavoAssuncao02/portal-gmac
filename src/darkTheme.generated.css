@@ -813,6 +813,12 @@
 :root[data-theme="dark"] .os-action-choice small {
     color: #b7c2cd
 }
+:root[data-theme="dark"] .os-action-choice label.is-disabled {
+    background: #203c59
+}
+:root[data-theme="dark"] .os-action-choice label.is-disabled strong {
+    color: #c1cfde
+}
 :root[data-theme="dark"] .os-action-note {
     color: #b7c2cd
 }
@@ -1259,6 +1265,15 @@
 }
 :root[data-theme="dark"][data-theme="dark"] .os-purchase-file small {
     color: #b0c2d3
+}
+:root[data-theme="dark"] .os-invoice-skipped {
+    border-left: 3px solid #ae8747;
+    background: #3c3320;
+    color: #ecc789
+}
+:root[data-theme="dark"][data-theme="dark"] .os-invoice-skipped {
+    border-left-color: #ae8847;
+    color: #ecca89
 }
 :root[data-theme="dark"] .os-location-options label {
     border: 1px solid #36516f;
@@ -3108,6 +3123,43 @@
     border-left: 3px solid #36516f;
     background: #3c2220;
     color: #e49791
+}
+:root[data-theme="dark"] .order-invoice-attached {
+    border: 1px solid #36516f;
+    background: #203c59
+}
+:root[data-theme="dark"] .order-invoice-attached > span {
+    color: #b6c2ce
+}
+:root[data-theme="dark"] .order-invoice-attached li svg {
+    color: #a9c0da
+}
+:root[data-theme="dark"] .order-invoice-attached li small {
+    color: #b6c2ce
+}
+:root[data-theme="dark"] .order-invoice-mode {
+    background: #3c3320;
+    color: #ecc789
+}
+:root[data-theme="dark"] .order-invoice-matches li {
+    border-left: 3px solid #ae8747;
+    background: #3c3320;
+    color: #ecc889
+}
+:root[data-theme="dark"] .order-invoice-matches small {
+    color: #e3c691
+}
+:root[data-theme="dark"] .payable-modal .order-invoice-remove label {
+    border: 1px solid #36516f
+}
+:root[data-theme="dark"] .order-invoice-remove small {
+    color: #b6c2ce
+}
+:root[data-theme="dark"] .payable-modal .order-invoice-remove label.is-disabled {
+    background: #203c59
+}
+:root[data-theme="dark"] .order-invoice-remove label.is-disabled strong {
+    color: #c1cfde
 }
 :root[data-theme="dark"] .registry-history-note {
     color: #b5c2cf
@@ -8522,6 +8574,15 @@
 :root[data-theme="dark"][data-theme="dark"] .admin-os-po--no {
     border-color: #36516f;
     color: #ec8990
+}
+:root[data-theme="dark"] .admin-os-no-invoice {
+    border: 1px solid #36516f;
+    background: #3c3320;
+    color: #ecc989
+}
+:root[data-theme="dark"][data-theme="dark"] .admin-os-no-invoice {
+    border-color: #36516f;
+    color: #ecca89
 }
 :root[data-theme="dark"] .admin-os-po-missing {
     color: #b7c2cd

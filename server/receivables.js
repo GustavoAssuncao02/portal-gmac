@@ -340,7 +340,68 @@ function postedInvoice(store, note) {
   return store.receivables.find((row) => !row.inactive && row.origin !== 'order' && keys.includes(plainNumber(row.documentNumber)) && (note.customerDocument && row.customerDocument ? row.customerDocument === note.customerDocument : normalizeText(row.customerName) === name)) || null
 }
 const IMPORT_LIMIT = 50 * 1024 * 1024
-const invoiceLabel = { nfse: 'NFS-e', nfe: 'NF-e' }
+export const invoiceLabel = { nfse: 'NFS-e', nfe: 'NF-e' }
+
+// ---------- NF-e of an OS (server/orderInvoices.js): the invoice attached to the OS becomes its account receivable.
+// Accounts that may already charge this invoice: the same invoice of the same client, any account of the OS, and another
+// account of the same client with the same value and due date. The user decides: post anyway, only attach, or cancel.
+// `note`: { documentNumber, customerName, customerDocument, valueCents, dueDates }.
+export function invoiceDuplicates(store, orderCode, note) {
+  init(store)
+  const name = normalizeText(note.customerName), dues = new Set((note.dueDates || []).filter(Boolean))
+  const sameClient = (row) => note.customerDocument && row.customerDocument ? row.customerDocument === note.customerDocument : normalizeText(row.customerName) === name
+  const found = new Map()
+  const add = (row) => { if (row && !row.inactive && !row.partialOf && !found.has(row.groupId || row.id)) found.set(row.groupId || row.id, row) }
+  add(postedInvoice(store, note))
+  // Another NF-e of the same OS (an OS may have several) is not this one.
+  const number = plainNumber(note.documentNumber)
+  for (const row of linkedReceivables(store, orderCode)) if (!(row.origin === 'invoice' && number && plainNumber(row.documentNumber) !== number)) add(row)
+  if (note.valueCents) for (const row of store.receivables) if (!row.treasury && (row.originalTotalCents || row.valueCents) === note.valueCents && dues.has(row.dueDate) && sameClient(row)) add(row)
+  return [...found.values()].map((row) => ({ id: row.id, customerName: row.customerName, description: row.description || '', documentNumber: row.documentNumber || '', valueCents: row.originalTotalCents || row.valueCents, dueDate: row.dueDate, status: receivableStatus(row), orderCode: row.orderCode || null, installments: row.groupId ? row.installmentCount : 1 }))
+}
+
+// The account of one NF-e of an OS (one per duplicate of an NF-e), linked to the OS, with the PDF of the note attached.
+// Same rules as an account typed in Contas a Receber; administrative employees post it too, without the finance screens.
+export async function postInvoiceAccount(store, actor, accounts, order, input, attachment) {
+  init(store)
+  const installments = Array.isArray(input.installments) && input.installments.length ? input.installments : [{ dueDate: input.dueDate, value: input.value }]
+  const many = installments.length > 1
+  const body = { clientId: input.clientId, description: input.description, documentNumber: input.documentNumber, issueDate: input.issueDate, value: input.value, iss: input.iss, classificationId: input.classificationId, dueDate: installments[0]?.dueDate, ...(many ? { kind: 'installment', count: installments.length, installments } : { kind: 'single', count: 1 }) }
+  if (!clean(body.documentNumber)) fail('Informe o número da nota.')
+  if (!body.clientId) fail('Cadastre o cliente da nota antes de lançar.')
+  const common = { ...await fields(store, body, accounts), ...revenueClassification(store, body) }
+  const parts = partsOf(body, common, true)
+  assertDueDates(parts, common.issueDate)
+  const groupId = parts.length > 1 ? randomUUID() : null, createdAt = new Date().toISOString(), label = `${invoiceLabel[input.kind] || 'NF-e'} ${common.documentNumber}`
+  const rows = parts.map((part, index) => ({ origin: 'invoice', orderCode: order.code, offerId: order.offerId || null, ...common, ...part, kind: groupId ? 'installment' : 'single', groupId, installmentNumber: groupId ? index + 1 : 1, installmentCount: groupId ? parts.length : 1, seriesId: null, seriesIndex: null, seriesCount: null, originalTotalCents: groupId ? common.valueCents : part.valueCents, receipt: null, inactive: false, createdAt, attachments: attachment ? [{ ...attachment }] : [] }))
+  for (const row of rows) {
+    store.receivableSequence = (store.receivableSequence || 0) + 1
+    row.id = `REC-${String(store.receivableSequence).padStart(6, '0')}`
+    row.lastStatus = receivableStatus(row)
+    store.receivables.push(row)
+    event(store, actor, 'created', row.id, { details: { valueCents: row.valueCents, dueDate: row.dueDate, text: [`${label} anexada na ${order.code}`, groupId ? `Parcela ${row.installmentNumber} de ${rows.length} de ${money(common.valueCents)}` : '', input.duplicateOf?.length ? `Possível duplicidade com ${input.duplicateOf.join(', ')} confirmada pelo usuário` : ''].filter(Boolean).join(' · ') } })
+    for (const file of row.attachments) event(store, actor, 'attachment_added', row.id, { details: { name: file.name } })
+  }
+  return rows.map((row) => row.id)
+}
+
+// Why these accounts (each with its whole installment plan) cannot be deleted, or null.
+export function receivablesDeleteBlock(store, ids) {
+  init(store)
+  for (const row of store.receivables.filter((item) => ids.includes(item.id) && !item.inactive)) { const block = deletionBlock(store, row); if (block) return `${row.id}: ${block.message}` }
+  return null
+}
+// Deletes these accounts (with their installment plans); the history keeps them, with `text` saying why.
+export function removeReceivables(store, actor, ids, text) {
+  init(store)
+  const rows = store.receivables.filter((row) => ids.includes(row.id) && !row.inactive), removed = [...new Set(rows.flatMap((row) => groupOf(store, row)))]
+  for (const row of removed) { const block = deletionBlock(store, row); if (block) fail(`Não foi possível excluir ${row.id}. ${block.message}`, block.status) }
+  for (const item of removed) event(store, actor, 'deleted', item.id, { details: { account: item, text } })
+  store.receivables = store.receivables.filter((item) => !removed.includes(item))
+  return removed.map((item) => item.id)
+}
+// The accounts of a list of ids that still exist, as the NF-e of an OS shows them.
+export const receivableSummaries = (store, ids = []) => { init(store); return store.receivables.filter((row) => ids.includes(row.id) && !row.inactive).map((row) => ({ id: row.id, valueCents: row.valueCents, dueDate: row.dueDate, status: receivableStatus(row), installmentNumber: row.installmentNumber, installmentCount: row.installmentCount })) }
 
 export default function createReceivablesRouter(accounts, requireAdmin, pool = null) {
   const router = express.Router()

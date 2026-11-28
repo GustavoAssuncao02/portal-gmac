@@ -17,6 +17,7 @@ export function storedFileInventory(store, dataDirectory) {
   for (const order of orders) {
     for (const file of order.attachments || []) if (!offerFiles.has(file.id)) offerFiles.set(file.id, { id: file.id, name: file.name, where: order.code, at: order.createdAt || null })
     for (const file of order.purchaseOrders || []) offerFiles.set(file.id, { id: file.id, name: file.name, where: `${order.code} (anexo administrativo)`, at: file.uploadedAt || null })
+    for (const file of order.invoices || []) offerFiles.set(file.id, { id: file.id, name: file.name, where: `${order.code} (NF-e)`, at: file.uploadedAt || null })
   }
   const withPath = (directory, files, fileName = (file) => file.id) => files.map((file) => ({ ...file, path: path.join(directory, fileName(file)) }))
   return [

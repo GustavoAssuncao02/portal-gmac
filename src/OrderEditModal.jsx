@@ -35,9 +35,12 @@ export function OrderActionModal({ order, action, onConfirm, onClose }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const reopen = action === 'reopen'
-  // Reopening an OS that has an account receivable asks what to do with it; nothing is assumed before the answer.
+  // Reopening an OS with its NF-e or an account receivable asks, with two boxes, what leaves with the reopening: the
+  // NF-e and, apart, the accounts. Unmarked, they stay; an account with a receipt or reconciled cannot be marked.
   const [linked, setLinked] = useState(null)
-  const [choice, setChoice] = useState('')
+  const [removeInvoices, setRemoveInvoices] = useState(false)
+  const [deleteAccounts, setDeleteAccounts] = useState(false)
+  const invoices = order.invoices || []
   useDialog(dialog)
   useEffect(() => {
     if (!reopen) return undefined
@@ -45,26 +48,25 @@ export function OrderActionModal({ order, action, onConfirm, onClose }) {
     payableRequest(`/receivables/order/${encodeURIComponent(order.code)}`).then((result) => { if (active) setLinked({ items: result.items || [], deleteBlock: result.deleteBlock || '' }) }).catch(() => { if (active) setLinked({ items: [], failed: true }) })
     return () => { active = false }
   }, [reopen, order.code])
-  const items = linked?.items || [], asking = items.length > 0 && !linked.deleteBlock
+  const items = linked?.items || [], deletable = items.length > 0 && !linked.deleteBlock
   const close = () => { if (!pending.current) onClose() }
   async function confirm() {
     if (pending.current) return
     pending.current = true
     setBusy(true)
-    try { await onConfirm(reopen ? { receivables: asking ? choice : 'keep' } : undefined); onClose() } catch (caught) { setError(caught.message) } finally { pending.current = false; setBusy(false) }
+    try { await onConfirm(reopen ? { receivables: deletable && deleteAccounts ? 'delete' : 'keep', invoices: invoices.length && removeInvoices ? 'remove' : 'keep' } : undefined); onClose() } catch (caught) { setError(caught.message) } finally { pending.current = false; setBusy(false) }
   }
   return <dialog ref={dialog} className="os-history-modal os-action-modal" aria-labelledby="os-action-title" onCancel={(event) => { event.preventDefault(); close() }} {...backdropClose(close)}>
     <header className="os-history-heading"><div><h2 id="os-action-title">{reopen ? 'Reabrir OS' : 'Editar OS finalizada?'}</h2><p>{order.code} · {order.service}</p></div><button className="os-icon-button" type="button" onClick={close} disabled={busy} aria-label="Fechar confirmação" title="Fechar confirmação"><X size={18} /></button></header>
     <div className="os-action-content"><p>{reopen ? 'Deseja reabrir esta ordem de serviço? As quantidades produzidas e o histórico serão mantidos, e a OS voltará ao painel de serviços em andamento.' : 'Esta ordem de serviço já foi finalizada. Tem certeza de que deseja editar seus dados?'}</p>
-      {reopen && items.length > 0 && <div className="os-action-receivables">
-        <h3 id="os-action-receivables-title">{items.length > 1 ? 'Contas a receber vinculadas a esta OS' : 'Conta a receber vinculada a esta OS'}</h3>
-        <ul>{items.map((row) => <li key={row.id}>{receivableLine(row)}</li>)}</ul>
-        {asking ? <fieldset className="os-action-choice" disabled={busy}><legend>O que fazer {items.length > 1 ? 'com elas' : 'com ela'}?</legend>
-          {[['keep', items.length > 1 ? 'Manter as contas a receber' : 'Manter a conta a receber', 'Os lançamentos continuam no financeiro, como estão.'], ['delete', items.length > 1 ? 'Excluir as contas a receber' : 'Excluir a conta a receber', 'Os lançamentos saem do financeiro; o histórico registra a exclusão.']].map(([value, label, hint]) => <label key={value}><input type="radio" name="os-action-receivables" value={value} checked={choice === value} onChange={() => setChoice(value)} /><span><strong>{label}</strong><small>{hint}</small></span></label>)}
-        </fieldset> : <p className="os-action-note">Não é possível excluir {items.length > 1 ? 'estas contas' : 'esta conta'}: {linked.deleteBlock} {items.length > 1 ? 'Elas serão mantidas.' : 'Ela será mantida.'}</p>}
+      {reopen && (invoices.length > 0 || items.length > 0) && <div className="os-action-receivables">
+        <fieldset className="os-action-choice" disabled={busy}><legend>Ao reabrir, marque o que deve ser removido:</legend>
+          {invoices.length > 0 && <label><input type="checkbox" checked={removeInvoices} onChange={(event) => setRemoveInvoices(event.target.checked)} /><span><strong>{invoices.length > 1 ? 'Remover as NF-e da OS' : 'Remover a NF-e da OS'}</strong><small>{invoices.map((file) => `${file.label} ${file.number}`).join(', ')}. Desmarcada, fica anexada na OS.</small></span></label>}
+          {items.length > 0 && <label className={deletable ? '' : 'is-disabled'}><input type="checkbox" checked={deletable && deleteAccounts} disabled={!deletable} onChange={(event) => setDeleteAccounts(event.target.checked)} /><span><strong>{items.length > 1 ? 'Excluir as contas a receber' : 'Excluir a conta a receber'}</strong><small>{items.map(receivableLine).join('; ')}</small><small>{deletable ? 'Marcada, os lançamentos saem do financeiro e o histórico registra a exclusão. Desmarcada, continuam como estão.' : `Não é possível excluir: ${linked.deleteBlock} ${items.length > 1 ? 'Elas serão mantidas.' : 'Ela será mantida.'}`}</small></span></label>}
+        </fieldset>
       </div>}
       {reopen && linked?.failed && <p className="os-action-note os-action-note--standalone">Não foi possível verificar se há conta a receber vinculada a esta OS. Se houver, ela será mantida.</p>}
-      {error && <p className="os-edit-error" role="alert">{error}</p>}<footer className="os-edit-actions"><button className="os-button" type="button" onClick={close} disabled={busy}>Cancelar</button><button className="os-button os-edit-primary" type="button" onClick={confirm} disabled={busy || (reopen && (!linked || (asking && !choice)))}>{reopen && <RotateCcw size={16} />}{busy ? 'Reabrindo...' : reopen ? 'Reabrir OS' : 'Sim, editar OS'}</button></footer></div>
+      {error && <p className="os-edit-error" role="alert">{error}</p>}<footer className="os-edit-actions"><button className="os-button" type="button" onClick={close} disabled={busy}>Cancelar</button><button className="os-button os-edit-primary" type="button" onClick={confirm} disabled={busy || (reopen && !linked)}>{reopen && <RotateCcw size={16} />}{busy ? 'Reabrindo...' : reopen ? 'Reabrir OS' : 'Sim, editar OS'}</button></footer></div>
   </dialog>
 }
 

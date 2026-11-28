@@ -12,7 +12,7 @@ import ClientQuickForm from './ClientQuickForm.jsx'
 const token = () => ({ Authorization: `Bearer ${sessionStorage.getItem('gmac-admin-token') || ''}` })
 const safeCents = (value) => { try { return cents(value || '0') } catch { return 0 } }
 const plainDocument = (value) => String(value || '').replace(/\D/g, '')
-const documentLabel = (digits) => digits.length === 14 ? digits.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') : digits.length === 11 ? digits.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4') : digits || 'sem CPF/CNPJ'
+export const documentLabel = (digits) => digits.length === 14 ? digits.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') : digits.length === 11 ? digits.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4') : digits || 'sem CPF/CNPJ'
 const plainNumber = (value) => String(value || '').replace(/\D/g, '').replace(/^0+/, '')
 // Service invoices go to Receita de Serviços a Prazo; product invoices (NF-e) to Receita de Industrialização a Prazo.
 const DEFAULT_CODES = { nfse: '7.02', nfe: '7.04' }
@@ -46,7 +46,8 @@ export function invoiceDrafts(results, classifications) {
   return rows
 }
 
-function InvoiceCard({ row, client, classifications, disabled, onChange, onRegister }) {
+// `selectable`: the box "Lançar" of the import; the NF-e of an OS (OrderInvoiceModal) has no box, `extra` goes in its header.
+export function InvoiceCard({ row, client, classifications, disabled, onChange, onRegister, selectable = true, extra = null }) {
   const change = (patch) => onChange({ ...patch, error: '' })
   const valueCents = safeCents(row.value), issCents = safeCents(row.iss), many = row.installments.length > 1
   const sum = row.installments.reduce((total, part) => total + safeCents(part.value), 0)
@@ -54,8 +55,8 @@ function InvoiceCard({ row, client, classifications, disabled, onChange, onRegis
   if (row.saved) return <article className="invoice-import-card invoice-import-card--saved" aria-label={title}><header><strong>{title}</strong><span className="invoice-import-saved"><Check size={14} aria-hidden="true" />Lançada em {row.saved.join(', ')}</span></header></article>
   return <article className={`invoice-import-card ${row.selected ? '' : 'invoice-import-card--off'}`} aria-label={title}>
     <header>
-      <label className="invoice-import-check"><input type="checkbox" aria-label={`Lançar ${title}`} checked={row.selected} disabled={disabled} onChange={(event) => change({ selected: event.target.checked })} /><strong>{title}</strong></label>
-      <small><FileText size={13} aria-hidden="true" />{row.source}{row.pages.length ? ` · pág. ${row.pages.join(', ')}` : ''}</small>
+      {selectable ? <label className="invoice-import-check"><input type="checkbox" aria-label={`Lançar ${title}`} checked={row.selected} disabled={disabled} onChange={(event) => change({ selected: event.target.checked })} /><strong>{title}</strong></label> : <strong>{title}</strong>}
+      <small><FileText size={13} aria-hidden="true" />{row.source}{row.pages.length ? ` · pág. ${row.pages.join(', ')}` : ''}</small>{extra}
     </header>
     {row.duplicateOf && <p className="invoice-import-warning" role="note"><TriangleAlert size={14} aria-hidden="true" />{row.duplicateOf === 'nesta importação' ? 'Esta nota aparece mais de uma vez nesta importação.' : `Esta nota já foi lançada em ${row.duplicateOf}.`} Ficou desmarcada para não lançar duas vezes.</p>}
     {row.warnings.map((text) => <p className="invoice-import-warning" role="note" key={text}><TriangleAlert size={14} aria-hidden="true" />{text}</p>)}
@@ -83,7 +84,7 @@ function InvoiceCard({ row, client, classifications, disabled, onChange, onRegis
 }
 
 // Why a checked invoice cannot be posted yet, or ''.
-function blockOf(row, client) {
+export function blockOf(row, client) {
   if (!client) return 'Cadastre o cliente antes de lançar esta nota.'
   if (!row.documentNumber.trim()) return 'Informe o número da nota.'
   if (!row.issueDate) return 'Informe a data de emissão.'

@@ -717,6 +717,12 @@
 :root[data-theme="dark"][data-tone="black"] .os-action-choice small {
     color: #bfc2c5
 }
+:root[data-theme="dark"][data-tone="black"] .os-action-choice label.is-disabled {
+    background: #232425
+}
+:root[data-theme="dark"][data-tone="black"] .os-action-choice label.is-disabled strong {
+    color: #cdcfd2
+}
 :root[data-theme="dark"][data-tone="black"] .os-action-note {
     color: #bfc2c5
 }
@@ -1106,6 +1112,9 @@
 }
 :root[data-theme="dark"][data-tone="black"][data-theme="dark"] .os-purchase-file small {
     color: #bec2c5
+}
+:root[data-theme="dark"][data-tone="black"] .os-invoice-skipped {
+    background: #30291a
 }
 :root[data-theme="dark"][data-tone="black"] .os-location-options label {
     border: 1px solid #303133;
@@ -2625,6 +2634,37 @@
 :root[data-theme="dark"][data-tone="black"] .invoice-import-problems li {
     border-left: 3px solid #303133;
     background: #301b1a
+}
+:root[data-theme="dark"][data-tone="black"] .order-invoice-attached {
+    border: 1px solid #303133;
+    background: #232425
+}
+:root[data-theme="dark"][data-tone="black"] .order-invoice-attached > span {
+    color: #bfc2c5
+}
+:root[data-theme="dark"][data-tone="black"] .order-invoice-attached li svg {
+    color: #bec1c5
+}
+:root[data-theme="dark"][data-tone="black"] .order-invoice-attached li small {
+    color: #bfc2c5
+}
+:root[data-theme="dark"][data-tone="black"] .order-invoice-mode {
+    background: #30291a
+}
+:root[data-theme="dark"][data-tone="black"] .order-invoice-matches li {
+    background: #30291a
+}
+:root[data-theme="dark"][data-tone="black"] .payable-modal .order-invoice-remove label {
+    border: 1px solid #303133
+}
+:root[data-theme="dark"][data-tone="black"] .order-invoice-remove small {
+    color: #bfc2c5
+}
+:root[data-theme="dark"][data-tone="black"] .payable-modal .order-invoice-remove label.is-disabled {
+    background: #232425
+}
+:root[data-theme="dark"][data-tone="black"] .order-invoice-remove label.is-disabled strong {
+    color: #cdcfd2
 }
 :root[data-theme="dark"][data-tone="black"] .registry-history-note {
     color: #bfc2c5
@@ -7268,6 +7308,13 @@
 :root[data-theme="dark"][data-tone="black"][data-theme="dark"] .admin-os-po--no {
     border-color: #303133
 }
+:root[data-theme="dark"][data-tone="black"] .admin-os-no-invoice {
+    border: 1px solid #303133;
+    background: #30291a
+}
+:root[data-theme="dark"][data-tone="black"][data-theme="dark"] .admin-os-no-invoice {
+    border-color: #303133
+}
 :root[data-theme="dark"][data-tone="black"] .admin-os-po-missing {
     color: #bfc2c5
 }
@@ -7875,6 +7922,9 @@
 :root[data-theme="dark"][data-tone="black"] .os-purchase-file small {
     color: #c6c9cb
 }
+:root[data-theme="dark"][data-tone="black"] .os-invoice-skipped {
+    background: #29200c
+}
 :root[data-theme="dark"][data-tone="black"] .bank-closing {
     border-color: #303133;
     border-left-color: #91969b;
@@ -7997,6 +8047,10 @@
 }
 :root[data-theme="dark"][data-tone="black"] .admin-os-po--no {
     background: #2e1517
+}
+:root[data-theme="dark"][data-tone="black"] .admin-os-no-invoice {
+    border-color: #56421b;
+    background: #29200c
 }
 :root[data-theme="dark"][data-tone="black"] .admin-os-po-missing {
     color: #c6c9cb

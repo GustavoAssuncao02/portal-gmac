@@ -28,6 +28,7 @@ import createPlanningRouter from './planning.js'
 import createReportsRouter from './reports.js'
 import createPayablesRouter from './payables.js'
 import createReceivablesRouter from './receivables.js'
+import createOrderInvoicesRouter from './orderInvoices.js'
 import createAccountPlanRouter, { ensureAccountPlan } from './accountPlan.js'
 import createDreRouter from './dre.js'
 import createBankStatementsRouter from './bankStatements.js'
@@ -163,6 +164,8 @@ const payablesRouter = createPayablesRouter(accounts, requireAdmin)
 app.use('/api', payablesRouter)
 const receivablesRouter = createReceivablesRouter(accounts, requireAdmin, pool)
 app.use('/api', receivablesRouter)
+// NF-e da OS: outside the finance area, so administrative employees attach it and generate the account too.
+app.use('/api', createOrderInvoicesRouter({ pool, requireAdmin, accounts }))
 app.use('/api', createAccountPlanRouter(accounts, requireAdmin))
 app.use('/api', createDreRouter(accounts, requireAdmin))
 app.use('/api', createBankStatementsRouter(accounts, requireAdmin))

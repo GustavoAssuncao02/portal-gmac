@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { mkdir } from 'node:fs/promises'
 import { chromium } from 'playwright'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
+import { attachOrderInvoice } from './orderInvoiceSteps.js'
 import { todayBahia } from '../server/payableRules.js'
 import { stageLabel } from '../server/serviceStages.js'
 import { openSidebarItem } from './sidebarNavigation.js'
@@ -203,58 +204,18 @@ try {
   await editMaterial.waitFor({ state: 'detached' })
   assert.equal(await page.getByRole('dialog').count(), 0)
 
-  // Finishing an OS: the administrator says whether the customer still has to pay or has already paid.
+  // Finishing an OS: its NF-e becomes the account receivable of the OS, open in Contas a Receber (the receipt is a baixa).
   await navigate('Serviços em andamento')
   const service = page.locator('.admin-invoice-table tbody tr').filter({ hasText: order.code })
-  await service.getByRole('button', { name: 'Aguardando NF-e', exact: true }).click()
-  const schedule = page.getByRole('dialog', { name: 'Recebimento do serviço', exact: true })
-  await schedule.getByText('O cliente já pagou este serviço?', { exact: true }).waitFor()
-  assert.equal(await schedule.locator('form').count(), 0, 'nothing is assumed before the answer')
-  assert.equal(await schedule.getByRole('button', { name: /e concluir$/ }).count(), 0)
-  await schedule.getByRole('button', { name: /^Ainda vai receber/ }).click()
-  await schedule.getByLabel('Data prevista de recebimento', { exact: true }).waitFor()
-  await schedule.getByRole('button', { name: 'Programar e concluir', exact: true }).waitFor()
-  // Scheduling more or less than the OS also shows the difference, as a quiet line (no highlighted box).
-  const difference = schedule.locator('.receivable-difference')
-  assert.equal(await difference.count(), 0)
-  await schedule.getByLabel('Valor a receber', { exact: true }).fill('2.450,00')
-  assert.equal(plain(await difference.innerText()), 'Juros de R$ 50,00 sobre o valor da OS (R$ 2.400,00).')
-  await schedule.getByLabel('Valor a receber', { exact: true }).fill('2.400,00')
-  assert.equal(await difference.count(), 0)
-  await schedule.getByRole('button', { name: /^Já recebido/ }).click()
-  assert.equal(await schedule.getByLabel('Data prevista de recebimento', { exact: true }).count(), 0)
-  assert.equal(await schedule.getByLabel('Valor recebido', { exact: true }).inputValue(), '2.400,00')
-  assert.equal(await schedule.getByLabel('Data do recebimento', { exact: true }).inputValue(), today)
-  await schedule.getByLabel('Forma de recebimento', { exact: true }).selectOption({ label: 'Transferência' })
-  // More or less than the value of the OS: the difference is interest or discount.
-  assert.equal(await schedule.locator('.payable-final').count(), 0, 'the difference is a quiet line, not a highlighted box')
-  assert.equal(await difference.count(), 0)
-  await schedule.getByLabel('Valor recebido', { exact: true }).fill('2.350,00')
-  assert.equal(plain(await difference.innerText()), 'Desconto de R$ 50,00 sobre o valor da OS (R$ 2.400,00).')
-  await schedule.getByLabel('Valor recebido', { exact: true }).fill('2.450,00')
-  assert.equal(plain(await difference.innerText()), 'Juros de R$ 50,00 sobre o valor da OS (R$ 2.400,00).')
-  await schedule.getByLabel('Classificação da receita', { exact: true }).selectOption({ label: '98.01 · Receita de teste' })
-  await page.screenshot({ path: 'test-results/treasury/conclusao-os.png' })
-  await schedule.getByRole('button', { name: 'Registrar e concluir', exact: true }).click()
+  await attachOrderInvoice({ fixture, page, open: () => service.getByRole('button', { name: 'Aguardando NF-e', exact: true }).click(), code: order.code, cnpj: offerDraft.cnpj, company: offerDraft.company, valueCents: 240000, issued: today, due: today, classification: '98.01 · Receita de teste', headers: { Authorization: `Bearer ${token}` } })
   await service.waitFor({ state: 'detached' })
-  await navigate('Tesouraria')
-  assert.match((await rows.filter({ hasText: order.code }).first().innerText()).replace(/\s+/g, ' '), /Entrada Teste de fluxo .*Tesouraria .*\+ R\$ 2\.450,00/)
-  // The OS keeps its own value; the R$ 50,00 beyond it is interest.
   const posted = (await api('/receivables')).data.items.find((item) => item.orderCode === order.code)
-  assert.deepEqual([posted.valueCents, posted.receipt.interestCents, posted.receipt.discountCents, posted.receipt.finalCents], [240000, 5000, 0, 245000])
-  await rows.filter({ hasText: order.code }).first().click()
-  const entryDetails = page.getByRole('dialog', { name: posted.id, exact: true })
-  await entryDetails.getByRole('button', { name: 'Editar', exact: true }).click()
-  const entryForm = page.getByRole('dialog', { name: `Editar ${posted.id}`, exact: true })
-  assert.deepEqual([await entryForm.getByLabel('Valor da OS', { exact: true }).inputValue(), await entryForm.getByLabel('Valor recebido', { exact: true }).inputValue()], ['2.400,00', '2.450,00'])
-  assert.equal(plain(await entryForm.locator('.payable-final').innerText()), 'R$ 2.400,00 + R$ 50,00 de juros = R$ 2.450,00')
-  await entryForm.getByLabel('Valor recebido', { exact: true }).fill('2.400,00')
-  await entryForm.getByRole('button', { name: 'Salvar entrada', exact: true }).click()
-  await entryForm.waitFor({ state: 'detached' })
-  assert.equal((await api('/receivables')).data.items.find((item) => item.id === posted.id).receipt.finalCents, 240000)
+  assert.deepEqual([posted.origin, posted.valueCents, posted.receipt, posted.treasury || false], ['invoice', 240000, null, false])
+  await navigate('Tesouraria')
+  assert.equal(await rows.filter({ hasText: order.code }).count(), 0, 'not received yet: not in the cash book')
   assert.equal(await rows.filter({ hasText: 'Compra de material: Aço 1020 para teste' }).count(), 1)
   assert.deepEqual(errors, [])
-  console.log('Treasury passed: menu entry, cash book with settled accounts, money in/out with the account forms, filters, in-place edit, direct removal, Full HD/Quad HD/4K/mobile layout, stock purchase question and OS received on completion.')
+  console.log('Treasury passed: menu entry, cash book with settled accounts, money in/out with the account forms, filters, in-place edit, direct removal, Full HD/Quad HD/4K/mobile layout, stock purchase question and the NF-e of an OS posted as an open receivable.')
 } catch (error) {
   await page.screenshot({ path: 'test-results/treasury/failure.png' })
   throw error

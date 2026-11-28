@@ -23,6 +23,8 @@ import { upper } from './displayCase.js'
 import { backdropClose } from './dialogBackdrop.js'
 import { PayableModal } from './PayableModal.jsx'
 import { savePurchaseInfo, uploadPurchaseOrders } from './purchaseOrders.js'
+import OrderInvoiceModal, { OrderInvoiceRemoveModal, invoiceNotCompleted } from './OrderInvoiceModal.jsx'
+import { labelQuoteRequired } from '../server/labelQuoteRules.js'
 
 const currency = (value) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const date = (value) => value ? new Date(value).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : 'Não informado'
@@ -405,6 +407,29 @@ function PurchaseOrders({ order, onChanged, Icon }) {
   </section>
 }
 
+// NF-e: the third kind of attachment, the PDF of the invoice issued for the service (server/orderInvoices.js). Imported
+// only once every piece is done; each note becomes the account receivable of the OS and, while the OS waits for its
+// NF-e, it concludes the OS. Administrators and administrative employees only, like the administrative attachments.
+function OrderInvoices({ order, onChanged, Icon }) {
+  const [open, setOpen] = useState(false), [removing, setRemoving] = useState(null), [error, setError] = useState('')
+  const files = order.invoices || [], skipped = order.invoiceSkipped && !files.length ? order.invoiceSkipped : null
+  function start() {
+    setError('')
+    if (order.operation?.status !== 'completed') return setError(invoiceNotCompleted)
+    if (order.labelQuote?.pending) return setError(labelQuoteRequired)
+    setOpen(true)
+  }
+  const download = (file) => { setError(''); downloadFile(`/api/orders/${encodeURIComponent(order.code)}/invoices/${encodeURIComponent(file.id)}`, file.name).catch((caught) => setError(caught.message)) }
+  return <section className="os-section os-attachments os-invoices"><div className="os-section-heading"><h3>NF-e</h3><span>{files.length} {files.length === 1 ? 'nota' : 'notas'}</span><button type="button" className="os-purchase-add" aria-haspopup="dialog" onClick={start}>Importar NF-e</button></div>
+    <p className="os-purchase-hint">PDF da NF-e emitida para o serviço. Só pode ser importada com a OS concluída; cada nota gera a conta a receber da OS. Visível somente para administradores e funcionários administrativos.</p>
+    {skipped && <p className="os-invoice-skipped">Concluída sem NF-e{skipped.by ? ` por ${skipped.by}` : ''}{skipped.at ? ` em ${new Date(skipped.at).toLocaleDateString('pt-BR', { timeZone: 'America/Bahia' })}` : ''}: nenhuma conta a receber foi gerada.</p>}
+    {files.length ? <ul>{files.map((file) => <li key={file.id}><button type="button" className="os-purchase-file" onClick={() => download(file)}><Icon name="orders" /><span>{file.label} {file.number}</span><small>{file.uploadedBy ? `${file.uploadedBy} · ` : ''}{file.uploadedAt ? new Date(file.uploadedAt).toLocaleDateString('pt-BR', { timeZone: 'America/Bahia' }) : ''}</small></button><button type="button" className="os-purchase-remove" aria-haspopup="dialog" aria-label={`Remover ${file.label} ${file.number}`} title="Remover" onClick={() => { setError(''); setRemoving(file) }}>×</button></li>)}</ul> : !skipped && <p className="os-empty">Nenhuma NF-e.</p>}
+    {error && <p className="workflow-error" role="alert">{error}</p>}
+    {open && <OrderInvoiceModal code={order.code} onClose={() => setOpen(false)} onDone={async () => { setOpen(false); await onChanged?.() }} />}
+    {removing && <OrderInvoiceRemoveModal code={order.code} file={removing} onClose={() => setRemoving(null)} onDone={async () => { setRemoving(null); await onChanged?.() }} />}
+  </section>
+}
+
 // Pedido de compra e nota de entrada: what the acceptance left pending is filled in here; the files go to "Anexos
 // administrativos". A number erased on an OS that had one removes it.
 function PurchaseInfoModal({ order, focus, onSaved, onClose }) {
@@ -571,6 +596,7 @@ export default function OrderDetails({ order, offer, activeTime, stageNamesInput
       <ServiceLocation order={order} onChanged={onRefresh} />
       <OrderAttachments order={order} onUpload={onUpload} onChanged={onRefresh} Icon={Icon} />
       <PurchaseOrders order={order} onChanged={onRefresh} Icon={Icon} />
+      <OrderInvoices order={order} onChanged={onRefresh} Icon={Icon} />
     </div></div>
     {unaccepting && <UndoAcceptModal orderCode={order.code} onConfirm={async () => { const response = await fetch(`/api/offers/${encodeURIComponent(order.offerId)}/unaccept`, { method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: '{}' }); if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || 'Não foi possível desfazer o aceite.'); await onRefresh?.(); onBack() }} onClose={() => setUnaccepting(false)} />}
     {historyOpen && <OrderHistoryModal order={order} onClose={() => setHistoryOpen(false)} onEditTime={onEditEventTime} onAddEvent={onAddEvent} Icon={Icon} />}

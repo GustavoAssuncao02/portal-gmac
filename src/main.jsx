@@ -56,7 +56,7 @@ import { SESSION_EXPIRED_EVENT, installApiSession } from './apiSession.js'
 import CashFlowScreen from './CashFlowScreen.jsx'
 import StockPurchaseFinance, { purchasedQuantity } from './StockPurchaseFinance.jsx'
 import BankStatementsScreen from './BankStatementsScreen.jsx'
-import ReceivableScheduleModal from './ReceivableScheduleModal.jsx'
+import OrderInvoiceModal from './OrderInvoiceModal.jsx'
 import LabelQuoteModal from './LabelQuoteModal.jsx'
 import CompleteOperatorModal from './CompleteOperatorModal.jsx'
 import { ProposalDeadlineCell, ProposalDeadlineDetail, ProposalDeadlineField } from './ProposalDeadline.jsx'
@@ -2448,11 +2448,11 @@ function AdminServicesView({ collapsed, onToggle, activeNav, onNavigate, onLogou
   const invoiceOpenKey = `gmac-invoice-block-open:${userId ?? ''}`
   const [invoiceOpen, setInvoiceOpen] = useState(() => { try { return localStorage.getItem(invoiceOpenKey) !== 'false' } catch { return true } })
   const toggleInvoice = () => setInvoiceOpen((current) => { try { localStorage.setItem(invoiceOpenKey, String(!current)) } catch { /* only not remembered */ } return !current })
-  const [schedulingCode, setSchedulingCode] = useState(null)
-  // An etiqueta waiting for its NF-e opens the window of its quote first (LabelQuoteModal); "Concluir OS" there opens
-  // the receivable of the OS, as the green button does for the others.
+  // "Aguardando NF-e" asks for the NF-e of the OS (OrderInvoiceModal): attaching it generates the account receivable and
+  // concludes the OS. An etiqueta opens the window of its quote first (LabelQuoteModal); "Concluir OS" there asks for it.
+  const [invoiceCode, setInvoiceCode] = useState(null)
   const [labelCode, setLabelCode] = useState(null)
-  const openCompleted = (code) => orders.find((order) => order.code === code)?.labelQuote ? setLabelCode(code) : setSchedulingCode(code)
+  const openCompleted = (code) => orders.find((order) => order.code === code)?.labelQuote ? setLabelCode(code) : setInvoiceCode(code)
   const displayRef = useRef(null)
   const [displayMode, setDisplayMode] = useState(false)
   const [displayError, setDisplayError] = useState('')
@@ -2512,10 +2512,6 @@ function AdminServicesView({ collapsed, onToggle, activeNav, onNavigate, onLogou
     setCompletingCode(null)
     await onRefresh()
   }
-  async function acknowledgeCompletion(code) {
-    await apiRequest(`/api/operations/orders/${encodeURIComponent(code)}/acknowledge-completion`, jsonOptions('POST', {}))
-    await onRefresh()
-  }
   return <div className={`dashboard-shell admin-os-shell${completedView ? ' admin-os-shell--completed' : ''}`}>
     <Sidebar collapsed={collapsed} onToggle={onToggle} activeNav={activeNav} onNavigate={onNavigate} onLogout={onLogout} />
     <main className="dashboard-main admin-os-main" ref={displayRef}>
@@ -2531,8 +2527,8 @@ function AdminServicesView({ collapsed, onToggle, activeNav, onNavigate, onLogou
       {completedView ? <div className="admin-os-summary admin-os-summary--completed"><div><strong>{panelOrders.length}</strong><span>Serviços concluídos</span></div><div><strong>{panelOrders.reduce((total, order) => total + currentPieceProgress(order.operation, order.quantity).completedPieces, 0)}</strong><span>Peças concluídas</span></div><div><strong>{panelDuration(panelOrders.reduce((total, order) => total + totalTime(order.operation), 0))}</strong><span>Tempo ativo somado</span></div></div> : <div className="admin-os-summary"><div><strong>{orders.filter((order) => order.operation.status !== 'completed').length}</strong><span>OS abertas</span></div><div><strong>{orders.filter((order) => order.operation.status === 'running' || order.operation.status === 'finalizing').length}</strong><span>Em execução</span></div><div><strong>{panelDuration(orders.reduce((total, order) => total + totalTime(order.operation), 0))}</strong><span>Tempo ativo somado</span></div><div><strong>{orders.filter((order) => order.operation.status === 'completed').length}</strong><span>Concluídas</span></div></div>}
       {displayError && <p className="workflow-error" role="alert">{displayError}</p>}
       {completingOrder && <CompleteOperatorModal key={completingOrder.code} order={completingOrder} onConfirm={completeOperator} onClose={() => setCompletingCode(null)} />}
-      {schedulingCode && <ReceivableScheduleModal key={schedulingCode} orderCode={schedulingCode} onClose={() => setSchedulingCode(null)} onAcknowledge={acknowledgeCompletion} />}
-      {labelCode && <LabelQuoteModal key={labelCode} code={labelCode} onClose={() => { setLabelCode(null); onRefresh?.() }} onConclude={(code) => { setLabelCode(null); setSchedulingCode(code) }} />}
+      {invoiceCode && <OrderInvoiceModal key={invoiceCode} code={invoiceCode} onClose={() => setInvoiceCode(null)} onDone={async () => { setInvoiceCode(null); await onRefresh() }} />}
+      {labelCode && <LabelQuoteModal key={labelCode} code={labelCode} onClose={() => { setLabelCode(null); onRefresh?.() }} onConclude={(code) => { setLabelCode(null); setInvoiceCode(code) }} />}
       {inspectedOrder && inspectedMaterials.length > 0 && <PendingMaterialsModal orderCode={inspectedOrder.code} materials={inspectedMaterials} onClose={() => setPendingInspectionCode(null)} onOpenRequest={() => { setPendingInspectionCode(null); onNavigate('Pedidos', { orderCode: inspectedOrder.code }) }} />}
     </main>
   </div>

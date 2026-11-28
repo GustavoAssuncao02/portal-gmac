@@ -13,6 +13,8 @@
 .os-action-choice input { margin-top: 3px; }
 .os-action-choice strong { display: block; font-size: 13.5px; }
 .os-action-choice small { display: block; margin-top: 2px; color: #5f7489; font-size: 12px; }
+.os-action-choice label.is-disabled { background: #f2f5f8; cursor: default; }
+.os-action-choice label.is-disabled strong { color: #7d8b99; }
 .os-action-note { margin: 0; color: #5f7489; font-size: 12.5px; line-height: 1.5; }
 .os-action-content > p.os-action-note--standalone { margin: -8px 0 20px; font-size: 12.5px; }
 .os-edit-modal { width: min(980px, calc(100% - 24px)); }

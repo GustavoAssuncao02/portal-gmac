@@ -102,10 +102,10 @@ try {
   await waiting.getByRole('button').click()
   assert.deepEqual(await codes(), [today.code, week.code, old.code])
 
-  // The green button: the receivable, as before; Ver OS opens the OS.
+  // The green button asks for the NF-e of the OS; Ver OS opens the OS.
   await invoiceRows.filter({ hasText: today.code }).getByRole('button', { name: 'Aguardando NF-e', exact: true }).click()
-  const schedule = page.getByRole('dialog', { name: 'Recebimento do serviço', exact: true })
-  await schedule.waitFor()
+  const schedule = page.getByRole('dialog', { name: `NF-e · ${today.code}`, exact: true })
+  await schedule.getByRole('button', { name: 'Selecionar PDF da NF-e', exact: true }).waitFor()
   await page.keyboard.press('Escape')
   await schedule.waitFor({ state: 'detached' })
   await invoiceRows.filter({ hasText: old.code }).getByRole('button', { name: 'Ver OS', exact: true }).click()

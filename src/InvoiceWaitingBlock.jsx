@@ -16,7 +16,8 @@ const completedLabel = (order) => {
 // The block "Aguardando NF-e" at the end of Serviços em andamento (src/invoiceWaiting.js): the OS whose production is
 // finished, with only what the invoicing needs: when it was completed, how long it has been waiting, what is still
 // missing (purchase order, nota de entrada, material, the quote of an etiqueta) and the same green button as before,
-// which schedules the receivable and takes the OS out of the panel. `open` and `onToggle`: the block can be collapsed.
+// which asks for the NF-e (src/OrderInvoiceModal.jsx): attached, it generates the account receivable and concludes the OS,
+// taking it out of the panel. `open` and `onToggle`: the block can be collapsed.
 export default function InvoiceWaitingBlock({ orders, now, open, onToggle, onSelectOrder, onCompletedStatus, onMaterialAlert }) {
   const today = todayBahia(new Date(now))
   // Without a title chosen, the one waiting longest first; numbers and dates start from the largest, text from A.
@@ -29,7 +30,7 @@ export default function InvoiceWaitingBlock({ orders, now, open, onToggle, onSel
     <button className="admin-invoice-heading" type="button" aria-expanded={open} aria-controls="admin-invoice-list" onClick={onToggle}>
       <ChevronDown className="admin-invoice-chevron" size={18} aria-hidden="true" />
       <span className="admin-invoice-title" id="admin-invoice-title">Aguardando NF-e</span><strong>{orders.length}</strong>
-      <small>Produção concluída: programe o recebimento quando a NF-e for emitida.</small>
+      <small>Produção concluída: anexe a NF-e para concluir a OS e gerar o contas a receber.</small>
       <span className="admin-invoice-toggle-text">{open ? 'Recolher' : 'Mostrar'}</span>
     </button>
     {open && <div className="admin-invoice-wrap" id="admin-invoice-list">{rows.length ? <table className="admin-invoice-table"><thead><tr>{header('OS / Serviço', 'code')}{header('Cliente', 'company')}{header('Concluída em', 'completion')}{header('Esperando', 'waiting')}<th>Pendências</th><th><span className="sr-only">Ações</span></th></tr></thead><tbody>{rows.map((order) => {
@@ -47,7 +48,7 @@ export default function InvoiceWaitingBlock({ orders, now, open, onToggle, onSel
           {materials.length > 0 && <button type="button" className="admin-os-material-alert" title={materials.map((material) => `${material.name}: ${formatQuantity(material.quantity, material.unit)} pendentes`).join('; ')} onClick={() => onMaterialAlert(order.code)}><TriangleAlert size={15} aria-hidden="true" />Material pendente</button>}
           {missing.length > 0 && <span className="admin-os-po-missing" title={`Falta informar ${missing.join(' e ')}: informe em Ver OS.`}>{missing.map((item) => <span key={item}>Sem {item}</span>)}</span>}
         </span> : '—'}</td>
-        <td className="admin-invoice-actions"><button className="admin-os-status admin-os-status--completed" type="button" aria-label="Aguardando NF-e" title="Programar o recebimento e retirar do painel" aria-haspopup="dialog" onClick={() => onCompletedStatus(order.code)}>Aguardando NF-e</button><button type="button" className="admin-invoice-open" onClick={() => onSelectOrder(order.code)}>Ver OS</button></td>
+        <td className="admin-invoice-actions"><button className="admin-os-status admin-os-status--completed" type="button" aria-label="Aguardando NF-e" title="Anexar a NF-e e concluir a OS" aria-haspopup="dialog" onClick={() => onCompletedStatus(order.code)}>Aguardando NF-e</button><button type="button" className="admin-invoice-open" onClick={() => onSelectOrder(order.code)}>Ver OS</button></td>
       </tr>
     })}</tbody></table> : <p className="admin-os-empty">Nenhuma OS aguardando NF-e.</p>}</div>}
   </section>

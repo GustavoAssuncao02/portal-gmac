@@ -233,6 +233,10 @@
 :root[data-theme="dark"] .os-purchase-file small { color:#b9c9d8; }
 /* Anexos da OS share the layout of the purchase orders: download link, then the remove button. */
 .os-order-attachments .os-section-heading { gap:12px; }
+/* NF-e of the OS: same list as the administrative attachments; an OS concluded without one says so. */
+.os-invoices li { display:flex; align-items:center; gap:8px; }
+.os-invoice-skipped { margin:0 0 8px; padding:8px 10px; border-left:3px solid #e0a440; border-radius:4px; background:#fff6e2; color:#7a4f05; font-size:12.5px; }
+:root[data-theme="dark"] .os-invoice-skipped { border-left-color:#b9862e; background:#33280f; color:#f0c674; }
 .os-order-attachments li { display:flex; align-items:center; gap:8px; }
 .os-order-attachments .os-attachment-download { flex:1; min-width:0; }
 /* Tipo de serviço: two options side by side and, after a switch, the time in each one. */

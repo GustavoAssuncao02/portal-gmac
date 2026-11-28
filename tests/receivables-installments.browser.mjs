@@ -4,6 +4,7 @@ import { chromium } from 'playwright'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
 import { stageLabel } from '../server/serviceStages.js'
 import { todayBahia, shiftMonth } from '../server/payableRules.js'
+import { attachOrderInvoice } from './orderInvoiceSteps.js'
 
 const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Gustavo' }
 const fixture = await createWorkflowFixture({ accountsEnv: env })
@@ -74,19 +75,9 @@ try {
   assert.deepEqual(await page.locator('.receivable-table tbody td[data-label="Parcela"]').allTextContents(), ['1 de 3', '2 de 3', '3 de 3'])
   assert.deepEqual((await api('/receivables')).data.items.map((row) => row.valueCents), [333400, 333300, 333300])
 
-  // Finishing an OS can also schedule installments.
+  // Finishing an OS with an NF-e in duplicates posts its installments.
   await page.locator('.sidebar').getByRole('button', { name: 'Serviços em andamento', exact: true }).click()
-  await page.locator('.admin-invoice-table tbody tr').filter({ hasText: order.code }).getByRole('button', { name: 'Aguardando NF-e', exact: true }).click()
-  const schedule = page.getByRole('dialog', { name: 'Recebimento do serviço', exact: true })
-  await schedule.getByRole('button', { name: /^Ainda vai receber/ }).click()
-  await schedule.getByRole('radio', { name: 'Recebimento parcelado', exact: true }).check()
-  assert.equal(await schedule.getByLabel('Valor total a receber', { exact: true }).inputValue(), '9.000,00')
-  await schedule.getByLabel('Data da 1ª parcela', { exact: true }).fill(first)
-  await schedule.getByLabel('Quantidade de parcelas', { exact: true }).fill('3')
-  await schedule.getByLabel('Classificação da receita', { exact: true }).selectOption({ label: '98.01 · Receita de teste' })
-  await page.screenshot({ path: 'test-results/receivables-installments-os.png' })
-  await schedule.getByRole('button', { name: 'Programar e concluir', exact: true }).click()
-  await schedule.waitFor({ state: 'hidden' })
+  await attachOrderInvoice({ fixture, page, open: () => page.locator('.admin-invoice-table tbody tr').filter({ hasText: order.code }).getByRole('button', { name: 'Aguardando NF-e', exact: true }).click(), code: order.code, cnpj: offerDraft.cnpj, company: offerDraft.company, kind: 'nfe', valueCents: 900000, issued: today, dues: [0, 1, 2].map((months) => ({ due: shiftMonth(first, months), cents: 300000 })), classification: '98.01 · Receita de teste' })
   const fromOrder = (await api('/receivables')).data.items.filter((row) => row.orderCode === order.code)
   assert.deepEqual(fromOrder.map((row) => [row.installmentNumber, row.valueCents, row.dueDate]), [[1, 300000, first], [2, 300000, shiftMonth(first, 1)], [3, 300000, shiftMonth(first, 2)]])
   assert.deepEqual(errors, [])

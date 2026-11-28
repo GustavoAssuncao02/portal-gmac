@@ -3,7 +3,7 @@ import { offerRequesterNames } from '../server/offerRequesters.js'
 // The magnifier of Ofertas e serviços, Serviços em andamento and Serviços concluídos: one rule for the three screens.
 // It finds service, client, offer and OS codes, requesters and buyer, label, quote number, the client's purchase order
 // number, the nota de entrada and the name of any attachment — of the offer, of its proposal e-mails, of the OS and of its "Anexos
-// administrativos" (order.purchaseOrders). An offer and its OS are one job: what belongs to either finds both. Accents
+// administrativos" (order.purchaseOrders) and of its NF-e (order.invoices, also by the number of the note). An offer and its OS are one job: what belongs to either finds both. Accents
 // and capitals do not matter.
 export const workSearchPlaceholder = 'Buscar por serviço, cliente, OS, cotação ou anexo...'
 
@@ -20,7 +20,7 @@ function offerTerms(offer) {
 
 function orderTerms(order) {
   if (!order) return []
-  return [order.service, order.company, order.code, order.labelNumber, order.purchaseOrderNumber, order.entryInvoiceNumber,...quoteNumbers(order.proposal), ...(order.labelQuote?.versions || []).map((version) => version.number), ...names(order.attachments), ...names(order.purchaseOrders)]
+  return [order.service, order.company, order.code, order.labelNumber, order.purchaseOrderNumber, order.entryInvoiceNumber,...quoteNumbers(order.proposal), ...(order.labelQuote?.versions || []).map((version) => version.number), ...names(order.attachments), ...names(order.purchaseOrders), ...names(order.invoices), ...(order.invoices || []).map((file) => file.number)]
 }
 
 // `offers` and `orders` are the full lists, so each side also searches what belongs to the other.

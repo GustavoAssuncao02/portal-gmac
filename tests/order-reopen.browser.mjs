@@ -68,35 +68,38 @@ try {
   await dialog.getByRole('button', { name: 'Reabrir OS', exact: true }).click()
   await assertInProgress(plain)
 
-  // An account receivable: the user must answer before reopening; deleting removes it.
+  // An NF-e and an account receivable: two boxes, two answers; unmarked, they stay. Marked, both leave.
+  await fixture.mutateStore((store) => { store.orders.find((item) => item.code === scheduled.code).invoices = [{ id: 'nfe-de-teste', name: 'NFS-e 2026000000999.pdf', size: 10, contentType: 'application/pdf', kind: 'nfse', label: 'NFS-e', number: '2026000000999', valueCents: 100000, uploadedAt: '2026-10-02T11:00:00Z', uploadedBy: 'Gustavo', receivableIds: [], existingReceivableIds: [] }] })
   await openReopenDialog(scheduled)
   const box = dialog.locator('.os-action-receivables')
   await box.waitFor()
-  assert.match((await box.innerText()).replace(/\s+/g, ' '), new RegExp(`Conta a receber vinculada a esta OS ${scheduledRow.id} · R\\$ 1\\.000,00 · previsto para \\d{2}/\\d{2}/\\d{4}`))
+  const invoiceBox = dialog.getByRole('checkbox', { name: /^Remover a NF-e da OS/ }), accountBox = dialog.getByRole('checkbox', { name: /^Excluir a conta a receber/ })
+  await accountBox.waitFor()
+  assert.match((await box.innerText()).replace(/\s+/g, ' '), new RegExp(`NFS-e 2026000000999.*${scheduledRow.id} · R\\$ 1\\.000,00 · previsto para \\d{2}/\\d{2}/\\d{4}`))
+  assert.deepEqual([await invoiceBox.isChecked(), await accountBox.isChecked(), await accountBox.isDisabled()], [false, false, false], 'nothing is removed unless marked')
   const confirm = dialog.getByRole('button', { name: 'Reabrir OS', exact: true })
-  assert.equal(await confirm.isDisabled(), true, 'nothing is assumed before the answer')
-  assert.equal(await dialog.getByRole('radio').count(), 2)
-  assert.equal(await dialog.getByRole('radio', { checked: true }).count(), 0)
-  await dialog.getByRole('radio', { name: /^Excluir a conta a receber/ }).check()
-  assert.equal(await confirm.isDisabled(), false)
+  await invoiceBox.check()
+  await accountBox.check()
   await page.screenshot({ path: 'test-results/order-reopen/modal-1920.png' })
   await confirm.click()
   await assertInProgress(scheduled)
   assert.deepEqual(await linked(scheduled), [])
+  assert.deepEqual((await fixture.mutateStore((store) => store.orders.find((item) => item.code === scheduled.code).invoices)), [])
 
-  // Keeping it leaves the account as it is.
+  // Unmarked, the account stays as it is.
   await openReopenDialog(kept)
-  await dialog.getByRole('radio', { name: /^Manter a conta a receber/ }).check()
+  await dialog.getByRole('checkbox', { name: /^Excluir a conta a receber/ }).waitFor()
+  assert.equal(await dialog.getByRole('checkbox', { name: /^Remover a NF-e/ }).count(), 0, 'no NF-e, no box for it')
   await dialog.getByRole('button', { name: 'Reabrir OS', exact: true }).click()
   await assertInProgress(kept)
   assert.deepEqual(await linked(kept), [keptRow.id])
 
-  // A received account cannot be deleted: the dialog says so and the account is kept.
+  // A received account cannot be deleted: its box is disabled with the reason, and the account is kept.
   await openReopenDialog(received)
-  const note = dialog.locator('.os-action-note')
-  await note.waitFor()
-  assert.match(await note.innerText(), /Não é possível excluir esta conta: Conta com recebimento: preserve o histórico\. Ela será mantida\./)
-  assert.equal(await dialog.getByRole('radio').count(), 0)
+  const blocked = dialog.getByRole('checkbox', { name: /^Excluir a conta a receber/ })
+  await blocked.waitFor()
+  assert.equal(await blocked.isDisabled(), true)
+  assert.match((await dialog.locator('.os-action-receivables').innerText()).replace(/\s+/g, ' '), /Não é possível excluir: Conta com recebimento: preserve o histórico\. Ela será mantida\./)
   await dialog.getByRole('button', { name: 'Reabrir OS', exact: true }).click()
   await assertInProgress(received)
   assert.deepEqual(await linked(received), [receivedRow.id])
@@ -121,7 +124,7 @@ try {
   await phone.close()
 
   assert.deepEqual(errors, [])
-  console.log('Order reopen passed: the OS goes back to Serviços em andamento highlighted; the linked account receivable is asked about (keep or delete), blocked when it has a receipt, and absent from the question when there is none.')
+  console.log('Order reopen passed: the OS goes back to Serviços em andamento highlighted; the NF-e and the linked account receivable are asked about with two boxes (unmarked they stay), the account box blocked when it has a receipt, and no question when there is neither.')
 } catch (error) {
   await page.screenshot({ path: 'test-results/order-reopen/failure.png', fullPage: true })
   throw error

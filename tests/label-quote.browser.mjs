@@ -109,12 +109,12 @@ try {
   await page.keyboard.press('Escape')
   await email.waitFor({ state: 'hidden' }).catch(async () => { await email.getByRole('button', { name: 'Fechar janela', exact: true }).first().click() })
 
-  // Concluir OS opens the receivable with the quote value.
+  // Concluir OS asks for the NF-e, with the quote value as the value of the OS.
   await modal.getByRole('button', { name: 'Concluir OS', exact: true }).click()
-  const schedule = page.getByRole('dialog', { name: 'Recebimento do serviço', exact: true })
-  await schedule.getByRole('button', { name: /^Ainda vai receber/ }).click()
-  const value = await schedule.getByLabel('Valor a receber', { exact: true }).inputValue()
-  assert.equal(value, generated.total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 'defaults to the quote value')
+  const schedule = page.getByRole('dialog', { name: `NF-e · ${order.code}`, exact: true })
+  await schedule.getByRole('button', { name: 'Selecionar PDF da NF-e', exact: true }).waitFor()
+  const spaces = (text) => text.replace(/\s/g, ' ')
+  assert.equal(spaces(await schedule.locator('.receivable-order-facts div').filter({ hasText: 'Valor da OS' }).locator('dd').innerText()), spaces(generated.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })), 'the quote value')
   await schedule.getByRole('button', { name: 'Fechar janela', exact: true }).click()
 
   // Cadastros › Modelos de e-mail: the two templates of the portal and a new one.

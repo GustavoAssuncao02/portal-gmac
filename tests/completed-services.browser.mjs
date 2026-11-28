@@ -88,11 +88,13 @@ try {
       assert.equal(await page.locator('.admin-os-table thead th', { hasText: 'OS / Servi\u00e7o' }).getAttribute('aria-sort'), 'ascending')
     }
     const pendingRow = page.locator('.admin-os-table tbody tr').filter({ hasText: pendingCode })
-    const schedule = page.getByRole('dialog', { name: 'Recebimento do serviço', exact: true })
+    const schedule = page.getByRole('dialog', { name: `NF-e · ${pendingCode}`, exact: true })
+    const skip = page.getByRole('dialog', { name: 'Concluir sem NF-e', exact: true })
     if (viewport.width === 1920) {
       await page.route('**/acknowledge-completion', (route) => route.fulfill({ status: 409, json: { message: 'Teste de falha de confirmacao' } }))
       await pendingRow.getByRole('button', { name: 'Conclu\u00eddo', exact: true }).click()
-      await schedule.getByRole('button', { name: 'Concluir sem lançar', exact: true }).click()
+      await schedule.getByRole('button', { name: 'Concluir sem NF-e', exact: true }).click()
+      await skip.getByRole('button', { name: 'Concluir sem NF-e', exact: true }).click()
       await schedule.getByRole('alert').filter({ hasText: 'Teste de falha' }).waitFor()
       assert.ok((await codes()).includes(pendingCode))
       await page.unroute('**/acknowledge-completion')
@@ -100,7 +102,8 @@ try {
       await schedule.waitFor({ state: 'hidden' })
     }
     await pendingRow.getByRole('button', { name: 'Conclu\u00eddo', exact: true }).click()
-    await schedule.getByRole('button', { name: 'Concluir sem lançar', exact: true }).click()
+    await schedule.getByRole('button', { name: 'Concluir sem NF-e', exact: true }).click()
+    await skip.getByRole('button', { name: 'Concluir sem NF-e', exact: true }).click()
     await pendingRow.waitFor({ state: 'detached' })
     await navigate('Servi\u00e7os conclu\u00eddos')
     assert.deepEqual(await codes(), [pendingCode, newCode, oldCode])

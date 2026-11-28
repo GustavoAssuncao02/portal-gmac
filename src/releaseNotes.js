@@ -9,6 +9,9 @@ export const releaseNotes = [
       'Nessas ofertas, uma peça já feita antes vem com a sugestão das etapas, tempos e materiais da última vez (ou a média, quando houver mais de uma)',
       'Dica: as horas entram como hora normal; para cobrar parte delas como noturna/sábado ou domingo/feriado, use "Dividir horas" na linha do serviço, na tela de geração do PDF',
       'Etapas: as linhas das planilhas da Nestlé e da Etiqueta aparecem em grupos próprios, para escolher quais máquinas podem executar cada uma',
+      'Ordem de serviço: nova seção NF-e; o botão Aguardando NF-e pede o PDF da nota, gera a conta a receber e conclui a OS, também pelo funcionário administrativo',
+      'Ordem de serviço: opção Concluir sem NF-e, com a marca Sem NF-e em Serviços concluídos (a nota pode ser importada depois)',
+      'Reabrir OS: caixas para escolher se a NF-e e a conta a receber saem junto',
     ],
   },
   {

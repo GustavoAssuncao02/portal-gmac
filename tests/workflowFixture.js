@@ -16,7 +16,7 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   const directory = await mkdtemp(path.join(results, 'workflow-'))
   // The copied modules keep their data next to them; a DATA_DIR from the shell would point them at real data.
   delete process.env.DATA_DIR
-  for (const name of ['quantityUnits.js', 'contractTables.js', 'developers.js', 'systemLog.js', 'proposalDeadlineRules.js', 'proposalDeadlineNotices.js', 'zipFile.js', 'adminInventory.js', 'labelQuotes.js', 'labelQuoteRules.js', 'clientPaymentTerm.js', 'offerRequesters.js', 'retroactiveEntry.js', 'offerPresence.js', 'emailTemplates.js', 'emailSignature.js', 'entryMode.js', 'registryHistory.js', 'materialStock.js', 'invoiceImport.js', 'loginThrottle.js', 'liveUpdates.js','planning.js','planningRules.js', 'byName.js', 'offers.js', 'stageLabor.js', 'proposalEmails.js', 'stageCatalog.js', 'orderHistory.js', 'pieces.js', 'access.js', 'orderMaterials.js', 'pendingMaterials.js', 'operations.js', 'orderEditing.js', 'operatorAuth.js', 'employeeAccess.js', 'employeeActivity.js', 'serviceStages.js', 'machines.js', 'laborServices.js', 'accounts.js', 'reports.js', 'reportData.js', 'documentExports.js', 'payables.js', 'payableRules.js', 'receivables.js', 'bankStatements.js', 'ofx.js', 'materialRequests.js', 'notificationRules.js', 'notificationEvents.js', 'operationSessions.js', 'operationEventTime.js', 'operationManualEvents.js', 'materialRequestCodes.js', 'notifications.js', 'fiscalCatalog.js', 'dataDirectory.js', 'proposalDocuments.js', 'clientDocument.js', 'proposalDefaults.js', 'proposalPdf.js', 'proposalBrand.js', 'proposalMath.js', 'moneyWords.js', 'store.js', 'materialUnits.js', 'banks.js', 'operatorAccount.js', 'registries.js', 'requesters.js','serviceLocation.js', 'materialRequestSources.js', 'inventory.js', 'inventoryAppearance.js', 'materialIcons.js', 'uploads.js', 'machineUsage.js', 'accountPlan.js', 'accountPlanRules.js', 'dre.js', 'dreRules.js', 'dreExport.js', 'passwordReset.js', 'supportTickets.js', 'ticketRules.js', 'sitePreRegistration.js', 'offerRequests.js', 'homeWidgets.js', 'notes.js', 'noteRules.js', 'bulkAccounts.js']) {
+  for (const name of ['orderInvoices.js', 'quantityUnits.js', 'contractTables.js', 'developers.js', 'systemLog.js', 'proposalDeadlineRules.js', 'proposalDeadlineNotices.js', 'zipFile.js', 'adminInventory.js', 'labelQuotes.js', 'labelQuoteRules.js', 'clientPaymentTerm.js', 'offerRequesters.js', 'retroactiveEntry.js', 'offerPresence.js', 'emailTemplates.js', 'emailSignature.js', 'entryMode.js', 'registryHistory.js', 'materialStock.js', 'invoiceImport.js', 'loginThrottle.js', 'liveUpdates.js','planning.js','planningRules.js', 'byName.js', 'offers.js', 'stageLabor.js', 'proposalEmails.js', 'stageCatalog.js', 'orderHistory.js', 'pieces.js', 'access.js', 'orderMaterials.js', 'pendingMaterials.js', 'operations.js', 'orderEditing.js', 'operatorAuth.js', 'employeeAccess.js', 'employeeActivity.js', 'serviceStages.js', 'machines.js', 'laborServices.js', 'accounts.js', 'reports.js', 'reportData.js', 'documentExports.js', 'payables.js', 'payableRules.js', 'receivables.js', 'bankStatements.js', 'ofx.js', 'materialRequests.js', 'notificationRules.js', 'notificationEvents.js', 'operationSessions.js', 'operationEventTime.js', 'operationManualEvents.js', 'materialRequestCodes.js', 'notifications.js', 'fiscalCatalog.js', 'dataDirectory.js', 'proposalDocuments.js', 'clientDocument.js', 'proposalDefaults.js', 'proposalPdf.js', 'proposalBrand.js', 'proposalMath.js', 'moneyWords.js', 'store.js', 'materialUnits.js', 'banks.js', 'operatorAccount.js', 'registries.js', 'requesters.js','serviceLocation.js', 'materialRequestSources.js', 'inventory.js', 'inventoryAppearance.js', 'materialIcons.js', 'uploads.js', 'machineUsage.js', 'accountPlan.js', 'accountPlanRules.js', 'dre.js', 'dreRules.js', 'dreExport.js', 'passwordReset.js', 'supportTickets.js', 'ticketRules.js', 'sitePreRegistration.js', 'offerRequests.js', 'homeWidgets.js', 'notes.js', 'noteRules.js', 'bulkAccounts.js']) {
     await copyFile(path.join(root, 'server', name), path.join(directory, name))
   }
   // PDFs use the bundled logo and fonts.
@@ -35,6 +35,7 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   const { default: reportsRouter } = await import(pathToFileURL(path.join(directory, 'reports.js')))
   const { default: payablesRouter } = await import(pathToFileURL(path.join(directory, 'payables.js')))
   const { default: receivablesRouter } = await import(pathToFileURL(path.join(directory, 'receivables.js')))
+  const { default: orderInvoicesRouter } = await import(pathToFileURL(path.join(directory, 'orderInvoices.js')))
   const { default: bankStatementsRouter } = await import(pathToFileURL(path.join(directory, 'bankStatements.js')))
   const { default: materialRequestsRouter, saveRequestedMaterial } = await import(pathToFileURL(path.join(directory, 'materialRequests.js')))
   const { default: notificationsRouter } = await import(pathToFileURL(path.join(directory, 'notifications.js')))
@@ -76,12 +77,12 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   // Every classification belongs to a group of accounts and every receivable has a revenue classification. Most tests are
   // not about it: a classification created without a group goes to a test group (with the next free code), and a
   // receivable created without a classification gets a test revenue classification ("98.01 · Receita de teste", also
-  // offered by the receivable forms once Contas a Receber, Tesouraria or the OS receipt is opened).
+  // offered by the receivable forms once Contas a Receber, Tesouraria or the NF-e of an OS is opened).
   // `fillClassifications: false` keeps the requests as sent (tests of the plan itself, which install GMAC's plan).
   if (fillClassifications) app.use('/api', async (request, _response, next) => {
     try {
       const classification = request.method === 'POST' && request.path === '/classifications' && request.body && !request.body.groupId
-      const receivable = (request.method === 'POST' && request.path === '/receivables' || request.method === 'GET' && /^\/receivables(\/order\/[^/]+)?$/.test(request.path))
+      const receivable = (request.method === 'POST' && request.path === '/receivables' || request.method === 'GET' && /^\/(receivables(\/order\/[^/]+)?|orders\/[^/]+\/invoices)$/.test(request.path))
       if (!classification && !receivable) return next()
       await mutateStore((store) => {
         store.accountGroups ||= []; store.classifications ||= []
@@ -173,6 +174,7 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   app.use('/api', payables)
   const receivables = receivablesRouter(accounts, requireAdmin, pool)
   app.use('/api', receivables)
+  app.use('/api', orderInvoicesRouter({ pool, requireAdmin, accounts }))
   app.use('/api', accountPlanRouter(accounts, requireAdmin))
   app.use('/api', dreRouter(accounts, requireAdmin))
   // "Esqueci minha senha" never reaches an SMTP server: the e-mails stay in `sentMail`.
