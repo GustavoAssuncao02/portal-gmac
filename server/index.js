@@ -21,7 +21,7 @@ import createRequestersRouter from './requesters.js'
 import createRegistryHistoryRouter from './registryHistory.js'
 import createProposalEmailsRouter from './proposalEmails.js'
 import createStageCatalogRouter, { ensureStageCatalog } from './stageCatalog.js'
-import { announceRelease } from './notificationEvents.js'
+import { announceRelease, releaseNoticeDescription, syncReleaseNotice } from './notificationEvents.js'
 import { listReleaseNotes } from './releaseNoteEdits.js'
 import { releaseNotes } from '../src/releaseNotes.js'
 import { createSiteQuotes } from './siteQuotes/index.js'
@@ -127,8 +127,13 @@ await ensureLaborServices()
 await ensureSectors()
 // The stages come from "Etapas": the first start saves the stages the system always had.
 await ensureStageCatalog()
-// A new version of the portal: the bell tells everybody once (src/releaseNotes.js is the list of the versions).
-if (!(await readStore()).operationalNotifications?.some((item) => item.id === `release:${releaseNotes[0].version}`)) await mutateStore((store) => { announceRelease(store, listReleaseNotes(store)[0]) })
+// A new version of the portal: the bell tells everybody once (src/releaseNotes.js is the list of the versions). When its
+// notes were corrected after the notice went out, the notice takes the corrected text, without a new notification.
+{
+  const startup = await readStore(), release = listReleaseNotes(startup)[0]
+  const notice = startup.operationalNotifications?.find((item) => item.id === `release:${release.version}`)
+  if (!notice || notice.description !== releaseNoticeDescription(release.notes)) await mutateStore((store) => { const current = listReleaseNotes(store)[0]; if (!announceRelease(store, current)) syncReleaseNotice(store, current) })
+}
 await ensurePauseReasons()
 await ensureAccountPlan()
 await loadOperatorAccount()

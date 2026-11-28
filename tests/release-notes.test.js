@@ -18,3 +18,11 @@ test('release notes list each version once, newest first, with a date and at lea
     assert.ok(date >= previous.date, `${version} is not dated before ${previous.version}`)
   }
 })
+
+// The notes are read by everybody who uses the portal; the Desenvolvedor screen is seen only by the developers
+// (2026-11-27 and 2026-11-28: "não é para ter nada de desenvolvimento nas notas de atualização").
+test('release notes never mention the Desenvolvedor screen', () => {
+  for (const { version, notes } of releaseNotes) {
+    for (const note of notes) assert.doesNotMatch(note, /Desenvolvedor/, `${version}: ${note}`)
+  }
+})

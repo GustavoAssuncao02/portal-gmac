@@ -58,3 +58,14 @@ test('developers can correct any published note without issuing another notifica
   assert.deepEqual((await edit(older, older.notes.join('\n'), corrected.notes)).data, { item: older })
   assert.deepEqual((await fixture.adminRequest('/release-notes')).data.items, [saved, ...releaseNotes.slice(1)])
 })
+
+test('a notice already sent follows the corrected notes of its version, without notifying again', async () => {
+  const { announceRelease, syncReleaseNotice } = await import('../server/notificationEvents.js')
+  const store = {}
+  announceRelease(store, { version: '9.9.98', notes: ['Na tela Desenvolvedor, uma novidade interna'] })
+  store.operationalNotifications[0].readAt = '2026-11-28T12:00:00.000Z'
+  assert.equal(syncReleaseNotice(store, { version: '9.9.98', notes: ['Melhorias gerais: correções de problemas e maior estabilidade do sistema'] }), true)
+  assert.deepEqual(store.operationalNotifications.map((item) => [item.description, item.readAt]), [['Melhorias gerais: correções de problemas e maior estabilidade do sistema', '2026-11-28T12:00:00.000Z']])
+  assert.equal(syncReleaseNotice(store, { version: '9.9.98', notes: ['Melhorias gerais: correções de problemas e maior estabilidade do sistema'] }), false, 'nothing to change')
+  assert.equal(syncReleaseNotice(store, { version: '9.9.97', notes: ['Outra'] }), false, 'a version never announced is left to announceRelease')
+})

@@ -1,12 +1,13 @@
 // Each commit to main is a new version: add an entry at the top, with what changed in plain words for whoever uses the portal.
+// The notes are for the people who use the portal: never mention the Desenvolvedor screen (only the developers see it);
+// a change that only exists there gets no line of its own, at most the generic "Melhorias gerais" line.
+// tests/release-notes.test.js checks it.
 export const releaseNotes = [
   {
     version: '1.0.29',
     date: '2026-11-28',
     notes: [
-      'Na tela Desenvolvedor, edite as notas de qualquer versão publicada direto pelo portal, sem precisar publicar o sistema de novo',
-      'Em Usuários, consulte contas online e offline, o último login e a estimativa de uso nas últimas 24 horas',
-      'Clique nos cartões de Desenvolvedor para ver os detalhes de cada indicador, incluindo os erros e avisos do período, e copiar ou baixar o JSON',
+      'Melhorias gerais: correções de problemas e maior estabilidade do sistema',
     ],
   },
   {
@@ -87,7 +88,6 @@ export const releaseNotes = [
       'Configurações: nova opção "Notificações do sistema por e-mail" para escolher se recebe os avisos por e-mail',
       'Ordem de serviço: o cabeçalho da OS mostra também o solicitante, o comprador e o número da cotação',
       'Ofertas e serviços: a quantidade pode ser em unidades, pares ou conjuntos, e a proposta em PDF mostra a medida escolhida (Un, Par ou Cj)',
-      'Desenvolvedor: tela de logs e diagnóstico do sistema, visível só para a equipe de desenvolvimento',
     ],
   },
   {

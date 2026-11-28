@@ -22,6 +22,16 @@ export function announceRelease(store, release) {
   return true
 }
 
+// The notes of the current version were corrected after its notice went out (2026-11-28: notes about the Desenvolvedor
+// screen taken out): the notice follows the notes, without notifying anybody again. Returns true when it changed.
+export function syncReleaseNotice(store, release) {
+  const notice = (store.operationalNotifications || []).find((item) => item.id === `release:${release?.version}` && item.type === 'release')
+  const description = releaseNoticeDescription(release?.notes || [])
+  if (!notice || notice.description === description) return false
+  notice.description = description
+  return true
+}
+
 function requests(store) {
   return materialRequestSources(store.offers, store.orders).flatMap((offer) => (offer.resources?.materials || []).flatMap((material) => {
     const quantity = Number(material.purchaseQuantity ?? (material.stockStatus === 'available' ? 0 : Number(material.quantity) - Number(material.stockAvailable || 0)))
