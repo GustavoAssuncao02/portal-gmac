@@ -17,6 +17,8 @@ export function openDeliveries(orders, now = Date.now()) {
       quantity, unit: quantityUnitOf(order.quantityUnit),
       done: currentPieceProgress(order.operation, quantity).completedPieces,
       day: Number.isFinite(at) ? localDay(at) : null,
+      // The moment of the deadline (end of the delivery day): a forecast after it "vai atrasar".
+      deliveryAt: Number.isFinite(at) ? at : null,
       due: serviceDeadline({ ...order, deadline }, now),
       status: order.operation?.status || 'waiting',
       urgent: order.resources?.urgency === 'emergency',

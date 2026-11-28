@@ -254,6 +254,18 @@
 .planning-strip-new { background: #0c4c91; }
 .planning-strip-new--other { background: #86aed8; }
 .planning-strip-new--clash { background: #c42b3b; }
+/* A late block drawn up to where it should end now; the bar of the stage being planned is dragged (2026-11-28). */
+.planning-strip-busy--late { background: repeating-linear-gradient(45deg, #e3a35b 0 4px, #f3cf9f 4px 7px); }
+.planning-strip .planning-strip-drag { position: absolute; top: 0; bottom: 0; z-index: 1; min-width: 8px; padding: 0; border: 0; border-radius: 3px; cursor: grab; touch-action: none; }
+.planning-strip .planning-strip-drag:hover { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .55); }
+.planning-strip .planning-strip-drag:focus-visible { outline: 2px solid #0c4c91; outline-offset: 1px; }
+.planning-strip .planning-strip-drag--moving { cursor: grabbing; opacity: .85; }
+.planning-replan { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 4px; background: #fff0e2; color: #8f4c0e; font-size: 11px; font-weight: 700; }
+/* Entregas: the forecast end of each OS in the list of a day. */
+.planning-forecast { justify-self: start; margin-top: 2px; padding: 2px 8px; border-radius: 999px; background: #eef2f6; color: #4f6680; font-size: 12px; font-weight: 700; }
+.planning-forecast--forecast { background: #eaf6ef; color: #1d6f43; }
+.planning-forecast--forecast-late { background: #fff0e2; color: #8f4c0e; }
+.planning-forecast--replan { background: #fff5dd; color: #75560f; }
 .planning-strip-ruler { position: relative; height: 8px; margin-top: -1px; border-bottom: 1px solid #8ea2b7; }
 .planning-strip-tick { position: absolute; bottom: 0; width: 1px; height: 3px; background: #8ea2b7; }
 .planning-strip-tick--mid { height: 5px; }

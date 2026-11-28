@@ -3,13 +3,15 @@ import { mkdir } from 'node:fs/promises'
 import { chromium } from 'playwright'
 import { createWorkflowFixture, offerDraft } from './workflowFixture.js'
 import { openSidebarItem } from './sidebarNavigation.js'
-import { localDay } from '../server/planningRules.js'
+import { SLOT_MS, clockTime, localDay } from '../server/planningRules.js'
 import { monthTitle, shiftDay, shiftMonth, sundayOf } from '../src/calendarDays.js'
 
 // Planejamento › Entregas (2026-11-24): the open OS on their delivery day (the date of the accepted proposal), month by
 // month from Sunday: what the month has to deliver (OS, services and products, quantities by measure), the late ones,
 // the list of a day, the OS opened from the calendar, the type filter and the next months; light, dark, black and phone;
 // and the month of the machines, also from Sunday.
+// 2026-11-28: the delivery deadline in red and, when every stage is planned, the forecast end of the OS in green (orange
+// when it ends after the deadline); the list of a day tells the forecast, or how much of the OS is planned.
 const env = { DEMO_ADMIN_CPF: '12345678901', DEMO_ADMIN_PASSWORD: 'teste123', DEMO_ADMIN_NAME: 'Gustavo' }
 const fixture = await createWorkflowFixture({ accountsEnv: env })
 const browser = await chromium.launch({ headless: true })
@@ -37,6 +39,14 @@ try {
   const support = await order({ service: 'Suporte soldado', quantity: 4, quantityUnit: 'par', kind: 'product', deadline: day })
   const flange = await order({ service: 'Flange', quantity: 25, deadline: lateDay })
   const plate = await order({ service: 'Chapa cortada', quantity: 100, deadline: nextDay })
+  // The Tornearia of the shaft (1 h) planned from the next quarter, then the one of the late flange right after it.
+  await fixture.mutateStore((store) => { store.machines = [{ id: 'torno', name: 'Torno 01', sectors: ['Usinagem'], sector: 'Usinagem', hourlyRate: 80 }] })
+  const start = Math.ceil(Date.now() / SLOT_MS) * SLOT_MS + SLOT_MS, shaftEnd = start + 3600000, flangeEnd = shaftEnd + 3600000
+  for (const [code, at] of [[shaft, start], [flange, shaftEnd]]) assert.equal((await fixture.adminRequest('/planning/blocks', 'POST', { orderCode: code, stageCode: 'turning', resourceType: 'machine', resourceId: 'torno', start: new Date(at).toISOString(), minutes: 60 })).status, 201)
+  const forecasts = new Map((await fixture.adminRequest('/planning/forecasts')).data.items.map((item) => [item.orderCode, item]))
+  assert.deepEqual([forecasts.get(shaft).end, forecasts.get(flange).end, forecasts.get(support).end], [new Date(shaftEnd).toISOString(), new Date(flangeEnd).toISOString(), null])
+  assert.deepEqual([forecasts.get(support).planned, forecasts.get(support).total], [0, 1])
+  const shaftTone = localDay(shaftEnd) <= day ? 'forecast' : 'forecast-late'
 
   await page.goto(fixture.url)
   await page.getByLabel('CPF', { exact: true }).fill(env.DEMO_ADMIN_CPF)
@@ -60,11 +70,18 @@ try {
   assert.match(await indicators.innerText(), new RegExp(`Entregas em ${monthTitle(month)}\\s+${inMonth} OS\\s+${inMonth === 3 ? 2 : 1} serviços? · 1 produto`))
   assert.match(await indicators.innerText(), new RegExp(`Quantidade a entregar no mês\\s+${inMonth === 3 ? 35 : 10} unidades · 4 pares`))
   assert.match(await indicators.innerText(), new RegExp(`Atrasadas\\s+1 OS\\s+${flange}`))
-  for (const code of [shaft, support]) await cell(day).locator('.calendar-chip').filter({ hasText: code }).waitFor()
+  for (const code of [shaft, support]) await cell(day).locator('.calendar-chip').filter({ hasText: code }).first().waitFor()
   assert.match(await cell(day).locator('.calendar-day-summary').innerText(), /10 un · 4 pares/)
-  assert.match(await cell(day).locator('.calendar-chip').filter({ hasText: shaft }).getAttribute('class'), /calendar-chip--(on-time|soon|at-deadline)/)
-  if (lateDay.slice(0, 7) === month) assert.match(await cell(lateDay).locator('.calendar-chip').filter({ hasText: flange }).getAttribute('class'), /calendar-chip--late/)
-  assert.match(await calendar.locator('.planning-delivery-legend').innerText(), /Dentro do prazo[\s\S]*Atrasado/)
+  // The delivery deadline is always red.
+  assert.match(await cell(day).locator('.calendar-chip').filter({ hasText: shaft }).first().getAttribute('class'), /calendar-chip--deadline/)
+  if (lateDay.slice(0, 7) === month) assert.match(await cell(lateDay).locator('.calendar-chip').filter({ hasText: flange }).getAttribute('class'), /calendar-chip--deadline/)
+  // The forecast end: green within the deadline, orange ("Vai atrasar") after it.
+  if (localDay(shaftEnd).slice(0, 7) === month) {
+    const chip = cell(localDay(shaftEnd)).locator(`.calendar-chip--${shaftTone}`).filter({ hasText: shaft })
+    assert.match(await chip.innerText(), new RegExp(`${shaftTone === 'forecast' ? 'Previsão' : 'Vai atrasar'} · ${clockTime(shaftEnd)}`))
+  }
+  if (localDay(flangeEnd).slice(0, 7) === month) assert.match(await cell(localDay(flangeEnd)).locator('.calendar-chip--forecast-late').filter({ hasText: flange }).innerText(), new RegExp(`Vai atrasar · ${clockTime(flangeEnd)}`))
+  assert.match(await calendar.locator('.planning-delivery-legend').innerText(), /Prazo de entrega[\s\S]*Previsão de término[\s\S]*vai atrasar/)
   await shot('mes', { fullPage: true })
 
   // A click on an OS opens it whole, without leaving the planning.
@@ -79,11 +96,15 @@ try {
   await cell(day).locator('.calendar-day-number').click()
   const panel = calendar.locator('.planning-delivery-panel')
   const supportRow = panel.locator('.planning-delivery-list li').filter({ hasText: support })
-  assert.match(await supportRow.innerText(), /SUPORTE SOLDADO[\s\S]*Produto · 4 pares · Prontas: 0 de 4/)
-  assert.equal(await panel.locator('.planning-delivery-list li').count(), 2)
+  assert.match(await supportRow.innerText(), /SUPORTE SOLDADO[\s\S]*Produto · 4 pares · Prontas: 0 de 4[\s\S]*Ainda não planejada \(0 de 1 etapas\)/)
+  const shaftRow = panel.locator('.planning-delivery-list li').filter({ hasText: shaft })
+  assert.match(await shaftRow.locator('.planning-forecast').innerText(), new RegExp(`Previsão de término: ${localDay(shaftEnd).split('-').reverse().join('/')} às ${clockTime(shaftEnd)}`))
+  assert.match(await shaftRow.locator('.planning-forecast').getAttribute('class'), new RegExp(`planning-forecast--${shaftTone}$`))
+  // The flange ends on this day too when the day is today: the list brings it with the deliveries.
+  assert.equal(await panel.locator('.planning-delivery-list li').count(), localDay(flangeEnd) === day ? 3 : 2)
   await panel.getByRole('button', { name: 'Ver atrasadas (1)' }).click()
   await panel.locator('.planning-delivery-list li').filter({ hasText: flange }).waitFor()
-  assert.match(await panel.locator('.planning-delivery-list li').innerText(), /Atrasado/)
+  assert.match(await panel.locator('.planning-delivery-list li').innerText(), /vai atrasar[\s\S]*Atrasado/)
   await shot('atrasadas', { fullPage: true })
   const next = calendar.getByRole('group', { name: 'Próximos meses' }).getByRole('button').first()
   assert.match(await next.innerText(), /1 OS · 100 un/)

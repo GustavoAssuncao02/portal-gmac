@@ -5,7 +5,7 @@ import { PayableModal } from './PayableModal.jsx'
 import { backdropClose } from './dialogBackdrop.js'
 import { payableRequest } from './payablesApi.js'
 import { pollWhileVisible } from './polling.js'
-import { DAY_MS, SLOT_MS, addDays, blockEnd, blockStart, clockTime, dayStart, localDay, operatorQueue, planningSnapshot, resourceKey } from '../server/planningRules.js'
+import { DAY_MS, SLOT_MS, addDays, blockEnd, blockOccupancy, blockStart, clockTime, dayStart, localDay, operatorQueue, planningSnapshot, resourceKey } from '../server/planningRules.js'
 import { SortableRows, SortHeader } from './RegistryList.jsx'
 import './adminTools.css'
 import './planning.css'
@@ -287,16 +287,40 @@ function MonthCalendar({ from, month, sectors, resources, blocks, today, onOpen 
 }
 
 // Entregas (2026-11-24): the open OS on the day each one has to be delivered, month by month, to see how much the month
-// (and the next ones) will have to deliver. The colors are the states of Serviços em andamento. A click on an OS opens it;
-// on a day (or "+N mais"), the list of that day below the calendar.
+// (and the next ones) will have to deliver. A click on an OS opens it; on a day (or "+N mais"), the list of that day below
+// the calendar, with the state of each OS (the colors of Serviços em andamento).
+// 2026-11-28: the calendar also shows when each OS should be ready if everything goes as planned (/planning/forecasts):
+// the delivery deadline in red, the forecast in green, or orange when it ends after the deadline.
 const operationLabels = { waiting: 'Aguardando', running: 'Em execução', paused: 'Pausado', stage_done: 'Etapa concluída', finalizing: 'Finalizando' }
-const dueTones = [['on-time', 'Dentro do prazo'], ['soon', 'Próximo do prazo'], ['at-deadline', 'Em cima do prazo'], ['late', 'Atrasado'], ['unknown', 'Sem previsão']]
+const calendarTones = [['deadline', 'Prazo de entrega'], ['forecast', 'Previsão de término'], ['forecast-late', 'Previsão depois do prazo (vai atrasar)']]
 const UPCOMING_MONTHS = 6
+// The forecast of an OS: when it should be ready (late: after the delivery deadline), or why there is none.
+function forecastOf(forecast, row) {
+  if (!forecast) return null
+  if (forecast.end) {
+    const end = Date.parse(forecast.end), late = Number.isFinite(row.deliveryAt) && end > row.deliveryAt
+    return { tone: late ? 'forecast-late' : 'forecast', end, late, text: `Previsão de término: ${fullDate(localDay(end))} às ${clockTime(end)}${late ? ' · vai atrasar' : ''}` }
+  }
+  if (forecast.finished) return { tone: 'forecast', text: 'Etapas concluídas' }
+  if (!forecast.total) return { tone: 'none', text: 'Sem etapas para planejar' }
+  if (forecast.replan) return { tone: 'replan', text: `Precisa replanejar · ${forecast.planned} de ${forecast.total} etapas planejadas` }
+  return { tone: 'none', text: forecast.planned ? `Planejamento incompleto (${forecast.planned} de ${forecast.total})` : `Ainda não planejada (0 de ${forecast.total} etapas)` }
+}
 function Deliveries({ orders, loading, kind, month, today, now, onMonth, onOpen }) {
   const [selected, setSelected] = useState(null)
+  const [forecasts, setForecasts] = useState(null)
   useEffect(() => { setSelected((current) => current && current.length === 10 && current.slice(0, 7) !== month ? null : current) }, [month])
-  const rows = useMemo(() => openDeliveries(orders, now).filter((row) => !kind || row.kind === kind), [orders, now, kind])
+  useEffect(() => {
+    let active = true
+    const read = () => payableRequest('/planning/forecasts').then((result) => { if (active) setForecasts(new Map(result.items.map((item) => [item.orderCode, item]))) }).catch(() => {})
+    read()
+    const stop = pollWhileVisible(read, 30000)
+    return () => { active = false; stop() }
+  }, [])
+  const rows = useMemo(() => openDeliveries(orders, now).filter((row) => !kind || row.kind === kind).map((row) => ({ ...row, forecast: forecastOf(forecasts?.get(row.code), row) })), [orders, now, kind, forecasts])
   const days = useMemo(() => byDeliveryDay(rows), [rows])
+  // The OS by the day of their forecast end.
+  const ends = useMemo(() => { const map = new Map(); for (const row of rows) if (row.forecast?.end) { const day = localDay(row.forecast.end); map.set(day, [...(map.get(day) || []), row]) } return map }, [rows])
   const dated = rows.filter((row) => row.day)
   const inMonth = dated.filter((row) => row.day.slice(0, 7) === month)
   const late = rows.filter((row) => row.due.key === 'late')
@@ -305,8 +329,10 @@ function Deliveries({ orders, loading, kind, month, today, now, onMonth, onOpen 
   const totals = deliveryTotals(inMonth)
   const upcoming = Array.from({ length: UPCOMING_MONTHS }, (_, index) => shiftMonth(month, index + 1))
   const later = dated.filter((row) => row.day.slice(0, 7) > upcoming.at(-1))
-  const list = selected === 'late' ? late : selected === 'undated' ? undated : selected ? days.get(selected) || [] : null
-  const title = selected === 'late' ? `Atrasadas (${late.length})` : selected === 'undated' ? `Sem prazo de entrega (${undated.length})` : selected ? `Entregas de ${dayTitle(selected)}` : 'Escolha um dia'
+  // A day lists the OS delivered on it and the ones that should be ready on it.
+  const endingOnly = selected?.length === 10 ? (ends.get(selected) || []).filter((row) => row.day !== selected) : []
+  const list = selected === 'late' ? late : selected === 'undated' ? undated : selected ? [...(days.get(selected) || []), ...endingOnly] : null
+  const title = selected === 'late' ? `Atrasadas (${late.length})` : selected === 'undated' ? `Sem prazo de entrega (${undated.length})` : selected ? `${endingOnly.length ? 'Entregas e previsões' : 'Entregas'} de ${dayTitle(selected)}` : 'Escolha um dia'
   const shortcuts = [['late', `Ver atrasadas (${late.length})`, late.length], ['undated', `Ver sem prazo (${undated.length})`, undated.length]].filter(([key, , count]) => count && key !== selected)
   return <>
     <section className="planning-indicators" aria-label="Indicadores das entregas">
@@ -316,18 +342,21 @@ function Deliveries({ orders, loading, kind, month, today, now, onMonth, onOpen 
       <article><CalendarClock size={22} aria-hidden="true" /><div><span>Próximos 7 dias</span><strong>{week.length} OS</strong><small>{week.length ? amountsText(deliveryTotals(week).amounts) : 'Nenhuma entrega'}</small></div></article>
     </section>
     <section className="planning-agenda planning-deliveries" aria-labelledby="planning-deliveries-title">
-      <header><h2 id="planning-deliveries-title">Calendário de entregas</h2><p>OS em aberto no dia da entrega: o prazo da proposta aceita ou, sem ele, o prazo pedido pelo cliente. Clique numa OS para abrir, ou num dia para ver a lista.</p></header>
+      <header><h2 id="planning-deliveries-title">Calendário de entregas</h2><p>OS em aberto no dia da entrega (o prazo da proposta aceita ou, sem ele, o prazo pedido pelo cliente) e no dia em que o planejamento prevê que fiquem prontas. Clique numa OS para abrir, ou num dia para ver a lista.</p></header>
       {loading && !orders.length ? <p className="planning-loading">Carregando OS...</p> : <div className="planning-deliveries-body">
-        <CalendarGrid days={monthDays(month)} month={month} today={today} selected={selected?.length === 10 ? selected : null} words={['entrega', 'entregas']} label={`Entregas de ${monthTitle(month)}`} onSelectDay={setSelected}
-          entriesFor={(day) => (days.get(day) || []).map((row) => ({ key: row.code, time: row.code, label: upper(row.company), title: `${row.code} · ${upper(row.service)} · ${upper(row.company)} · ${quantityLabel(row.quantity, row.unit)} · ${row.due.label}`, tone: row.due.key, onOpen: onOpen ? () => onOpen(row.code) : () => setSelected(day) }))}
+        <CalendarGrid days={monthDays(month)} month={month} today={today} selected={selected?.length === 10 ? selected : null} words={['item', 'itens']} label={`Entregas de ${monthTitle(month)}`} onSelectDay={setSelected}
+          entriesFor={(day) => [
+            ...(days.get(day) || []).map((row) => ({ key: row.code, time: row.code, label: upper(row.company), title: `${row.code} · ${upper(row.service)} · ${upper(row.company)} · ${quantityLabel(row.quantity, row.unit)} · Prazo de entrega · ${row.due.label}`, tone: 'deadline', onOpen: onOpen ? () => onOpen(row.code) : () => setSelected(day) })),
+            ...(ends.get(day) || []).map((row) => ({ key: `${row.code}-forecast`, time: row.code, label: `${row.forecast.late ? 'Vai atrasar' : 'Previsão'} · ${clockTime(row.forecast.end)}`, title: `${row.code} · ${upper(row.service)} · ${upper(row.company)} · Previsão de término ${fullDate(day)} às ${clockTime(row.forecast.end)}${row.forecast.late ? ` · vai atrasar (entrega ${fullDate(row.day)})` : row.day ? ` · entrega ${fullDate(row.day)}` : ''}`, tone: row.forecast.tone, onOpen: onOpen ? () => onOpen(row.code) : () => setSelected(day) })),
+          ]}
           summaryFor={(day) => days.has(day) ? amountsText(deliveryTotals(days.get(day)).amounts, { short: true }) : ''} />
-        <ul className="planning-delivery-legend" aria-label="Legenda">{dueTones.map(([key, label]) => <li key={key}><i className={`calendar-dot calendar-dot--${key}`} aria-hidden="true" />{label}</li>)}</ul>
+        <ul className="planning-delivery-legend" aria-label="Legenda">{calendarTones.map(([key, label]) => <li key={key}><i className={`calendar-dot calendar-dot--${key}`} aria-hidden="true" />{label}</li>)}</ul>
         <div className="planning-delivery-panel" aria-live="polite">
           <header><h3>{title}</h3>{shortcuts.map(([key, label]) => <button key={key} type="button" className="planning-link" onClick={() => setSelected(key)}>{label}</button>)}</header>
           {list == null ? <p className="planning-muted">Clique num dia do calendário para ver as OS que vencem nele.</p>
             : list.length ? <ul className="planning-delivery-list">{list.map((row) => <li key={row.code}>
               <i className={`calendar-dot calendar-dot--${row.due.key}`} aria-hidden="true" />
-              <div><strong>{row.code} · {upper(row.service)}{row.urgent && <span className="planning-emergency">Emergência</span>}</strong><small>{upper(row.company)} · {row.kind === 'product' ? 'Produto' : 'Serviço'} · {quantityLabel(row.quantity, row.unit)} · Prontas: {row.done} de {row.quantity} · {operationLabels[row.status] || 'Aguardando'}</small></div>
+              <div><strong>{row.code} · {upper(row.service)}{row.urgent && <span className="planning-emergency">Emergência</span>}</strong><small>{upper(row.company)} · {row.kind === 'product' ? 'Produto' : 'Serviço'} · {quantityLabel(row.quantity, row.unit)} · Prontas: {row.done} de {row.quantity} · {operationLabels[row.status] || 'Aguardando'}</small>{row.forecast && <span className={`planning-forecast planning-forecast--${row.forecast.tone}`}>{row.forecast.text}</span>}</div>
               <div className="planning-delivery-when"><span className={`planning-due planning-due--${row.due.key}`}>{row.due.label}</span><small>{row.day ? `Entrega ${fullDate(row.day)}${row.due.key === 'unknown' ? '' : ` · ${row.due.remaining}`}` : 'Sem prazo de entrega'}</small></div>
               {onOpen && <button className="admin-tool-button" type="button" onClick={() => onOpen(row.code)}><FileText size={16} aria-hidden="true" />Ver OS</button>}
             </li>)}</ul> : <p className="planning-muted">Nenhuma entrega neste dia.</p>}
@@ -352,7 +381,7 @@ function Backlog({ rows, resources, fit, onClearFit, onPlan }) {
     <div className="planning-table-scroll"><SortableRows rows={orders} columns={[{ key: "OS", label: "OS", value: (order) => order.orderCode }, { key: "Etapas a planejar", label: "Etapas a planejar", value: (order) => order.stages.length, numeric: true }, { key: "Prazo", label: "Prazo", value: (order) => order.deadline, numeric: true }, { key: "Ação", label: "Ação" }]}>{(sorted) => <table><thead><tr><SortHeader column={sorted.columns[0]} list={sorted} /><SortHeader column={sorted.columns[1]} list={sorted} /><SortHeader column={sorted.columns[2]} list={sorted} /><th><span className="sr-only">Ação</span></th></tr></thead>
       <tbody>{sorted.rows.map((order) => <tr key={order.orderCode} draggable onDragStart={(event) => { event.dataTransfer.setData('text/plain', JSON.stringify({ orderCode: order.orderCode })); event.dataTransfer.effectAllowed = 'copy' }}>
         <td><strong>{order.orderCode}</strong><small>{upper(order.service)} · {order.company}</small></td>
-        <td><ol className="planning-backlog-stages">{order.stages.map((stage) => <li key={stage.stageCode}><b>{stage.position}</b><span><strong>{upper(stage.stageName)}</strong> · {nameOf(stage)}<small>{stage.toPlanMinutes == null ? <span className="planning-warning">Sem tempo previsto</span> : `${duration(stage.toPlanMinutes)} a planejar`} · {stage.done} de {stage.quantity} peças</small></span></li>)}</ol></td>
+        <td><ol className="planning-backlog-stages">{order.stages.map((stage) => <li key={stage.stageCode}><b>{stage.position}</b><span><strong>{upper(stage.stageName)}</strong> · {nameOf(stage)}{stage.replan && <span className="planning-replan">Precisa replanejar</span>}<small>{stage.toPlanMinutes == null ? <span className="planning-warning">Sem tempo previsto</span> : `${duration(stage.toPlanMinutes)} a planejar`} · {stage.done} de {stage.quantity} peças</small></span></li>)}</ol></td>
         <td>{order.deadline ? fullDate(order.deadline) : '—'}{order.urgency === 'emergency' && <span className="planning-emergency">Emergência</span>}</td>
         <td><button className="admin-tool-button" type="button" onClick={() => onPlan({ orderCode: order.orderCode })}>Planejar</button></td>
       </tr>)}
@@ -418,31 +447,65 @@ function groupBacklog(rows) {
   }
   return [...orders.values()].map((order) => ({ ...order, stages: order.stages.sort((left, right) => (left.position || 0) - (right.position || 0)) }))
 }
-// The first start, from `from` on, when a machine is free for `minutes`. Labor services are people: any time works.
-function firstFree(blocks, key, from, minutes) {
+// What holds a machine or service in the plan of /planning, as it really goes (blockOccupancy, 2026-11-28): a late block
+// until now plus what is left of it, a block done early only until it was done; a block late for more than 7 days, nothing.
+const heldOn = (plan, key, now) => plan.filter((block) => resourceKey(block.resourceType, block.resourceId) === key).flatMap((block) => { const held = blockOccupancy(block, block, now); return held ? [{ block, ...held }] : [] })
+// The times a machine is busy. Labor services are people: never busy.
+const busyOf = (plan, key, now) => key.startsWith('machine:') ? heldOn(plan, key, now) : []
+// The first start, from `from` on, when nothing in `busy` overlaps `minutes`: a gap before a busy time is used when the
+// stage fits in it whole; otherwise it goes after it.
+function firstFree(busy, from, minutes) {
   let start = roundUp(from)
-  if (!key.startsWith('machine:')) return start
-  const own = blocks.filter((block) => resourceKey(block.resourceType, block.resourceId) === key)
   for (let guard = 0; guard < 500; guard += 1) {
-    const clash = own.find((block) => blockStart(block) < start + minutes * 60000 && start < blockEnd(block))
+    const clash = busy.find((item) => item.start < start + minutes * 60000 && start < item.end)
     if (!clash) return start
-    start = roundUp(blockEnd(clash))
+    start = roundUp(clash.end)
   }
   return start
 }
 
-// The chosen day of the machine on a 24-hour bar: what is already planned on it, the other stages of this OS on it and
-// this stage (red when it clashes).
-function DayStrip({ day, resourceKeyValue, name, agenda, planned, current, clash }) {
+// The chosen day of the machine on a 24-hour bar: what already holds it (a late block drawn up to where it should end
+// now, a block done early only until it was done), the other stages of this OS on it and this stage (red when it
+// clashes). The bar of this stage is dragged sideways, or moved with the arrow keys (Shift: one hour), in 15-minute
+// steps within the day; `onMove` gets the new start (2026-11-28).
+function DayStrip({ day, resourceKeyValue, name, agenda, now, planned, current, clash, onMove }) {
+  const strip = useRef(null)
+  const [drag, setDrag] = useState(null)
   const from = dayStart(day), to = from + DAY_MS
   const place = (start, end) => ({ left: `${(Math.max(start, from) - from) / DAY_MS * 100}%`, width: `${Math.max(0.5, (Math.min(end, to) - Math.max(start, from)) / DAY_MS * 100)}%` })
-  const busy = agenda.filter((block) => resourceKey(block.resourceType, block.resourceId) === resourceKeyValue && blockStart(block) < to && blockEnd(block) > from).sort((left, right) => blockStart(left) - blockStart(right))
+  const busy = heldOn(agenda, resourceKeyValue, now).filter((item) => item.start < to && item.end > from).sort((left, right) => left.start - right.start)
   const mine = planned.filter((item) => item.key === resourceKeyValue && item.minutes && item.start < to && item.end > from)
-  const busyText = busy.map((block) => `${clockTime(Math.max(blockStart(block), from))}–${blockEnd(block) >= to ? '24:00' : clockTime(blockEnd(block))} (${block.orderCode})`).join(', ')
+  const busyText = busy.map((item) => `${clockTime(Math.max(item.start, from))}–${item.end >= to ? '24:00' : clockTime(item.end)} (${item.block.orderCode}${item.end > blockEnd(item.block) ? ', em atraso' : ''})`).join(', ')
+  const within = (start) => Math.min(Math.max(start, from), to - SLOT_MS)
+  function down(event) {
+    if (event.button !== 0) return
+    event.preventDefault()
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+    setDrag({ x: event.clientX, shift: 0 })
+  }
+  const moveTo = (event) => setDrag((value) => value && { ...value, shift: Math.round((event.clientX - value.x) / (strip.current?.getBoundingClientRect().width || 1) * 1440 / 15) * 15 })
+  function up() {
+    const shift = drag?.shift || 0
+    setDrag(null)
+    if (shift) onMove(within(current.start + shift * 60000))
+  }
+  function key(event) {
+    const step = { ArrowLeft: -1, ArrowRight: 1 }[event.key]
+    if (!step) return
+    event.preventDefault()
+    onMove(within(current.start + step * (event.shiftKey ? 60 : 15) * 60000))
+  }
   return <div className="planning-strip-wrap">
-    <div className="planning-strip" role="img" aria-label={`${name} em ${shortDate(day)}: ${busy.length ? `ocupada ${busyText}` : 'livre o dia todo'}`}>
-      {busy.map((block) => <i key={block.id} className="planning-strip-busy" style={place(blockStart(block), blockEnd(block))} title={`${block.orderCode} · ${block.stageName} · ${clockTime(blockStart(block))}–${clockTime(blockEnd(block))}`} />)}
-      {mine.map((item) => <i key={item.stage.stageCode} className={`planning-strip-new${item === current ? clash ? ' planning-strip-new--clash' : '' : ' planning-strip-new--other'}`} style={place(item.start, item.end)} title={`${item.stage.stageName} · ${clockTime(item.start)}–${clockTime(item.end)}`} />)}
+    <div ref={strip} className="planning-strip" role="group" aria-label={`${name} em ${shortDate(day)}: ${busy.length ? `ocupada ${busyText}` : 'livre o dia todo'}`}>
+      {busy.map((item) => <i key={item.block.id} className={`planning-strip-busy${item.end > blockEnd(item.block) ? ' planning-strip-busy--late' : ''}`} style={place(item.start, item.end)} title={`${item.block.orderCode} · ${item.block.stageName} · ${clockTime(item.start)}–${clockTime(item.end)}${item.end > blockEnd(item.block) ? ' (em atraso)' : ''}`} />)}
+      {mine.map((item) => {
+        const className = `planning-strip-new${item === current ? clash ? ' planning-strip-new--clash' : '' : ' planning-strip-new--other'}`
+        if (item !== current || !onMove) return <i key={item.stage.stageCode} className={className} style={place(item.start, item.end)} title={`${item.stage.stageName} · ${clockTime(item.start)}–${clockTime(item.end)}`} />
+        const start = drag ? within(item.start + drag.shift * 60000) : item.start
+        return <button key={item.stage.stageCode} type="button" className={`${className} planning-strip-drag${drag ? ' planning-strip-drag--moving' : ''}`} style={place(start, start + item.minutes * 60000)}
+          aria-label={`Horário da etapa ${item.stage.stageName}: das ${clockTime(item.start)} às ${clockTime(item.end)}. Arraste para os lados ou use as setas para mudar.`} title={drag ? `${clockTime(start)}–${clockTime(start + item.minutes * 60000)}` : 'Arraste para mudar o horário'}
+          onPointerDown={down} onPointerMove={drag ? moveTo : undefined} onPointerUp={drag ? up : undefined} onPointerCancel={() => setDrag(null)} onKeyDown={key} />
+      })}
     </div>
     {/* A line under the bar with a tick going up at every hour (taller every 3 and 6 hours), then the hours. */}
     <div className="planning-strip-ruler" aria-hidden="true">{Array.from({ length: 25 }, (_, hour) => <i key={hour} className={`planning-strip-tick${hour % 6 === 0 ? ' planning-strip-tick--major' : hour % 3 === 0 ? ' planning-strip-tick--mid' : ''}`} style={{ left: `calc(${hour / 24 * 100}% - ${hour === 24 ? 1 : 0}px)` }} />)}</div>
@@ -465,10 +528,11 @@ function OrderPlanModal({ data, initial, date, onClose, onSaved }) {
   const [rows, setRows] = useState({})
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  // The plan of the next two months, to find the free time of each machine and the clashes.
+  // The plan of the next weeks, to find the free time of each machine and the clashes, from 8 days back: a late block
+  // still holds its machine for up to 7 days after its end.
   useEffect(() => {
     let active = true
-    const from = date < today ? date : today
+    const from = addDays(date < today ? date : today, -8)
     payableRequest(`/planning?from=${from}&to=${addDays(from, 61)}`).then((result) => { if (active) setAgenda(result.blocks) }).catch(() => { if (active) setAgenda(data.blocks) })
     return () => { active = false }
   }, [])
@@ -476,6 +540,9 @@ function OrderPlanModal({ data, initial, date, onClose, onSaved }) {
   const keyOf = (stage, row) => stageKeyOf(stage) || row?.resource || ''
   const startOf = (row) => Date.parse(`${row.day}T${row.time}:00-03:00`)
   const minutesOf = (row) => Math.max(0, Math.floor(Number(row.hours) || 0)) * 60 + Math.max(0, Math.floor(Number(row.minutes) || 0))
+  // The stages of this OS before `stage` that are already in the plan, as they really go (a late one until it should end
+  // now): the last of them and when it ends. A stage starts after them.
+  const plannedBefore = (plan, stage) => (plan || []).filter((block) => block.orderCode === order.orderCode && block.position && block.position < stage.position).reduce((last, block) => { const held = blockOccupancy(block, block, data.now); return held && held.end > (last?.end || 0) ? { name: block.stageName, end: held.end } : last }, null)
   function schedule(current, plan = agenda) {
     if (!order || !plan) return current
     let cursor = Math.max(roundUp(data.now), dayStart(date)), focused = false
@@ -483,11 +550,12 @@ function OrderPlanModal({ data, initial, date, onClose, onSaved }) {
     for (const stage of order.stages) {
       const row = current[stage.stageCode]
       if (!row?.checked) continue
+      cursor = Math.max(cursor, plannedBefore(plan, stage)?.end || 0)
       const key = keyOf(stage, row), minutes = minutesOf(row) || 60
       let start
       if (row.touched) start = startOf(row)
       else if (focus && !focused && key === focus.resourceKey) { start = focus.start; focused = true }
-      else start = firstFree(plan, key, cursor, minutes)
+      else start = firstFree(busyOf(plan, key, data.now), cursor, minutes)
       if (!row.touched) next[stage.stageCode] = { ...row, day: localDay(start), time: clockTime(start) }
       cursor = start + minutes * 60000
     }
@@ -509,10 +577,28 @@ function OrderPlanModal({ data, initial, date, onClose, onSaved }) {
   }) : []
   function clashOf(item) {
     if (!item.key.startsWith('machine:') || !item.minutes) return ''
-    const block = (agenda || []).find((entry) => resourceKey(entry.resourceType, entry.resourceId) === item.key && blockStart(entry) < item.end && item.start < blockEnd(entry))
-    if (block) return `${resourceName(item.key)} já tem a ${block.orderCode} · ${block.stageName} das ${clockTime(blockStart(block))} às ${clockTime(blockEnd(block))}${localDay(blockStart(block)) !== localDay(item.start) ? ` de ${shortDate(localDay(blockStart(block)))}` : ''}.`
+    const held = busyOf(agenda || [], item.key, data.now).find((entry) => entry.start < item.end && item.start < entry.end)
+    if (held) return held.end > blockEnd(held.block)
+      ? `${resourceName(item.key)} ainda está com a ${held.block.orderCode} · ${held.block.stageName}, em atraso, até ${clockTime(held.end)}${localDay(held.end) !== localDay(item.start) ? ` de ${shortDate(localDay(held.end))}` : ''}.`
+      : `${resourceName(item.key)} já tem a ${held.block.orderCode} · ${held.block.stageName} das ${clockTime(held.start)} às ${clockTime(held.end)}${localDay(held.start) !== localDay(item.start) ? ` de ${shortDate(localDay(held.start))}` : ''}.`
     const other = planned.find((entry) => entry !== item && entry.key === item.key && entry.minutes && entry.start < item.end && item.start < entry.end)
     return other ? `Ao mesmo tempo que a etapa ${other.stage.stageName}, na mesma máquina.` : ''
+  }
+  // The stage that has to end before this one starts: the previous stages here and the ones already in the plan.
+  function previousOf(item) {
+    const here = planned.filter((entry) => entry.stage.position < item.stage.position && entry.minutes).reduce((last, entry) => entry.end > (last?.end || 0) ? { name: entry.stage.stageName, end: entry.end } : last, null)
+    const before = plannedBefore(agenda, item.stage)
+    return [here, before].filter(Boolean).sort((left, right) => right.end - left.end)[0] || null
+  }
+  // The bar of a stage dropped (or moved with the arrow keys) at `wanted`: on a time its machine is busy, it goes to the
+  // next free one. It becomes a hand-set time; the following stages not changed by hand come after it again.
+  function moveStage(stage, wanted) {
+    const row = rows[stage.stageCode]
+    if (!row || !agenda) return
+    const key = keyOf(stage, row), minutes = minutesOf(row) || 60
+    const others = key.startsWith('machine:') ? planned.filter((entry) => entry.stage !== stage && entry.key === key && entry.minutes && entry.row.touched) : []
+    const start = firstFree([...busyOf(agenda, key, data.now), ...others], wanted, minutes)
+    change(stage.stageCode, { day: localDay(start), time: clockTime(start) }, true)
   }
   async function submit(event) {
     event.preventDefault()
@@ -536,7 +622,7 @@ function OrderPlanModal({ data, initial, date, onClose, onSaved }) {
         <label>OS<select value={orderCode} onChange={(event) => setOrderCode(event.target.value)}>{choices.map((item) => <option key={item.orderCode} value={item.orderCode}>{item.orderCode} · {upper(item.service)} · {item.company}</option>)}</select></label>
         {order && <p className="planning-order-facts">{order.stages.length} {order.stages.length === 1 ? 'etapa' : 'etapas'} a planejar · prazo {order.deadline ? fullDate(order.deadline) : 'não informado'}{order.urgency === 'emergency' && <span className="planning-emergency">Emergência</span>}</p>}
         {!agenda ? <p className="planning-muted">Carregando a agenda das máquinas...</p> : order && <>
-          <p className="planning-muted">Cada etapa já vem com a máquina ou o serviço da OS: escolha o dia e o horário. A etapa seguinte começa quando a anterior termina, na primeira hora livre da máquina, até você mudar o horário dela.{planned.some((item) => item.row.touched) && <> <button type="button" className="planning-link" onClick={rechain}>Encadear de novo</button></>}</p>
+          <p className="planning-muted">Cada etapa já vem com a máquina ou o serviço da OS: escolha o dia e o horário, ou arraste a barra azul. A etapa seguinte começa quando a anterior termina, na primeira hora livre da máquina (contando os serviços em atraso), até você mudar o horário dela.{planned.some((item) => item.row.touched) && <> <button type="button" className="planning-link" onClick={rechain}>Encadear de novo</button></>}</p>
           <ol className="planning-stage-rows">{order.stages.map((stage) => {
             const row = rows[stage.stageCode]
             if (!row) return null
@@ -544,8 +630,9 @@ function OrderPlanModal({ data, initial, date, onClose, onSaved }) {
             const key = keyOf(stage, row), name = resourceName(key) || stage.suggested?.name || ''
             const resource = data.resources.find((entry) => resourceKey(entry.type, entry.id) === key)
             const clash = item ? clashOf(item) : ''
+            const previous = item?.minutes > 0 ? previousOf(item) : null
             return <li key={stage.stageCode} className={`planning-stage-row${row.checked ? '' : ' planning-stage-row--off'}`}>
-              <label className="planning-stage-check"><input type="checkbox" checked={row.checked} onChange={(event) => change(stage.stageCode, { checked: event.target.checked })} aria-label={`Planejar a etapa ${stage.stageName}`} /><b>{stage.position}</b><span><strong>{upper(stage.stageName)}</strong><small>{stageKeyOf(stage) ? name : 'Sem máquina definida na OS'} · {stage.toPlanMinutes == null ? 'sem tempo previsto na OS' : `falta planejar ${duration(stage.toPlanMinutes)}`} · {stage.done} de {stage.quantity} peças</small></span></label>
+              <label className="planning-stage-check"><input type="checkbox" checked={row.checked} onChange={(event) => change(stage.stageCode, { checked: event.target.checked })} aria-label={`Planejar a etapa ${stage.stageName}`} /><b>{stage.position}</b><span><strong>{upper(stage.stageName)}</strong><small>{stageKeyOf(stage) ? name : 'Sem máquina definida na OS'} · {stage.toPlanMinutes == null ? 'sem tempo previsto na OS' : `falta planejar ${duration(stage.toPlanMinutes)}`} · {stage.done} de {stage.quantity} peças{stage.replan && <> · <span className="planning-replan">Precisa replanejar</span></>}</small></span></label>
               {row.checked && <>
                 <div className="planning-stage-fields">
                   {!stageKeyOf(stage) && <label>Máquina ou serviço<select aria-label={`Máquina ou serviço da etapa ${stage.stageName}`} value={row.resource} onChange={(event) => change(stage.stageCode, { resource: event.target.value })}><option value="">Escolher</option><optgroup label="Máquinas">{machines.map((entry) => <option key={entry.id} value={resourceKey(entry.type, entry.id)}>{entry.name}</option>)}</optgroup>{services.length > 0 && <optgroup label="Serviços (hora homem)">{services.map((entry) => <option key={entry.id} value={resourceKey(entry.type, entry.id)}>{entry.name}</option>)}</optgroup>}</select></label>}
@@ -554,9 +641,10 @@ function OrderPlanModal({ data, initial, date, onClose, onSaved }) {
                   <label>Horas<input type="number" min="0" step="1" inputMode="numeric" aria-label={`Horas da etapa ${stage.stageName}`} value={row.hours} onChange={(event) => change(stage.stageCode, { hours: event.target.value })} /></label>
                   <label>Minutos<input type="number" min="0" max="59" step="1" inputMode="numeric" aria-label={`Minutos da etapa ${stage.stageName}`} value={row.minutes} onChange={(event) => change(stage.stageCode, { minutes: event.target.value })} /></label>
                 </div>
-                {key && <DayStrip day={row.day} resourceKeyValue={key} name={name} agenda={agenda} planned={planned} current={item} clash={Boolean(clash)} />}
+                {key && <DayStrip day={row.day} resourceKeyValue={key} name={name} agenda={agenda} now={data.now} planned={planned} current={item} clash={Boolean(clash)} onMove={(start) => moveStage(stage, start)} />}
                 {item?.minutes > 0 && <p className="planning-form-summary">Das <strong>{clockTime(item.start)}</strong> de {shortDate(localDay(item.start))} às <strong>{clockTime(item.end)}</strong> de {shortDate(localDay(item.end))} · {duration(item.minutes)}</p>}
                 {clash && <p className="planning-warning planning-warning--clash" role="status"><AlertTriangle size={14} aria-hidden="true" /> {clash}</p>}
+                {previous && item.start < previous.end && <p className="planning-warning" role="status"><AlertTriangle size={14} aria-hidden="true" /> Começa antes de terminar a etapa {upper(previous.name)} ({clockTime(previous.end)} de {shortDate(localDay(previous.end))}).</p>}
                 {resource?.maintenance && <p className="planning-warning" role="status"><Wrench size={14} aria-hidden="true" /> {resource.name} está em manutenção: {resource.maintenance.reason}</p>}
                 {order.deadline && item?.minutes > 0 && localDay(item.end) > order.deadline && <p className="planning-warning" role="status"><AlertTriangle size={14} aria-hidden="true" /> Termina depois do prazo da OS ({fullDate(order.deadline)}).</p>}
               </>}

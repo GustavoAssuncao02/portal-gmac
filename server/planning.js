@@ -7,7 +7,7 @@ import { employeeRecords } from './employeeAccess.js'
 import { sectorRows } from './registries.js'
 import { machineSectors } from './machines.js'
 import { sortedByName } from './byName.js'
-import { DAY_MS, SLOT_MS, addDays, blockEnd, blockStart, blockState, clockTime, dayStart, localDay, operatorQueue, orderStages, planningBacklog } from './planningRules.js'
+import { DAY_MS, SLOT_MS, addDays, blockEnd, blockOccupancy, blockStart, blockState, clockTime, dayStart, localDay, operatorQueue, orderForecast, orderStages, planningBacklog } from './planningRules.js'
 
 const fail = (status, message) => { throw Object.assign(new Error(message), { status }) }
 const isDate = (value) => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(dayStart(value)) && localDay(dayStart(value)) === value
@@ -27,9 +27,11 @@ function decorate(blocks, orders, resources, now) {
     const order = orderOf.get(block.orderCode)
     if (!order) return []
     const resource = resources.find((item) => item.type === block.resourceType && item.id === String(block.resourceId))
-    // The machine or service defined in the OS for the stage: the block stays on it.
-    const stageResource = orderStages(order).find((item) => item.code === block.stageCode)?.resource || null
-    return [{ ...block, end: new Date(blockEnd(block)).toISOString(), ...blockState(block, order, now), stageResource, service: order.service, company: order.company, deadline: order.deadline, urgency: order.resources?.urgency === 'emergency' ? 'emergency' : 'normal', quantityTotal: Number(order.quantity) || 0, resourceName: resource?.name || 'Fora do cadastro' }]
+    // The machine or service defined in the OS for the stage: the block stays on it. `position`: the order of the stage
+    // in the OS (Planejar OS starts a stage after the blocks of the stages before it).
+    const stages = orderStages(order), index = stages.findIndex((item) => item.code === block.stageCode)
+    const stageResource = stages[index]?.resource || null
+    return [{ ...block, end: new Date(blockEnd(block)).toISOString(), ...blockState(block, order, now), stageResource, position: index + 1, service: order.service, company: order.company, deadline: order.deadline, urgency: order.resources?.urgency === 'emergency' ? 'emergency' : 'normal', quantityTotal: Number(order.quantity) || 0, resourceName: resource?.name || 'Fora do cadastro' }]
   })
 }
 
@@ -82,18 +84,28 @@ export default function createPlanningRouter(requireAdmin, pool) {
     if (quantity != null && (!Number.isInteger(quantity) || quantity < 1 || quantity > Number(order.quantity))) fail(400, `As peças do bloco vão de 1 a ${order.quantity}.`)
     return { block: { orderCode: order.code, stageCode: body.stageCode, resourceType: resource.type, resourceId: resource.id, start: new Date(start).toISOString(), minutes, quantity }, resource }
   }
-  const assertFree = (blocks, block, resource, id) => {
+  // A machine is held by its blocks as they really go (blockOccupancy, 2026-11-28): a late block until now plus what is
+  // left of it, a block done early only until it was done, a block late for more than 7 days not at all; the blocks of an
+  // OS no longer in the portal do not hold it (the screens do not show them).
+  const assertFree = (blocks, block, resource, id, orders, now = Date.now()) => {
     if (block.resourceType !== 'machine') return
-    const clash = blocks.find((item) => item.id !== id && item.resourceType === 'machine' && String(item.resourceId) === String(block.resourceId) && blockStart(item) < blockEnd(block) && blockStart(block) < blockEnd(item))
-    if (clash) fail(409, `${resource.name} já tem a ${clash.orderCode} das ${clockTime(blockStart(clash))} às ${clockTime(blockEnd(clash))}${localDay(blockStart(clash)) !== localDay(blockStart(block)) ? ` de ${localDay(blockStart(clash)).split('-').reverse().join('/')}` : ''}.`)
+    const orderOf = new Map(orders.map((order) => [order.code, order]))
+    for (const item of blocks) {
+      if (item.id === id || item.resourceType !== 'machine' || String(item.resourceId) !== String(block.resourceId) || !orderOf.has(item.orderCode)) continue
+      const busy = blockOccupancy(item, blockState(item, orderOf.get(item.orderCode), now), now)
+      if (!busy || !(busy.start < blockEnd(block) && blockStart(block) < busy.end)) continue
+      const day = localDay(busy.start) !== localDay(blockStart(block)) ? ` de ${localDay(busy.start).split('-').reverse().join('/')}` : ''
+      fail(409, busy.end > blockEnd(item) ? `${resource.name} ainda está com a ${item.orderCode}, em atraso, até ${clockTime(busy.end)}${localDay(busy.end) !== localDay(blockStart(block)) ? ` de ${localDay(busy.end).split('-').reverse().join('/')}` : ''}.` : `${resource.name} já tem a ${item.orderCode} das ${clockTime(busy.start)} às ${clockTime(busy.end)}${day}.`)
+    }
   }
 
   router.post('/planning/blocks', requireAdmin, handle(async (request, response) => {
-    const { block, resource } = blockFrom(request.body, await load())
+    const loaded = await load()
+    const { block, resource } = blockFrom(request.body, loaded)
     const at = new Date().toISOString(), by = request.adminName || 'Administrador'
     const item = await mutateStore((store) => {
       store.planningBlocks ||= []
-      assertFree(store.planningBlocks, block, resource)
+      assertFree(store.planningBlocks, block, resource, null, loaded.orders)
       const created = { id: randomUUID(), ...block, createdAt: at, createdBy: by, updatedAt: at, updatedBy: by }
       store.planningBlocks.push(created)
       return created
@@ -110,7 +122,7 @@ export default function createPlanningRouter(requireAdmin, pool) {
     const created = await mutateStore((store) => {
       store.planningBlocks ||= []
       return prepared.map(({ block, resource }) => {
-        assertFree(store.planningBlocks, block, resource)
+        assertFree(store.planningBlocks, block, resource, null, loaded.orders)
         const item = { id: randomUUID(), ...block, createdAt: at, createdBy: by, updatedAt: at, updatedBy: by }
         store.planningBlocks.push(item)
         return item
@@ -119,11 +131,12 @@ export default function createPlanningRouter(requireAdmin, pool) {
     response.status(201).json({ items: created })
   }))
   router.put('/planning/blocks/:id', requireAdmin, handle(async (request, response) => {
-    const { block, resource } = blockFrom(request.body, await load())
+    const loaded = await load()
+    const { block, resource } = blockFrom(request.body, loaded)
     const item = await mutateStore((store) => {
       const current = (store.planningBlocks || []).find((entry) => entry.id === request.params.id)
       if (!current) fail(404, 'Bloco do planejamento não encontrado.')
-      assertFree(store.planningBlocks, block, resource, current.id)
+      assertFree(store.planningBlocks, block, resource, current.id, loaded.orders)
       return Object.assign(current, block, { updatedAt: new Date().toISOString(), updatedBy: request.adminName || 'Administrador' })
     })
     response.json({ item })
@@ -136,6 +149,14 @@ export default function createPlanningRouter(requireAdmin, pool) {
     })
     if (!removed) fail(404, 'Bloco do planejamento não encontrado.')
     response.status(204).end()
+  }))
+
+  // Planejamento > Entregas (2026-11-28): when each open OS should be ready if everything goes as planned (orderForecast),
+  // or how much of it is planned.
+  router.get('/planning/forecasts', requireAdmin, handle(async (request, response) => {
+    const { store, orders } = await load()
+    const now = Date.now(), blocks = store.planningBlocks || []
+    response.set('Cache-Control', 'no-store').json({ now, items: orders.filter((order) => order.operation?.status !== 'completed').map((order) => ({ orderCode: order.code, ...orderForecast(order, blocks, now) })) })
   }))
 
   // The tablet: what is planned for the sectors of the identified employee, in the order of the plan.

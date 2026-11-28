@@ -3827,6 +3827,31 @@
 :root[data-theme="dark"][data-tone="black"] .planning-strip-busy {
     background: repeating-linear-gradient(45deg, #343537 0 4px, #232425 4px 7px)
 }
+:root[data-theme="dark"][data-tone="black"] .planning-strip-busy--late {
+    background: repeating-linear-gradient(45deg, #985d1b 0 4px, #30261a 4px 7px)
+}
+:root[data-theme="dark"][data-tone="black"] .planning-strip .planning-strip-drag:hover {
+    box-shadow: inset 0 0 0 2px #0a0a0b8c
+}
+:root[data-theme="dark"][data-tone="black"] .planning-strip .planning-strip-drag:focus-visible {
+    outline: 2px solid #47494c
+}
+:root[data-theme="dark"][data-tone="black"] .planning-replan {
+    background: #30241a
+}
+:root[data-theme="dark"][data-tone="black"] .planning-forecast {
+    background: #232425;
+    color: #bec1c5
+}
+:root[data-theme="dark"][data-tone="black"] .planning-forecast--forecast {
+    background: #1a3023
+}
+:root[data-theme="dark"][data-tone="black"] .planning-forecast--forecast-late {
+    background: #30241a
+}
+:root[data-theme="dark"][data-tone="black"] .planning-forecast--replan {
+    background: #302a1a
+}
 :root[data-theme="dark"][data-tone="black"] .planning-strip-ruler {
     border-bottom: 1px solid #303133
 }
@@ -4811,6 +4836,15 @@
     border-left-color: #303133;
     background: #232425;
     color: #bec1c5
+}
+:root[data-theme="dark"][data-tone="black"] .calendar-chip--deadline {
+    background: #301a1c
+}
+:root[data-theme="dark"][data-tone="black"] .calendar-chip--forecast {
+    background: #1a3023
+}
+:root[data-theme="dark"][data-tone="black"] .calendar-chip--forecast-late {
+    background: #30241a
 }
 :root[data-theme="dark"][data-tone="black"] .calendar-chip--projected {
     border-left-color: #303133;

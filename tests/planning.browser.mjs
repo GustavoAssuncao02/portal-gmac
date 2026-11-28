@@ -72,26 +72,51 @@ try {
   const modal = page.getByRole('dialog', { name: 'Planejar OS' })
   const stages = modal.locator('.planning-stage-row')
   await modal.getByLabel('Início da etapa Tornearia').waitFor()
-  // The Tornearia stays on the Torno (no choice) and starts right after the block already planned on it.
+  // The Tornearia stays on the Torno (no choice) and starts right after the block already planned on it. That block is
+  // late (nobody started it): it holds the Torno from now for its 2 hours, so the next free time is the quarter after.
+  const heldUntil = slot + 2 * 3600000 + SLOT_MS
   assert.match(await stages.nth(0).innerText(), /Tornearia[\s\S]*Torno 01[\s\S]*falta planejar 2h/i)
   assert.equal(await modal.getByLabel('Máquina ou serviço da etapa Tornearia').count(), 0, 'the machine of a planned stage is not chosen again')
-  assert.equal(await modal.getByLabel('Início da etapa Tornearia').inputValue(), clockTime(slot + 2 * 3600000))
+  assert.equal(await modal.getByLabel('Início da etapa Tornearia').inputValue(), clockTime(heldUntil))
   assert.match(await stages.nth(0).locator('.planning-strip-wrap').innerText(), new RegExp(`Torno 01 em .*: ocupada ${clockTime(slot)}`))
   // The Corte a plasma has no machine in this older OS: it is chosen here, and on the same Torno it follows the Tornearia.
   await modal.getByLabel('Máquina ou serviço da etapa Corte a plasma').selectOption('machine:torno')
-  assert.equal(await modal.getByLabel('Início da etapa Corte a plasma').inputValue(), clockTime(slot + 4 * 3600000))
+  assert.equal(await modal.getByLabel('Início da etapa Corte a plasma').inputValue(), clockTime(heldUntil + 2 * 3600000))
   await modal.getByLabel('Planejar a etapa Tornearia').uncheck()
-  assert.equal(await modal.getByLabel('Início da etapa Corte a plasma').inputValue(), clockTime(slot + 2 * 3600000), 'without the Tornearia it takes the first free time of the Torno')
-  // Put over the block of the Torno, the clash shows at once and the server refuses it too.
+  assert.equal(await modal.getByLabel('Início da etapa Corte a plasma').inputValue(), clockTime(heldUntil), 'without the Tornearia it takes the first free time of the Torno')
+  // Put over the late block of the Torno, the clash shows at once and the server refuses it too.
   await modal.getByLabel('Dia da etapa Corte a plasma').fill(today)
   await modal.getByLabel('Início da etapa Corte a plasma').selectOption(clockTime(slot))
-  await stages.nth(1).getByText(/Torno 01 já tem a .* das/).waitFor()
+  await stages.nth(1).getByText(/Torno 01 ainda está com a .*, em atraso, até/).waitFor()
   assert.equal(await stages.nth(1).locator('.planning-strip-new--clash').count(), 1)
+  assert.match(await stages.nth(1).locator('.planning-strip').getAttribute('aria-label'), /em atraso/)
   await page.screenshot({ path: 'test-results/planning/planejar.png' })
   await modal.getByRole('button', { name: 'Planejar etapa', exact: true }).click()
-  await modal.getByRole('alert').getByText(/Torno 01 já tem a .* das/).waitFor()
+  await modal.getByRole('alert').getByText(/Torno 01 ainda está com a .*, em atraso, até/).waitFor()
+  // The blue bar moves with the arrow keys (15 minutes): onto a time the Torno is busy, it jumps to the next free time.
+  await stages.nth(1).getByRole('button', { name: /Horário da etapa Corte a plasma/ }).press('ArrowRight')
+  assert.equal(await modal.getByLabel('Início da etapa Corte a plasma').inputValue(), clockTime(heldUntil))
+  assert.equal(await modal.getByLabel('Dia da etapa Corte a plasma').inputValue(), localDay(heldUntil))
+  assert.equal(await stages.nth(1).locator('.planning-strip-new--clash').count(), 0)
+  await modal.getByLabel('Dia da etapa Corte a plasma').fill(today)
+  await modal.getByLabel('Início da etapa Corte a plasma').selectOption(clockTime(slot))
   await modal.getByLabel('Máquina ou serviço da etapa Corte a plasma').selectOption('machine:plasma')
   assert.equal(await stages.nth(1).locator('.planning-strip-new--clash').count(), 0)
+  // Dragged with the mouse, it follows in 15-minute steps within the day; on a free machine it stays where dropped.
+  if (localDay(slot + 2 * 3600000) === today) {
+    const width = (await stages.nth(1).locator('.planning-strip').boundingBox()).width
+    const dragBar = async (minutes) => {
+      const box = await stages.nth(1).locator('.planning-strip-drag').boundingBox()
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+      await page.mouse.down()
+      await page.mouse.move(box.x + box.width / 2 + width * minutes / 1440, box.y + box.height / 2, { steps: 6 })
+      await page.mouse.up()
+    }
+    await dragBar(60)
+    assert.equal(await modal.getByLabel('Início da etapa Corte a plasma').inputValue(), clockTime(slot + 3600000))
+    await dragBar(-60)
+    assert.equal(await modal.getByLabel('Início da etapa Corte a plasma').inputValue(), clockTime(slot))
+  }
   await modal.getByRole('button', { name: 'Planejar etapa', exact: true }).click()
   await modal.waitFor({ state: 'detached' })
   await agenda.getByLabel('Agenda de Plasma 01').locator('.planning-block').filter({ hasText: 'Corte a plasma' }).waitFor()

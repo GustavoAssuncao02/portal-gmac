@@ -778,6 +778,8 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .planning-stage-check b { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .planning-stage-check strong { font-size: calc(15px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .planning-stage-check small { font-size: calc(12px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .planning-replan { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .planning-forecast { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .planning-strip-axis { font-size: calc(11px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .planning-strip-wrap small { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .ticket-form h2, :root:is([data-font-size="small"], [data-font-size="large"]) .ticket-list h2 { font-size: calc(18px * var(--account-font-scale)); }

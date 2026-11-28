@@ -4561,6 +4561,35 @@
 :root[data-theme="dark"] .planning-strip-new--clash {
     background: #92202c
 }
+:root[data-theme="dark"] .planning-strip-busy--late {
+    background: repeating-linear-gradient(45deg, #985d1b 0 4px, #3c3020 4px 7px)
+}
+:root[data-theme="dark"] .planning-strip .planning-strip-drag:hover {
+    box-shadow: inset 0 0 0 2px #06111d8c
+}
+:root[data-theme="dark"] .planning-strip .planning-strip-drag:focus-visible {
+    outline: 2px solid #4778ae
+}
+:root[data-theme="dark"] .planning-replan {
+    background: #3c2d20;
+    color: #ecb889
+}
+:root[data-theme="dark"] .planning-forecast {
+    background: #203c59;
+    color: #b3c1d0
+}
+:root[data-theme="dark"] .planning-forecast--forecast {
+    background: #203c2c;
+    color: #92e2b7
+}
+:root[data-theme="dark"] .planning-forecast--forecast-late {
+    background: #3c2d20;
+    color: #ecb889
+}
+:root[data-theme="dark"] .planning-forecast--replan {
+    background: #3c3420;
+    color: #ecce89
+}
 :root[data-theme="dark"] .planning-strip-ruler {
     border-bottom: 1px solid #36516f
 }
@@ -5707,6 +5736,21 @@
     background: #203c59;
     color: #b3c1d0
 }
+:root[data-theme="dark"] .calendar-chip--deadline {
+    border-left-color: #ae474d;
+    background: #3c2023;
+    color: #e0949b
+}
+:root[data-theme="dark"] .calendar-chip--forecast {
+    border-left-color: #47ae65;
+    background: #203c2c;
+    color: #92e2b7
+}
+:root[data-theme="dark"] .calendar-chip--forecast-late {
+    border-left-color: #ae7e47;
+    background: #3c2d20;
+    color: #ecb889
+}
 :root[data-theme="dark"] .calendar-chip--projected {
     border-left-color: #36516f;
     background: #203c59;
@@ -5735,6 +5779,15 @@
 }
 :root[data-theme="dark"] .calendar-dot--unknown {
     background: #45596e
+}
+:root[data-theme="dark"] .calendar-dot--deadline {
+    background: #981b21
+}
+:root[data-theme="dark"] .calendar-dot--forecast {
+    background: #219241
+}
+:root[data-theme="dark"] .calendar-dot--forecast-late {
+    background: #985e1b
 }
 :root[data-theme="dark"] .calendar-dot--projected {
     background: #203c59

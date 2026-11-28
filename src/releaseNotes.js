@@ -7,6 +7,8 @@ export const releaseNotes = [
     version: '1.0.29',
     date: '2026-11-28',
     notes: [
+      'Melhorias no sistema de planejamento: o Planejar OS sugere os horários pela ocupação real das máquinas (contando os serviços em atraso) e a barra azul de cada etapa pode ser arrastada para mudar o horário',
+      'Planejamento › Entregas: além do prazo de entrega (vermelho), o calendário mostra a previsão de término de cada OS planejada (verde no prazo, laranja quando vai atrasar)',
       'Melhorias gerais: correções de problemas e maior estabilidade do sistema',
     ],
   },

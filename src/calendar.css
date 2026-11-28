@@ -35,6 +35,10 @@
 .calendar-chip--late { border-left-color: #e52b35; background: #ffedef; color: #a8303b; }
 .calendar-chip--unknown { border-left-color: #8aa0b6; background: #eef2f6; color: #4f6680; }
 /* A repeated task on its next days: only a preview, lighter. */
+/* Planejamento > Entregas: the delivery deadline and the forecast end of an OS (2026-11-28). */
+.calendar-chip--deadline { border-left-color: #e52b35; background: #ffedef; color: #a8303b; }
+.calendar-chip--forecast { border-left-color: #24a148; background: #eaf6ef; color: #1d6f43; }
+.calendar-chip--forecast-late { border-left-color: #d97706; background: #fff0e2; color: #8f4c0e; }
 .calendar-chip--projected { border-left-color: #b7c9da; background: #f4f7fa; color: #5b7590; font-style: italic; }
 .calendar-more { align-self: start; padding: 1px 4px; border: 0; background: transparent; color: #1d5fa3; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
 .calendar-more:hover { text-decoration: underline; }
@@ -47,6 +51,9 @@
 .calendar-dot--at-deadline { background: #d97706; }
 .calendar-dot--late { background: #e52b35; }
 .calendar-dot--unknown { background: #8aa0b6; }
+.calendar-dot--deadline { background: #e52b35; }
+.calendar-dot--forecast { background: #24a148; }
+.calendar-dot--forecast-late { background: #d97706; }
 .calendar-dot--projected { background: #b7c9da; }
 /* A week: every entry of the day. */
 .calendar-grid--week .calendar-day { min-height: 280px; }
