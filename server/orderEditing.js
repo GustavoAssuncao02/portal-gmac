@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { productionStages, stageLabel, stageActive, stageCodeOf, readStageLayout, validStageLayout, serviceDetails, stagePlanProblem } from './serviceStages.js'
+import { contractOf } from './contractTables.js'
 import { cleanStagePerPiece, cleanStageResources, cleanStageTimes } from './pieces.js'
 import { validEntryMode, withEntryMode } from './entryMode.js'
 import { realChangedFields } from './orderHistory.js'
@@ -110,7 +111,7 @@ export function editOrder(order, state, body, catalog = {}) {
       return { ...(unchangedMaterial ? previous : {}), id: previous && !unchangedMaterial ? randomUUID() : id, name, detail, unit, quantity, unitPrice: numeric(item.unitPrice, unitPriceLabel(unit)), ...(unchangedMaterial && previous.stockAvailable != null ? { purchaseQuantity: Math.max(0, Number((quantity - covered).toFixed(3))), stockStatus: previous.inventoryId == null ? 'unknown' : covered <= 0 ? 'missing' : covered < quantity ? 'partial' : 'available' } : {}) }
     })
   }
-  fields.resources = { ...order.resources, materials: rows(resources.materials), laborEntries: rows(resources.laborEntries, true), stages: [...resources.stages], stageLayout: readStageLayout(resources), kind: resources.kind, ...serviceDetails(resources), serviceLocation: serviceDetails(order.resources).serviceLocation, paintColor: text(resources.paintColor || ''), serviceDescription: text(resources.serviceDescription || '', 5000), stageTimes: cleanStageTimes(resources.stageTimes ?? order.resources?.stageTimes, resources.stages) }
+  fields.resources = { ...order.resources, materials: rows(resources.materials), laborEntries: rows(resources.laborEntries, true), stages: [...resources.stages], stageLayout: readStageLayout(resources, contractOf(order)), kind: resources.kind, ...serviceDetails(resources), serviceLocation: serviceDetails(order.resources).serviceLocation, paintColor: text(resources.paintColor || ''), serviceDescription: text(resources.serviceDescription || '', 5000), stageTimes: cleanStageTimes(resources.stageTimes ?? order.resources?.stageTimes, resources.stages) }
   delete fields.resources.entryMode
   delete fields.resources.stageTimesPerPiece
   if (entryMode) fields.resources.entryMode = entryMode

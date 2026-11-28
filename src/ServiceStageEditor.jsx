@@ -69,12 +69,17 @@ function SortableStages({ ids, onMove, vertical = false, children }) {
 
 // The stages are a stack read from top to bottom: each checked stage shows its position in the execution (1, 2, 3…),
 // counted across the groups in their order. Dragging a stage or a group renumbers everything at once.
-export default function ServiceStageEditor({ layout, stages, onLayoutChange, onToggle, disabled, stageTimes, onStageTime, stageResources, resourceOptions, onStageResource, pieces }) {
+const rateText = (value) => `${Number(value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/h`
+
+// `sheet` (offers of the Nestlé and etiquetas of the Belgo, server/contractTables.js): { title, rates } — the stages are the
+// service lines of the client's price sheet, each one with the normal rate of the sheet beside its name.
+export default function ServiceStageEditor({ layout, stages, onLayoutChange, onToggle, disabled, stageTimes, onStageTime, stageResources, resourceOptions, onStageResource, pieces, sheet = null }) {
   // A deactivated stage (Etapas) shows only where it is checked; it can be unchecked, not checked again.
   const shown = (key) => stageActive(key) || stages.includes(key)
   const visibleGroups = layout.filter((entry) => entry.stages.some(shown))
   const sequence = orderedStageSelection(layout, stages), position = (key) => sequence.indexOf(key) + 1
   return <fieldset><legend>Etapas do serviço</legend>
+    {sheet && <p className="offer-stage-hint offer-stage-sheet"><strong>Planilha {sheet.title}:</strong> as etapas são as linhas de serviço da planilha do cliente, com o valor da hora normal. Marque as que vão ser feitas e escolha em cada uma a <strong>máquina ou o serviço</strong> do portal que vai executar: é por ele que o operador e o planejamento acompanham a produção. O PDF sai com a linha escolhida.</p>}
     <p className="offer-stage-hint">As etapas marcadas são feitas <strong>de cima para baixo</strong>, na ordem dos números. Arraste <GripVertical size={13} aria-hidden="true" /> para mudar a ordem de uma etapa ou de um grupo.{onStageTime && <> Ao lado de cada etapa marcada, informe o <strong>tempo previsto</strong> {pieces ? 'de uma peça' : 'para a OS inteira'} (obrigatório): é a meta que o operador vê e a base do planejamento das máquinas.</>}{onStageResource && <> Escolha também a <strong>máquina ou o serviço</strong> de cada etapa (obrigatório): o operador não escolhe no tablet, a etapa já vem com ele.</>}</p>
     <div className="offer-stage-groups">
     <SortableStages ids={visibleGroups.map(({ group }) => group)} vertical onMove={(groups) => {
@@ -97,7 +102,7 @@ export default function ServiceStageEditor({ layout, stages, onLayoutChange, onT
           <div className="offer-stage-options offer-stage-stack">{options.map((key) => <SortableStageItem key={key} id={key} label={stageLabel(key)} disabled={disabled} selected={stages.includes(key)}>
             <span className="offer-stage-number" aria-hidden="true">{stages.includes(key) ? position(key) : ''}</span>
             {stages.includes(key) && <span className="sr-only" id={`stage-order-${key}`}>Etapa {position(key)} da execução</span>}
-            <label><input type="checkbox" checked={stages.includes(key)} disabled={disabled} aria-describedby={stages.includes(key) ? `stage-order-${key}` : undefined} onChange={() => onToggle(key)} />{upper(stageLabel(key))}{!stageActive(key) && <span className="offer-stage-inactive" title="Desativada em Etapas: some das ofertas novas. Pode ser desmarcada, mas não marcada de novo.">desativada</span>}</label>
+            <label><input type="checkbox" checked={stages.includes(key)} disabled={disabled} aria-describedby={stages.includes(key) ? `stage-order-${key}` : undefined} onChange={() => onToggle(key)} />{upper(stageLabel(key))}{sheet?.rates?.[key] != null && <span className="offer-stage-rate" title="Valor da hora normal na planilha do cliente">{rateText(sheet.rates[key])}</span>}{!stageActive(key) && <span className="offer-stage-inactive" title="Desativada em Etapas: some das ofertas novas. Pode ser desmarcada, mas não marcada de novo.">desativada</span>}</label>
             {onStageTime && stages.includes(key) && <StageTimeInput label={stageLabel(key)} minutes={stageTimes?.[key]} disabled={disabled} pieces={pieces} onChange={(minutes) => onStageTime(key, minutes)} />}
             {onStageResource && stages.includes(key) && <StageResourceSelect code={key} label={stageLabel(key)} value={stageResources?.[key]} options={resourceOptions} disabled={disabled} onChange={(choice) => onStageResource(key, choice)} />}
           </SortableStageItem>)}</div>

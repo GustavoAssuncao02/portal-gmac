@@ -7211,6 +7211,10 @@ button {
 .offer-stage-group { padding-left: 12px; border-left: 3px solid #d8e6f3; }
 .offer-stage-group h3 { margin: 0 0 10px; color: #0c4c91; font-size: 13px; }
 .offer-stage-inactive { margin-left: 8px; padding: 1px 7px; border-radius: 999px; color: #a3283a; background: #fdecee; font-size: 11px; font-weight: 600; }
+.offer-stage-rate { margin-left: 8px; padding: 1px 7px; border-radius: 999px; color: #1d5b8f; background: #e7f1fb; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.offer-stage-hint.offer-stage-sheet { display: block; padding: 10px 12px; border: 1px solid #c9dcef; border-radius: 10px; color: #1d3f5e; background: #f2f8fe; line-height: 1.5; }
+.offer-material-sheet-row { display: block; color: #1d5b8f; font-size: 11px; font-weight: 600; }
+.offer-stage-hint.offer-sheet-total { display: block; margin: 12px 0 8px; color: #1d5b8f; font-size: 13px; line-height: 1.5; }
 .offer-stage-heading { display: flex; align-items: center; gap: 5px; margin-bottom: 8px; }
 .offer-stage-heading h3 { margin: 0; }
 .offer-stage-item { display: flex; align-items: center; gap: 3px; position: relative; }

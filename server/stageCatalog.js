@@ -4,6 +4,8 @@ import { mutateStore, readStore } from './offers.js'
 import { registerSectorNames } from './registries.js'
 import { requireAdminOrOperator } from './access.js'
 import { seedStageCatalog, setStageCatalog } from './serviceStages.js'
+import { nestleLabor, etiquetaLabor } from './proposalDefaults.js'
+import { contractModels, contractStageCode, contractStageSuffix, contractTitles } from './contractTables.js'
 
 // "Etapas" (below Máquinas and Serviços): the stages of the services. Each stage belongs to a sector of Cadastros ›
 // Setores (its group), may be renamed (the old names stay as aliases, so the OS that kept a name still find it), and
@@ -24,6 +26,55 @@ function seededCatalog(store) {
   return { stages: seed.stages.map((row) => ({ code: row.code, name: row.name, sectorId: sectorId(row.group), active: row.active, resources: [], aliases: [], createdAt: now, updatedAt: now })), groupOrder: seed.groups.map(sectorId) }
 }
 
+// Planilhas dos clientes (server/contractTables.js): cada linha de serviço da planilha da Nestlé e da Etiqueta é uma etapa
+// do catálogo, no grupo da planilha e sem setor. O nome vem da descrição da linha (Modelos de proposta), com a planilha
+// entre parênteses: as duas planilhas têm descrições iguais e a OS acha a etapa pelo nome. Mudar a descrição renomeia a
+// etapa (o nome antigo fica nos aliases); uma linha retirada da planilha desativa a etapa e volta ativa se a linha voltar.
+// Só as máquinas e serviços da etapa podem ser editados na tela Etapas.
+const defaultContractLabor = { nestle: nestleLabor, etiqueta: etiquetaLabor }
+const contractLabor = (store, model) => {
+  const rows = store.proposalSettings?.tables?.[model]?.labor
+  return (Array.isArray(rows) ? rows : defaultContractLabor[model]).filter((row) => row?.id && String(row.description ?? '').trim())
+}
+export function syncContractStages(store) {
+  const catalog = store.stageCatalog
+  if (!catalog) return false
+  let changed = false
+  const now = new Date().toISOString()
+  for (const model of contractModels) {
+    const codes = new Set()
+    for (const row of contractLabor(store, model)) {
+      const code = contractStageCode(model, row.id)
+      codes.add(code)
+      const taken = (name) => catalog.stages.some((other) => other.code !== code && [other.name, ...(other.aliases || [])].some((used) => sameText(used, name)))
+      const description = clean(row.description, 60)
+      let name = `${description} (${contractStageSuffix[model]})`
+      if (taken(name)) name = clean(`${description} (${contractStageSuffix[model]} ${row.id})`)
+      const existing = catalog.stages.find((entry) => entry.code === code)
+      if (!existing) {
+        catalog.stages.push({ code, name, sectorId: null, contract: model, rowId: String(row.id), active: true, resources: [], aliases: [], createdAt: now, updatedAt: now })
+        changed = true
+        continue
+      }
+      if (existing.name !== name) {
+        existing.aliases = [...new Set([...(existing.aliases || []).filter((alias) => !sameText(alias, name)), existing.name])]
+        existing.name = name
+        existing.updatedAt = now
+        changed = true
+      }
+      if (existing.removedFromSheet) { delete existing.removedFromSheet; existing.active = true; existing.updatedAt = now; changed = true }
+    }
+    for (const stage of catalog.stages) {
+      if (stage.contract !== model || codes.has(stage.code) || stage.removedFromSheet) continue
+      Object.assign(stage, { removedFromSheet: true, active: false, updatedAt: now })
+      changed = true
+    }
+  }
+  return changed
+}
+// Whether the saved catalog lacks a line of the sheets (or has an old description), without changing the store.
+const contractStagesOutdated = (store) => Boolean(store.stageCatalog) && syncContractStages(structuredClone({ stageCatalog: store.stageCatalog, proposalSettings: store.proposalSettings }))
+
 // What the screens and the rules read: the sector names as groups, only the machines and services still registered.
 export function catalogView(store) {
   const draft = store.stageCatalog ? store : structuredClone({ sectors: store.sectors || [] })
@@ -31,10 +82,12 @@ export function catalogView(store) {
   const sectors = draft.sectors || []
   const sectorName = (id) => sectors.find((row) => row.id === id)?.name || 'Sem setor'
   const registered = (choice) => (choice.type === 'machine' ? store.machines : choice.type === 'labor-service' ? store.laborServices : null)?.some((item) => String(item.id) === String(choice.id))
-  const stages = catalog.stages.map((row) => ({ ...row, group: sectorName(row.sectorId), resources: (row.resources || []).filter(registered) }))
+  const stages = catalog.stages.map((row) => ({ ...row, group: row.contract ? contractTitles[row.contract] || row.contract : sectorName(row.sectorId), resources: (row.resources || []).filter(registered) }))
   const ordered = (catalog.groupOrder || []).map(sectorName)
-  const others = [...new Set(stages.map((row) => row.group))].filter((name) => !ordered.includes(name)).sort((left, right) => left.localeCompare(right, 'pt-BR'))
-  return { stages, groups: [...new Set([...ordered, ...others])] }
+  // The groups of the price sheets come last, in their own order.
+  const sheets = contractModels.map((model) => contractTitles[model]).filter((name) => stages.some((row) => row.contract && row.group === name))
+  const others = [...new Set(stages.filter((row) => !row.contract).map((row) => row.group))].filter((name) => !ordered.includes(name)).sort((left, right) => left.localeCompare(right, 'pt-BR'))
+  return { stages, groups: [...new Set([...ordered.filter((name) => !sheets.includes(name)), ...others, ...sheets])] }
 }
 
 export async function refreshStageCatalog() {
@@ -43,9 +96,11 @@ export async function refreshStageCatalog() {
   return view
 }
 
-// At startup: the first catalog is saved once; afterwards the saved one is loaded.
+// At startup: the first catalog is saved once; afterwards the saved one is loaded. The lines of the price sheets join it
+// (or follow the sheets) whenever they changed.
 export async function ensureStageCatalog() {
-  if (!(await readStore()).stageCatalog) await mutateStore((store) => { store.stageCatalog ||= seededCatalog(store) })
+  const store = await readStore()
+  if (!store.stageCatalog || contractStagesOutdated(store)) await mutateStore((draft) => { draft.stageCatalog ||= seededCatalog(draft); syncContractStages(draft) })
   return refreshStageCatalog()
 }
 
@@ -64,6 +119,11 @@ function stageFields(body, store, current) {
   if (others.some((row) => [row.name, ...(row.aliases || [])].some((used) => sameText(used, name)))) fail(409, 'Já existe uma etapa com esse nome (ou que já teve esse nome).')
   const sectorId = String(body?.sectorId ?? '')
   if (!(store.sectors || []).some((row) => row.id === sectorId)) fail(400, 'Escolha o setor da etapa (Cadastros › Setores).')
+  return { name, sectorId, resources: stageResourcesOf(body, store, current) }
+}
+
+// The machines and services of a stage (the first is the default of a new offer).
+function stageResourcesOf(body, store, current) {
   if (body?.resources !== undefined && !Array.isArray(body.resources)) fail(400, 'Máquinas e serviços da etapa inválidos.')
   const seen = new Set(), resources = []
   for (const choice of (body?.resources ?? current?.resources ?? []).slice(0, MAX_RESOURCES)) {
@@ -73,7 +133,7 @@ function stageFields(body, store, current) {
     if (!found) fail(400, 'Escolha máquinas e serviços cadastrados para a etapa.')
     if (!seen.has(`${type}:${id}`)) { seen.add(`${type}:${id}`); resources.push({ type, id: found.id }) }
   }
-  return { name, sectorId, resources }
+  return resources
 }
 
 // A renamed stage: the OS that kept the old name in their production and records show the new one.
@@ -157,7 +217,8 @@ export default function createStageCatalogRouter(requireAdmin, pool) {
       store.stageCatalog ||= seededCatalog(store)
       const row = store.stageCatalog.stages.find((entry) => entry.code === request.params.code)
       if (!row) fail(404, 'Etapa não encontrada.')
-      const fields = stageFields(request.body, store, row)
+      // A line of a price sheet keeps the name and the group of the sheet: only its machines and services change.
+      const fields = row.contract ? { name: row.name, sectorId: row.sectorId ?? null, resources: stageResourcesOf(request.body, store, row) } : stageFields(request.body, store, row)
       const before = row.name
       const changes = stageChanges(store, row, fields)
       if (changes.length) recordStage(store, request, 'edited', { code: row.code, name: fields.name }, changes)
@@ -184,6 +245,7 @@ export default function createStageCatalogRouter(requireAdmin, pool) {
       store.stageCatalog ||= seededCatalog(store)
       const row = store.stageCatalog.stages.find((entry) => entry.code === request.params.code)
       if (!row) fail(404, 'Etapa não encontrada.')
+      if (row.contract) fail(409, `A etapa ${row.name} é uma linha da planilha do cliente: desative-a em vez de excluir (ou retire a linha em Modelos de proposta).`)
       if (stageInUse(store, row)) fail(409, `A etapa ${row.name} já foi usada em ofertas ou OS: desative-a em vez de excluir.`)
       store.stageCatalog.stages = store.stageCatalog.stages.filter((entry) => entry !== row)
       recordStage(store, request, 'deleted', row)

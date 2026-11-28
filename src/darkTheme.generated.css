@@ -3377,6 +3377,9 @@
 :root[data-theme="dark"] .proposal-table td.proposal-yellow {
     background: #3c3920
 }
+:root[data-theme="dark"] .proposal-split-foot {
+    color: #b4c1cf
+}
 :root[data-theme="dark"] .proposal-usage li {
     border: 1px solid #36516f
 }
@@ -3641,6 +3644,9 @@
 }
 :root[data-theme="dark"] .stages-intro {
     color: #b2c2d2
+}
+:root[data-theme="dark"] .stages-sheet-note {
+    color: #a9c4da
 }
 :root[data-theme="dark"] .stages-group {
     border: 1px solid #36516f;
@@ -8039,6 +8045,21 @@
 :root[data-theme="dark"] .offer-stage-inactive {
     color: #e4909d;
     background: #3c2023
+}
+:root[data-theme="dark"] .offer-stage-rate {
+    color: #a9c4da;
+    background: #203c59
+}
+:root[data-theme="dark"] .offer-stage-hint.offer-stage-sheet {
+    border: 1px solid #36516f;
+    color: #e1ebf6;
+    background: #203c59
+}
+:root[data-theme="dark"] .offer-material-sheet-row {
+    color: #a9c4da
+}
+:root[data-theme="dark"] .offer-stage-hint.offer-sheet-total {
+    color: #a9c4da
 }
 :root[data-theme="dark"] .offer-stage-drag {
     color: #b3c2d0

@@ -88,7 +88,8 @@ import { latestOnly, pollWhileVisible } from './polling.js'
 import { newId } from './newId.js'
 import { PackageMinus, Ticket, Terminal, NotebookPen, History, Monitor, Minimize2, Plus, Pencil, Trash2, Clock3, CreditCard, HandCoins, Banknote, Landmark, ChartColumn, Tags, FileChartColumn, FilePenLine, FolderTree, ChartNoAxesCombined, Truck, WalletCards, ChevronLeft, ChevronRight, ChevronDown, UsersRound, Menu, X, Info, ArrowLeft, ListChecks, Layers, CircleCheck, CircleX, ArrowUpDown, ArrowUp, ArrowDown, Building2, CirclePause, Power, Factory, Wrench, CalendarClock, Save, Contact, ShoppingCart, Mail, ListOrdered } from 'lucide-react'
 import { proposalCosts, proposalPricing, osValueOf, hoursText, marginLimits, PROPOSAL_MARGIN_GAP } from '../server/proposalMath.js'
-import { stageLabel, serviceDetails, serviceDescriptionText, readStageLayout, orderedStageSelection, stagePlanProblem, stagePlanPlace, setStageCatalog, onStageCatalogChange, defaultStageResource } from '../server/serviceStages.js'
+import { stageLabel, serviceDetails, serviceDescriptionText, readStageLayout, orderedStageSelection, stagePlanProblem, stagePlanPlace, setStageCatalog, onStageCatalogChange, defaultStageResource, stageContract, stageContractRow } from '../server/serviceStages.js'
+import { contractMaterialUnit, contractOf, contractTitles } from '../server/contractTables.js'
 import { findInventoryMaterial, materialsStock, normalizeSearch, purchaseMaterialRequests } from './offerResources.js'
 import { deadlineCategories } from './serviceDeadline.js'
 import { currentPieceProgress, emergenciesFirst } from './serviceProgress.js'
@@ -1622,7 +1623,9 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
   const [machines, setMachines] = useState([])
   const [materials, setMaterials] = useState(offer?.resources?.materials || [])
   const [stages, setStages] = useState(offer?.resources?.stages ?? offer?.proposal?.stages ?? [])
-  const [stageLayout, setStageLayout] = useState(() => readStageLayout({ ...offer?.resources, stages: offer?.resources?.stages ?? offer?.proposal?.stages ?? [] }))
+  // Nestlé and etiquetas of the Belgo (server/contractTables.js): the stages and materials come from the client's sheet.
+  const sheet = contractOf(offer)
+  const [stageLayout, setStageLayout] = useState(() => readStageLayout({ ...offer?.resources, stages: offer?.resources?.stages ?? offer?.proposal?.stages ?? [] }, contractOf(offer)))
   const [kind, setKind] = useState(offer?.resources?.kind ?? offer?.proposal?.kind ?? 'service')
   const [details, setDetails] = useState(() => offerDetails(offer?.resources, offer?.description))
   const [stageTimes, setStageTimes] = useState(offer?.resources?.stageTimes || {})
@@ -1657,7 +1660,7 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
     setMaterials(offer?.resources?.materials || [])
     setLaborEntries(offer?.resources?.laborEntries || [])
     setStages(offer?.resources?.stages ?? offer?.proposal?.stages ?? [])
-    setStageLayout(readStageLayout({ ...offer?.resources, stages: offer?.resources?.stages ?? offer?.proposal?.stages ?? [] }))
+    setStageLayout(readStageLayout({ ...offer?.resources, stages: offer?.resources?.stages ?? offer?.proposal?.stages ?? [] }, contractOf(offer)))
     setKind(offer?.resources?.kind ?? offer?.proposal?.kind ?? 'service')
     setDetails(offerDetails(offer?.resources, offer?.description))
     setStageTimes(offer?.resources?.stageTimes || {})
@@ -1668,7 +1671,7 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
       materials: offer?.resources?.materials || [],
       laborEntries: offer?.resources?.laborEntries || [],
       stages: offer?.resources?.stages ?? offer?.proposal?.stages ?? [],
-      stageLayout: readStageLayout({ ...offer?.resources, stages: offer?.resources?.stages ?? offer?.proposal?.stages ?? [] }),
+      stageLayout: readStageLayout({ ...offer?.resources, stages: offer?.resources?.stages ?? offer?.proposal?.stages ?? [] }, contractOf(offer)),
       kind: offer?.resources?.kind ?? offer?.proposal?.kind ?? 'service',
       ...offerDetails(offer?.resources, offer?.description),
       stageTimes: offer?.resources?.stageTimes || {},
@@ -1680,7 +1683,21 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
     // A row being edited belongs to the offer that was open.
     setEditingMaterialId(null)
     setMaterialFormOpen(false)
-  }, [offer?.id, resourcesVersion])
+  }, [offer?.id, resourcesVersion, sheet])
+
+  const [sheetTable, setSheetTable] = useState(null)
+  useEffect(() => {
+    setSheetTable(null)
+    if (!sheet) return undefined
+    let active = true
+    apiRequest('/api/proposal-settings').then((data) => { if (active) setSheetTable(data.settings?.tables?.[sheet] || null) }).catch((error) => { if (active) setAttachmentError(error.message) })
+    return () => { active = false }
+  }, [sheet, offer?.id])
+  const sheetMaterial = (id) => sheetTable?.materials?.find((row) => row.id === id) || null
+  const sheetLabor = (code) => stageContract(code) === sheet ? sheetTable?.labor?.find((row) => row.id === stageContractRow(code)) || null : null
+  const sheetRates = Object.fromEntries(stageLayout.flatMap((entry) => entry.stages).map((code) => [code, sheetLabor(code)?.normal]).filter(([, rate]) => rate != null))
+  // What the client's sheet charges for the stages (hours at the normal rate) and the materials chosen from it.
+  const sheetTotal = !sheet ? null : laborEntries.reduce((total, entry) => total + (Number(entry.hours) || 0) * (Number(sheetLabor(entry.stageCode)?.normal) || 0), 0) + materials.reduce((total, material) => total + (Number(material.quantity) || 0) * (Number(sheetMaterial(material.contractRow)?.price) || 0), 0)
 
   // An offer that arrives empty (for example, from the website) of a piece made before can be filled with its history.
   const emptyResources = !offer?.orderCode && !(offer?.resources?.materials?.length) && !(offer?.resources?.stages?.length)
@@ -1740,7 +1757,7 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
           setMaterials(item.resources.materials)
           setLaborEntries(item.resources.laborEntries)
           setStages(item.resources.stages)
-          setStageLayout(readStageLayout(item.resources))
+          setStageLayout(readStageLayout(item.resources, contractOf(item)))
           setKind(item.resources.kind)
           setDetails(offerDetails(item.resources, item.description))
           setStageTimes(item.resources.stageTimes || {})
@@ -1756,7 +1773,7 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
           setMaterials(persistedResources.current.materials)
           setLaborEntries(persistedResources.current.laborEntries)
           setStages(persistedResources.current.stages)
-          setStageLayout(readStageLayout(persistedResources.current))
+          setStageLayout(readStageLayout(persistedResources.current, contractOf(offer)))
           setKind(persistedResources.current.kind)
           setDetails(offerDetails(persistedResources.current, persistedResources.current.description))
           setStageTimes(persistedResources.current.stageTimes || {})
@@ -1777,6 +1794,12 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
 
   function updateMaterial(field, value) {
     setMaterialForm((current) => ({ ...current, [field]: value }))
+  }
+
+  // A material line of the client's sheet: its description, unit and price (the price can still be changed).
+  function selectSheetMaterial(id) {
+    const row = sheetMaterial(id)
+    setMaterialForm((current) => row ? { ...current, name: row.description, contractRow: row.id, inventoryId: null, unit: contractMaterialUnit(row.unit), unitPrice: String(row.price ?? '') } : { ...current, name: '', contractRow: null, inventoryId: null })
   }
 
   function selectInventoryMaterial(value, selectedItem) {
@@ -1812,7 +1835,7 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
 
   // Opens the material form with the row filled in; saving replaces the row instead of adding another one.
   function editMaterial(material) {
-    setMaterialForm({ name: material.name, detail: material.detail || '', unit: materialUnit(material.unit), quantity: String(perPiece ? material.quantityPerPiece ?? Math.round(material.quantity / (Number(offer.quantity) || 1) * 10000) / 10000 : material.quantity), unitPrice: String(material.unitPrice ?? ''), inventoryId: material.inventoryId ?? null })
+    setMaterialForm({ name: material.name, detail: material.detail || '', unit: materialUnit(material.unit), quantity: String(perPiece ? material.quantityPerPiece ?? Math.round(material.quantity / (Number(offer.quantity) || 1) * 10000) / 10000 : material.quantity), unitPrice: String(material.unitPrice ?? ''), inventoryId: material.inventoryId ?? null, ...(material.contractRow ? { contractRow: material.contractRow } : {}) })
     setEditingMaterialId(material.id)
     setMaterialFormOpen(true)
     window.requestAnimationFrame(() => document.querySelector('.offer-inline-form:not(.offer-labor-form)')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }))
@@ -1975,24 +1998,24 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
             <EntryModeChoice value={entryMode} onChange={changeEntryMode} />
             <div className="offer-resource-heading"><div><span className="offer-details-section-title">Materiais necessários</span><p>{perPiece ? `Informe a quantidade de uma peça, em quilos (kg), em metros (m), em unidades (un) ou em conjuntos (cj). ${quantityPending(offer) ? 'Quantidade a definir: o total fica para 1 peça e é recalculado quando a quantidade for informada.' : `O total é calculado para as ${offer.quantity} ${Number(offer.quantity) === 1 ? 'peça' : 'peças'} do pedido.`}` : 'Adicione os materiais e informe a quantidade, em quilos (kg), em metros (m), em unidades (un) ou em conjuntos (cj).'}</p></div><button className="offer-add-resource-button" type="button" onClick={() => { if (editingMaterialId == null && materialFormOpen) return closeMaterialForm(); closeMaterialForm(); setMaterialFormOpen(true) }}><Icon name="plus" />Adicionar material</button></div>
             {materialFormOpen && <form className="offer-inline-form" onSubmit={addMaterial} aria-label={editingMaterialId != null ? 'Editar material' : 'Adicionar material'}>
-              <label>Material *<div className="material-autocomplete"><div className="material-autocomplete-input">
+              {sheet ? <label>Material da planilha *<select value={materialForm.contractRow || ''} onChange={(event) => selectSheetMaterial(event.target.value)} required aria-label="Material da planilha"><option value="">{sheetTable ? 'Escolha o material da planilha' : 'Carregando a planilha...'}</option>{(sheetTable?.materials || []).map((row, index) => <option key={row.id} value={row.id}>{index + 1}. {row.description} · {row.unit} · {formatMoney(row.price)}</option>)}</select></label> : <label>Material *<div className="material-autocomplete"><div className="material-autocomplete-input">
                 <input className="upper-input" value={materialForm.name} autoComplete="off" role="combobox" aria-expanded={materialSuggestionsOpen} aria-controls="offer-material-suggestions" onFocus={() => setMaterialSuggestionsOpen(true)} onBlur={(event) => { if (!event.currentTarget.closest('.material-autocomplete')?.contains(event.relatedTarget)) setMaterialSuggestionsOpen(false) }} onChange={(event) => { selectInventoryMaterial(event.target.value); setMaterialSuggestionsOpen(true) }} onKeyDown={(event) => { if (event.key === 'Escape') setMaterialSuggestionsOpen(false); if (event.key === 'ArrowDown' && matchingInventory.length) { event.preventDefault(); document.getElementById('offer-material-suggestions')?.querySelector('button')?.focus() } }} placeholder="Digite para buscar no estoque" required /><span>⌄</span>
               </div>{materialSuggestionsOpen && <div className="material-suggestions" id="offer-material-suggestions" role="listbox" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setMaterialSuggestionsOpen(false) }}>
                 {matchingInventory.length > 0 ? matchingInventory.map((item) => <button type="button" role="option" aria-selected={materialForm.inventoryId === item.id} key={item.id} onMouseDown={(event) => event.preventDefault()} onClick={() => { selectInventoryMaterial(item.name, item); setMaterialSuggestionsOpen(false) }} onKeyDown={(event) => { if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); const buttons = [...event.currentTarget.parentElement.querySelectorAll('button')]; const next = buttons.indexOf(event.currentTarget) + (event.key === 'ArrowDown' ? 1 : -1); buttons[(next + buttons.length) % buttons.length]?.focus() } if (event.key === 'Escape') setMaterialSuggestionsOpen(false) }}><strong>{upper(item.name)}</strong><small>{formatQuantity(item.quantity, item.unit)} · {formatMoney(item.unitPrice)}/{materialUnit(item.unit)}</small></button>) : <div className="material-suggestion-empty"><strong>Novo material</strong><span>{upper(materialForm.name.trim()) || 'Material não cadastrado'}</span></div>}
-              </div>}</div></label>
+              </div>}</div></label>}
               <label>Especificação<input className="upper-input" value={materialForm.detail} onChange={(event) => updateMaterial('detail', event.target.value)} placeholder="Ex.: Chapa 10 mm" /></label>
-              <label>Unidade<select value={materialUnit(materialForm.unit)} disabled={materialForm.inventoryId != null} title={materialForm.inventoryId != null ? 'A unidade vem do cadastro do estoque' : undefined} onChange={(event) => updateMaterial('unit', event.target.value)}>{materialUnits.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+              <label>Unidade<select value={materialUnit(materialForm.unit)} disabled={materialForm.inventoryId != null || Boolean(sheet && materialForm.contractRow)} title={sheet && materialForm.contractRow ? 'A unidade vem da planilha do cliente' : materialForm.inventoryId != null ? 'A unidade vem do cadastro do estoque' : undefined} onChange={(event) => updateMaterial('unit', event.target.value)}>{materialUnits.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
               <label>{`Quantidade${perPiece ? ' por peça' : ''} (${materialUnit(materialForm.unit)}) *`}<input type="number" min={perPiece ? '0.0001' : quantityStep(materialForm.unit)} step={perPiece ? 'any' : quantityStep(materialForm.unit)} value={materialForm.quantity} onChange={(event) => updateMaterial('quantity', event.target.value)} placeholder={wholeUnit(materialForm.unit) && !perPiece ? '0' : '0,00'} required /></label>
               <label>{materialUnit(materialForm.unit) === 'kg' ? 'Valor unitário' : unitPriceLabel(materialForm.unit)}<input type="number" min="0" step="0.01" value={materialForm.unitPrice} onChange={(event) => updateMaterial('unitPrice', event.target.value)} placeholder="0,00" /></label>
               <div className="offer-inline-actions"><button className="offer-modal-cancel" type="button" onClick={closeMaterialForm}>Cancelar</button><button className="offer-add-resource-button" type="submit" disabled={saving}>{editingMaterialId != null ? 'Salvar alterações' : 'Adicionar material'}</button></div>
             </form>}
-            {materials.length > 0 ? <><div className="offer-materials-head"><span>Material</span><span>Especificação</span><span>{perPiece ? 'Qtd. por peça' : 'Qtd. necessária'}</span><span>Estoque</span><span>Valor unitário</span><span>Valor total</span><span>Ações</span></div><div className="offer-materials-list">{checkedMaterials.map((material) => <div className={`offer-material-row offer-material-row--managed${material.id === editingMaterialId ? ' offer-material-row--editing' : ''}`} key={material.id}><div className="material-visual">{material.icon}</div><div className="material-name"><strong>{upper(material.name)}</strong><span>{upper(material.detail) || '—'}</span></div><span className="offer-quantity-cell">{perPiece && material.quantityPerPiece != null ? <>{formatQuantity(material.quantityPerPiece, material.unit)}<small>{formatQuantity(material.quantity, material.unit)} no total</small></> : formatQuantity(material.quantity, material.unit)}</span><span className={`material-stock-status material-stock-status--${material.groupStockStatus}`}>{material.groupStockStatus === 'unknown' ? 'Não verificado' : material.groupPurchaseQuantity > 0 ? `Falta: ${formatQuantity(material.groupPurchaseQuantity, material.unit)}` : material.stockStatus === 'available' ? `Disponível: ${formatQuantity(material.stockAvailable, material.unit)}` : material.stockStatus === 'partial' ? `Parcial: ${formatQuantity(material.stockAvailable, material.unit)}` : material.stockStatus === 'unknown' ? 'Não verificado' : 'Sem estoque'}</span><span>{formatMoney(material.unitPrice)}</span><strong>{formatMoney(material.quantity * material.unitPrice)}</strong><div className="offer-resource-actions"><button className="offer-resource-edit" type="button" disabled={saving} onClick={() => editMaterial(material)} aria-label={`Editar ${material.name}`} title="Editar"><Pencil size={14} aria-hidden="true" /></button><button className="offer-resource-remove" type="button" disabled={saving} onClick={() => removeMaterial(material.id)} aria-label={`Remover ${material.name}`} title="Remover">×</button></div></div>)}</div></> : <button className="offer-empty-state" type="button" onClick={() => setMaterialFormOpen(true)}><Icon name="plus" /><strong>Nenhum material adicionado</strong><span>Clique aqui ou no botão acima para buscar materiais cadastrados no estoque.</span></button>}
+            {materials.length > 0 ? <><div className="offer-materials-head"><span>Material</span><span>Especificação</span><span>{perPiece ? 'Qtd. por peça' : 'Qtd. necessária'}</span><span>Estoque</span><span>Valor unitário</span><span>Valor total</span><span>Ações</span></div><div className="offer-materials-list">{checkedMaterials.map((material) => <div className={`offer-material-row offer-material-row--managed${material.id === editingMaterialId ? ' offer-material-row--editing' : ''}`} key={material.id}><div className="material-visual">{material.icon}</div><div className="material-name"><strong>{upper(material.name)}</strong><span>{upper(material.detail) || '—'}</span>{sheet && <small className="offer-material-sheet-row">{material.contractRow && sheetMaterial(material.contractRow) ? `Planilha · ${formatMoney(sheetMaterial(material.contractRow).price)}/${sheetMaterial(material.contractRow).unit}` : 'Fora da planilha: não entra no PDF'}</small>}</div><span className="offer-quantity-cell">{perPiece && material.quantityPerPiece != null ? <>{formatQuantity(material.quantityPerPiece, material.unit)}<small>{formatQuantity(material.quantity, material.unit)} no total</small></> : formatQuantity(material.quantity, material.unit)}</span><span className={`material-stock-status material-stock-status--${material.groupStockStatus}`}>{material.groupStockStatus === 'unknown' ? 'Não verificado' : material.groupPurchaseQuantity > 0 ? `Falta: ${formatQuantity(material.groupPurchaseQuantity, material.unit)}` : material.stockStatus === 'available' ? `Disponível: ${formatQuantity(material.stockAvailable, material.unit)}` : material.stockStatus === 'partial' ? `Parcial: ${formatQuantity(material.stockAvailable, material.unit)}` : material.stockStatus === 'unknown' ? 'Não verificado' : 'Sem estoque'}</span><span>{formatMoney(material.unitPrice)}</span><strong>{formatMoney(material.quantity * material.unitPrice)}</strong><div className="offer-resource-actions"><button className="offer-resource-edit" type="button" disabled={saving} onClick={() => editMaterial(material)} aria-label={`Editar ${material.name}`} title="Editar"><Pencil size={14} aria-hidden="true" /></button><button className="offer-resource-remove" type="button" disabled={saving} onClick={() => removeMaterial(material.id)} aria-label={`Remover ${material.name}`} title="Remover">×</button></div></div>)}</div></> : <button className="offer-empty-state" type="button" onClick={() => setMaterialFormOpen(true)}><Icon name="plus" /><strong>Nenhum material adicionado</strong><span>{sheet ? `Clique aqui ou no botão acima para escolher na lista de materiais da planilha ${contractTitles[sheet]}.` : 'Clique aqui ou no botão acima para buscar materiais cadastrados no estoque.'}</span></button>}
             <div className="offer-resource-subsection"><div className="offer-resource-heading"><div><span className="offer-details-section-title">Mão de obra</span><p>Vem das etapas do serviço: o tempo e a máquina ou o serviço de cada etapa, ao valor da hora do cadastro.</p></div></div>
               {laborEntries.length > 0 ? <><div className="offer-materials-head"><span>Tipo</span><span>Máquina / serviço</span><span>{perPiece ? 'Tempo por peça' : 'Tempo (h)'}</span><span>Setor</span><span>Valor/hora</span><span>Valor total</span><span>Ações</span></div><div className="offer-materials-list offer-labor-list">{laborEntries.map((entry) => <div className="offer-material-row offer-material-row--managed offer-material-row--labor" key={entry.id}><div className="material-visual"><Icon name={entry.type === 'machine' ? 'machines' : 'employees'} /></div><div className="material-name"><strong>{upper(entry.resource)}</strong><span>{entry.type === 'machine' ? 'Hora máquina' : 'Hora homem'} · {entry.stageCode ? stageLabel(entry.stageCode) : 'Lançada à mão antes das etapas'}</span></div><span className="offer-quantity-cell">{perPiece && stageTimesPerPiece[entry.stageCode] ? <>{Number(stageTimesPerPiece[entry.stageCode]).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} min<small>{minutesLabel(entry.hours * 60)} no total</small></> : `${Number(entry.hours).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} h`}</span><span>{upper(laborSector(entry))}</span><span>{formatMoney(entry.hourlyRate)}</span><strong>{formatMoney(entry.hours * entry.hourlyRate)}</strong><div className="offer-resource-actions">{!entry.stageCode && <button className="offer-resource-remove" type="button" disabled={saving} onClick={() => removeLabor(entry.id)} aria-label={`Remover ${entry.resource}`} title="Remover: a mão de obra agora vem das etapas">×</button>}</div></div>)}</div></> : <div className="offer-empty-state offer-empty-state--static"><strong>Nenhuma mão de obra ainda</strong><span>Informe o tempo e a máquina ou o serviço de cada etapa, em Etapas do serviço, e as horas aparecem aqui.</span></div>}
             </div>
             <div className="offer-resource-subsection offer-process-settings">
               {pieceHistory && emptyResources && <div className="piece-history-banner" role="status"><div><strong>Esta peça já foi feita antes.</strong><span>Dá para preencher os materiais, as etapas e os tempos com base no histórico{pieceHistory.samples ? ` (média de ${pieceHistory.samples} ${pieceHistory.samples === 1 ? 'registro' : 'registros'})` : ` (última vez: ${pieceHistory.source || 'oferta anterior'})`}.</span></div><button type="button" className="offer-add-resource-button" disabled={saving} onClick={async () => { if (await saveResources(pieceHistory.resources)) setPieceHistory(null) }}>Preencher com o histórico</button></div>}
-              <ServiceStageEditor layout={stageLayout} stages={stages} onLayoutChange={reorderStageLayout} onToggle={toggleStage} disabled={Boolean(offer.orderCode)} stageTimes={perPiece ? stageTimesPerPiece : stageTimes} pieces={perPiece ? Number(offer.quantity) || 1 : null} onStageTime={changeStageTime} stageResources={stageResources} resourceOptions={{ machines, laborServices }} onStageResource={changeStageResource} />
+              <ServiceStageEditor layout={stageLayout} stages={stages} onLayoutChange={reorderStageLayout} onToggle={toggleStage} disabled={Boolean(offer.orderCode)} stageTimes={perPiece ? stageTimesPerPiece : stageTimes} pieces={perPiece ? Number(offer.quantity) || 1 : null} onStageTime={changeStageTime} stageResources={stageResources} resourceOptions={{ machines, laborServices }} onStageResource={changeStageResource} sheet={sheet ? { title: contractTitles[sheet], rates: sheetRates } : null} />
               <fieldset><legend>Tipo</legend><div className="offer-kind-options"><label><input type="radio" name="offer-kind" checked={kind === 'service'} onChange={() => selectKind('service')} />Serviço</label><label><input type="radio" name="offer-kind" checked={kind === 'product'} onChange={() => selectKind('product')} />Produto</label></div></fieldset>
               <fieldset><legend>Fabricado a partir de</legend><div className="offer-kind-options">{[['sample', 'Amostra'], ['drawing', 'Desenho']].map(([key, label]) => <label key={key}><input type="radio" name="manufactured-from" checked={details.manufacturedFrom === key} onChange={() => updateDetails('manufacturedFrom', key)} />{label}</label>)}</div></fieldset>
               <fieldset><legend>Têmpera</legend><div className="offer-kind-options">{[[true, 'Sim'], [false, 'Não']].map(([key, label]) => <label key={label}><input type="radio" name="tempering" checked={details.tempering === key} onChange={() => updateDetails('tempering', key)} />{label}</label>)}</div></fieldset>
@@ -2002,13 +2025,14 @@ function OfferDetailsV2({ collapsed, onToggle, activeNav, onNavigate, onLogout, 
               <label className="offer-service-field">Descrição do serviço<textarea className="upper-input" aria-label="Descrição do serviço" value={details.description} maxLength={5000} rows={4} required onChange={(event) => updateDetails('description', event.target.value, false)} onBlur={() => saveResources()} /></label>
               <div className="offer-kind-options offer-strict-process"><label><input type="checkbox" checked={details.strictProcess} onChange={(event) => updateDetails('strictProcess', event.target.checked)} />Processo Injessado</label></div>
             </div>
+            {sheet && sheetTable && <p className="offer-stage-hint offer-sheet-total" role="status">Pela planilha {contractTitles[sheet]} (hora normal): <strong>{formatMoney(sheetTotal)}</strong>. É o que o PDF cobra com as horas previstas{sheet === 'etiqueta' ? '; na etiqueta, o orçamento final usa as horas trabalhadas na OS' : ''}.</p>}
             <div className="offer-resource-totals">{[['Total de materiais', materialsTotal], ['Total de mão de obra', laborTotal], ['Total estimado', materialsTotal + laborTotal]].map(([label, value], index) => <div key={label} className={index === 2 ? 'offer-resource-total' : undefined}><span>{label}</span><strong>{formatMoney(value)}</strong>{perPiece && <small>{formatMoney(value / (Number(offer.quantity) || 1))} por peça · {offer.quantity} {Number(offer.quantity) === 1 ? 'peça' : 'peças'}</small>}</div>)}</div>
             </fieldset>
           </section>
         </div>
         <div className="offer-details-footer"><div className="offer-details-tip"><span>♡</span><p>Os anexos ficam vinculados à solicitação e à OS gerada.</p></div><div className="offer-details-actions"><label className="offer-attachment-button">📎 <strong>Anexo</strong><input className="visually-hidden-file" type="file" onChange={addAttachment} /></label>{isCreating(offer) && <button className="offer-discard-button" type="button" disabled={saving} onClick={() => setDiscarding(true)}><Trash2 size={16} aria-hidden="true" />Descartar oferta</button>}{offer.orderCode ? <button className="offer-proposal-button" type="button" onClick={() => onSelectOrder(offer.orderCode)}>Ver OS {offer.orderCode}</button> : <button className="offer-proposal-button" type="button" onClick={goToProposal} disabled={saving}><Icon name="edit" /><strong>{saving ? 'Salvando...' : labelOffer ? 'Abrir OS da etiqueta' : 'Fazer proposta'}</strong></button>}</div></div>{openingLabel && <AcceptOfferModal offer={offer} onConfirm={async (body) => (await apiRequest(`/api/offers/${offer.id}/accept`, jsonOptions('POST', body))).item} onAccepted={async (item) => { await onRefresh(); onSelectOrder(item.code) }} onClose={() => setOpeningLabel(false)} />}{attachmentError && <p className="workflow-error" role="alert">{attachmentError}</p>}
       </main>
-      {editingInfo && <OfferInfoEditModal offer={offer} onClose={() => setEditingInfo(false)} onSaved={async (result, { resized }) => { await onRefresh(); if (resized) setResourcesVersion((value) => value + 1); setEditingInfo(false); setInfoNotice(result.proposalDiscarded ? 'Informações atualizadas. A proposta foi descartada: gere de novo com os dados corrigidos.' : 'Informações atualizadas.') }} />}
+      {editingInfo && <OfferInfoEditModal offer={offer} onClose={() => setEditingInfo(false)} onSaved={async (result, { resized }) => { await onRefresh(); if (resized || result.contractCleared) setResourcesVersion((value) => value + 1); setEditingInfo(false); setInfoNotice([result.proposalDiscarded ? 'Informações atualizadas. A proposta foi descartada: gere de novo com os dados corrigidos.' : 'Informações atualizadas.', result.contractCleared ? 'A planilha da oferta mudou: escolha de novo as etapas e os materiais.' : ''].filter(Boolean).join(' ')) }} />}
       {infoNotice && <p className="app-toast" role="status"><CircleCheck size={16} aria-hidden="true" />{infoNotice}</p>}
       {discarding && <DiscardOfferModal offer={offer} onConfirm={discardOffer} onClose={() => setDiscarding(false)} />}
       {askingQuantity && <OfferQuantityModal offer={offer} onConfirm={confirmQuantity} onClose={() => setAskingQuantity(false)} />}
@@ -2216,7 +2240,7 @@ function ProposalBuilder({ collapsed, onToggle, activeNav, onNavigate, onLogout,
       {deadlineAsked && <RequestedDeadlineModal offer={offer} onConfirm={saveRequestedDeadline} onClose={() => setDeadlineAsked(false)} />}
       {/* Reached by another way (a tab, the list) with the quantity still "A definir": asked here too; cancelling goes back. */}
       {quantityPending(offer) && <OfferQuantityModal offer={offer} onConfirm={async (quantity) => { await apiRequest(`/api/offers/${encodeURIComponent(offer.id)}/quantity`, jsonOptions('PUT', { quantity })); await onRefresh() }} onClose={() => onNavigate('Detalhes da oferta')} />}
-      {layoutOpen && <ProposalDocumentModal offer={offer} option={selectedProposal} onClose={() => setLayoutOpen(false)} onSaved={proposalSaved} />}
+      {layoutOpen && <ProposalDocumentModal offer={offer} option={selectedProposal} initialModel={contractOf(offer) === 'nestle' ? 'nestle' : null} onClose={() => setLayoutOpen(false)} onSaved={proposalSaved} />}
       {emailOpen && <ProposalEmailModal offer={offer} onClose={() => setEmailOpen(false)} onSent={proposalEmailSent} />}
       {emailNotice && <p className="app-toast" role="status"><CircleCheck size={16} aria-hidden="true" />{emailNotice}</p>}
     </div>

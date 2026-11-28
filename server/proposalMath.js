@@ -8,8 +8,17 @@ export const situationNames = { normal: 'Normal', night: 'Noturna semanal e sáb
 // The "Variante" column: the rate of the situation chosen for the line.
 export const rateFor = (row) => Number(row[row.situation] ?? row.normal) || 0
 
+// "Dividir horas": the hours of one service line split by situation (2 h normal + 2 h noturna). In the form a divided line
+// keeps its parts ([{ situation, quantity }]); the document prints the line once per situation, as the client's sheet has
+// one Situação per line.
+export const LABOR_SITUATIONS = ['normal', 'night', 'holiday']
+export const laborParts = (row) => Array.isArray(row.parts) && row.parts.length ? row.parts : [{ situation: row.situation || 'normal', quantity: row.quantity }]
+export const laborHours = (row) => round2(laborParts(row).reduce((total, part) => total + (Number(part.quantity) || 0), 0))
+export const laborRowTotal = (row) => round2(laborParts(row).reduce((total, part) => total + round2((Number(part.quantity) || 0) * rateFor({ ...row, situation: part.situation || 'normal' })), 0))
+export const expandLabor = (rows = []) => rows.flatMap(({ parts, ...row }) => laborParts({ ...row, parts }).map((part) => ({ ...row, situation: part.situation || 'normal', quantity: part.quantity })))
+
 export function tableTotals(document) {
-  const labor = (document.labor || []).map((row) => round2((Number(row.quantity) || 0) * rateFor(row)))
+  const labor = expandLabor(document.labor || []).map((row) => round2((Number(row.quantity) || 0) * rateFor(row)))
   const materials = (document.materials || []).map((row) => round2((Number(row.quantity) || 0) * (Number(row.price) || 0)))
   const place = document.freight?.places?.find((item) => item.name === document.freight.place)
   const freight = document.freight?.charge && place ? round2(place.value) : 0

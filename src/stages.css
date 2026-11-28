@@ -1,6 +1,7 @@
 /* "Etapas" (StagesScreen.jsx): sectors and stages in the order of the offers, each stage with its machines and services. */
 .stages-intro { max-width: 900px; margin: 0 0 18px; color: #48627a; font-size: 14px; line-height: 1.55; }
 .stages-intro svg { vertical-align: -2px; }
+.stages-sheet-note { margin: 0 0 8px; color: #1d5b8f; font-size: 12px; line-height: 1.45; }
 .stages-groups { display: grid; gap: 14px; }
 .stages-groups[aria-busy="true"] { opacity: .7; }
 .stages-group { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: start; padding: 12px 14px; border: 1px solid #d7e3ee; border-left: 4px solid #0c4c91; border-radius: 8px; background: #ffffff; }

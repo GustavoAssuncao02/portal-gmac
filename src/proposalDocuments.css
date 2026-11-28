@@ -82,6 +82,16 @@
 .payable-modal .proposal-table--edit input { min-height: 32px; padding: 4px 8px; font-size: 12.5px; }
 .proposal-table--edit .money-input { min-width: 120px; }
 
+/* "Dividir horas": the hours of one service line by situation, each with its own hours. */
+.proposal-table .proposal-split-link { display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; font-size: 11.5px; white-space: nowrap; }
+.proposal-split { display: grid; gap: 6px; }
+.proposal-split-row { display: grid; grid-template-columns: minmax(150px, 1fr) 92px 28px; gap: 6px; align-items: center; }
+.payable-modal .proposal-split-row .proposal-split-remove { width: 28px; height: 28px; min-height: 28px; padding: 0; display: inline-grid; place-items: center; }
+.proposal-split-foot { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 12px; font-size: 11.5px; color: #4c6177; }
+.proposal-split-foot .proposal-split-link { margin-top: 0; }
+.proposal-table td.proposal-line-total { white-space: nowrap; }
+.proposal-split-hint { margin: 8px 0 0; }
+
 .proposal-usage ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .proposal-usage li { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.2fr); gap: 10px; align-items: end; padding: 8px 10px; border: 1px solid #e0e8f0; border-radius: 6px; }
 .proposal-usage li > span { display: grid; gap: 2px; }

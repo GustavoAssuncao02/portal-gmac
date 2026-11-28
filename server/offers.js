@@ -8,14 +8,14 @@ import { receiveFile } from './uploads.js'
 import express from 'express'
 import { exportPdf } from './documentExports.js'
 import { renderProposalDocument } from './proposalPdf.js'
-import { productionStages, stageLabel, stageActive, serviceDetails, serviceDescriptionText, readStageLayout, validStageLayout, stagePlanProblem, stagePlanPlace } from './serviceStages.js'
+import { productionStages, stageLabel, stageActive, stageContract, serviceDetails, serviceDescriptionText, readStageLayout, validStageLayout, stagePlanProblem, stagePlanPlace } from './serviceStages.js'
 import { consumeOrderMaterials } from './orderMaterials.js'
 import { addNotification, workflowSnapshot, recordWorkflowNotifications } from './notificationEvents.js'
 import { assignMaterialRequestCodes } from './materialRequestCodes.js'
 import { adminIdentity } from './accounts.js'
 import { recordOrderEvent } from './orderHistory.js'
 import { cleanStageResources, cleanStagePerPiece, cleanStageTimes, pieceTracking } from './pieces.js'
-import { migrateStageLabor, stageLaborEntries } from './stageLabor.js'
+import { migrateSheetLabor, migrateStageLabor, stageLaborEntries } from './stageLabor.js'
 import { proposalMargins, PROPOSAL_MARGIN_GAP, declineReasons } from './proposalMath.js'
 import { requireAdminOrOperator } from './access.js'
 import { documentDigits, documentKind, isClientDocument } from './clientDocument.js'
@@ -31,6 +31,22 @@ import { todayBahia } from './payableRules.js'
 import { requestDay, retroactiveOrderDay } from './retroactiveEntry.js'
 import { parseProposalDeadline, proposalDeadlineMessage } from './proposalDeadlineRules.js'
 import { createOfferPresence } from './offerPresence.js'
+import { contractModelFor, contractOf, contractTitles } from './contractTables.js'
+import { etiquetaMaterials, nestleMaterials } from './proposalDefaults.js'
+
+// The material lines of a client's price sheet as saved in Modelos de proposta (server/proposalDocuments.js).
+const defaultContractMaterials = { nestle: nestleMaterials, etiqueta: etiquetaMaterials }
+const contractMaterials = (store, model) => {
+  const rows = store.proposalSettings?.tables?.[model]?.materials
+  return Array.isArray(rows) ? rows : defaultContractMaterials[model] || []
+}
+// What changes when an offer moves into or out of a client's price sheet (CNPJ or Número da etiqueta edited): the stages
+// and the materials were chosen for the other sheet, so they are cleared to be chosen again.
+function clearForContract(item) {
+  const resources = item.resources || {}
+  const { stageLayout, ...rest } = resources
+  item.resources = { ...rest, materials: [], laborEntries: (resources.laborEntries || []).filter((entry) => !entry.stageCode), stages: [], stageTimes: {}, stageResources: {}, ...(resources.stageTimesPerPiece ? { stageTimesPerPiece: {} } : {}) }
+}
 
 const filesDirectory = path.join(dataDirectory, 'files')
 const router = express.Router()
@@ -167,7 +183,7 @@ router.post('/offers', async (request, response) => {
       // A manual offer starts as "Criando oferta": only "Fazer proposta" in its details (POST /offers/:id/finish) puts it
       // in analysis. The person who is creating it (editingBy) and since when are shown on the list.
       const at = new Date().toISOString(), author = { id: request.adminId ?? null, name: request.adminName || 'Administrador' }
-      const item = { id: randomUUID(), code: nextCode('OF', [...store.offers, ...(store.discardedOffers || [])]), createdAt: at, createdBy: author.id, createdByName: author.name, ...(open ? { openForTeam: true } : { editingBy: { ...author, at, active: true, lastActiveAt: at } }), cnpj: clean(cnpj, 18), company: clean(company, 160), ...requesters.fields, buyer: buyerLink.name, buyerId: buyerLink.id, deadline, service: clean(service, 160), quantity: quantityPending ? 1 : Number(quantity), ...(quantityPending ? { quantityPending: true } : {}), quantityUnit: quantityUnitOf(request.body?.quantityUnit), description: clean(description, 5000), labelNumber: clean(labelNumber, 80), requestedAt: requestedDay ? dayMoment(requestedDay, new Date(at)) : at, ...(proposalDeadline ? { proposalDeadline, proposalDeadlineSetAt: at } : {}), origin: 'Inserida Manualmente', status: 'creating', attachments: [], resources: { materials: [], laborEntries: [] }, proposal: null, orderCode: null }
+      const item = { id: randomUUID(), code: nextCode('OF', [...store.offers, ...(store.discardedOffers || [])]), createdAt: at, createdBy: author.id, createdByName: author.name, ...(open ? { openForTeam: true } : { editingBy: { ...author, at, active: true, lastActiveAt: at } }), cnpj: clean(cnpj, 18), company: clean(company, 160), ...requesters.fields, buyer: buyerLink.name, buyerId: buyerLink.id, deadline, service: clean(service, 160), quantity: quantityPending ? 1 : Number(quantity), ...(quantityPending ? { quantityPending: true } : {}), quantityUnit: quantityUnitOf(request.body?.quantityUnit), description: clean(description, 5000), labelNumber: clean(labelNumber, 80), contract: contractModelFor({ cnpj, labelNumber }), requestedAt: requestedDay ? dayMoment(requestedDay, new Date(at)) : at, ...(proposalDeadline ? { proposalDeadline, proposalDeadlineSetAt: at } : {}), origin: 'Inserida Manualmente', status: 'creating', attachments: [], resources: { materials: [], laborEntries: [] }, proposal: null, orderCode: null }
       store.offers.unshift(item)
       // An open offer has nobody creating it: it waits on the list, like the offers of the site, and the others are told.
       if (open) addNotification(store, { type: 'open-offer', offerId: item.id, authorId: author.id, title: 'Nova oferta em aberto', description: `${item.code} · ${item.company} · inserida por ${author.name}` })
@@ -214,7 +230,17 @@ router.put('/offers/:id/resources', async (request, response) => {
       // A deactivated stage stays where it was checked, but cannot be checked again.
       const reactivated = (resources.stages || []).filter((code) => !settings.stages.includes(code) && !stageActive(code))
       if (reactivated.length) throw Object.assign(new Error(`A etapa ${reactivated.map(stageLabel).join(', ')} está desativada em Etapas: não pode ser marcada.`), { status: 400 })
-      const nextResources = { materials, laborEntries: [], stages: [...new Set(resources.stages ?? settings.stages)], stageLayout: readStageLayout({ stages: resources.stages ?? settings.stages, stageLayout: resources.stageLayout ?? item.resources?.stageLayout }), kind: resources.kind ?? settings.kind, ...serviceDetails({ ...item.resources, ...resources }), paintColor: clean(resources.paintColor ?? item.resources?.paintColor, 160), serviceDescription: '' }
+      // Nestlé and etiqueta of the Belgo (server/contractTables.js): only the lines of the sheet. Any other offer never
+      // takes them. What was already checked or added stays (an older offer keeps its stages and materials).
+      const contract = contractOf(item)
+      const foreign = (resources.stages || []).filter((code) => !settings.stages.includes(code) && (stageContract(code) || null) !== contract)
+      if (foreign.length) throw Object.assign(new Error(contract ? `Esta oferta usa a planilha ${contractTitles[contract]}: escolha as etapas da planilha.` : `A etapa ${foreign.map(stageLabel).join(', ')} é da planilha de um cliente: só vale para ofertas da Nestlé ou etiquetas da Belgo.`), { status: 400 })
+      if (contract) {
+        const sheet = contractMaterials(store, contract)
+        const outside = materials.filter((material) => (material.contractRow != null || !item.resources?.materials?.some((entry) => entry.id === material.id)) && !sheet.some((row) => row.id === material.contractRow))
+        if (outside.length) throw Object.assign(new Error(`Esta oferta usa a planilha ${contractTitles[contract]}: escolha os materiais na lista da planilha.`), { status: 400 })
+      }
+      const nextResources = { materials, laborEntries: [], stages: [...new Set(resources.stages ?? settings.stages)], stageLayout: readStageLayout({ stages: resources.stages ?? settings.stages, stageLayout: resources.stageLayout ?? item.resources?.stageLayout }, contract), kind: resources.kind ?? settings.kind, ...serviceDetails({ ...item.resources, ...resources }), paintColor: clean(resources.paintColor ?? item.resources?.paintColor, 160), serviceDescription: '' }
       nextResources.stageTimes = cleanStageTimes(sized.stageTimes, nextResources.stages)
       if (sized.entryMode) nextResources.entryMode = sized.entryMode
       if (sized.entryMode === 'piece') nextResources.stageTimesPerPiece = cleanStagePerPiece(sized.stageTimesPerPiece, nextResources.stages)
@@ -361,7 +387,7 @@ export const openOfferDefault = (cpf, env = process.env) => {
 }
 
 export default function createOffersRouter(pool, requireAdmin, accounts) {
-  migrateStageLabor().catch((error) => console.error('Falha ao montar a mão de obra das etapas nas ofertas abertas:', error.message))
+  migrateStageLabor().then(migrateSheetLabor).catch((error) => console.error('Falha ao montar a mão de obra das etapas nas ofertas abertas:', error.message))
   const configured = express.Router()
   configured.use((request, _response, next) => {
     const actor = adminIdentity(request)
@@ -437,7 +463,7 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
       const current = (await readStore()).offers.find((entry) => entry.id === request.params.id)
       if (quantityPending) fields.quantity = Number(current?.quantity) || 1
       const inventory = current && Number(current.quantity) !== fields.quantity ? await stockOf(current) : null
-      let proposalDiscarded = false
+      let proposalDiscarded = false, contractCleared = false
       const offer = await mutateStore((store) => {
         const item = store.offers.find((entry) => entry.id === request.params.id)
         if (!item) throw Object.assign(new Error('Oferta não encontrada.'), { status: 404 })
@@ -464,6 +490,12 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
         const printed = ['cnpj', 'company', 'requester', 'buyer', 'service', 'labelNumber', 'deadline', 'quantity']
         const changed = printed.some((key) => String(item[key] ?? '') !== String(next[key] ?? '')) || quantityUnitOf(item.quantityUnit) !== next.quantityUnit
         const quantityChanged = Number(item.quantity) !== fields.quantity
+        // Another price sheet (or none): the stages and materials chosen for the previous one are cleared. An offer from
+        // before the sheets (without the field) keeps the normal flow and what it has.
+        const contract = contractModelFor(next)
+        const contractChanged = item.contract !== undefined && contract !== contractOf(item)
+        if (contractChanged) { clearForContract(item); contractCleared = true }
+        if (item.contract !== undefined) next.contract = contract
         Object.assign(item, next)
         if (quantityPending) item.quantityPending = true
         else delete item.quantityPending
@@ -489,7 +521,7 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
         item.updatedAt = new Date().toISOString()
         return item
       })
-      response.json({ item: offer, proposalDiscarded })
+      response.json({ item: offer, proposalDiscarded, contractCleared })
     } catch (error) { handleError(response, error) }
   })
   // "Sem quantidade definida": the quantity counted at the client, asked before the proposal options (or the OS of an
@@ -844,7 +876,7 @@ export default function createOffersRouter(pool, requireAdmin, accounts) {
         // Lançamento retroativo: an offer entered with an earlier "Data da solicitação" opens its OS on that same day, with
         // nothing asked again on the acceptance; the real moment of the entry is kept in registeredAt.
         const now = new Date(), orderDay = retroactiveOrderDay(item), retroactive = Boolean(orderDay)
-        const created = existing || { code: nextCode('OS', [...store.orders, ...(store.cancelledOrders || [])]), offerId: item.id, createdAt: retroactive ? dayMoment(orderDay, now) : now.toISOString(), ...(retroactive ? { registeredAt: now.toISOString() } : {}), ...(purchaseOrderNumber ? { purchaseOrderNumber } : {}), ...(entryInvoiceNumber ? { entryInvoiceNumber } : {}), createdBy: request.adminId ?? null, status: 'Em andamento', company: item.company, cnpj: item.cnpj, service: item.service, description: item.description, labelNumber: item.labelNumber, quantity: item.quantity, quantityUnit: quantityUnitOf(item.quantityUnit), deadline: item.deadline, requestedAt: item.requestedAt, attachments: [...item.attachments], resources: item.resources, proposal: label ? labelPlaceholderProposal(item) : item.proposal, ...(label ? { labelQuote: { pending: true, openedAt: new Date().toISOString(), openedByName: request.adminName || 'Administrador', estimate: labelEstimate(item.resources) } } : {}) }
+        const created = existing || { code: nextCode('OS', [...store.orders, ...(store.cancelledOrders || [])]), offerId: item.id, createdAt: retroactive ? dayMoment(orderDay, now) : now.toISOString(), ...(retroactive ? { registeredAt: now.toISOString() } : {}), ...(purchaseOrderNumber ? { purchaseOrderNumber } : {}), ...(entryInvoiceNumber ? { entryInvoiceNumber } : {}), createdBy: request.adminId ?? null, status: 'Em andamento', company: item.company, cnpj: item.cnpj, ...(contractOf(item) ? { contract: contractOf(item) } : {}), service: item.service, description: item.description, labelNumber: item.labelNumber, quantity: item.quantity, quantityUnit: quantityUnitOf(item.quantityUnit), deadline: item.deadline, requestedAt: item.requestedAt, attachments: [...item.attachments], resources: item.resources, proposal: label ? labelPlaceholderProposal(item) : item.proposal, ...(label ? { labelQuote: { pending: true, openedAt: new Date().toISOString(), openedByName: request.adminName || 'Administrador', estimate: labelEstimate(item.resources) } } : {}) }
         const materials = created.resources?.materials || []
         let consumption = []
         if (materials.length && pool) {

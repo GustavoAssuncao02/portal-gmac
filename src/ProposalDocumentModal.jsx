@@ -1,11 +1,11 @@
 import { useEffect, useId, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { AlertTriangle, ArrowLeft, BadgeCheck, FileText, Plus, Search, Settings, Trash2 } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, BadgeCheck, FileText, Plus, Search, Settings, Split, Trash2, X } from 'lucide-react'
 import { PayableModal } from './PayableModal.jsx'
 import MoneyInput from './MoneyInput.jsx'
 import ProposalSettingsModal from './ProposalSettingsModal.jsx'
 import { payableRequest } from './payablesApi.js'
-import { itemTotal, letterTotal, PRICE_LIST_MODELS, rateFor, situationNames, tableTotals } from '../server/proposalMath.js'
+import { itemTotal, LABOR_SITUATIONS, laborHours, laborParts, laborRowTotal, letterTotal, PRICE_LIST_MODELS, rateFor, round2, situationLabels, situationNames, tableTotals } from '../server/proposalMath.js'
 import { PAYMENT_DAYS_MAX, paymentDaysText } from '../server/clientPaymentTerm.js'
 import { upper } from './displayCase.js'
 import './proposalDocuments.css'
@@ -128,6 +128,42 @@ function LetterForm({ model, draft, setDraft, settings, catalog, paymentClient }
   </div>
 }
 
+// Situations a service line can be charged in: the normal rate always, the others when the sheet has a rate for them.
+const lineSituations = (row) => LABOR_SITUATIONS.filter((key) => key === 'normal' || row[key] != null)
+const hoursText = (value) => `${decimal(round2(value))} h`
+// Adds hours to a line (a system record moved to it); a divided line takes them in its normal part, or in the first.
+function addHours(row, delta) {
+  const plus = (value) => Math.max(0, round2((Number(value) || 0) + delta)) || null
+  if (!(Array.isArray(row.parts) && row.parts.length > 1)) return { ...row, quantity: plus(row.quantity) }
+  const target = Math.max(0, row.parts.findIndex((part) => part.situation === 'normal'))
+  const parts = row.parts.map((part, index) => index === target ? { ...part, quantity: plus(part.quantity) } : part)
+  return { ...row, parts, quantity: laborHours({ parts }) || null }
+}
+
+// The hours of a service line. "Dividir horas" splits them by situation (2 h normal + 2 h noturna): the PDF prints the
+// line once per situation, as the client's sheet has one Situação per line.
+function LaborHours({ row, onChange }) {
+  const options = lineSituations(row), parts = laborParts(row), divided = Array.isArray(row.parts) && row.parts.length > 1
+  const setParts = (next) => onChange(next.length > 1 ? { parts: next, situation: next[0].situation, quantity: laborHours({ parts: next }) || null } : { parts: undefined, situation: next[0].situation, quantity: next[0].quantity })
+  const free = options.filter((key) => !parts.some((part) => part.situation === key))
+  const divide = () => free.length && setParts([...parts, { situation: free[0], quantity: null }])
+  if (!divided) return <>
+    <td><select aria-label={`Situação de ${row.description}`} value={row.situation || 'normal'} onChange={(event) => onChange({ situation: event.target.value })}>{Object.entries(situationNames).filter(([key]) => key === 'normal' || row[key] != null).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>
+      {free.length > 0 && Number(row.quantity) > 0 && <button type="button" className="payable-link proposal-split-link" onClick={divide}><Split size={13} aria-hidden="true" />Dividir horas</button>}</td>
+    <td className="proposal-yellow"><QuantityInput label={`Horas de ${row.description}`} value={row.quantity} onChange={(value) => onChange({ quantity: value })} /></td>
+  </>
+  return <td className="proposal-yellow proposal-split-cell" colSpan={2}>
+    <div className="proposal-split" role="group" aria-label={`Horas divididas de ${row.description}`}>
+      {parts.map((part, index) => <div className="proposal-split-row" key={part.situation}>
+        <select aria-label={`Situação ${index + 1} de ${row.description}`} value={part.situation} onChange={(event) => setParts(parts.map((item, position) => position === index ? { ...item, situation: event.target.value } : item))}>{options.filter((key) => key === part.situation || !parts.some((item) => item.situation === key)).map((key) => <option key={key} value={key}>{situationNames[key]}</option>)}</select>
+        <QuantityInput label={`Horas ${situationLabels[part.situation].toLowerCase()} de ${row.description}`} value={part.quantity} onChange={(value) => setParts(parts.map((item, position) => position === index ? { ...item, quantity: value } : item))} />
+        <button type="button" className="payable-icon proposal-split-remove" aria-label={`Tirar as horas ${situationLabels[part.situation].toLowerCase()} de ${row.description}`} title="Tirar esta situação" onClick={() => setParts(parts.filter((_, position) => position !== index))}><X size={14} /></button>
+      </div>)}
+      <div className="proposal-split-foot">{free.length > 0 && <button type="button" className="payable-link proposal-split-link" onClick={divide}><Plus size={13} aria-hidden="true" />Outra situação</button>}<span>Total da linha: <strong>{hoursText(laborHours(row))}</strong></span></div>
+    </div>
+  </td>
+}
+
 // The sheet of a price-list model as the form has it: the price list with the quantities typed.
 function tableDocument(model, draft, settings) {
   const table = settings.tables[model]
@@ -147,14 +183,14 @@ function TableForm({ model, draft, setDraft, settings, assignments, setAssignmen
     const kind = item.kind === 'labor' ? 'labor' : 'materials'
     const previous = assignments[item.id] ?? item.rowId
     setDraft((current) => ({ ...current, [kind]: current[kind].map((row) => {
-      let quantityValue = Number(row.quantity) || 0
-      if (row.id === previous) quantityValue = Math.max(0, Math.round((quantityValue - item.quantity) * 100) / 100)
-      if (row.id === rowId) quantityValue = Math.round((quantityValue + item.quantity) * 100) / 100
-      return { ...row, quantity: quantityValue || null }
+      let next = row
+      if (row.id === previous) next = addHours(next, -item.quantity)
+      if (row.id === rowId) next = addHours(next, item.quantity)
+      return next
     }) }))
     setAssignments({ ...assignments, [item.id]: rowId || null })
   }
-  const visible = (rows) => filled ? rows.filter((row) => Number(row.quantity)) : rows
+  const visible = (rows) => filled ? rows.filter((row) => laborHours(row) > 0) : rows
   return <div className="proposal-doc-form">
     <section className="proposal-doc-section"><h3>{model === 'nestle' ? 'Dados da solicitação (células amarelas)' : 'Identificação da etiqueta'}</h3><div className="proposal-doc-grid">
       <label>Empresa emissora<select aria-label="Empresa emissora" value={draft.issuerId} onChange={(event) => { const issuer = settings.issuers.find((item) => item.id === event.target.value); setDraft((current) => ({ ...current, issuerId: event.target.value, contact: issuer.contact })) }}>{settings.issuers.map((item) => <option key={item.id} value={item.id}>{item.label} · {item.cnpj}</option>)}</select></label>
@@ -179,8 +215,9 @@ function TableForm({ model, draft, setDraft, settings, assignments, setAssignmen
     <section className="proposal-doc-section"><div className="proposal-doc-heading"><h3>Mão de obra</h3><label className="proposal-doc-check"><input type="checkbox" checked={filled} onChange={(event) => setFilled(event.target.checked)} />Mostrar só linhas preenchidas</label></div>
       <div className="proposal-table-wrap"><table className="proposal-table"><thead><tr><th>Item</th>{model === 'nestle' && <th>Código SAP</th>}<th>Descrição</th><th>Normal</th><th>Noturna/sáb.</th><th>Dom./feriado</th><th>Situação</th><th>Quantidade (h)</th><th>Total</th></tr></thead>
         <tbody>{visible(document.labor).map((row) => { const index = table.labor.findIndex((item) => item.id === row.id); return <tr key={row.id}><td>{index + 1}</td>{model === 'nestle' && <td>{row.sap}</td>}<td>{row.description}</td><td>{money(row.normal)}</td><td>{row.night == null ? '—' : money(row.night)}</td><td>{row.holiday == null ? '—' : money(row.holiday)}</td>
-          <td><select aria-label={`Situação de ${row.description}`} value={row.situation || 'normal'} onChange={(event) => update('labor', row.id, { situation: event.target.value })}>{Object.entries(situationNames).filter(([key]) => key === 'normal' || row[key] != null).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></td>
-          <td className="proposal-yellow"><QuantityInput label={`Horas de ${row.description}`} value={row.quantity} onChange={(value) => update('labor', row.id, { quantity: value })} /></td><td>{money(totals.labor[document.labor.indexOf(row)])}<small>{money(rateFor(row))}/h</small></td></tr> })}</tbody></table></div>
+          <LaborHours row={row} onChange={(change) => update('labor', row.id, change)} />
+          <td className="proposal-line-total">{money(laborRowTotal(row))}{row.parts?.length > 1 ? laborParts(row).filter((part) => Number(part.quantity) > 0).map((part) => <small key={part.situation}>{hoursText(part.quantity)} × {money(rateFor({ ...row, situation: part.situation }))}</small>) : <small>{money(rateFor(row))}/h</small>}</td></tr> })}</tbody></table></div>
+      <p className="payable-hint proposal-split-hint">Parte das horas é noturna, de sábado, domingo ou feriado? Use <strong>Dividir horas</strong> na linha: no PDF ela sai uma vez para cada situação, com as horas de cada uma.</p>
     </section>
     <section className="proposal-doc-section"><h3>Materiais</h3>
       <div className="proposal-table-wrap"><table className="proposal-table"><thead><tr><th>Item</th>{model === 'nestle' && <th>Código SAP</th>}<th>Descrição</th><th>Unidade</th><th>Valor unitário</th><th>Quantidade</th><th>Total</th></tr></thead>

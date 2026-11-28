@@ -9,7 +9,8 @@ import { proposalCosts, proposalPricing, hoursText } from './proposalMath.js'
 import { todayBahia } from './payableRules.js'
 import { materialUnit } from './materialUnits.js'
 import { quantityUnitPdf } from './quantityUnits.js'
-import { stagePlanPlace, stagePlanProblem } from './serviceStages.js'
+import { stagePlanPlace, stagePlanProblem, stageContractRow, stageLabel } from './serviceStages.js'
+import { refreshStageCatalog, syncContractStages } from './stageCatalog.js'
 import { documentDigits } from './clientDocument.js'
 import { actorOf } from './registryHistory.js'
 import { legacyPaymentDays, paymentDaysValue } from './clientPaymentTerm.js'
@@ -150,18 +151,22 @@ export function matchRow(name, rows, aliases = {}) {
   return tie ? null : best
 }
 
-// Hours and materials planned in the offer.
+// Hours and materials planned in the offer. A stage that is a line of a client's price sheet, and a material chosen from
+// the sheet, carry that line (`contractRow`): the sheet is filled by it, never by the name.
 export function systemUsage(offer) {
   const usage = []
-  const add = (kind, name, value, unit, source) => {
+  const add = (kind, name, value, unit, source, contractRow = null) => {
     if (!(Number(value) > 0)) return
-    const existing = usage.find((item) => item.kind === kind && item.name === name)
+    const existing = usage.find((item) => item.kind === kind && item.name === name && (item.contractRow || null) === contractRow)
     if (existing) existing.quantity = round2(existing.quantity + Number(value))
-    else usage.push({ id: `${kind}-${usage.length + 1}`, kind, name, quantity: round2(Number(value)), unit, source })
+    else usage.push({ id: `${kind}-${usage.length + 1}`, kind, name, quantity: round2(Number(value)), unit, source, ...(contractRow ? { contractRow } : {}) })
   }
   const resources = offer?.resources || {}
-  for (const entry of resources.laborEntries || []) add('labor', entry.resource, entry.hours, 'h', 'Oferta (previsto)')
-  for (const material of resources.materials || []) add('material', [material.name, material.detail].filter(Boolean).join(' '), material.quantity, ({ kg: 'kg', m: 'm', un: 'Un', cj: 'Cj' })[materialUnit(material.unit)], 'Oferta')
+  for (const entry of resources.laborEntries || []) {
+    const contractRow = entry.stageCode ? stageContractRow(entry.stageCode) : null
+    add('labor', contractRow ? `${stageLabel(entry.stageCode)}${entry.resource ? ` · ${entry.resource}` : ''}` : entry.resource, entry.hours, 'h', 'Oferta (previsto)', contractRow)
+  }
+  for (const material of resources.materials || []) add('material', [material.name, material.detail].filter(Boolean).join(' '), material.quantity, ({ kg: 'kg', m: 'm', un: 'Un', cj: 'Cj' })[materialUnit(material.unit)], 'Oferta', material.contractRow ? String(material.contractRow) : null)
   return usage
 }
 
@@ -231,7 +236,9 @@ export async function buildDraft({ model, store, offer, value, deadline, client 
     }
   }
   const table = settings.tables[model]
-  const usage = systemUsage(offer).map((item) => ({ ...item, rowId: matchRow(item.name, item.kind === 'labor' ? table.labor : table.materials, settings.aliases[model]) }))
+  const rowsOf = (item) => item.kind === 'labor' ? table.labor : table.materials
+  // The line chosen in the offer when it belongs to this sheet; otherwise (older offers, other sheet) the name decides.
+  const usage = systemUsage(offer).map((item) => ({ ...item, rowId: item.contractRow && rowsOf(item).some((row) => row.id === item.contractRow) ? item.contractRow : matchRow(item.name, rowsOf(item), settings.aliases[model]) }))
   const totalOf = (rowId) => round2(usage.filter((item) => item.rowId === rowId).reduce((total, item) => total + item.quantity, 0))
   return {
     ...base, number: model === 'nestle' ? nextNestleNumber(store, settings) : source?.labelNumber || '', labelNumber: source?.labelNumber || '', componentName: source?.service || '', description: source?.description || '', quantity: source?.quantity || 1, quantityUnit: quantityUnitPdf(source?.quantityUnit),
@@ -255,10 +262,14 @@ export async function normalizeDocument(model, input, store) {
     const pick = (rows, list, kind) => {
       const given = new Map((Array.isArray(list) ? list : []).map((row) => [row?.id, row]))
       for (const id of given.keys()) if (!rows.some((row) => row.id === id)) fail('A tabela de preços mudou. Abra o documento novamente.', 409)
-      return rows.map((row) => {
+      return rows.flatMap((row) => {
         const entry = given.get(row.id) || {}
-        const situation = kind === 'labor' ? (situations.includes(entry.situation) ? entry.situation : 'normal') : undefined
-        return { ...row, quantity: quantity(entry.quantity, row.description), ...(situation ? { situation } : {}) }
+        if (kind !== 'labor') return [{ ...row, quantity: quantity(entry.quantity, row.description) }]
+        // A divided line (Dividir horas) is printed once per situation with hours, in the order of the sheet's columns; the
+        // same situation typed twice is added up. Without hours it stays one line with the situation chosen.
+        const parts = (Array.isArray(entry.parts) && entry.parts.length ? entry.parts.slice(0, 6) : [entry]).map((part) => ({ situation: situations.includes(part?.situation) ? part.situation : 'normal', quantity: quantity(part?.quantity, row.description) }))
+        const filled = situations.map((situation) => ({ situation, quantity: Math.round(parts.filter((part) => part.situation === situation).reduce((total, part) => total + part.quantity, 0) * 100) / 100 })).filter((part) => part.quantity > 0)
+        return (filled.length ? filled : [{ situation: parts[0].situation, quantity: 0 }]).map((part) => ({ ...row, ...part }))
       })
     }
     const document = {
@@ -332,7 +343,12 @@ export function fromSaved(document, settings) {
   const find = (list, id) => (list || []).find((row) => row.id === id)
   return {
     ...document,
-    labor: table.labor.map((row) => ({ id: row.id, quantity: find(document.labor, row.id)?.quantity || null, situation: find(document.labor, row.id)?.situation || 'normal' })),
+    // A line printed once per situation (Dividir horas) reopens divided.
+    labor: table.labor.map((row) => {
+      const lines = (document.labor || []).filter((entry) => entry.id === row.id)
+      if (lines.length > 1) return { id: row.id, quantity: round2(lines.reduce((total, entry) => total + (Number(entry.quantity) || 0), 0)) || null, situation: lines[0].situation || 'normal', parts: lines.map((entry) => ({ situation: entry.situation || 'normal', quantity: Number(entry.quantity) || null })) }
+      return { id: row.id, quantity: lines[0]?.quantity || null, situation: lines[0]?.situation || 'normal' }
+    }),
     materials: table.materials.map((row) => ({ id: row.id, quantity: find(document.materials, row.id)?.quantity || null })),
     ...(document.freight ? { freight: { place: document.freight.place, charge: document.freight.charge } } : {}),
   }
@@ -407,8 +423,11 @@ export default function createProposalDocumentsRouter(requireAdmin, accounts = n
       const next = validateSettings(request.body || {}, proposalSettings(store))
       const { aliases, defaultIssuer, ...editable } = next
       store.proposalSettings = { ...store.proposalSettings, ...editable }
+      // The service lines of the Nestlé and Etiqueta sheets are stages (server/stageCatalog.js): they follow the table.
+      syncContractStages(store)
       return proposalSettings(store)
     })
+    await refreshStageCatalog()
     response.json({ settings })
   }))
 

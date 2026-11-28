@@ -13,6 +13,8 @@ import { laborServiceRows } from './laborServices.js'
 import { requireAdmin, adminIdentity, revokeAccountSessions } from './accounts.js'
 import { orderHistory } from './orderHistory.js'
 import { pieceCatalog, pieceKey, pieceSuggestion, pieceLeadTime } from './pieces.js'
+import { contractOf } from './contractTables.js'
+import { sheetRows } from './stageLabor.js'
 import { accessFields, employeeRecords, employeesWithActivity, isOperator, isStaff, publicEmployee, staffAccountId } from './employeeAccess.js'
 import { editOrder } from './orderEditing.js'
 import { pendingOrderMaterials } from './pendingMaterials.js'
@@ -898,7 +900,10 @@ export default function createOperationsRouter(pool) {
       }
       // The operation events of the OS of this piece tell which machine or service each stage was made on.
       const history = await ordersWithOperations((store.orders || []).filter((order) => pieceKey(order.service) === pieceKey(request.query.name)), pool)
-      const item = pieceSuggestion({ offers: store.offers || [], orders: await operationOrders(), name: request.query.name, quantity: request.query.quantity, prices, excludeOfferId: request.query.offerId, catalog: await resourceCatalog(), history })
+      // An offer of a client's price sheet learns only from the offers and OS of the same sheet (and a normal one never from
+      // them): its stages and materials are the lines of the sheet, at the prices of the sheet today.
+      const contract = contractOf((store.offers || []).find((offer) => offer.id === request.query.offerId))
+      const item = pieceSuggestion({ offers: store.offers || [], orders: await operationOrders(), name: request.query.name, quantity: request.query.quantity, prices, excludeOfferId: request.query.offerId, catalog: await resourceCatalog(), history, contract, sheetMaterials: contract ? sheetRows(store, contract, 'materials') : [] })
       response.set('Cache-Control', 'no-store').json({ item })
     } catch (error) { sendError(response, error) }
   })

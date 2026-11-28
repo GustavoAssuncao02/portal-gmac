@@ -162,7 +162,7 @@ export default function createLabelQuotesRouter({ pool, inventoryPool = pool, re
     const order = labelOrder(store, request.params.code)
     const operation = await operationOf(order)
     const model = String(request.query.model || '')
-    const source = { ...order, resources: { ...order.resources, laborEntries: realLabor(order, operation).map(({ resource, hours }) => ({ resource, hours })) } }
+    const source = { ...order, resources: { ...order.resources, laborEntries: realLabor(order, operation).map(({ code, resource, hours }) => ({ stageCode: code, resource, hours })) } }
     const client = await clientOfOffer(accounts, order)
     const fresh = await buildDraft({ model, store, offer: source, client, value: order.labelQuote.pending ? 0 : osValueOf(order.proposal), deadline: order.proposal?.deadline || order.deadline })
     if (fresh.usage) fresh.usage = fresh.usage.map((item) => ({ ...item, source: item.kind === 'labor' ? 'Horas reais da OS' : 'Consumido na OS' }))

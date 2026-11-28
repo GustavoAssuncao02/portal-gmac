@@ -563,6 +563,8 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .proposal-table td small { font-size: calc(11px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .payable-modal .proposal-table select { font-size: calc(12.5px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .payable-modal .proposal-table--edit input { font-size: calc(12.5px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .proposal-table .proposal-split-link { font-size: calc(11.5px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .proposal-split-foot { font-size: calc(11.5px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .proposal-usage li small { font-size: calc(11.5px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .proposal-doc-totals { font-size: calc(12.5px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .proposal-doc-totals strong { font-size: calc(15px * var(--account-font-scale)); }
@@ -609,6 +611,7 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .email-template-fields li { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .email-template-field { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .stages-intro { font-size: calc(14px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .stages-sheet-note { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .stages-group h2 { font-size: calc(16px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .stages-group h2 small { font-size: calc(12px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .stages-row-name strong { font-size: calc(14px * var(--account-font-scale)); }
@@ -1325,6 +1328,9 @@
 :root:is([data-font-size="small"], [data-font-size="large"]) .offer-stage-options label, :root:is([data-font-size="small"], [data-font-size="large"]) .offer-kind-options label { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .offer-stage-group h3 { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .offer-stage-inactive { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .offer-stage-rate { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .offer-material-sheet-row { font-size: calc(11px * var(--account-font-scale)); }
+:root:is([data-font-size="small"], [data-font-size="large"]) .offer-stage-hint.offer-sheet-total { font-size: calc(13px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .offer-service-field { font-size: calc(14px * var(--account-font-scale)); }
 :root:is([data-font-size="small"], [data-font-size="large"]) .offer-service-field input, :root:is([data-font-size="small"], [data-font-size="large"]) .offer-service-field textarea { font-size: inherit; }
 :root:is([data-font-size="small"], [data-font-size="large"]) .material-orders-table table { font-size: calc(13px * var(--account-font-scale)); }

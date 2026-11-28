@@ -83,8 +83,9 @@ export default function StagesScreen({ Sidebar, WorkspaceTabs, navigationProps }
     {!data && !message && <p className="payable-muted">Carregando...</p>}
     {data && <div className="stages-groups" aria-busy={busy}>
       <Sortable ids={groups.map((group) => group.name)} onMove={(names) => saveOrder(names.map((name) => groups.find((group) => group.name === name)))}>
-        {groups.map((group) => <SortableRow key={group.name} id={group.name} label={`setor ${group.name}`} disabled={busy} className="stages-group">
+        {groups.map((group) => <SortableRow key={group.name} id={group.name} label={`setor ${group.name}`} disabled={busy || Boolean(group.stages[0]?.contract)} className="stages-group">
           <div className="stages-group-body">
+            {group.stages[0]?.contract && <p className="stages-sheet-note">Linhas de serviço da planilha do cliente (Modelos de proposta). Aparecem só nas ofertas {group.stages[0].contract === 'nestle' ? 'da Nestlé' : 'de etiqueta da Belgo'}; o nome segue a planilha. Aqui dá para escolher as máquinas e serviços de cada linha.</p>}
             <h2>{group.name}<small>{group.stages.filter((row) => row.active).length} {group.stages.filter((row) => row.active).length === 1 ? 'etapa ativa' : 'etapas ativas'}</small></h2>
             <Sortable ids={group.stages.map((row) => row.code)} onMove={(codes) => saveOrder(groups.map((item) => item === group ? { ...item, stages: codes.map((code) => group.stages.find((row) => row.code === code)) } : item))}>
               <div className="stages-list">{group.stages.map((row) => <SortableRow key={row.code} id={row.code} label={`etapa ${row.name}`} disabled={busy} className={`stages-row${row.active ? '' : ' stages-row--inactive'}`}>
@@ -93,7 +94,7 @@ export default function StagesScreen({ Sidebar, WorkspaceTabs, navigationProps }
                 <div className="payable-registry-actions">
                   <button className="payable-icon" type="button" title="Histórico" aria-label={`Ver histórico de ${row.name}`} onClick={() => setHistory({ stage: row })}><Info size={16} /></button>
                   <button className="payable-icon" type="button" title="Editar" aria-label={`Editar ${row.name}`} disabled={busy} onClick={() => { setMessage(''); setEditing(row) }}><Pencil size={16} /></button>
-                  {row.inUse || !row.active ? <button className={`payable-icon${row.active ? '' : ' payable-icon--inactive'}`} type="button" title={row.active ? 'Desativar' : 'Reativar'} aria-label={`${row.active ? 'Desativar' : 'Reativar'} ${row.name}`} disabled={busy} onClick={() => toggle(row)}><Power size={16} /></button>
+                  {row.contract || row.inUse || !row.active ? <button className={`payable-icon${row.active ? '' : ' payable-icon--inactive'}`} type="button" title={row.active ? 'Desativar' : 'Reativar'} aria-label={`${row.active ? 'Desativar' : 'Reativar'} ${row.name}`} disabled={busy} onClick={() => toggle(row)}><Power size={16} /></button>
                     : <button className="payable-icon payable-danger" type="button" title="Excluir" aria-label={`Excluir ${row.name}`} disabled={busy} onClick={() => remove(row)}><Trash2 size={16} /></button>}
                 </div>
               </SortableRow>)}</div>
@@ -125,8 +126,9 @@ function StageForm({ source, sectors, machines, laborServices, onClose, onSave }
   }
   return <PayableModal title={source.code ? `Editar etapa ${source.name}` : 'Nova etapa'} busy={busy} onClose={onClose} footer={<><button className="admin-tool-button" type="button" disabled={busy} onClick={onClose}>Cancelar</button><button className="admin-tool-button admin-tool-button--primary" type="submit" form={id} disabled={busy}>Salvar</button></>}>
     <form id={id} className="payable-form registration-modal-form stages-form" onSubmit={submit}><fieldset disabled={busy}>
-      <label>Nome da etapa *<input className="upper-input" value={name} maxLength={80} onChange={(event) => setName(event.target.value)} required autoFocus />{source.aliases?.length > 0 && <small className="payable-hint">Já se chamou {source.aliases.join(', ')}.</small>}</label>
-      <label>Setor *<select value={sectorId} onChange={(event) => setSectorId(event.target.value)} required><option value="">Escolha o setor</option>{sectors.map((sector) => <option key={sector.id} value={sector.id}>{sector.name}</option>)}</select><small className="payable-hint">O setor é o grupo da etapa na oferta. Para um setor novo, use Cadastros › Setores.</small></label>
+      {source.contract && <p className="payable-hint">Linha da planilha do cliente: o nome e o grupo vêm de Modelos de proposta. Escolha só as máquinas e serviços que podem executar esta linha.</p>}
+      <label>Nome da etapa *<input className="upper-input" value={name} maxLength={80} onChange={(event) => setName(event.target.value)} required autoFocus={!source.contract} disabled={Boolean(source.contract)} />{source.aliases?.length > 0 && <small className="payable-hint">Já se chamou {source.aliases.join(', ')}.</small>}</label>
+      {!source.contract && <label>Setor *<select value={sectorId} onChange={(event) => setSectorId(event.target.value)} required><option value="">Escolha o setor</option>{sectors.map((sector) => <option key={sector.id} value={sector.id}>{sector.name}</option>)}</select><small className="payable-hint">O setor é o grupo da etapa na oferta. Para um setor novo, use Cadastros › Setores.</small></label>}
       <div className="stages-form-resources">
         <span className="stages-form-label">Máquinas e serviços da etapa</span>
         <small className="payable-hint">A primeira é a padrão: já vem escolhida na oferta. Com mais de uma, a oferta deixa trocar entre elas. Sem nenhuma, a oferta mostra todas as máquinas e serviços.</small>

@@ -8,8 +8,10 @@ test('Etapas: the stages of the system come registered by sector, and new ones a
   const fixture = await createWorkflowFixture()
   t.after(() => fixture.close())
   const first = (await fixture.adminRequest('/stages')).data
-  assert.deepEqual(first.groups, ['Usinagem', 'Pintura', 'Caldeiraria'])
-  assert.equal(first.stages.length, 19)
+  // The service lines of the Nestlé (16) and Etiqueta (18) sheets come last, in groups of their own (contract-sheets.test.js).
+  assert.deepEqual(first.groups, ['Usinagem', 'Pintura', 'Caldeiraria', 'Nestlé · FS-3055', 'Etiqueta Belgo'])
+  assert.equal(first.stages.filter((row) => !row.contract).length, 19)
+  assert.equal(first.stages.filter((row) => row.contract).length, 34)
   assert.deepEqual(first.stages.filter((row) => !row.active).map((row) => row.name), ['Corte', 'Usinagem', 'Soldagem', 'Caldeiraria'])
   assert.equal(byName(first.stages, 'Tornearia').group, 'Usinagem')
   assert.equal((await fixture.request('/stages', 'POST', { name: 'X' })).status, 401, 'administrators only')
@@ -59,7 +61,7 @@ test('Etapas: the stages of the system come registered by sector, and new ones a
   // The order of the screen is the order of the catalog: groups and stages.
   const order = (await fixture.adminRequest('/stages')).data
   const reordered = await fixture.adminRequest('/stages-order', 'PUT', { groups: [caldeiraria.id, usinagem.id], stages: ['polishing', ...order.stages.map((row) => row.code).filter((code) => code !== 'polishing')] })
-  assert.deepEqual(reordered.data.groups, ['Caldeiraria', 'Usinagem', 'Pintura'])
+  assert.deepEqual(reordered.data.groups, ['Caldeiraria', 'Usinagem', 'Pintura', 'Nestlé · FS-3055', 'Etiqueta Belgo'], 'the sheets stay last')
   assert.equal(reordered.data.stages.filter((row) => row.group === 'Caldeiraria')[0].code, 'polishing')
 })
 

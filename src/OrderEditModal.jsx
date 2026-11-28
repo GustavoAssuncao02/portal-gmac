@@ -13,6 +13,7 @@ import { upper } from './displayCase.js'
 import { requestDay } from '../server/retroactiveEntry.js'
 import { backdropClose } from './dialogBackdrop.js'
 import { QuantityUnitSelect } from './OfferQuantityModal.jsx'
+import { contractOf } from '../server/contractTables.js'
 
 function useDialog(dialog) {
   useEffect(() => {
@@ -71,7 +72,7 @@ export function orderEditDraft(order) {
   const source = structuredClone(order)
   const stages = source.operation.stages.map((stage) => stageCodeOf(stage) || stage.name)
   const resources = { materials: [], laborEntries: [], ...source.resources, ...serviceDetails(source.resources), stages, kind: source.resources?.kind || source.proposal?.kind || 'service' }
-  resources.stageLayout = readStageLayout(resources)
+  resources.stageLayout = readStageLayout(resources, contractOf(source))
   return { order: { ...source, resources, proposal: { key: 'A', title: '', materials: 0, labor: 0, serviceValue: 0, margin: 0, discount: 0, ...source.proposal }, attachmentIds: (source.attachments || []).map((item) => item.id) }, stageCounts: Object.fromEntries(stages.map((code, index) => [code, source.operation.stageCounts[source.operation.stages[index].key] || 0])), expectedUpdatedAt: source.updatedAt || source.createdAt, expectedOperation: { status: source.operation.status, stages: source.operation.stages, stageCounts: source.operation.stageCounts, activeSessionIds: activeSessions(source.operation).map((session) => session.id) } }
 }
 

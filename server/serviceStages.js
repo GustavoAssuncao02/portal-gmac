@@ -28,9 +28,9 @@ export let serviceStageGroups = []
 export let productionStages = []
 const listeners = new Set()
 export function setStageCatalog({ stages = [], groups = [] } = {}) {
-  stageCatalog = stages.map((row) => ({ code: String(row.code), name: String(row.name), group: String(row.group || ''), active: row.active !== false, resources: Array.isArray(row.resources) ? row.resources : [], aliases: Array.isArray(row.aliases) ? row.aliases : [] }))
+  stageCatalog = stages.map((row) => ({ code: String(row.code), name: String(row.name), group: String(row.group || ''), active: row.active !== false, resources: Array.isArray(row.resources) ? row.resources : [], aliases: Array.isArray(row.aliases) ? row.aliases : [], ...(row.contract ? { contract: String(row.contract), rowId: String(row.rowId ?? '') } : {}) }))
   stageGroupOrder = [...new Set([...groups, ...stageCatalog.map((row) => row.group)])].filter(Boolean)
-  serviceStageGroups = stageGroupOrder.map((group) => [group, stageCatalog.filter((row) => row.group === group && row.active).map((row) => [row.code, row.name])]).filter(([, stages]) => stages.length)
+  serviceStageGroups = stageGroupOrder.map((group) => [group, stageCatalog.filter((row) => row.group === group && row.active && !row.contract).map((row) => [row.code, row.name])]).filter(([, stages]) => stages.length)
   productionStages = stageCatalog.map((row) => [row.code, row.name])
   for (const listener of listeners) listener()
 }
@@ -41,6 +41,10 @@ const sameText = (left, right) => String(left ?? '').trim().localeCompare(String
 const catalogRow = (code) => stageCatalog.find((row) => row.code === code)
 export const stageLabel = (key) => catalogRow(key)?.name || key
 export const stageActive = (key) => catalogRow(key)?.active === true
+// Etapas que são linhas de serviço da planilha de um cliente (server/contractTables.js): a planilha (nestle, etiqueta) e a
+// linha dela. As demais etapas não têm planilha.
+export const stageContract = (key) => catalogRow(key)?.contract || null
+export const stageContractRow = (key) => catalogRow(key)?.contract ? catalogRow(key).rowId : null
 // The code of a stage kept by name in an OS (operation.stages, events): the current name or one it had before.
 export function stageCodeOf(stage) {
   const name = typeof stage === 'string' ? stage : stage?.name
@@ -90,13 +94,17 @@ export function validStageLayout(layout) {
 }
 // The saved order of an offer over the current catalog: a stage moved to another sector goes with it, removed groups go
 // away, and what the order does not have yet comes at the end. Stages that are no longer registered keep their place.
-export function readStageLayout(resources) {
+// `contract` (server/contractTables.js): an offer of a client's price sheet shows only the lines of that sheet; any other
+// offer never shows them. A stage already checked always stays where it is.
+export function readStageLayout(resources, contract = null) {
+  const checked = resources?.stages || []
+  const belongs = (row) => (row.contract || null) === (contract || null) || checked.includes(row.code)
   const saved = Array.isArray(resources?.stageLayout) ? resources.stageLayout.filter((entry) => typeof entry?.group === 'string' && Array.isArray(entry.stages)) : []
   const savedOrder = saved.flatMap((entry) => entry.stages)
   const rank = (code) => { const index = savedOrder.indexOf(code); return index === -1 ? Infinity : index }
   const groups = [...new Set([...saved.map((entry) => entry.group).filter((group) => stageGroupOrder.includes(group)), ...stageGroupOrder])]
   const layout = groups.map((group) => {
-    const rows = stageCatalog.filter((row) => row.group === group).map((row, index) => ({ code: row.code, index }))
+    const rows = stageCatalog.filter((row) => row.group === group && belongs(row)).map((row, index) => ({ code: row.code, index }))
     return { group, stages: rows.sort((left, right) => rank(left.code) - rank(right.code) || left.index - right.index).map((row) => row.code) }
   }).filter((entry) => entry.stages.length)
   const unknown = (resources?.stages || []).filter((code) => !catalogRow(code))

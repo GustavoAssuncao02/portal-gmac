@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { stageCodeOf } from './serviceStages.js'
+import { stageCodeOf, stageContract } from './serviceStages.js'
+import { contractMaterialUnit, contractOf } from './contractTables.js'
 import { materialUnit, wholeUnit } from './materialUnits.js'
 import { workIntervals } from './reportData.js'
 
@@ -149,19 +150,27 @@ function stagePlans(stages, planned = {}, history, catalog) {
 // Resources for a new offer of a piece made before. Choices (which materials, stages and their order, process options,
 // labor, the machine or service of each stage) come from the last time; material quantities and stage times come from
 // the average per piece × the new quantity. `history`: the OS of the piece with their operation events.
-export function pieceSuggestion({ offers, orders, name, quantity, prices = new Map(), excludeOfferId, catalog = {}, history = [] }) {
+// `contract`: the price sheet of the new offer (server/contractTables.js). Only the offers and OS of the same sheet count
+// (none for a normal offer), so the stages and materials suggested are lines of that sheet; `sheetMaterials` gives the
+// price of each material line today.
+export function pieceSuggestion({ offers, orders, name, quantity, prices = new Map(), excludeOfferId, catalog = {}, history = [], contract = null, sheetMaterials = [] }) {
+  const sameSheet = (row) => contractOf(row) === (contract || null)
+  offers = offers.filter(sameSheet); orders = orders.filter(sameSheet); history = history.filter(sameSheet)
   const key = pieceKey(name), pieces = Math.max(1, Number(quantity) || 1)
   const source = key && lastPieceSource(offers, orders, key, excludeOfferId)
   if (!source?.resources) return null
   const averages = pieceAverages(pieceSamples(orders, key))
   const sourcePieces = Math.max(1, Number(source.quantity) || 1), resources = source.resources, now = new Date().toISOString()
-  const materials = (resources.materials || []).map((material) => {
+  const sheetLine = (material) => sheetMaterials.find((row) => row.id === material.contractRow)
+  // A sheet offer takes only the materials of lines still in the sheet.
+  const materials = (resources.materials || []).filter((material) => !contract || sheetLine(material)).map((material) => {
     const perPiece = averages.materials[materialKey(material)] ?? (Number(material.quantity) || 0) / sourcePieces
     // Units are whole: a scaled quantity of units is rounded up.
-    const unit = materialUnit(material.unit), quantity = wholeUnit(unit) ? Math.ceil(round(perPiece * pieces, 3)) : round(perPiece * pieces, 3)
-    return { id: randomUUID(), name: material.name, detail: material.detail || '', inventoryId: material.inventoryId ?? null, unit, quantity, quantityPerPiece: round(perPiece, 4), unitPrice: prices.get(String(material.inventoryId)) ?? Number(material.unitPrice || 0), icon: material.icon || '▰', requestedAt: now }
+    const line = contract && sheetLine(material)
+    const unit = line ? contractMaterialUnit(line.unit) : materialUnit(material.unit), quantity = wholeUnit(unit) ? Math.ceil(round(perPiece * pieces, 3)) : round(perPiece * pieces, 3)
+    return { id: randomUUID(), name: line ? line.description : material.name, detail: material.detail || '', inventoryId: material.inventoryId ?? null, unit, quantity, quantityPerPiece: round(perPiece, 4), unitPrice: line ? Number(line.price) || 0 : prices.get(String(material.inventoryId)) ?? Number(material.unitPrice || 0), icon: material.icon || '▰', requestedAt: now, ...(line ? { contractRow: line.id } : {}) }
   }).filter((material) => material.quantity > 0)
-  const stages = [...(resources.stages || [])]
+  const stages = (resources.stages || []).filter((code) => (stageContract(code) || null) === (contract || null))
   const stageTimes = {}, stageTimesPerPiece = {}
   for (const code of stages) {
     const perPiece = averages.stages[code] ?? (Number(resources.stageTimes?.[code]) || 0) / sourcePieces

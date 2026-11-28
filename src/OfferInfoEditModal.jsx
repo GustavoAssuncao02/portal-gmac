@@ -10,6 +10,7 @@ import { QuantityUnitSelect } from './OfferQuantityModal.jsx'
 import { quantityUnitOf } from '../server/quantityUnits.js'
 import { ProposalDeadlineField } from './ProposalDeadline.jsx'
 import { requestDay } from '../server/retroactiveEntry.js'
+import { contractModelFor, contractOf, contractTitles } from '../server/contractTables.js'
 
 // Informações do serviço of an offer not yet accepted: corrects the client, requester, buyer, piece, request date, requested
 // deadline, quantity and label without creating the offer again (PUT /api/offers/:id). What goes printed on the proposal
@@ -37,6 +38,11 @@ export default function OfferInfoEditModal({ offer, onClose, onSaved }) {
   // Several requesters go printed joined by ", ", as the server saves them.
   const printedValue = (values, key) => (key === 'requester' ? values.requesters.map((name) => name.trim()).filter(Boolean).join(requesterSeparator) : String(values[key]).trim())
   const changesProposal = Boolean(offer.proposal) && printed.some((key) => (key === 'cnpj' ? documentDigits(form.cnpj) !== documentDigits(original.cnpj) : printedValue(form, key) !== printedValue(original, key)))
+  // Nestlé and etiquetas of the Belgo (server/contractTables.js): another sheet (or none) clears the stages and materials
+  // chosen for the previous one. Offers from before the sheets keep the normal flow.
+  const nextSheet = contractModelFor({ cnpj: form.cnpj, labelNumber: form.labelNumber })
+  const sheetChange = offer.contract !== undefined && nextSheet !== contractOf(offer)
+  const sheetClears = sheetChange && Boolean(offer.resources?.stages?.length || offer.resources?.materials?.length)
   const resized = !form.quantityPending && offer.resources?.entryMode === 'piece' && Number(form.quantity) > 0 && Number(form.quantity) !== Number(offer.quantity)
   // "Sem quantidade definida" can be chosen (or kept) only while the offer has no proposal yet.
   const canLeavePending = Boolean(offer.quantityPending) || (!offer.proposal && !offer.proposalDraft)
@@ -73,7 +79,8 @@ export default function OfferInfoEditModal({ offer, onClose, onSaved }) {
         {/* Observação interna (ofertas do site): não sai no PDF da proposta, então mudá-la não descarta a proposta. */}
         <label className="offer-form-field--full">Observação<textarea rows={3} maxLength={2000} value={form.notes} onChange={(event) => update('notes', event.target.value)} placeholder="Interna: não sai na proposta" /></label>
       </div></fieldset>
-      {(changesProposal || resized) && <div className="offer-info-edit-notes" role="note">
+      {(changesProposal || resized || sheetChange) && <div className="offer-info-edit-notes" role="note">
+        {sheetChange && <p><strong>{nextSheet ? `A oferta passa a usar a planilha ${contractTitles[nextSheet]}.` : 'A oferta deixa de usar a planilha do cliente e segue o fluxo normal.'}</strong>{sheetClears ? ' Ao salvar, as etapas e os materiais já escolhidos serão limpos para serem escolhidos de novo.' : ''}</p>}
         {changesProposal && <p><strong>A proposta já gerada será descartada.</strong> Estes dados vão impressos na proposta: ao salvar, a oferta volta para "Em análise" e a proposta é gerada de novo com os dados corrigidos. As opções de preço salvas continuam.</p>}
         {resized && <p>Os materiais e tempos lançados por peça serão recalculados para {Number(form.quantity)} {Number(form.quantity) === 1 ? 'peça' : 'peças'}.</p>}
       </div>}

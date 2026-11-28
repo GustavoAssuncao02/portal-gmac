@@ -10,6 +10,7 @@ import { documentDigits, maskClientDocument } from './clientDocument.js'
 import { addNotification } from './notificationEvents.js'
 import { recordRegistryChange } from './registryHistory.js'
 import { SITE_ACTOR } from './sitePreRegistration.js'
+import { contractModelFor } from './contractTables.js'
 
 // Formulário público "Ofertar Serviço" do site gmacmetalurgica.com.br: três etapas (dados + captcha, anexos um a um,
 // concluir) que terminam numa oferta "Criando oferta" com origem Site na tela Ofertas de serviços. As rotas ficam no
@@ -393,7 +394,7 @@ export default function createOfferRequestsRouter({ pool = null, accounts, sendM
           cnpj: maskClientDocument(fields.document), company: name,
           requester: fields.requester, requesterId: null, buyer: fields.buyer, buyerId: null,
           deadline: fields.deadline, service: fields.service, quantity: fields.quantity, description: fields.description,
-          labelNumber: fields.labelNumber, requestedAt: at, origin: 'Site', status: 'creating',
+          labelNumber: fields.labelNumber, contract: contractModelFor({ cnpj: fields.document, labelNumber: fields.labelNumber }), requestedAt: at, origin: 'Site', status: 'creating',
           attachments: state.files.map((file) => ({ id: file.fileId, name: file.name, size: file.size, contentType: 'application/octet-stream' })),
           resources: { materials: [], laborEntries: [] }, proposal: null, orderCode: null,
           notes,

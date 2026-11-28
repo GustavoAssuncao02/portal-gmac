@@ -1,6 +1,17 @@
 // Each commit to main is a new version: add an entry at the top, with what changed in plain words for whoever uses the portal.
 export const releaseNotes = [
   {
+    version: '1.0.28',
+    date: '2026-11-28',
+    notes: [
+      'Ofertas da Nestlé e etiquetas da Belgo: as etapas e os materiais são escolhidos direto na lista da planilha do cliente, com os valores da planilha (inclusive a mão de obra), e o PDF já sai preenchido com as linhas escolhidas',
+      'Nessas ofertas, cada etapa da planilha pede a máquina ou o serviço do portal que vai executar, para o operador e o planejamento acompanharem a produção',
+      'Nessas ofertas, uma peça já feita antes vem com a sugestão das etapas, tempos e materiais da última vez (ou a média, quando houver mais de uma)',
+      'Dica: as horas entram como hora normal; para cobrar parte delas como noturna/sábado ou domingo/feriado, use "Dividir horas" na linha do serviço, na tela de geração do PDF',
+      'Etapas: as linhas das planilhas da Nestlé e da Etiqueta aparecem em grupos próprios, para escolher quais máquinas podem executar cada uma',
+    ],
+  },
+  {
     version: '1.0.27',
     date: '2026-11-27',
     notes: [
