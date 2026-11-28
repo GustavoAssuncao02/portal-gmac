@@ -433,7 +433,7 @@ export function createAccountService(pool, env = process.env) {
   return { admins, clients, account, accountByCpf, people, authenticate, updateAccount, setPassword, getNotificationSettings, updateNotificationSettings, getAppearanceSettings, updateAppearanceSettings, getHomeLayout, updateHomeLayout, save, remove }
 }
 
-export function createAccountsRouter(service) {
+export function createAccountsRouter(service, { userActivity } = {}) {
   const router = express.Router()
   router.use(['/admins', '/clients', '/account', '/auth/logout', '/auth/session'], requireAdmin)
   // Administrative employees see the list of administrators, but only an administrator session (the role kept by the
@@ -479,7 +479,9 @@ export function createAccountsRouter(service) {
       const user = await service.updateAccount(request.adminId, request.body)
       currentPasswords.succeed(key)
       if (request.body?.password) await recordPasswordChange('self', user)
-      response.json({ user, token: await issueAdminToken(user) })
+      const token = await issueAdminToken(user)
+      userActivity?.register(request, token, user, request.adminToken)
+      response.json({ user, token })
     } catch (error) {
       // The only 403 of updateAccount is "Senha atual incorreta."
       if (error.status === 403) currentPasswords.fail(key)

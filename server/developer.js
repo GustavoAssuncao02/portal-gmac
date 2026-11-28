@@ -6,6 +6,10 @@ import { readdir, stat, statfs } from 'node:fs/promises'
 import { isDeveloper } from './developers.js'
 import { cut, deviceOf, errorDetails, logLevels, logSources } from './systemLog.js'
 import { missingStoredFiles, storedFileInventory } from './storedFiles.js'
+import { editReleaseNotes, listReleaseNotes } from './releaseNoteEdits.js'
+import { mutateStore } from './store.js'
+import { operatorConfigured } from './operatorAuth.js'
+import { developerUsers } from './developerUsers.js'
 
 // Tela Desenvolvedor (only the accounts of developers.js): the logs of the system, who is online, the state of the
 // server, database and storage, and the export of everything in one JSON file to hand over when solving a problem.
@@ -38,7 +42,7 @@ const orderFields = ['code', 'offerId', 'createdAt', 'registeredAt', 'deadline',
 // `live`: the live updates (who holds a connection); `readStore`: the portal data; `config()`: the settings in force,
 // without the value of any secret; `version`: the newest entry of the release notes.
 // `interfaceDirectory`: the built interface (dist/), whose version.json says the version the server publishes now.
-export default function createDeveloperRouter({ accounts, requireAdmin, requireSession, systemLog, live, pool, readStore, dataDirectory, interfaceDirectory = null, config = () => ({}), version = null, updates = null, now = Date.now }) {
+export default function createDeveloperRouter({ accounts, requireAdmin, requireSession, systemLog, live, pool, readStore, dataDirectory, interfaceDirectory = null, config = () => ({}), version = null, updates = null, now = Date.now, changeStore = mutateStore, userActivity = null }) {
   const router = express.Router()
   // The build of the interface published now (the same one "Nova versão" compares), read again once a minute.
   let buildCache = null
@@ -51,6 +55,10 @@ export default function createDeveloperRouter({ accounts, requireAdmin, requireS
     return value
   }
   const handle = (fn) => async (request, response, next) => { try { await fn(request, response) } catch (error) { next(error) } }
+
+  router.get('/release-notes', requireAdmin, handle(async (_request, response) => {
+    response.set('Cache-Control', 'no-store').json({ items: listReleaseNotes(await readStore()) })
+  }))
 
   // Programar atualização: every screen of the administrative portal reads the next update for its countdown.
   if (updates) router.get('/update-schedule', requireAdmin, handle(async (_request, response) => {
@@ -161,33 +169,45 @@ export default function createDeveloperRouter({ accounts, requireAdmin, requireS
     return { collections, bytes: sizeCache.bytes, openTickets: (store.supportTickets || []).filter((ticket) => ticket.status !== 'closed').length }
   }
 
-  async function overview({ fresh = false } = {}) {
+  async function overview({ fresh = false, includeUsers = false, includeMetricWindow = false } = {}) {
     const memory = process.memoryUsage(), at = now()
     const store = await readStore()
-    const [database, logs24, logs1, storage] = await Promise.all([databaseInfo(), systemLog.summary(at - DAY), systemLog.summary(at - HOUR), storageInfo(store, fresh)])
+    const [database, { through, ...logs24 }, logs1, storage] = await Promise.all([databaseInfo(), systemLog.summary(at - DAY, includeMetricWindow ? at : 0), systemLog.summary(at - HOUR), storageInfo(store, fresh)])
+    const online = onlineUsers()
+    const users = includeUsers && userActivity ? await developerUsers(accounts, online, userActivity, Boolean(store.operatorAccount) || operatorConfigured()).catch(() => null) : null
     return {
       generatedAt: at, version,
       server: { startedAt: systemLog.startedAt, uptimeSeconds: Math.round(process.uptime()), node: process.version, platform: `${os.type()} ${os.release()} (${process.arch})`, hostname: os.hostname(), pid: process.pid, cpus: os.cpus().length, loadAverage: os.loadavg().map((value) => Math.round(value * 100) / 100), memory: { rss: memory.rss, heapUsed: memory.heapUsed, heapTotal: memory.heapTotal, external: memory.external }, systemMemory: { free: os.freemem(), total: os.totalmem() }, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, serverTime: bahia(at) },
-      config: config(), database, storage, data: storeInfo(store), online: onlineUsers(), logs: { day: logs24, hour: logs1 }, traffic: systemLog.traffic(60),
+      config: config(), database, storage, data: storeInfo(store), online, ...(includeUsers && { users }), logs: { day: logs24, hour: logs1 },
+      ...(includeMetricWindow && { logWindow: { since: at - DAY, until: at, through } }), traffic: systemLog.traffic(60, includeMetricWindow ? at : undefined),
     }
   }
 
+  const logCursor = (value) => typeof value === 'string' && /^(?:\d{1,20}|m-[a-z0-9]{1,16}-[a-z0-9]{1,16})$/.test(value) ? value : null
+  const timestamp = (value) => /^\d{1,15}$/.test(String(value || '')) ? Number(value) : 0
   const filtersOf = (query) => ({
     levels: String(query.level || '').split(',').filter((level) => logLevels.includes(level)),
     source: logSources.includes(query.source) ? query.source : '',
     search: String(query.search || '').trim().slice(0, 120),
     since: Number(query.since) || 0,
-    before: /^\d+$/.test(String(query.before || '')) ? query.before : null,
+    until: timestamp(query.until),
+    before: logCursor(query.before),
+    through: logCursor(query.through),
     limit: Math.min(500, Number(query.limit) || 200),
   })
 
   router.get('/developer/overview', handle(async (request, response) => {
-    response.set('Cache-Control', 'no-store').json(await overview({ fresh: request.query.fresh === '1' }))
+    response.set('Cache-Control', 'no-store').json(await overview({ fresh: request.query.fresh === '1', includeUsers: Boolean(userActivity), includeMetricWindow: true }))
   }))
   router.get('/developer/logs', handle(async (request, response) => {
     const filters = filtersOf(request.query)
     const items = await systemLog.list(filters)
     response.set('Cache-Control', 'no-store').json({ items, more: items.length === filters.limit })
+  }))
+  router.put('/developer/release-notes/:version', handle(async (request, response) => {
+    const { item, changed } = await changeStore((store) => editReleaseNotes(store, request.params.version, request.body || {}))
+    if (changed) systemLog.record({ level: 'info', source: 'system', user: request.developer.name, message: `Notas de atualização da versão ${item.version} editadas.` })
+    response.json({ item })
   }))
   // Programar atualização (server/updateSchedule.js): list, schedule, reschedule, cancel and close an update by hand.
   if (updates) {
@@ -257,8 +277,10 @@ export default function createDeveloperRouter({ accounts, requireAdmin, requireS
       exportedAt: at, exportedAtBahia: bahia(at), exportedBy: request.developer.name, version, diagnostico: item, logs,
     }, null, 2))
   }))
-  router.get('/developer/requests', handle(async (_request, response) => {
-    response.set('Cache-Control', 'no-store').json({ items: systemLog.recentRequests(300) })
+  router.get('/developer/requests', handle(async (request, response) => {
+    const until = timestamp(request.query.until)
+    const items = until ? systemLog.recentRequests().filter((item) => item.at >= until - HOUR && item.at <= until) : systemLog.recentRequests(300)
+    response.set('Cache-Control', 'no-store').json({ items })
   }))
   // Everything in one file: the state of the system, who is online, the saved logs of the period and the latest requests.
   router.get('/developer/export', handle(async (request, response) => {

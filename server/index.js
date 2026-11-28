@@ -22,6 +22,7 @@ import createRegistryHistoryRouter from './registryHistory.js'
 import createProposalEmailsRouter from './proposalEmails.js'
 import createStageCatalogRouter, { ensureStageCatalog } from './stageCatalog.js'
 import { announceRelease } from './notificationEvents.js'
+import { listReleaseNotes } from './releaseNoteEdits.js'
 import { releaseNotes } from '../src/releaseNotes.js'
 import { createSiteQuotes } from './siteQuotes/index.js'
 import createPlanningRouter from './planning.js'
@@ -58,6 +59,7 @@ import { createUpdateScheduler } from './updateSchedule.js'
 import { developerCpfs } from './developers.js'
 import { dataDirectory } from './dataDirectory.js'
 import { enabled, flag, isProduction } from './envFlags.js'
+import { createUserActivity } from './userActivity.js'
 
 const app = express()
 const port = Number(process.env.PORT || 3002)
@@ -90,7 +92,8 @@ app.use('/gmac', siteQuotes.app)
 // The interface and the API share one address, so a published portal answers other sites only when CORS_ORIGIN lists them.
 if (corsOrigins.length) app.use(cors({ origin: corsOrigins }))
 else if (!production) app.use(cors())
-app.use('/api', createApiRateLimiter({ limit: Number(process.env.API_RATE_LIMIT) || 200 }))
+app.use('/api', createApiRateLimiter({ limit: Number(process.env.API_RATE_LIMIT) || 200, skip: (request) => request.method === 'POST' && /^\/auth\/activity\/?$/i.test(request.path) }))
+app.post('/api/auth/activity', createApiRateLimiter())
 app.use(express.json())
 
 // Every piece of data lives in MySQL; uploaded files (attachments, receipts, OFX statements) stay in DATA_DIR and the
@@ -109,6 +112,8 @@ const pool = mysql.createPool({
   connectionLimit: 10,
 })
 systemLog.connect(pool)
+const userActivity = createUserActivity(pool)
+app.post('/api/auth/activity', requireAdminOrOperator, userActivity.heartbeat)
 const restartNotes = systemLog.importLastWords()
 if (restartNotes) console.log(`Registros do encerramento anterior do servidor recuperados: ${restartNotes}.`)
 await configureStore(pool)
@@ -123,7 +128,7 @@ await ensureSectors()
 // The stages come from "Etapas": the first start saves the stages the system always had.
 await ensureStageCatalog()
 // A new version of the portal: the bell tells everybody once (src/releaseNotes.js is the list of the versions).
-if (!(await readStore()).operationalNotifications?.some((item) => item.id === `release:${releaseNotes[0].version}`)) await mutateStore((store) => { announceRelease(store, releaseNotes[0]) })
+if (!(await readStore()).operationalNotifications?.some((item) => item.id === `release:${releaseNotes[0].version}`)) await mutateStore((store) => { announceRelease(store, listReleaseNotes(store)[0]) })
 await ensurePauseReasons()
 await ensureAccountPlan()
 await loadOperatorAccount()
@@ -143,10 +148,10 @@ app.use('/api', createOffersRouter(pool, requireAdmin, accounts))
 app.use('/api', createOperationsRouter(pool))
 app.use('/api', createLabelQuotesRouter({ pool, requireAdmin, accounts }))
 app.use('/api', createEmailTemplatesRouter(requireAdmin))
-app.use('/api', createAccountsRouter(accounts))
+app.use('/api', createAccountsRouter(accounts, { userActivity }))
 // One count of wrong passwords, cleared when the password is reset by e-mail.
 const loginThrottle = createLoginThrottle()
-app.use('/api', createLoginRouter(accounts, process.env, loginThrottle))
+app.use('/api', createLoginRouter(accounts, process.env, loginThrottle, { userActivity }))
 app.use('/api', createPasswordResetRouter(accounts, requireAdmin, { throttle: loginThrottle }))
 app.use('/api', createOperatorAccountRouter(requireAdmin))
 app.use('/api', createMachinesRouter(requireAdmin, pool))
@@ -185,7 +190,7 @@ const updateScheduler = createUpdateScheduler({ readStore, mutateStore, version:
   developerIds: async () => (await Promise.all(developerCpfs.map((cpf) => accounts.accountByCpf(cpf)))).filter(Boolean).map((account) => account.id) })
 await updateScheduler.boot().catch((error) => console.error('Falha ao conferir a atualização programada:', error.message))
 setInterval(() => updateScheduler.sweep().catch((error) => console.error('Falha ao verificar a atualização programada:', error.message)), 15000).unref()
-app.use('/api', createDeveloperRouter({ accounts, requireAdmin, requireSession: requireAdminOrOperator, systemLog, live, pool, readStore, dataDirectory, interfaceDirectory: path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist'), updates: updateScheduler, version: releaseNotes[0] ? { version: releaseNotes[0].version, date: releaseNotes[0].date } : null, config: () => ({
+app.use('/api', createDeveloperRouter({ accounts, requireAdmin, requireSession: requireAdminOrOperator, systemLog, live, pool, readStore, dataDirectory, userActivity, interfaceDirectory: path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist'), updates: updateScheduler, version: releaseNotes[0] ? { version: releaseNotes[0].version, date: releaseNotes[0].date } : null, config: () => ({
   environment: production ? 'produção' : 'desenvolvimento', nodeEnv: process.env.NODE_ENV || '', host, port, database: `${process.env.DB_HOST}:${process.env.DB_PORT || 3306}/${process.env.DB_NAME}`,
   dataDir: Boolean(process.env.DATA_DIR), smtp: ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'MAIL_FROM'].every((key) => process.env[key]?.trim()), turnstile: Boolean(process.env.TURNSTILE_SECRET_KEY), testLogin: testLoginEnabled(),
   corsOrigins: corsOrigins.length, apiRateLimit: Number(process.env.API_RATE_LIMIT) || 200, trustProxy: process.env.TRUST_PROXY || '(padrão)', fiscalCatalogSync: flag(process.env.FISCAL_CATALOG_SYNC) !== 'off',
@@ -240,6 +245,9 @@ const server = app.listen(port, host, () => {
 const pruneLogs = () => systemLog.prune().then((removed) => { if (removed) console.log(`Logs do sistema com mais de 30 dias removidos: ${removed}.`) }).catch((error) => console.error('Falha ao limpar os logs antigos:', error.message))
 pruneLogs()
 setInterval(pruneLogs, 6 * 60 * 60 * 1000).unref()
+const pruneUserActivity = () => userActivity.prune().catch((error) => console.error('Falha ao limpar o histórico de atividade:', error.message))
+pruneUserActivity()
+setInterval(pruneUserActivity, 6 * 60 * 60 * 1000).unref()
 // A big attachment (up to the limit of uploads.js) on a slow connection takes as long as it needs. Node would end any
 // request after 5 minutes; the headers still have their own short limit (60 s), and a body that stalls is dropped by
 // bodyProgressGuard (webServer.js).

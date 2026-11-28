@@ -53,6 +53,7 @@ import { isDeveloper } from '../server/developers.js'
 import { todayBahia } from '../server/payableRules.js'
 import { installClientLog } from './clientLog.js'
 import { SESSION_EXPIRED_EVENT, installApiSession } from './apiSession.js'
+import { useUserActivity } from './useUserActivity.js'
 import CashFlowScreen from './CashFlowScreen.jsx'
 import StockPurchaseFinance, { purchasedQuantity } from './StockPurchaseFinance.jsx'
 import BankStatementsScreen from './BankStatementsScreen.jsx'
@@ -2587,6 +2588,7 @@ function App() {
   const [message, setMessage] = useState('')
   const [messageError, setMessageError] = useState(false)
   const [isDashboard, setIsDashboard] = useState(false)
+  useUserActivity(isDashboard || Boolean(operatorToken))
   // Birthday screen after the login ({ name, user, token }): the portal opens when the person goes on.
   const [birthday, setBirthday] = useState(null)
   const [adminUser, setAdminUser] = useState(null)

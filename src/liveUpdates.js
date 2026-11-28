@@ -11,7 +11,7 @@ const HIDDEN_CLOSE_MS = 30000
 const IDLE_CLOSE_MS = 2000
 // The server sends a sign of life every 25 s: a minute of silence means a connection lost on the way.
 const SILENCE_MS = 60000
-export const liveTopics = ['notifications', 'finance', 'data', 'notes']
+export const liveTopics = ['notifications', 'finance', 'data', 'notes', 'release-notes']
 
 const listeners = new Set()
 let connected = false

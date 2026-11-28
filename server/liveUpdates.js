@@ -10,8 +10,9 @@ import { headerValue } from './systemLog.js'
 // - finance: Gestão Financeira (payables, receivables, banks, statements, DRE, plan of accounts, suppliers);
 // - data: everything else (offers, OS, operation, stock, machines, registrations, planning...).
 // - notes: Anotações e Tarefas (personal: each screen reads only what is its person's, the others are not refreshed by it).
+// - release-notes: the published release notes.
 // One API process is assumed, as for the sessions and the request limit: the connections live in its memory.
-export const topics = ['notifications', 'finance', 'data', 'notes']
+export const topics = ['notifications', 'finance', 'data', 'notes', 'release-notes']
 const COALESCE_MS = 80
 const HEARTBEAT_MS = 25000
 
@@ -25,6 +26,7 @@ export function topicOfName(name) {
   if (quietNames.test(name)) return null
   if (notificationNames.test(name)) return 'notifications'
   if (name === 'noteItems') return 'notes'
+  if (name === 'releaseNoteEdits') return 'release-notes'
   return financeNames.test(name) ? 'finance' : 'data'
 }
 const financeRoutes = new Set(['payables', 'receivables', 'bank-statements', 'dre', 'dre-adjustments', 'classifications', 'account-groups', 'suppliers', 'ai-reconciliations'])

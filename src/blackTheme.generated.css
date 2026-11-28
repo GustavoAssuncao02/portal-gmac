@@ -4165,13 +4165,22 @@
     border: 1px solid #303133;
     background: #1a1b1c
 }
+:root[data-theme="dark"][data-tone="black"] .developer-metric:hover {
+    border-color: #303133
+}
+:root[data-theme="dark"][data-tone="black"] .developer-metric:focus-visible {
+    outline: 2px solid #303133
+}
+:root[data-theme="dark"][data-tone="black"] .developer-metric-arrow {
+    color: #bec2c5
+}
 :root[data-theme="dark"][data-tone="black"] .developer-metric small {
     color: #bec2c5
 }
 :root[data-theme="dark"][data-tone="black"] .developer-metric strong {
     color: #ebebec
 }
-:root[data-theme="dark"][data-tone="black"] .developer-metric > div > span {
+:root[data-theme="dark"][data-tone="black"] .developer-metric-text > span {
     color: #bfc2c5
 }
 :root[data-theme="dark"][data-tone="black"] .developer-metric-icon {
@@ -4190,6 +4199,9 @@
 }
 :root[data-theme="dark"][data-tone="black"] .developer-metric--red .developer-metric-icon {
     background: #301a1c
+}
+:root[data-theme="dark"][data-tone="black"] .developer-metric-note {
+    color: #bec2c5
 }
 :root[data-theme="dark"][data-tone="black"] .developer-section-heading h2 {
     color: #ebebec
@@ -4225,6 +4237,18 @@
 }
 :root[data-theme="dark"][data-tone="black"] .developer-presence--on i {
     box-shadow: 0 0 0 3px #0a0a0b
+}
+:root[data-theme="dark"][data-tone="black"] .developer-user-note {
+    color: #bec2c5
+}
+:root[data-theme="dark"][data-tone="black"] .developer-user-seen {
+    color: #bec2c5
+}
+:root[data-theme="dark"][data-tone="black"] .developer-user-link {
+    color: #ebebec
+}
+:root[data-theme="dark"][data-tone="black"] .developer-user-devices li {
+    color: #ebebec
 }
 :root[data-theme="dark"][data-tone="black"] .developer-filters label {
     color: #bec2c5
@@ -4384,7 +4408,7 @@
 :root[data-theme="dark"][data-tone="black"] .developer-update-row-message {
     color: #bec2c5
 }
-:root[data-theme="dark"][data-tone="black"] .developer-section-heading h2 .developer-outdated-count {
+:root[data-theme="dark"][data-tone="black"] .developer-section-heading .developer-outdated-count {
     background: #30281a
 }
 :root[data-theme="dark"][data-tone="black"] .developer-outdated {

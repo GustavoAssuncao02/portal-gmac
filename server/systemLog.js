@@ -160,8 +160,8 @@ export function createSystemLog({ pool: database = null, identify = () => null, 
 
   function finished(request, response, elapsed) {
     const url = request.originalUrl || request.url
-    // The live connection stays open for as long as the tab: it is not a request to measure.
-    if (/^\/api\/live(\?|$)/.test(url)) return
+    // Live connections and activity samples stay out of API traffic statistics.
+    if (/^\/api\/live(\?|$)/.test(url) || /^\/api\/auth\/activity\/?(\?|$)/i.test(url)) return
     sweepUnauthorized()
     const ms = Math.round(elapsed), status = response.statusCode, route = safePath(url), method = request.method
     const who = (() => { try { return identify(request) } catch { return null } })()
@@ -222,13 +222,22 @@ export function createSystemLog({ pool: database = null, identify = () => null, 
   }
 
   const parse = (value) => { if (!value) return null; try { return JSON.parse(value) } catch { return { texto: value } } }
+  const memoryPrefix = `m-${startedAt.toString(36)}-`
+  const memoryOrder = (id) => typeof id === 'string' && id.startsWith(memoryPrefix) ? parseInt(id.slice(memoryPrefix.length), 36) : null
   const matches = (entry, { levels, source, search, since, until }) => (!levels?.length || levels.includes(entry.level)) && (!source || entry.source === source) && (!since || entry.at >= since) && (!until || entry.at <= until)
     && (!search || `${entry.message} ${entry.user || ''} ${JSON.stringify(entry.details || '')}`.toLocaleLowerCase('pt-BR').includes(search.toLocaleLowerCase('pt-BR')))
   // Newest first. `before`: the id of the last row already shown (the next page).
-  async function list({ levels = [], source = '', search = '', since = 0, until = 0, before = null, limit = 200 } = {}) {
+  async function list({ levels = [], source = '', search = '', since = 0, until = 0, before = null, through = null, limit = 200 } = {}) {
     sweepUnauthorized()
     const size = Math.max(1, Math.min(20000, Number(limit) || 200))
-    if (!pool) return memory.filter((entry) => matches(entry, { levels, source, search, since, until })).reverse().slice(0, size)
+    if (!pool) {
+      const maxOrder = through ? memoryOrder(through) ?? -1 : Infinity
+      const beforeOrder = memoryOrder(before) ?? Infinity
+      return memory.filter((entry) => {
+        const order = memoryOrder(entry.id)
+        return order <= maxOrder && order < beforeOrder && matches(entry, { levels, source, search, since, until })
+      }).reverse().slice(0, size)
+    }
     await flush()
     await ready()
     const where = [], values = []
@@ -237,20 +246,27 @@ export function createSystemLog({ pool: database = null, identify = () => null, 
     if (levels.length) { where.push(`level IN (${levels.map(() => '?').join(', ')})`); values.push(...levels) }
     if (source) { where.push('source = ?'); values.push(source) }
     if (search) { where.push('(message LIKE ? OR user_name LIKE ? OR details LIKE ?)'); const like = `%${search.replace(/[\\%_]/g, (char) => `\\${char}`)}%`; values.push(like, like, like) }
-    if (before) { where.push('id < ?'); values.push(Number(before)) }
+    if (through) {
+      if (!/^\d+$/.test(through)) return []
+      where.push('id <= CAST(? AS UNSIGNED)'); values.push(through)
+    }
+    if (before && /^\d+$/.test(before)) { where.push('id < CAST(? AS UNSIGNED)'); values.push(before) }
     const [rows] = await pool.query(`SELECT id, at, level, source, message, user_name, details FROM system_logs${where.length ? ` WHERE ${where.join(' AND ')}` : ''} ORDER BY id DESC LIMIT ${size}`, values)
     return rows.map((row) => ({ id: String(row.id), at: Number(row.at), level: row.level, source: row.source, message: row.message, user: row.user_name, details: parse(row.details) }))
   }
   // How many errors and warnings came in a period, by origin.
-  async function summary(since) {
+  async function summary(since, until = 0) {
     sweepUnauthorized()
     const counts = { error: 0, warn: 0, info: 0, bySource: {} }
-    const rows = pool ? (await flush(), await ready(), (await pool.query('SELECT level, source, COUNT(*) AS total FROM system_logs WHERE at >= ? GROUP BY level, source', [since]))[0])
-      : Object.values(memory.filter((entry) => entry.at >= since).reduce((all, entry) => { const key = `${entry.level}|${entry.source}`; all[key] ||= { level: entry.level, source: entry.source, total: 0 }; all[key].total += 1; return all }, {}))
+    const current = !pool ? memory.filter((entry) => entry.at >= since && (!until || entry.at <= until)) : null
+    const rows = pool ? (await flush(), await ready(), (await pool.query(`SELECT level, source, COUNT(*) AS total${until ? ', CAST(MAX(id) AS CHAR) AS lastId' : ''} FROM system_logs WHERE at >= ?${until ? ' AND at <= ?' : ''} GROUP BY level, source`, until ? [since, until] : [since]))[0])
+      : Object.values(current.reduce((all, entry) => { const key = `${entry.level}|${entry.source}`; all[key] ||= { level: entry.level, source: entry.source, total: 0 }; all[key].total += 1; return all }, {}))
+    if (until) counts.through = current ? current.at(-1)?.id ?? null : null
     for (const row of rows) {
       counts[row.level] = (counts[row.level] || 0) + Number(row.total)
       counts.bySource[row.source] ||= { error: 0, warn: 0, info: 0 }
       counts.bySource[row.source][row.level] = Number(row.total)
+      if (row.lastId && (!counts.through || BigInt(row.lastId) > BigInt(counts.through))) counts.through = row.lastId
     }
     if (pool) {
       const [[size]] = await pool.query('SELECT COUNT(*) AS total, MIN(at) AS oldest FROM system_logs')
@@ -267,9 +283,9 @@ export function createSystemLog({ pool: database = null, identify = () => null, 
   }
 
   // Requests of the last `minutes`: totals, time and the routes that are slow or fail the most.
-  function traffic(minutes = 60) {
-    const since = now() - minutes * MINUTE
-    const recent = requests.filter((item) => item.at >= since)
+  function traffic(minutes = 60, until) {
+    const since = (until ?? now()) - minutes * MINUTE
+    const recent = requests.filter((item) => item.at >= since && (until == null || item.at <= until))
     const routes = new Map()
     for (const item of recent) {
       const row = routes.get(item.key) || { route: item.key, count: 0, clientErrors: 0, serverErrors: 0, times: [] }

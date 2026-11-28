@@ -10,7 +10,8 @@ import { cashFlowBuckets, cashFlowPeriod, classificationShares, totalsOf, change
 import { receivableForecast } from './receivableForecast.js'
 import { daysUntil, dueLabel, shiftMonth } from '../server/payableRules.js'
 import { calculatorFormats, calculatorMaterials, calculatorWeight, conversionOptions } from './calculatorData.js'
-import { currentVersion, releaseNotes } from './releaseNotes.js'
+import { currentVersion } from './releaseNotes.js'
+import { useReleaseNotes } from './useReleaseNotes.js'
 import { DEFAULT_HOME_PERIOD, homePeriods } from '../server/homeWidgets.js'
 import { forgetScroll, saveListState } from './savedListState.js'
 import { openDeliveries } from './deliveryCalendar.js'
@@ -684,10 +685,10 @@ function SupportTickets({ ctx, size }) {
 }
 
 function ReleaseNotesWidget({ ctx, size }) {
-  const latest = releaseNotes[0]
+  const [latest] = useReleaseNotes()
   const notes = latest.notes.slice(0, rowLimit(size, 3, 8))
   return <Card icon={Sparkles} tone="blue" title="Novidades do portal" subtitle={`Versão ${currentVersion} · ${latest.date.split('-').reverse().join('/')}`} action={{ label: 'Todas', onClick: () => { sessionStorage.setItem('gmac-release-notes-open', '1'); ctx.onNavigate('Configurações'); window.dispatchEvent(new CustomEvent('gmac-release-notes-open')) } }}>
-    <ul className="home-notes">{notes.map((note) => <li key={note}>{note}</li>)}</ul>
+    <ul className="home-notes">{notes.map((note, index) => <li key={index}>{note}</li>)}</ul>
     {latest.notes.length > notes.length && <p className="home-card-more">e mais {plural(latest.notes.length - notes.length, 'novidade', 'novidades')}</p>}
   </Card>
 }

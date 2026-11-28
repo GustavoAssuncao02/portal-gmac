@@ -105,6 +105,36 @@ test('the Desenvolvedor screen: access, browser errors, failed requests, online 
   assert.doesNotMatch(JSON.stringify(exported.data), /segredo/)
 })
 
+test('metric details use the same log snapshot and request period as the card', async (t) => {
+  let clock = Date.parse('2026-11-28T15:00:00Z')
+  const { call, systemLog } = await developerServer(t, { now: () => clock })
+  const day = 86400000
+  systemLog.record({ level: 'error', message: 'Fora do período', at: clock - day - 1 })
+  systemLog.record({ level: 'error', message: 'Primeiro erro', at: clock - day })
+  systemLog.record({ level: 'warn', message: 'Aviso do período' })
+  systemLog.record({ level: 'error', message: 'Último erro do cartão' })
+
+  await call('/developer/logs?level=info')
+  const overview = (await call('/developer/overview')).data
+  assert.equal(overview.logs.day.error, 2)
+  assert.equal(overview.logs.day.warn, 1)
+  assert.equal(overview.logWindow.until, clock)
+  systemLog.record({ level: 'error', message: 'Erro incluído depois, na mesma hora' })
+  clock += 1
+  await call('/broken')
+  const params = new URLSearchParams({ ...overview.logWindow, level: 'error', limit: '1' })
+  const page = (await call(`/developer/logs?${params}`)).data
+  assert.deepEqual(page.items.map((item) => item.message), ['Último erro do cartão'])
+  params.set('before', page.items[0].id)
+  assert.deepEqual((await call(`/developer/logs?${params}`)).data.items.map((item) => item.message), ['Primeiro erro'])
+  params.delete('before')
+  params.set('level', 'warn')
+  assert.deepEqual((await call(`/developer/logs?${params}`)).data.items.map((item) => item.message), ['Aviso do período'])
+  const requests = (await call(`/developer/requests?until=${overview.generatedAt}`)).data.items
+  assert.ok(requests.some((item) => item.route === '/api/developer/logs?level=info'))
+  assert.ok(requests.every((item) => item.at <= overview.generatedAt && item.route !== '/api/broken'))
+})
+
 test('the logs are saved in MySQL, paged from the newest and kept for 30 days', async (t) => {
   const database = await createTestDatabase('gmac_test_system_logs')
   t.after(() => database.drop())
@@ -126,10 +156,16 @@ test('the logs are saved in MySQL, paged from the newest and kept for 30 days', 
   const summary = await systemLog.summary(0)
   assert.deepEqual([summary.error, summary.warn, summary.info, summary.saved, summary.bySource.server.warn], [2, 3, 1, 6, 3])
 
+  const snapshot = await systemLog.summary(clock - 4000, clock)
+  assert.equal(snapshot.through, all[0].id)
+  systemLog.record({ level: 'warn', message: 'Gravado depois do resumo, no mesmo milissegundo' })
+  const shown = await systemLog.list({ since: clock - 4000, until: clock, through: snapshot.through, levels: ['warn'] })
+  assert.deepEqual(shown.map((item) => item.message), ['Mensagem 5', 'Mensagem 3', 'Mensagem 1'])
+
   // A restart reads the same saved logs.
-  assert.equal((await createSystemLog({ pool: database.pool, now }).list()).length, 6)
+  assert.equal((await createSystemLog({ pool: database.pool, now }).list()).length, 7)
   clock += 31 * 86400000
-  assert.equal(await systemLog.prune(), 6)
+  assert.equal(await systemLog.prune(), 7)
   assert.equal((await systemLog.list()).length, 0)
 })
 

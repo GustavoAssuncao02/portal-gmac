@@ -25,7 +25,7 @@ export function testLoginEnabled(env = process.env) {
 // - `operators`: the shared operator account (one user for all the tablets) had no limit: 10 wrong passwords in 15
 //   minutes from one IP, cleared by a correct login. The window is short because the tablets share the factory's address.
 // Each block lasts until the oldest error leaves the window; while blocked, even the right password waits.
-export default function createLoginRouter(accounts, env = process.env, throttle = createLoginThrottle(), { origins = createLoginThrottle({ limit: 30 }), operators = createLoginThrottle({ limit: 10, windowMs: 15 * 60000 }) } = {}) {
+export default function createLoginRouter(accounts, env = process.env, throttle = createLoginThrottle(), { origins = createLoginThrottle({ limit: 30 }), operators = createLoginThrottle({ limit: 10, windowMs: 15 * 60000 }), userActivity } = {}) {
   const router = express.Router()
   router.get('/auth/config', (_request, response) => {
     response.set('Cache-Control', 'no-store').json({ testLoginEnabled: testLoginEnabled(env) })
@@ -43,7 +43,9 @@ export default function createLoginRouter(accounts, env = process.env, throttle 
         }
         operators.succeed(request.ip)
       }
-      return response.json({ token: issueOperatorToken(), role: 'operator' })
+      const token = issueOperatorToken()
+      userActivity?.register(request, token)
+      return response.json({ token, role: 'operator' })
     } catch (error) { next(error) }
   })
   router.post('/auth/login', async (request, response) => {
@@ -84,7 +86,9 @@ export default function createLoginRouter(accounts, env = process.env, throttle 
         return response.status(401).json({ message: 'CPF ou senha inválidos.', attemptsRemaining: remaining })
       }
       if (throttleKey) throttle.succeed(throttleKey)
-      return response.json({ user, token: await issueAdminToken(user) })
+      const token = await issueAdminToken(user)
+      userActivity?.register(request, token, user)
+      return response.json({ user, token })
     } catch (error) {
       console.error('Falha no login:', error)
       return response.status(500).json({ message: 'Não foi possível acessar o sistema agora.' })

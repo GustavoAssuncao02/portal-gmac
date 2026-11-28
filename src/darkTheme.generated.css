@@ -4926,13 +4926,22 @@
     border: 1px solid #36516f;
     background: #162b43
 }
+:root[data-theme="dark"] .developer-metric:hover {
+    border-color: #36516f
+}
+:root[data-theme="dark"] .developer-metric:focus-visible {
+    outline: 2px solid #36516f
+}
+:root[data-theme="dark"] .developer-metric-arrow {
+    color: #b6c3cd
+}
 :root[data-theme="dark"] .developer-metric small {
     color: #b6c3cd
 }
 :root[data-theme="dark"] .developer-metric strong {
     color: #e1ebf6
 }
-:root[data-theme="dark"] .developer-metric > div > span {
+:root[data-theme="dark"] .developer-metric-text > span {
     color: #b8c2cc
 }
 :root[data-theme="dark"] .developer-metric-icon {
@@ -4960,6 +4969,9 @@
 }
 :root[data-theme="dark"] .developer-metric--red strong {
     color: #ec9089
+}
+:root[data-theme="dark"] .developer-metric-note {
+    color: #b6c3cd
 }
 :root[data-theme="dark"] .developer-section-heading h2 {
     color: #e1ebf6
@@ -4996,6 +5008,18 @@
 :root[data-theme="dark"] .developer-presence--on i {
     background: #1e9451;
     box-shadow: 0 0 0 3px #06111d
+}
+:root[data-theme="dark"] .developer-user-note {
+    color: #b6c3cd
+}
+:root[data-theme="dark"] .developer-user-seen {
+    color: #b6c3cd
+}
+:root[data-theme="dark"] .developer-user-link {
+    color: #e1ebf6
+}
+:root[data-theme="dark"] .developer-user-devices li {
+    color: #e1ebf6
 }
 :root[data-theme="dark"] .developer-filters label {
     color: #b2c3d1
@@ -5185,7 +5209,7 @@
 :root[data-theme="dark"] .developer-update-row-message {
     color: #b7c2cc
 }
-:root[data-theme="dark"] .developer-section-heading h2 .developer-outdated-count {
+:root[data-theme="dark"] .developer-section-heading .developer-outdated-count {
     color: #ecc889;
     background: #3c3220
 }

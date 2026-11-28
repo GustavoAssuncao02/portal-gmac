@@ -22,7 +22,7 @@ let tokenVersion = 0
 export function setOperatorTokenVersion(version) { tokenVersion = Number(version) || 0 }
 
 export function issueOperatorToken() {
-  const payload = Buffer.from(JSON.stringify({ role: 'operator', exp: Date.now() + 15 * 60 * 60 * 1000, v: tokenVersion })).toString('base64url')
+  const payload = Buffer.from(JSON.stringify({ role: 'operator', exp: Date.now() + 15 * 60 * 60 * 1000, v: tokenVersion, sid: randomBytes(12).toString('hex') })).toString('base64url')
   const signature = createHmac('sha256', signingKey).update(payload).digest('base64url')
   return `${payload}.${signature}`
 }
@@ -37,6 +37,7 @@ export function requireOperator(request, response, next) {
     const data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'))
     if (data.role !== 'operator' || data.exp < Date.now()) return response.status(401).json({ message: 'Sessão do operador expirada.' })
     if ((data.v || 0) !== tokenVersion) return response.status(401).json({ message: 'A senha do operador foi alterada. Entre novamente.' })
+    request.operatorToken = `${payload}.${signature}`
     next()
   } catch {
     return response.status(401).json({ message: 'Sessão do operador inválida.' })

@@ -7,10 +7,13 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { configureWeb, serveInterface } from '../server/webServer.js'
 import { sortedByName } from '../server/byName.js'
+import createDeveloperRouter from '../server/developer.js'
+import { createSystemLog } from '../server/systemLog.js'
+import { createUserActivity } from '../server/userActivity.js'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
-export async function createWorkflowFixture({ pool, inventoryPool = pool, accountsEnv, notificationInventory, fillStageTimes = true, fillClassifications = true, ticketDevelopers, ticketEmails, siteOffers = {} } = {}) {
+export async function createWorkflowFixture({ pool, inventoryPool = pool, accountsEnv, notificationInventory, fillStageTimes = true, fillClassifications = true, ticketDevelopers, ticketEmails, siteOffers = {}, developerRoutes = false } = {}) {
   const results = path.join(root, 'test-results')
   await mkdir(results, { recursive: true })
   const directory = await mkdtemp(path.join(results, 'workflow-'))
@@ -67,13 +70,16 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   app.use(express.json())
   // Live updates, as in server/index.js.
   const { createLiveUpdates } = await import(pathToFileURL(path.join(directory, 'liveUpdates.js')))
-  const { onStoreChange } = await import(pathToFileURL(path.join(directory, 'store.js')))
+  const { onStoreChange, mutateStore: changeStore } = await import(pathToFileURL(path.join(directory, 'store.js')))
   const { requireAdminOrOperator } = await import(pathToFileURL(path.join(directory, 'access.js')))
   const live = createLiveUpdates()
   onStoreChange(live.fromStore)
   app.use('/api', live.fromRequests)
   app.use('/api', live.router(requireAdminOrOperator))
   app.use('/api', restrictStaffFinance)
+  const userActivity = developerRoutes ? createUserActivity(storeDatabase.pool) : undefined
+  app.post('/api/auth/activity', requireAdminOrOperator, userActivity?.heartbeat ?? ((_request, response) => response.status(204).end()))
+  if (developerRoutes) app.use('/api', createDeveloperRouter({ accounts, requireAdmin, requireSession: requireAdminOrOperator, systemLog: createSystemLog(), live, readStore, changeStore, dataDirectory: directory, userActivity, updates: { list: async () => ({ items: [], automatic: false }) } }))
   // Every classification belongs to a group of accounts and every receivable has a revenue classification. Most tests are
   // not about it: a classification created without a group goes to a test group (with the next free code), and a
   // receivable created without a classification gets a test revenue classification ("98.01 · Receita de teste", also
@@ -160,7 +166,7 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
   app.use('/api', operationsRouter(pool))
   app.use('/api', labelQuotesRouter({ pool, inventoryPool, requireAdmin, accounts }))
   app.use('/api', emailTemplatesRouter(requireAdmin))
-  app.use('/api', createAccountsRouter(accounts))
+  app.use('/api', createAccountsRouter(accounts, { userActivity }))
   app.use('/api', machinesRouter(requireAdmin, pool))
   app.use('/api', laborServicesRouter(requireAdmin, pool))
   app.use('/api', registriesRouter(requireAdmin, pool))
@@ -236,7 +242,9 @@ export async function createWorkflowFixture({ pool, inventoryPool = pool, accoun
     try {
       const user = await accounts.authenticate(request.body.cpf, request.body.password)
       if (!user) return response.status(401).json({ message: 'CPF ou senha inválidos.' })
-      response.json({ user, token: await issueAdminToken(user) })
+      const token = await issueAdminToken(user)
+      userActivity?.register(request, token, user)
+      response.json({ user, token })
     } catch (error) { next(error) }
   })
   // As in server/index.js: an expected refusal may send data with its message (`extra`).
